@@ -1,0 +1,10 @@
+build/
+build-v01/
+_backup_current/
+.DS_Store
+*.o
+*.d
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
