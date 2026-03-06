@@ -94,6 +94,7 @@ public:
     // v0.2: Multi-channel output format — auto-detected from host bus config
     enum class OutputFormat { Binaural = 0, Quad, Surround5_1, Surround7_1, Surround7_1_4, Surround9_1_6 };
     OutputFormat getActiveOutputFormat() const { return activeOutputFormat; }
+    static juce::String getOutputFormatName (OutputFormat format);
 
     //--------------------------------------------------------------------------
     OpenSpatialDelayProcessor();

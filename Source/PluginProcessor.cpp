@@ -358,6 +358,20 @@ OpenSpatialDelayProcessor::OutputFormat
     }
 }
 
+juce::String OpenSpatialDelayProcessor::getOutputFormatName (OutputFormat format)
+{
+    switch (format)
+    {
+        case OutputFormat::Binaural:       return "Binaural";
+        case OutputFormat::Quad:           return "Quadraphonic";
+        case OutputFormat::Surround5_1:    return "5.1 Surround";
+        case OutputFormat::Surround7_1:    return "7.1 Surround";
+        case OutputFormat::Surround7_1_4:  return "7.1.4 Atmos";
+        case OutputFormat::Surround9_1_6:  return "9.1.6 Atmos";
+        default:                           return "Unknown";
+    }
+}
+
 //==============================================================================
 // v0.2: Activate speaker layout for the detected output format
 //==============================================================================
