@@ -3,6 +3,9 @@
 #include <array>
 #include <vector>
 
+// libmysofa — SOFA file reader for HRTF data
+struct MYSOFA_EASY;  // Forward declaration (avoids including mysofa.h in header)
+
 //==============================================================================
 // Binaural profile: defines virtual head characteristics for simplified HRTF
 //==============================================================================
@@ -78,22 +81,317 @@ struct BinauralGains
 };
 
 //==============================================================================
+// Source position for spatialization algorithm input
+//==============================================================================
+struct SourcePosition
+{
+    float azimuthRad;
+    float elevationRad;
+    float distance;
+};
+
+//==============================================================================
+// Context structs passed to spatialization algorithms
+//==============================================================================
+struct LayoutContext
+{
+    const SpeakerLayout& layout;
+    const std::vector<VBAPTriplet>& triplets;   // empty for 2D-only layouts
+    const float (*ambiDecodeMatrix)[16];         // Ambisonics decode matrix [speaker][channel]
+    int ambiNumSpeakers;
+};
+
+struct BinauralContext
+{
+    int profileIndex;
+    double sampleRate;
+    const BinauralProfile* profiles;             // pointer to the 5-profile array
+    const float* binauralSHWeightsL;             // pre-computed SH weights (Ambisonics only)
+    const float* binauralSHWeightsR;
+};
+
+//==============================================================================
+// Abstract spatialization algorithm interface
+// Shared across the Spatial Media Library plugin suite
+//==============================================================================
+class SpatializationAlgorithm
+{
+public:
+    virtual ~SpatializationAlgorithm() = default;
+
+    /** Compute speaker gains for a source position in the given layout. */
+    virtual void computeGains (const SourcePosition& source,
+                               const LayoutContext& ctx,
+                               float* outputGains,
+                               int numSpeakers) const = 0;
+
+    /** Whether this algorithm can produce direct binaural output (bypassing speakers). */
+    virtual bool supportsBinauralDirect() const { return false; }
+
+    /** Compute direct binaural gains (only called if supportsBinauralDirect() is true). */
+    virtual BinauralGains computeBinauralGains (const SourcePosition& source,
+                                                const BinauralContext& ctx) const { return {}; }
+
+    /** Whether this algorithm supports surround speaker output. */
+    virtual bool supportsSurround() const { return true; }
+
+    virtual juce::String getName() const = 0;
+    virtual int getIndex() const = 0;       // APVTS index (0-3: VBAP, Ambisonics, VBIP, KNN)
+};
+
+//==============================================================================
+// Concrete algorithm implementations (stateless, lightweight)
+//==============================================================================
+
+/** Woodworth ITD+ILD binaural model — used internally for "Simple (Low CPU)" profile.
+    Not in the user-facing algorithm dropdown; kept for Woodworth speaker cache gains. */
+class DirectBinauralAlgorithm : public SpatializationAlgorithm
+{
+public:
+    void computeGains (const SourcePosition& source, const LayoutContext& ctx,
+                       float* outputGains, int numSpeakers) const override;
+    bool supportsBinauralDirect() const override { return true; }
+    BinauralGains computeBinauralGains (const SourcePosition& source,
+                                        const BinauralContext& ctx) const override;
+    bool supportsSurround() const override { return false; }
+    juce::String getName() const override { return "Direct Binaural"; }
+    int getIndex() const override { return 0; }
+};
+
+/** Algorithm 2: Vector Base Amplitude Panning (Pulkki 1997). 2D or 3D. */
+class VBAPAlgorithm : public SpatializationAlgorithm
+{
+public:
+    void computeGains (const SourcePosition& source, const LayoutContext& ctx,
+                       float* outputGains, int numSpeakers) const override;
+    juce::String getName() const override { return "VBAP"; }
+    int getIndex() const override { return 2; }
+};
+
+/** Algorithm 0: 3rd-order Ambisonics (ACN/SN3D) with max-rE weighting. */
+class AmbisonicsAlgorithm : public SpatializationAlgorithm
+{
+public:
+    void computeGains (const SourcePosition& source, const LayoutContext& ctx,
+                       float* outputGains, int numSpeakers) const override;
+    bool supportsBinauralDirect() const override { return true; }
+    BinauralGains computeBinauralGains (const SourcePosition& source,
+                                        const BinauralContext& ctx) const override;
+    juce::String getName() const override { return "Ambisonics (HOA)"; }
+    int getIndex() const override { return 0; }
+};
+
+/** Algorithm 3: Vector Base Intensity Panning — VBAP with squared gains for tighter focus. */
+class VBIPAlgorithm : public SpatializationAlgorithm
+{
+public:
+    void computeGains (const SourcePosition& source, const LayoutContext& ctx,
+                       float* outputGains, int numSpeakers) const override;
+    juce::String getName() const override { return "VBIP"; }
+    int getIndex() const override { return 3; }
+};
+
+/** Algorithm 1: K-Nearest Neighbor panning — inverse-distance-squared weighting. */
+class KNNAlgorithm : public SpatializationAlgorithm
+{
+public:
+    void computeGains (const SourcePosition& source, const LayoutContext& ctx,
+                       float* outputGains, int numSpeakers) const override;
+    juce::String getName() const override { return "KNN"; }
+    int getIndex() const override { return 1; }
+};
+
+//==============================================================================
+// HRTF Database — loads SOFA files and provides HRIR lookup
+// Wraps libmysofa for SOFA parsing and nearest-neighbor interpolation
+//==============================================================================
+class HRTFDatabase
+{
+public:
+    HRTFDatabase();
+    ~HRTFDatabase();
+
+    /** Load a SOFA file from memory (BinaryData). Resamples to targetSampleRate. */
+    bool loadFromMemory (const void* data, int dataSize, float targetSampleRate);
+
+    /** Get interpolated HRIR pair for a direction (our convention: radians).
+        Writes irLength samples to irL and irR buffers (must be pre-allocated). */
+    void getInterpolatedHRIR (float azimuthRad, float elevationRad,
+                              float* irL, float* irR,
+                              float& delayL, float& delayR) const;
+
+    /** For Ambisonics: compute SH-projected HRIRs.
+        Integrates Y_c(dir) × HRIR(dir) over all measurement positions.
+        Writes numSHChannels × irLength floats to shIRsL and shIRsR. */
+    void computeSHProjectedHRIRs (float* shIRsL, float* shIRsR,
+                                   int numSHChannels) const;
+
+    /** Get the HRIR for a specific virtual speaker position.
+        Used by the BinauralRenderer for speaker-based algorithms. */
+    void getHRIRForSpeaker (const VirtualSpeaker& speaker,
+                            float* irL, float* irR,
+                            float& delayL, float& delayR) const;
+
+    int getIRLength() const { return irLength; }
+    int getNumPositions() const { return numPositions; }
+    bool isLoaded() const { return loaded; }
+
+    /** Unload current profile and free resources. */
+    void unload();
+
+private:
+    MYSOFA_EASY* easyHandle = nullptr;
+    int irLength = 0;
+    int numPositions = 0;
+    bool loaded = false;
+};
+
+//==============================================================================
+// Partitioned Convolver — real-time FFT overlap-save convolution
+// Uses juce::dsp::FFT for efficient per-block convolution
+//==============================================================================
+class PartitionedConvolver
+{
+public:
+    PartitionedConvolver() = default;
+
+    /** Prepare the convolver for a given max block size and IR length. */
+    void prepare (int maxBlockSize, int irLength);
+
+    /** Set or update the impulse response. Pre-computes FFT of IR. */
+    void setIR (const float* ir, int length);
+
+    /** Process one block: convolve input with IR, write to output.
+        in and out must be numSamples long. Can be called in-place. */
+    void process (const float* in, float* out, int numSamples);
+
+    /** Reset internal state (overlap buffers, input accumulators). */
+    void reset();
+
+    bool isPrepared() const { return fftSize > 0; }
+
+private:
+    juce::dsp::FFT fft { 1 };      // Will be re-initialized in prepare()
+    int fftOrder = 1;
+    int fftSize = 0;                 // 2^fftOrder
+    int irLen = 0;
+    int blockSize = 0;
+
+    std::vector<float> irFreqDomain;     // Pre-computed IR in frequency domain
+    std::vector<float> inputAccum;       // Input accumulator for FFT
+    std::vector<float> fftWorkBuf;       // FFT work buffer
+    std::vector<float> overlapBuf;       // Overlap-save tail buffer
+    int inputAccumPos = 0;               // Current position in input accumulator
+};
+
+//==============================================================================
+// Binaural Renderer — manages HRTF convolution for all algorithms
+// Routes spatial accumulation buffers through per-speaker or per-SH convolvers
+//==============================================================================
+class BinauralRenderer
+{
+public:
+    static constexpr int MAX_CONVOLVERS = 16;  // Max speakers or SH channels
+
+    BinauralRenderer() = default;
+
+    /** Prepare all convolvers for the given sample rate and block size. */
+    void prepare (double sampleRate, int maxBlockSize);
+
+    /** Load a new HRTF profile. Sets up convolvers for all virtual speakers
+        and (optionally) SH-domain HRIRs for Ambisonics. */
+    void setProfile (int profileIndex, HRTFDatabase& hrtfDb,
+                     const VirtualSpeaker* speakers, int numSpeakers,
+                     int numSHChannels);
+
+    /** Render speaker accumulation buffers through HRTF convolvers.
+        Used by VBAP, VBIP, KNN (virtual speaker algorithms).
+        speakerBufs: [numSpeakers][numSamples], outL/outR: [numSamples] */
+    void renderSpeakerBuffers (const float* const* speakerBufs, int numSpeakers,
+                                int numSamples, float* outL, float* outR);
+
+    /** Render SH accumulation buffers through SH-domain HRTF convolvers.
+        Used by Ambisonics algorithm.
+        shBufs: [numSHChannels][numSamples], outL/outR: [numSamples] */
+    void renderSHBuffers (const float* const* shBufs, int numSHChannels,
+                           int numSamples, float* outL, float* outR);
+
+    /** Check if the renderer is in Simple (Woodworth) mode. */
+    bool isSimpleMode() const { return activeProfile == 0; }
+
+    /** Get the active profile index. */
+    int getActiveProfile() const { return activeProfile; }
+
+    /** Reset all convolver states (e.g., on playback restart). */
+    void reset();
+
+private:
+    // Virtual speaker convolvers: per-speaker × 2 ears
+    PartitionedConvolver speakerConvL[MAX_CONVOLVERS];
+    PartitionedConvolver speakerConvR[MAX_CONVOLVERS];
+
+    // SH-domain convolvers: per-SH-channel × 2 ears
+    PartitionedConvolver shConvL[MAX_CONVOLVERS];
+    PartitionedConvolver shConvR[MAX_CONVOLVERS];
+
+    int activeProfile = 0;   // Default = Simple (Woodworth fallback)
+    int activeSpeakers = 0;
+    int activeSHChannels = 0;
+
+    double currentSampleRate = 44100.0;
+    int currentBlockSize = 512;
+
+    // Temporary work buffers for convolution output
+    std::vector<float> convTmpL, convTmpR;
+};
+
+//==============================================================================
 class OpenSpatialDelayProcessor : public juce::AudioProcessor
 {
 public:
     static constexpr int MAX_OBJECTS = 12;
     static constexpr int MAX_DELAY_SECONDS = 24;  // 12 objects × 2s max base delay
     static constexpr int PITCH_GRAIN_SIZE = 1024;  // ~23 ms at 44.1 kHz
-    static constexpr float MAX_CUMULATIVE_SEMITONES = 36.0f;  // Cap cumulative pitch to avoid grain artifacts
-
     // Modular 3D Audio Core constants
     static constexpr int NUM_VIRTUAL_SPEAKERS = 16;
     static constexpr int HOA_ORDER = 3;
     static constexpr int HOA_CHANNELS = (HOA_ORDER + 1) * (HOA_ORDER + 1); // = 16
 
-    // v0.2: Multi-channel output format — auto-detected from host bus config
-    enum class OutputFormat { Binaural = 0, Quad, Surround5_1, Surround7_1, Surround7_1_4, Surround9_1_6 };
-    OutputFormat getActiveOutputFormat() const { return activeOutputFormat; }
+    // v0.2: Multi-channel output format
+    enum class OutputFormat { Binaural = 0, Quad, Surround5_1, Surround7_1, Surround7_1_4, Surround9_1_6, Octaphonic };
+
+    // Output format registry — single source of truth for all supported formats
+    // Reusable across Spatial Media Library plugins
+    struct OutputFormatInfo
+    {
+        OutputFormat format;
+        const char* name;           // UI display name (e.g., "7.1.4 Atmos")
+        const char* shortName;      // Compact name (e.g., "7.1.4")
+        int requiredChannels;       // Minimum bus channels needed
+        bool hasLFE;
+        bool hasHeight;
+    };
+    static constexpr int NUM_OUTPUT_FORMATS = 7;
+    static const std::array<OutputFormatInfo, NUM_OUTPUT_FORMATS> outputFormatRegistry;
+
+    // Double-buffered layout state for lock-free audio thread reads
+    struct OutputLayoutState
+    {
+        OutputFormat format = OutputFormat::Binaural;
+        SpeakerLayout layout = {};
+        float ambiDecodeMatrix[16][16] = {};
+        int ambiNumSpeakers = 0;
+        std::vector<VBAPTriplet> vbapTriplets;
+    };
+
+    OutputFormat getActiveOutputFormat() const { return getActiveLayout().format; }
+    const OutputLayoutState& getActiveLayout() const
+    {
+        return layoutBuffers[activeLayoutIndex.load (std::memory_order_acquire)];
+    }
+    int getMaxBusChannels() const { return maxBusChannels; }
+    void requestOutputFormatChange (int formatIndex);
+
     static juce::String getOutputFormatName (OutputFormat format);
 
     //--------------------------------------------------------------------------
@@ -135,6 +433,10 @@ public:
 
     static const std::array<BinauralProfile, 5> binauralProfiles;
 
+    // HRTF profile names for UI (6 profiles: 5 HRTF + 1 Simple)
+    static constexpr int NUM_HRTF_PROFILES = 6;
+    static const char* const hrtfProfileNames[NUM_HRTF_PROFILES];
+
     // Modular 3D Audio Core: 9.1.6 virtual speaker layout + zenith (9 ear + 6 top + 1 zenith)
     static const std::array<VirtualSpeaker, NUM_VIRTUAL_SPEAKERS> virtualSpeakers;
 
@@ -145,35 +447,37 @@ private:
     void   writeDelayLine (float sample);
     float  readDelayLine  (float delaySamples) const;
     float  readPitchShifted (float delaySamples, float semitones, int objectIndex);
-    BinauralGains computeBinauralGains (float azimuthRad, float elevationRad,
-                                        float distance, int profileIndex) const;
     float getTempoSyncedDelayMs (int noteDivisionIndex) const;
 
-    //--- Modular 3D Audio Core (plugin-agnostic, future: extract to SpatialCore) ---
+    //--- Modular 3D Audio Core ------------------------------------------------
     static const std::vector<VBAPTriplet>& getVBAPTriplets();
-    void computeVBAPGains (float azimuthRad, float elevationRad, float* outGains) const;
-    void computeAmbiSpeakerGains (float azimuthRad, float elevationRad, float* outGains) const;  // v0.2+ speaker output
     void updateSpeakerBinauralCache (int profileIndex);
     void computeAmbiDecodeMatrix();
-    static float evalSH (int acnIndex, float azimuthRad, float elevationRad);
 
     // Direct Ambisonics-to-Binaural decode (v0.1 — bypasses virtual speakers)
     void computeBinauralSHWeights (int profileIndex);
-    BinauralGains computeAmbiBinauralGains (float azimuthRad, float elevationRad,
-                                             float distance, int profileIndex) const;
 
     //--- v0.2: Multi-channel output support ---
     OutputFormat detectOutputFormat (int numOutputChannels) const;
+    OutputFormat resolveEffectiveFormat (OutputFormat requested, int busChannels) const;
     void activateLayout (OutputFormat format);
 
-    // 2D VBAP for flat layouts (Quad, 5.1, 7.1)
-    void computeVBAPGains2D (const SpeakerLayout& layout, float azimuthRad, float* outGains) const;
-    // 3D VBAP for height layouts (7.1.4, 9.1.6) — triplet-based
-    void computeVBAPGains3D (const SpeakerLayout& layout, float azimuthRad, float elevationRad, float* outGains) const;
-    // VBIP — intensity-weighted VBAP (tighter focus)
-    void computeVBIPGains (const SpeakerLayout& layout, float azimuthRad, float elevationRad, float* outGains) const;
-    // KNN — K-nearest neighbor panning
-    void computeKNNGains (const SpeakerLayout& layout, float azimuthRad, float elevationRad, float* outGains, int k = 3) const;
+    //--- Spatialization algorithms (polymorphic, stateless value members) ---
+    // 4 algorithms: VBAP (0), Ambisonics (1), VBIP (2), KNN (3)
+    // DirectBinauralAlgorithm retired — Woodworth moved to profile "Simple (Low CPU)"
+    DirectBinauralAlgorithm  algDirectBinaural;  // Kept for Simple profile Woodworth gains
+    VBAPAlgorithm            algVBAP;
+    AmbisonicsAlgorithm      algAmbisonics;
+    VBIPAlgorithm            algVBIP;
+    KNNAlgorithm             algKNN;
+    static constexpr int NUM_ALGORITHMS = 4;
+    SpatializationAlgorithm* algorithms[NUM_ALGORITHMS] = {};
+
+    //--- HRTF convolution system ---
+    HRTFDatabase   hrtfDatabase;
+    BinauralRenderer binauralRenderer;
+    void loadHRTFProfile (int profileIndex);
+    int loadedHRTFProfileIndex = -1;
 
     //--- DSP state ------------------------------------------------------------
     double currentSampleRate = 44100.0;
@@ -210,13 +514,13 @@ private:
     float binauralSHWeightsR[HOA_CHANNELS] = {};
     int cachedBinauralProfileIndex = -1;
 
-    // v0.2: Multi-channel output state
-    OutputFormat activeOutputFormat = OutputFormat::Binaural;
-    SpeakerLayout activeLayout = {};
-    float discreteAmbiDecodeMatrix[16][16] = {};  // active layout's Ambi decode (speakers × SH channels)
-    int discreteAmbiNumSpeakers = 0;
-    std::vector<VBAPTriplet> layoutVBAPTriplets;   // 3D VBAP triplets for height layouts
-    juce::dsp::IIR::Filter<float> lfeFilter;       // 120 Hz LP for LFE generation
+    // v0.2: Double-buffered output layout for lock-free format switching
+    OutputLayoutState layoutBuffers[2];
+    std::atomic<int> activeLayoutIndex { 0 };
+    int prepareLayoutIndex = 1;                  // Message thread writes to the non-active buffer
+    int maxBusChannels = 2;                      // Set in prepareToPlay()
+
+    juce::dsp::IIR::Filter<float> lfeFilter;     // 120 Hz LP for LFE generation
 
     // Soft Clipper helper (NaN-safe, preserves natural asymptotic curve for self-oscillation)
     static float softClip (float x)
@@ -232,8 +536,14 @@ private:
         return x;
     }
 
-    // Pre-allocated work buffer (avoid allocation in processBlock)
+    // Pre-allocated work buffers (avoid allocation in processBlock)
     std::vector<float> monoInputBuffer;
+
+    // HRTF 3-pass work buffers (pre-allocated in prepareToPlay)
+    // Pass 1 accumulates per-speaker or per-SH-channel signals
+    std::vector<float> speakerAccumBufs[NUM_VIRTUAL_SPEAKERS];  // [speaker][sample]
+    std::vector<float> shAccumBufs[HOA_CHANNELS];               // [sh_channel][sample]
+    std::vector<float> wetBufL, wetBufR;                        // Pass 2 output / Pass 3 input
 
     // Smoothed parameters
     juce::SmoothedValue<float> smoothedDryWet;

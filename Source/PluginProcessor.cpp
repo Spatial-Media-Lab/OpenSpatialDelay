@@ -1,8 +1,27 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include "HRTFData.h"
+
+// libmysofa — SOFA file reader
+extern "C" {
+#include "mysofa.h"
+}
+
+//==============================================================================
+// HRTF profile names (6 profiles: 1 Simple Woodworth + 5 HRTF convolution)
+//==============================================================================
+const char* const OpenSpatialDelayProcessor::hrtfProfileNames[NUM_HRTF_PROFILES] = {
+    "Simple (Low CPU)",   // 0: Woodworth ITD+ILD (no convolution) — default
+    "Studio Reference",   // 1: MIT KEMAR
+    "Immersive",          // 2: SADIE II D2 KU100
+    "Natural",            // 3: CIPIC Subject003
+    "Precise",            // 4: HUTUBS PP2
+    "Spatial"             // 5: Bernschuetz KU100
+};
 
 //==============================================================================
 // Binaural profiles: simplified head models for ITD + ILD rendering
+// (Used by profile 0 "Simple" — Woodworth fallback)
 //==============================================================================
 const std::array<BinauralProfile, 5> OpenSpatialDelayProcessor::binauralProfiles = {{
     { 0.0875f, 1.0f, 1500.0f, "Studio Reference" },   // MIT KEMAR-inspired
@@ -13,12 +32,34 @@ const std::array<BinauralProfile, 5> OpenSpatialDelayProcessor::binauralProfiles
 }};
 
 //==============================================================================
+// Output format registry — single source of truth for all speaker layouts
+// Reusable across Spatial Media Library plugins
+//==============================================================================
+const std::array<OpenSpatialDelayProcessor::OutputFormatInfo,
+                 OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS>
+    OpenSpatialDelayProcessor::outputFormatRegistry = {{
+    { OutputFormat::Binaural,       "Binaural",         "Bin",    2, false, false },
+    { OutputFormat::Quad,           "Quadraphonic",     "Quad",   4, false, false },
+    { OutputFormat::Surround5_1,    "5.1 Surround",     "5.1",    6, true,  false },
+    { OutputFormat::Surround7_1,    "7.1 Surround",     "7.1",    8, true,  false },
+    { OutputFormat::Surround7_1_4,  "7.1.4 Atmos",      "7.1.4", 12, true,  true  },
+    { OutputFormat::Surround9_1_6,  "9.1.6 Atmos",      "9.1.6", 16, true,  true  },
+    { OutputFormat::Octaphonic,     "Octaphonic",       "Oct",    8, false, false },
+}};
+
+//==============================================================================
 // Virtual speaker layout: 9.1.6 standard + Top Center = 16 speakers
 // Based on Dolby Atmos / ITU-R BS.2051 9.1.6 bed (LFE excluded)
 // Ear level (9) + Top (6) + Zenith (1) = 16
 // Convention: 0° = front, positive azimuth = left, negative = right
 //==============================================================================
 static constexpr float degToRad (float deg) { return deg * juce::MathConstants<float>::pi / 180.0f; }
+
+// Forward declarations of free functions (defined below, needed by earlier callers)
+static float evalSH (int acnIndex, float azimuthRad, float elevationRad);
+static void computeVBAPGains2D (const SpeakerLayout& layout, float azimuthRad, float* outGains);
+static void computeVBAPGains3D (const SpeakerLayout& layout, const std::vector<VBAPTriplet>& triplets,
+                                float azimuthRad, float elevationRad, float* outGains);
 
 const std::array<VirtualSpeaker, OpenSpatialDelayProcessor::NUM_VIRTUAL_SPEAKERS>
     OpenSpatialDelayProcessor::virtualSpeakers = {{
@@ -140,6 +181,42 @@ static SpeakerLayout make9_1_6Layout()
     return l;
 }
 
+// Octaphonic (8-channel, no LFE) — "Center" configuration
+// 8 speakers at 45° intervals: C, RF, R, RR, Rear, RL, L, FL
+static SpeakerLayout makeOctaphonicLayout()
+{
+    auto degToRad = [] (float d) { return juce::degreesToRadians (d); };
+    SpeakerLayout l = {};
+    l.numSpeakers = 8;
+    l.lfeChannelIndex = -1;
+    l.totalChannels = 8;
+    l.speakers[0] = { degToRad(   0.0f), 0.0f, 0 };   // Center
+    l.speakers[1] = { degToRad( -45.0f), 0.0f, 1 };   // Right Front
+    l.speakers[2] = { degToRad( -90.0f), 0.0f, 2 };   // Right
+    l.speakers[3] = { degToRad(-135.0f), 0.0f, 3 };   // Rear Right
+    l.speakers[4] = { degToRad( 180.0f), 0.0f, 4 };   // Rear
+    l.speakers[5] = { degToRad( 135.0f), 0.0f, 5 };   // Rear Left
+    l.speakers[6] = { degToRad(  90.0f), 0.0f, 6 };   // Left
+    l.speakers[7] = { degToRad(  45.0f), 0.0f, 7 };   // Front Left
+    return l;
+}
+
+// Build a SpeakerLayout from the 16 virtual speakers (for binaural LayoutContext)
+static SpeakerLayout makeVirtualSpeakerLayout()
+{
+    SpeakerLayout l = {};
+    l.numSpeakers = OpenSpatialDelayProcessor::NUM_VIRTUAL_SPEAKERS;
+    l.lfeChannelIndex = -1;
+    l.totalChannels = OpenSpatialDelayProcessor::NUM_VIRTUAL_SPEAKERS;
+    for (int s = 0; s < OpenSpatialDelayProcessor::NUM_VIRTUAL_SPEAKERS; ++s)
+    {
+        l.speakers[s] = { OpenSpatialDelayProcessor::virtualSpeakers[s].azimuthRad,
+                          OpenSpatialDelayProcessor::virtualSpeakers[s].elevationRad,
+                          s };
+    }
+    return l;
+}
+
 //==============================================================================
 // Note division ratios (multiplied by beat duration to get delay in ms)
 //==============================================================================
@@ -254,13 +331,22 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             [](float value, int) { return juce::String (value, 1) + " dB"; })));
 
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
-        juce::ParameterID ("algorithm", 1), "Algorithm",
-        juce::StringArray { "Direct Binaural", "VBAP", "Ambisonics (HOA)", "VBIP", "KNN" }, 0));
+        juce::ParameterID ("algorithm", 3), "Algorithm",
+        juce::StringArray { "Ambisonics (HOA)", "KNN", "VBAP", "VBIP" }, 0));
 
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
-        juce::ParameterID ("hrtfProfile", 1), "HRTF Profile",
-        juce::StringArray { "Studio Reference", "Immersive", "Natural",
-                            "Precise", "Spatial" }, 0));
+        juce::ParameterID ("hrtfProfile", 3), "HRTF Profile",
+        juce::StringArray { "Simple (Low CPU)", "Studio Reference", "Immersive",
+                            "Natural", "Precise", "Spatial" }, 0));
+
+    // v0.2: User-selectable output format (bus-constrained in UI)
+    {
+        juce::StringArray formatNames;
+        for (const auto& info : outputFormatRegistry)
+            formatNames.add (info.name);
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            juce::ParameterID ("outputFormat", 2), "Output Format", formatNames, 0));
+    }
 
     // --- Per-object parameters ------------------------------------------------
     for (int i = 0; i < MAX_OBJECTS; ++i)
@@ -307,6 +393,528 @@ juce::AudioProcessorValueTreeState::ParameterLayout
 }
 
 //==============================================================================
+// HRTFDatabase implementation — SOFA loading + HRIR lookup
+//==============================================================================
+HRTFDatabase::HRTFDatabase() {}
+
+HRTFDatabase::~HRTFDatabase()
+{
+    unload();
+}
+
+bool HRTFDatabase::loadFromMemory (const void* data, int dataSize, float targetSampleRate)
+{
+    unload();
+
+    int filterLength = 0;
+    int err = 0;
+
+    easyHandle = mysofa_open_data (static_cast<const char*> (data),
+                                   static_cast<long> (dataSize),
+                                   targetSampleRate,
+                                   &filterLength,
+                                   &err);
+
+    if (easyHandle == nullptr || err != MYSOFA_OK)
+    {
+        DBG ("HRTFDatabase: Failed to load SOFA data, error code: " + juce::String (err));
+        easyHandle = nullptr;
+        loaded = false;
+        return false;
+    }
+
+    // Note: mysofa_open_data() already normalizes via mysofa_loudness(), which
+    // scales all HRIRs so the frontal HRIR has consistent energy (factor = sqrt(2/E)).
+    // This provides cross-profile normalization at the source level.
+
+    irLength = filterLength;
+    numPositions = static_cast<int> (easyHandle->hrtf->M);
+    loaded = true;
+
+    DBG ("HRTFDatabase: Loaded " + juce::String (numPositions) + " positions, "
+         + "IR length = " + juce::String (irLength) + " samples");
+
+    return true;
+}
+
+void HRTFDatabase::getInterpolatedHRIR (float azimuthRad, float elevationRad,
+                                         float* irL, float* irR,
+                                         float& delayL, float& delayR) const
+{
+    if (! loaded || easyHandle == nullptr)
+        return;
+
+    // Convert from our convention (radians) to Cartesian for libmysofa
+    // libmysofa uses Cartesian coordinates internally
+    // Our convention: az=0 front, positive=left; el=0 ear level, positive=up
+    // Convert to Cartesian: x=front, y=left, z=up
+    float x = std::cos (elevationRad) * std::cos (azimuthRad);
+    float y = std::cos (elevationRad) * std::sin (azimuthRad);
+    float z = std::sin (elevationRad);
+
+    mysofa_getfilter_float (easyHandle, x, y, z,
+                            irL, irR,
+                            &delayL, &delayR);
+}
+
+void HRTFDatabase::getHRIRForSpeaker (const VirtualSpeaker& speaker,
+                                       float* irL, float* irR,
+                                       float& delayL, float& delayR) const
+{
+    getInterpolatedHRIR (speaker.azimuthRad, speaker.elevationRad,
+                         irL, irR, delayL, delayR);
+}
+
+void HRTFDatabase::computeSHProjectedHRIRs (float* shIRsL, float* shIRsR,
+                                              int numSHChannels) const
+{
+    if (! loaded || easyHandle == nullptr)
+        return;
+
+    const int M = static_cast<int> (easyHandle->hrtf->M);
+    const int N = irLength;
+    const int R = static_cast<int> (easyHandle->hrtf->R);  // Should be 2
+
+    // Zero output arrays
+    std::memset (shIRsL, 0, sizeof (float) * numSHChannels * N);
+    std::memset (shIRsR, 0, sizeof (float) * numSHChannels * N);
+
+    // For each measurement position, evaluate SH basis and accumulate
+    // SH-projected HRIR[c][n] = (2l+1)/M × Σ_m Y_c^SN3D(dir_m) × HRIR_m[n]
+    // Weight is (2l+1)/M for SN3D normalization (NOT 4π/M which is for N3D).
+    // SN3D orthogonality: ∫|Y_c^SN3D|² dΩ = 4π/(2l+1), so the analysis
+    // weight must include the (2l+1)/(4π) correction vs. the 4π/M quadrature.
+    const float invM = 1.0f / static_cast<float> (M);
+
+    for (int m = 0; m < M; ++m)
+    {
+        // SourcePosition is in Cartesian (x, y, z) meters after mysofa_tocartesian().
+        // mysofa_open_data() calls mysofa_tocartesian() internally, so we must
+        // convert back to spherical here for SH basis evaluation.
+        float x = easyHandle->hrtf->SourcePosition.values[m * 3 + 0];
+        float y = easyHandle->hrtf->SourcePosition.values[m * 3 + 1];
+        float z = easyHandle->hrtf->SourcePosition.values[m * 3 + 2];
+        float r = std::sqrt (x * x + y * y + z * z);
+        if (r < 1e-6f) continue;  // skip degenerate positions
+
+        // az=0 → +x (front), positive az → +y (left); el=0 → horizon
+        float azRad = std::atan2 (y, x);
+        float elRad = std::asin (std::max (-1.0f, std::min (1.0f, z / r)));
+
+        // Get the HRIR data for this measurement directly from the internal arrays
+        // DataIR layout: [M × R × N] — M measurements, R receivers (L/R), N samples
+        const float* irDataL = &easyHandle->hrtf->DataIR.values[m * R * N];
+        const float* irDataR = &easyHandle->hrtf->DataIR.values[m * R * N + N];
+
+        // Evaluate SH basis functions at this direction and accumulate
+        for (int c = 0; c < numSHChannels; ++c)
+        {
+            int order = (c < 1) ? 0 : (c < 4) ? 1 : (c < 9) ? 2 : 3;
+            float channelWeight = static_cast<float> (2 * order + 1) * invM;
+            float shVal = evalSH (c, azRad, elRad);
+            float w = channelWeight * shVal;
+
+            float* outL = &shIRsL[c * N];
+            float* outR = &shIRsR[c * N];
+
+            for (int n = 0; n < N; ++n)
+            {
+                outL[n] += w * irDataL[n];
+                outR[n] += w * irDataR[n];
+            }
+        }
+    }
+}
+
+void HRTFDatabase::unload()
+{
+    if (easyHandle != nullptr)
+    {
+        mysofa_close (easyHandle);
+        easyHandle = nullptr;
+    }
+    loaded = false;
+    irLength = 0;
+    numPositions = 0;
+}
+
+//==============================================================================
+// PartitionedConvolver implementation — overlap-save FFT convolution
+//==============================================================================
+void PartitionedConvolver::prepare (int maxBlockSize, int irLength_)
+{
+    irLen = irLength_;
+    blockSize = maxBlockSize;
+
+    // FFT size must be >= blockSize + irLen - 1 (linear convolution length)
+    // Round up to next power of 2
+    int minFFTSize = blockSize + irLen - 1;
+    fftOrder = 1;
+    while ((1 << fftOrder) < minFFTSize)
+        ++fftOrder;
+    fftSize = 1 << fftOrder;
+
+    fft = juce::dsp::FFT (fftOrder);
+
+    // Allocate buffers (FFT uses 2× size for complex interleaved)
+    irFreqDomain.resize (static_cast<size_t> (fftSize * 2), 0.0f);
+    inputAccum.resize (static_cast<size_t> (fftSize * 2), 0.0f);
+    fftWorkBuf.resize (static_cast<size_t> (fftSize * 2), 0.0f);
+    overlapBuf.resize (static_cast<size_t> (fftSize), 0.0f);
+
+    reset();
+}
+
+void PartitionedConvolver::setIR (const float* ir, int length)
+{
+    if (fftSize == 0) return;
+
+    // Zero-pad IR to fftSize and compute FFT
+    std::fill (irFreqDomain.begin(), irFreqDomain.end(), 0.0f);
+    for (int i = 0; i < std::min (length, fftSize); ++i)
+        irFreqDomain[static_cast<size_t> (i)] = ir[i];
+
+    fft.performRealOnlyForwardTransform (irFreqDomain.data(), true);
+    irLen = length;
+}
+
+void PartitionedConvolver::process (const float* in, float* out, int numSamples)
+{
+    if (fftSize == 0 || irLen == 0)
+    {
+        // Pass-through if no IR set
+        if (in != out)
+            std::memcpy (out, in, sizeof (float) * numSamples);
+        return;
+    }
+
+    // Simple overlap-save convolution:
+    // For each block of input, we perform FFT, multiply with IR spectrum, IFFT,
+    // and combine with overlap from previous block.
+
+    int samplesProcessed = 0;
+
+    while (samplesProcessed < numSamples)
+    {
+        // How many samples we can accept before we need to process
+        int spaceInAccum = blockSize - inputAccumPos;
+        int samplesToAccum = std::min (spaceInAccum, numSamples - samplesProcessed);
+
+        // Accumulate input
+        for (int i = 0; i < samplesToAccum; ++i)
+            inputAccum[static_cast<size_t> (inputAccumPos + i)] = in[samplesProcessed + i];
+
+        inputAccumPos += samplesToAccum;
+        samplesProcessed += samplesToAccum;
+
+        // When we have a full block, process it
+        if (inputAccumPos >= blockSize)
+        {
+            // Copy input to work buffer, zero-pad to fftSize
+            std::fill (fftWorkBuf.begin(), fftWorkBuf.end(), 0.0f);
+            for (int i = 0; i < blockSize; ++i)
+                fftWorkBuf[static_cast<size_t> (i)] = inputAccum[static_cast<size_t> (i)];
+
+            // Forward FFT of input
+            fft.performRealOnlyForwardTransform (fftWorkBuf.data(), true);
+
+            // Complex multiply with pre-computed IR spectrum
+            // juce::dsp::FFT stores as [re, im, re, im, ...]
+            for (int i = 0; i < fftSize * 2; i += 2)
+            {
+                float re1 = fftWorkBuf[i],     im1 = fftWorkBuf[i + 1];
+                float re2 = irFreqDomain[i],   im2 = irFreqDomain[i + 1];
+                fftWorkBuf[i]     = re1 * re2 - im1 * im2;
+                fftWorkBuf[i + 1] = re1 * im2 + im1 * re2;
+            }
+
+            // Inverse FFT
+            fft.performRealOnlyInverseTransform (fftWorkBuf.data());
+
+            // Output: first blockSize samples = new output + overlap from previous block
+            int outStart = samplesProcessed - blockSize;  // Where in the output buffer to write
+            int outSamples = std::min (blockSize, numSamples - outStart);
+
+            for (int i = 0; i < outSamples; ++i)
+            {
+                out[outStart + i] = fftWorkBuf[static_cast<size_t> (i)]
+                                  + overlapBuf[static_cast<size_t> (i)];
+            }
+
+            // Save overlap: samples [blockSize .. fftSize-1] for next block
+            int overlapLen = fftSize - blockSize;
+            for (int i = 0; i < overlapLen; ++i)
+                overlapBuf[static_cast<size_t> (i)] = fftWorkBuf[static_cast<size_t> (blockSize + i)];
+
+            // Zero the rest of overlap buffer
+            for (int i = overlapLen; i < fftSize; ++i)
+                overlapBuf[static_cast<size_t> (i)] = 0.0f;
+
+            inputAccumPos = 0;
+        }
+    }
+}
+
+void PartitionedConvolver::reset()
+{
+    std::fill (inputAccum.begin(), inputAccum.end(), 0.0f);
+    std::fill (overlapBuf.begin(), overlapBuf.end(), 0.0f);
+    std::fill (fftWorkBuf.begin(), fftWorkBuf.end(), 0.0f);
+    inputAccumPos = 0;
+}
+
+//==============================================================================
+// BinauralRenderer implementation — manages HRTF convolver banks
+//==============================================================================
+void BinauralRenderer::prepare (double sampleRate, int maxBlockSize)
+{
+    currentSampleRate = sampleRate;
+    currentBlockSize = maxBlockSize;
+
+    convTmpL.resize (static_cast<size_t> (maxBlockSize), 0.0f);
+    convTmpR.resize (static_cast<size_t> (maxBlockSize), 0.0f);
+}
+
+void BinauralRenderer::setProfile (int profileIndex, HRTFDatabase& hrtfDb,
+                                    const VirtualSpeaker* speakers, int numSpeakers,
+                                    int numSHChannels)
+{
+    activeProfile = profileIndex;
+
+    if (profileIndex == 0 || ! hrtfDb.isLoaded())
+    {
+        // Simple mode — no convolution needed
+        activeSpeakers = 0;
+        activeSHChannels = 0;
+        return;
+    }
+
+    int irLen = hrtfDb.getIRLength();
+    activeSpeakers = numSpeakers;
+
+    // =========================================================================
+    // Pass 1: Load all speaker HRIRs into temp buffers, measure total energy.
+    // mysofa_loudness() normalises the FRONTAL HRIR so its sumOfSquares = 2.0,
+    // but off-axis HRIRs are scaled by the same factor — their relative energy
+    // vs. the frontal position is preserved.  Datasets with higher off-axis
+    // energy (SADIE D2, HUTUBS PP2) therefore produce louder output through
+    // the virtual-speaker convolution path.
+    //
+    // Self-calibrating target: frontal avgRMS after mysofa_loudness
+    //   = sqrt(2.0 / (2 × irLen)) = 1 / sqrt(irLen)
+    // Setting targetRMS = 1/sqrt(irLen) gives normGain ≈ 1.0 for datasets
+    // whose speaker-averaged RMS matches the frontal level (e.g. MIT KEMAR),
+    // and normGain < 1.0 for hotter datasets (SADIE, HUTUBS).
+    // =========================================================================
+    const int clamped = std::min (numSpeakers, MAX_CONVOLVERS);
+    std::vector<std::vector<float>> allIRsL (clamped, std::vector<float> (irLen));
+    std::vector<std::vector<float>> allIRsR (clamped, std::vector<float> (irLen));
+    double totalEnergy = 0.0;
+
+    for (int sp = 0; sp < clamped; ++sp)
+    {
+        float delayL = 0.0f, delayR = 0.0f;
+        hrtfDb.getHRIRForSpeaker (speakers[sp], allIRsL[sp].data(), allIRsR[sp].data(), delayL, delayR);
+        for (int n = 0; n < irLen; ++n)
+        {
+            totalEnergy += (double) allIRsL[sp][n] * allIRsL[sp][n];
+            totalEnergy += (double) allIRsR[sp][n] * allIRsR[sp][n];
+        }
+    }
+
+    const float targetRMS = 1.0f / std::sqrt ((float) irLen);
+    const double avgRMS   = std::sqrt (totalEnergy / (double) (clamped * 2 * irLen));
+    const float normGain  = (avgRMS > 1e-8) ? (float) (targetRMS / avgRMS) : 1.0f;
+
+    // =========================================================================
+    // Pass 2: Apply normGain and load into speaker convolvers
+    // =========================================================================
+    for (int sp = 0; sp < clamped; ++sp)
+    {
+        for (int n = 0; n < irLen; ++n)
+        {
+            allIRsL[sp][n] *= normGain;
+            allIRsR[sp][n] *= normGain;
+        }
+        speakerConvL[sp].prepare (currentBlockSize, irLen);
+        speakerConvR[sp].prepare (currentBlockSize, irLen);
+        speakerConvL[sp].setIR (allIRsL[sp].data(), irLen);
+        speakerConvR[sp].setIR (allIRsR[sp].data(), irLen);
+    }
+
+    // =========================================================================
+    // Set up SH-domain convolvers for Ambisonics, applying the same normGain
+    // =========================================================================
+    activeSHChannels = numSHChannels;
+
+    if (numSHChannels > 0)
+    {
+        std::vector<float> shIRsL (numSHChannels * irLen);
+        std::vector<float> shIRsR (numSHChannels * irLen);
+        hrtfDb.computeSHProjectedHRIRs (shIRsL.data(), shIRsR.data(), numSHChannels);
+
+        // Apply the same cross-profile normGain to keep SH path level-matched
+        for (int i = 0; i < numSHChannels * irLen; ++i)
+        {
+            shIRsL[i] *= normGain;
+            shIRsR[i] *= normGain;
+        }
+
+        for (int ch = 0; ch < numSHChannels && ch < MAX_CONVOLVERS; ++ch)
+        {
+            shConvL[ch].prepare (currentBlockSize, irLen);
+            shConvR[ch].prepare (currentBlockSize, irLen);
+
+            shConvL[ch].setIR (&shIRsL[ch * irLen], irLen);
+            shConvR[ch].setIR (&shIRsR[ch * irLen], irLen);
+        }
+    }
+
+    DBG ("BinauralRenderer: Profile " + juce::String (profileIndex)
+         + " loaded — " + juce::String (activeSpeakers) + " speaker convolvers, "
+         + juce::String (activeSHChannels) + " SH convolvers, IR=" + juce::String (irLen)
+         + ", normGain=" + juce::String (normGain, 4));
+}
+
+void BinauralRenderer::renderSpeakerBuffers (const float* const* speakerBufs, int numSpeakers,
+                                              int numSamples, float* outL, float* outR)
+{
+    // Zero output
+    std::memset (outL, 0, sizeof (float) * numSamples);
+    std::memset (outR, 0, sizeof (float) * numSamples);
+
+    if (convTmpL.size() < static_cast<size_t> (numSamples))
+    {
+        convTmpL.resize (numSamples);
+        convTmpR.resize (numSamples);
+    }
+
+    for (int sp = 0; sp < numSpeakers && sp < activeSpeakers; ++sp)
+    {
+        // Convolve this speaker's accumulated signal with its L and R HRIRs
+        speakerConvL[sp].process (speakerBufs[sp], convTmpL.data(), numSamples);
+        speakerConvR[sp].process (speakerBufs[sp], convTmpR.data(), numSamples);
+
+        // Sum into output
+        for (int s = 0; s < numSamples; ++s)
+        {
+            outL[s] += convTmpL[s];
+            outR[s] += convTmpR[s];
+        }
+    }
+}
+
+void BinauralRenderer::renderSHBuffers (const float* const* shBufs, int numSHChannels,
+                                         int numSamples, float* outL, float* outR)
+{
+    // Zero output
+    std::memset (outL, 0, sizeof (float) * numSamples);
+    std::memset (outR, 0, sizeof (float) * numSamples);
+
+    if (convTmpL.size() < static_cast<size_t> (numSamples))
+    {
+        convTmpL.resize (numSamples);
+        convTmpR.resize (numSamples);
+    }
+
+    for (int ch = 0; ch < numSHChannels && ch < activeSHChannels; ++ch)
+    {
+        shConvL[ch].process (shBufs[ch], convTmpL.data(), numSamples);
+        shConvR[ch].process (shBufs[ch], convTmpR.data(), numSamples);
+
+        for (int s = 0; s < numSamples; ++s)
+        {
+            outL[s] += convTmpL[s];
+            outR[s] += convTmpR[s];
+        }
+    }
+}
+
+void BinauralRenderer::reset()
+{
+    for (int i = 0; i < MAX_CONVOLVERS; ++i)
+    {
+        speakerConvL[i].reset();
+        speakerConvR[i].reset();
+        shConvL[i].reset();
+        shConvR[i].reset();
+    }
+}
+
+//==============================================================================
+// HRTF Profile Loading — maps profile index to SOFA BinaryData
+//==============================================================================
+void OpenSpatialDelayProcessor::loadHRTFProfile (int profileIndex)
+{
+    if (profileIndex == loadedHRTFProfileIndex)
+        return;  // Already loaded
+
+    if (profileIndex == 0)
+    {
+        // Simple (Woodworth) — no HRTF to load
+        hrtfDatabase.unload();
+        binauralRenderer.setProfile (0, hrtfDatabase,
+                                      virtualSpeakers.data(), NUM_VIRTUAL_SPEAKERS,
+                                      HOA_CHANNELS);
+        loadedHRTFProfileIndex = 0;
+        DBG ("HRTF: Switched to Simple (Woodworth) profile");
+        return;
+    }
+
+    // Map profile index to BinaryData
+    const char* sofaData = nullptr;
+    int sofaSize = 0;
+
+    switch (profileIndex)
+    {
+        case 1:  // Studio Reference — MIT KEMAR
+            sofaData = HRTFData::mit_kemar_large_pinna_sofa;
+            sofaSize = HRTFData::mit_kemar_large_pinna_sofaSize;
+            break;
+        case 2:  // Immersive — SADIE II D2 KU100
+            sofaData = HRTFData::sadie_d2_ku100_sofa;
+            sofaSize = HRTFData::sadie_d2_ku100_sofaSize;
+            break;
+        case 3:  // Natural — CIPIC Subject003
+            sofaData = HRTFData::cipic_subject_003_sofa;
+            sofaSize = HRTFData::cipic_subject_003_sofaSize;
+            break;
+        case 4:  // Precise — HUTUBS PP2
+            sofaData = HRTFData::hutubs_pp2_sofa;
+            sofaSize = HRTFData::hutubs_pp2_sofaSize;
+            break;
+        case 5:  // Spatial — Bernschuetz KU100
+            sofaData = HRTFData::bernschuetz_ku100_sofa;
+            sofaSize = HRTFData::bernschuetz_ku100_sofaSize;
+            break;
+        default:
+            DBG ("HRTF: Invalid profile index " + juce::String (profileIndex));
+            return;
+    }
+
+    float sampleRate = static_cast<float> (currentSampleRate);
+    bool success = hrtfDatabase.loadFromMemory (sofaData, sofaSize, sampleRate);
+
+    if (success)
+    {
+        binauralRenderer.setProfile (profileIndex, hrtfDatabase,
+                                      virtualSpeakers.data(), NUM_VIRTUAL_SPEAKERS,
+                                      HOA_CHANNELS);
+        loadedHRTFProfileIndex = profileIndex;
+        DBG ("HRTF: Loaded profile " + juce::String (profileIndex)
+             + " (" + juce::String (hrtfProfileNames[profileIndex]) + ")"
+             + " — " + juce::String (hrtfDatabase.getNumPositions()) + " positions"
+             + ", IR=" + juce::String (hrtfDatabase.getIRLength()) + " samples");
+    }
+    else
+    {
+        DBG ("HRTF: Failed to load profile " + juce::String (profileIndex)
+             + ", falling back to Simple");
+        loadedHRTFProfileIndex = -1;
+    }
+}
+
+//==============================================================================
 // Constructor / Destructor
 //==============================================================================
 OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
@@ -315,7 +923,12 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
                         .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "Parameters", createParameterLayout())
 {
-    // v0.2: Initialize LFE filter (will be configured in prepareToPlay)
+    // Initialize polymorphic algorithm pointer array (O(1) index lookup)
+    // 4 algorithms (alphabetical): Ambisonics (0), KNN (1), VBAP (2), VBIP (3)
+    algorithms[0] = &algAmbisonics;
+    algorithms[1] = &algKNN;
+    algorithms[2] = &algVBAP;
+    algorithms[3] = &algVBIP;
 }
 
 OpenSpatialDelayProcessor::~OpenSpatialDelayProcessor() {}
@@ -337,6 +950,8 @@ bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layou
     if (outputSet == juce::AudioChannelSet::create7point1())   return true;
     if (outputSet == juce::AudioChannelSet::create7point1point4()) return true;
     if (outputSet == juce::AudioChannelSet::create9point1point6()) return true;
+    if (outputSet == juce::AudioChannelSet::octagonal())          return true;
+    if (outputSet == juce::AudioChannelSet::discreteChannels (8)) return true;
 
     return false;
 }
@@ -368,6 +983,7 @@ juce::String OpenSpatialDelayProcessor::getOutputFormatName (OutputFormat format
         case OutputFormat::Surround7_1:    return "7.1 Surround";
         case OutputFormat::Surround7_1_4:  return "7.1.4 Atmos";
         case OutputFormat::Surround9_1_6:  return "9.1.6 Atmos";
+        case OutputFormat::Octaphonic:     return "Octaphonic";
         default:                           return "Unknown";
     }
 }
@@ -377,37 +993,44 @@ juce::String OpenSpatialDelayProcessor::getOutputFormatName (OutputFormat format
 //==============================================================================
 void OpenSpatialDelayProcessor::activateLayout (OutputFormat format)
 {
-    activeOutputFormat = format;
+    auto& buf = layoutBuffers[prepareLayoutIndex];
+    buf.format = format;
 
     switch (format)
     {
-        case OutputFormat::Quad:          activeLayout = makeQuadLayout();    break;
-        case OutputFormat::Surround5_1:   activeLayout = make5_1Layout();    break;
-        case OutputFormat::Surround7_1:   activeLayout = make7_1Layout();    break;
-        case OutputFormat::Surround7_1_4: activeLayout = make7_1_4Layout();  break;
-        case OutputFormat::Surround9_1_6: activeLayout = make9_1_6Layout();  break;
+        case OutputFormat::Quad:          buf.layout = makeQuadLayout();    break;
+        case OutputFormat::Surround5_1:   buf.layout = make5_1Layout();    break;
+        case OutputFormat::Surround7_1:   buf.layout = make7_1Layout();    break;
+        case OutputFormat::Surround7_1_4: buf.layout = make7_1_4Layout();  break;
+        case OutputFormat::Surround9_1_6: buf.layout = make9_1_6Layout();  break;
+        case OutputFormat::Octaphonic:     buf.layout = makeOctaphonicLayout(); break;
         case OutputFormat::Binaural:
         default:
-            activeLayout = {};
-            activeLayout.numSpeakers = 0;
-            activeLayout.lfeChannelIndex = -1;
-            activeLayout.totalChannels = 2;
-            return;  // No layout-specific processing needed for binaural
+            buf.layout = {};
+            buf.layout.numSpeakers = 0;
+            buf.layout.lfeChannelIndex = -1;
+            buf.layout.totalChannels = 2;
+            buf.ambiNumSpeakers = 0;
+            buf.vbapTriplets.clear();
+            // Swap: audio thread now sees the new binaural layout
+            activeLayoutIndex.store (prepareLayoutIndex, std::memory_order_release);
+            prepareLayoutIndex = 1 - prepareLayoutIndex;
+            return;
     }
 
-    discreteAmbiNumSpeakers = activeLayout.numSpeakers;
+    buf.ambiNumSpeakers = buf.layout.numSpeakers;
 
     // --- Compute Ambisonics decode matrix for this layout ---
     // D = E^T (E E^T + epsilon I)^{-1}  (Tikhonov-regularized pseudo-inverse)
-    const int N = activeLayout.numSpeakers;
+    const int N = buf.layout.numSpeakers;
     const int M = HOA_CHANNELS;
 
     // Build encoding matrix E[c][s] = evalSH(c, speaker_s_position)
     float E[16][16] = {};
     for (int s = 0; s < N; ++s)
         for (int c = 0; c < M; ++c)
-            E[c][s] = evalSH (c, activeLayout.speakers[s].azimuthRad,
-                                 activeLayout.speakers[s].elevationRad);
+            E[c][s] = evalSH (c, buf.layout.speakers[s].azimuthRad,
+                                 buf.layout.speakers[s].elevationRad);
 
     // Compute EET = E * E^T  (M × M)
     float EET[16][16] = {};
@@ -477,17 +1100,14 @@ void OpenSpatialDelayProcessor::activateLayout (OutputFormat format)
             float sum = 0.0f;
             for (int k = 0; k < M; ++k)
                 sum += E[k][s] * inv[k][c];
-            discreteAmbiDecodeMatrix[s][c] = sum;
+            buf.ambiDecodeMatrix[s][c] = sum;
         }
 
     // --- Build 3D VBAP triplets for height layouts ---
-    layoutVBAPTriplets.clear();
+    buf.vbapTriplets.clear();
 
     if (format == OutputFormat::Surround7_1_4 || format == OutputFormat::Surround9_1_6)
     {
-        // Build triplets from layout speakers using same Delaunay approach as virtual speakers
-        // For simplicity, use brute-force: test all triplets, keep those whose inverse exists
-        // and that contain the source direction (validated at runtime)
         for (int a = 0; a < N - 2; ++a)
         {
             for (int b = a + 1; b < N - 1; ++b)
@@ -500,11 +1120,10 @@ void OpenSpatialDelayProcessor::activateLayout (OutputFormat format)
                                  std::sin(el) };
                     };
 
-                    auto ca = toCart (activeLayout.speakers[a].azimuthRad, activeLayout.speakers[a].elevationRad);
-                    auto cb = toCart (activeLayout.speakers[b].azimuthRad, activeLayout.speakers[b].elevationRad);
-                    auto ccc = toCart (activeLayout.speakers[cc].azimuthRad, activeLayout.speakers[cc].elevationRad);
+                    auto ca = toCart (buf.layout.speakers[a].azimuthRad, buf.layout.speakers[a].elevationRad);
+                    auto cb = toCart (buf.layout.speakers[b].azimuthRad, buf.layout.speakers[b].elevationRad);
+                    auto ccc = toCart (buf.layout.speakers[cc].azimuthRad, buf.layout.speakers[cc].elevationRad);
 
-                    // 3×3 matrix [ca cb ccc]
                     float m[3][3] = {
                         { ca[0], cb[0], ccc[0] },
                         { ca[1], cb[1], ccc[1] },
@@ -516,7 +1135,7 @@ void OpenSpatialDelayProcessor::activateLayout (OutputFormat format)
                               + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
 
                     if (std::abs (det) < 0.01f)
-                        continue;  // Degenerate triplet
+                        continue;
 
                     float invDet = 1.0f / det;
                     VBAPTriplet t;
@@ -533,11 +1152,59 @@ void OpenSpatialDelayProcessor::activateLayout (OutputFormat format)
                     t.inv[2][1] = -(m[0][0] * m[2][1] - m[0][1] * m[2][0]) * invDet;
                     t.inv[2][2] =  (m[0][0] * m[1][1] - m[0][1] * m[1][0]) * invDet;
 
-                    layoutVBAPTriplets.push_back (t);
+                    buf.vbapTriplets.push_back (t);
                 }
             }
         }
     }
+
+    // Atomic swap: audio thread now reads the fully-populated buffer
+    activeLayoutIndex.store (prepareLayoutIndex, std::memory_order_release);
+    prepareLayoutIndex = 1 - prepareLayoutIndex;
+}
+
+//==============================================================================
+// v0.2: Resolve user-selected format against bus channel constraint
+//==============================================================================
+OpenSpatialDelayProcessor::OutputFormat
+    OpenSpatialDelayProcessor::resolveEffectiveFormat (OutputFormat requested, int busChannels) const
+{
+    // Binaural always works — renders to L/R within any bus ≥ 2ch
+    if (requested == OutputFormat::Binaural)
+        return OutputFormat::Binaural;
+
+    // For surround formats, validate that the bus has enough channels
+    for (const auto& info : outputFormatRegistry)
+    {
+        if (info.format == requested)
+        {
+            if (busChannels >= info.requiredChannels)
+                return requested;
+            break;
+        }
+    }
+
+    // Fall back: find the largest format that fits the bus
+    OutputFormat fallback = OutputFormat::Binaural;
+    for (const auto& info : outputFormatRegistry)
+    {
+        if (info.requiredChannels <= busChannels)
+            fallback = info.format;
+    }
+    return fallback;
+}
+
+//==============================================================================
+// v0.2: Runtime output format change (called from editor timer, message thread)
+//==============================================================================
+void OpenSpatialDelayProcessor::requestOutputFormatChange (int formatIndex)
+{
+    formatIndex = juce::jlimit (0, NUM_OUTPUT_FORMATS - 1, formatIndex);
+    auto requested = outputFormatRegistry[formatIndex].format;
+    auto effective = resolveEffectiveFormat (requested, maxBusChannels);
+
+    if (effective != getActiveLayout().format)
+        activateLayout (effective);
 }
 
 //==============================================================================
@@ -585,14 +1252,31 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     cachedBinauralProfileIndex = -1;  // Force Ambisonics SH weights re-computation
     computeAmbiDecodeMatrix();        // Pre-compute 3rd-order decode matrix for virtual speakers
 
-    // v0.2: Detect output format and activate speaker layout
-    auto format = detectOutputFormat (getTotalNumOutputChannels());
-    activateLayout (format);
+    // v0.2: Resolve output format from user selection + bus constraint
+    maxBusChannels = getTotalNumOutputChannels();
+    int userFormatIndex = static_cast<int> (apvts.getRawParameterValue ("outputFormat")->load());
+    auto userFormat = outputFormatRegistry[juce::jlimit (0, NUM_OUTPUT_FORMATS - 1, userFormatIndex)].format;
+    auto effectiveFormat = resolveEffectiveFormat (userFormat, maxBusChannels);
+    activateLayout (effectiveFormat);
 
     // v0.2: Configure LFE low-pass filter (120 Hz, 2nd order Butterworth)
     lfeFilter.prepare (spec);
     lfeFilter.reset();
     *lfeFilter.coefficients = *juce::dsp::IIR::Coefficients<float>::makeLowPass (sampleRate, 120.0f);
+
+    // HRTF convolution: prepare renderer and work buffers
+    binauralRenderer.prepare (sampleRate, samplesPerBlock);
+
+    // Pre-allocate accumulation buffers for 3-pass architecture
+    for (int sp = 0; sp < NUM_VIRTUAL_SPEAKERS; ++sp)
+        speakerAccumBufs[sp].resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+    for (int ch = 0; ch < HOA_CHANNELS; ++ch)
+        shAccumBufs[ch].resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+    wetBufL.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+    wetBufR.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+
+    // Force HRTF profile reload at new sample rate
+    loadedHRTFProfileIndex = -1;
 }
 
 void OpenSpatialDelayProcessor::releaseResources()
@@ -686,31 +1370,37 @@ float OpenSpatialDelayProcessor::readPitchShifted (float delaySamples,
 }
 
 //==============================================================================
-// Binaural rendering (simplified physical model: ITD + ILD)
+// DirectBinauralAlgorithm — ITD + ILD binaural model (Woodworth)
 //==============================================================================
-BinauralGains OpenSpatialDelayProcessor::computeBinauralGains (
-    float azimuthRad, float elevationRad, float distance, int profileIndex) const
+void DirectBinauralAlgorithm::computeGains (const SourcePosition&, const LayoutContext&,
+                                             float* outputGains, int numSpeakers) const
 {
-    const auto& profile = binauralProfiles[juce::jlimit (0, 4, profileIndex)];
+    // Direct Binaural does not produce speaker gains — zero for safety
+    for (int s = 0; s < numSpeakers; ++s)
+        outputGains[s] = 0.0f;
+}
+
+BinauralGains DirectBinauralAlgorithm::computeBinauralGains (
+    const SourcePosition& source, const BinauralContext& ctx) const
+{
+    const auto& profile = ctx.profiles[juce::jlimit (0, 4, ctx.profileIndex - 1)];
 
     // Effective lateral angle (azimuth projected by elevation)
-    float sinAz  = std::sin (azimuthRad);
-    float cosEl  = std::cos (elevationRad);
+    float sinAz  = std::sin (source.azimuthRad);
+    float cosEl  = std::cos (source.elevationRad);
     float lateral = sinAz * cosEl;  // effective sine of lateral angle
 
     // Woodworth ITD model: t = (r/c) * (sin(theta) + theta)
-    // Simplified: use lateral angle directly
     float itdSeconds = (profile.headRadius / 343.0f)
                      * (std::abs (lateral) + std::asin (std::abs (lateral)));
-    float itdSamples = itdSeconds * static_cast<float> (currentSampleRate);
+    float itdSamples = itdSeconds * static_cast<float> (ctx.sampleRate);
 
-    // ILD: frequency-dependent, but simplified to a broadband gain difference
-    // Empirical: ~1.5 dB per 10 degrees for low frequencies, more for high
-    float ildDb = profile.ildScale * 8.0f * std::abs (lateral); // up to ~8 dB at 90°
+    // ILD: broadband gain difference (~8 dB at 90°)
+    float ildDb = profile.ildScale * 8.0f * std::abs (lateral);
     float farEarGain = juce::Decibels::decibelsToGain (-ildDb);
 
     // Distance attenuation (inverse-distance law, clamped)
-    float distGain = 1.0f / std::max (0.1f, distance * 4.0f + 0.25f);
+    float distGain = 1.0f / std::max (0.1f, source.distance * 4.0f + 0.25f);
 
     BinauralGains gains;
 
@@ -769,16 +1459,6 @@ float OpenSpatialDelayProcessor::getTempoSyncedDelayMs (int noteDivisionIndex) c
 //==============================================================================
 // Modular 3D Audio Core — VBAP 3D (Pulkki 1997)
 //==============================================================================
-
-// Helper: convert spherical to Cartesian unit vector
-static inline void sphericalToCartesian (float azRad, float elRad,
-                                          float& x, float& y, float& z)
-{
-    float cosEl = std::cos (elRad);
-    x = std::cos (azRad) * cosEl;   // front/back
-    y = std::sin (azRad) * cosEl;   // left/right
-    z = std::sin (elRad);           // up/down
-}
 
 // Helper: 3x3 matrix inverse, returns false if singular
 static bool invert3x3 (const float m[3][3], float inv[3][3])
@@ -887,19 +1567,28 @@ const std::vector<VBAPTriplet>& OpenSpatialDelayProcessor::getVBAPTriplets()
         tri.k = tris[t][2];
 
         // Build 3x3 matrix of speaker direction vectors
-        float xi, yi, zi, xj, yj, zj, xk, yk, zk;
-        sphericalToCartesian (virtualSpeakers[tri.i].azimuthRad,
-                              virtualSpeakers[tri.i].elevationRad, xi, yi, zi);
-        sphericalToCartesian (virtualSpeakers[tri.j].azimuthRad,
-                              virtualSpeakers[tri.j].elevationRad, xj, yj, zj);
-        sphericalToCartesian (virtualSpeakers[tri.k].azimuthRad,
-                              virtualSpeakers[tri.k].elevationRad, xk, yk, zk);
+        // Convention: (sin(az)*cos(el), cos(az)*cos(el), sin(el))
+        // Matches computeVBAPGains3D and activateLayout toCart lambda
+        auto toCart = [](float az, float el) -> std::array<float, 3> {
+            return { std::cos(el) * std::sin(az),
+                     std::cos(el) * std::cos(az),
+                     std::sin(el) };
+        };
 
-        // Matrix L = [spk_i | spk_j | spk_k] as rows for g = L^-1 * p
+        auto ci = toCart (virtualSpeakers[tri.i].azimuthRad, virtualSpeakers[tri.i].elevationRad);
+        auto cj = toCart (virtualSpeakers[tri.j].azimuthRad, virtualSpeakers[tri.j].elevationRad);
+        auto ck = toCart (virtualSpeakers[tri.k].azimuthRad, virtualSpeakers[tri.k].elevationRad);
+
+        float xi = ci[0], yi = ci[1], zi = ci[2];
+        float xj = cj[0], yj = cj[1], zj = cj[2];
+        float xk = ck[0], yk = ck[1], zk = ck[2];
+
+        // Matrix L = [spk_i | spk_j | spk_k] as columns for g = L^-1 * p
+        // (Pulkki 1997: p = L*g → g = L^-1 * p; speakers must be columns)
         float L[3][3] = {
-            { xi, yi, zi },
-            { xj, yj, zj },
-            { xk, yk, zk }
+            { xi, xj, xk },
+            { yi, yj, yk },
+            { zi, zj, zk }
         };
 
         if (invert3x3 (L, tri.inv))
@@ -910,82 +1599,23 @@ const std::vector<VBAPTriplet>& OpenSpatialDelayProcessor::getVBAPTriplets()
     return triplets;
 }
 
-void OpenSpatialDelayProcessor::computeVBAPGains (float azimuthRad, float elevationRad,
-                                                    float* outGains) const
+//==============================================================================
+// VBAPAlgorithm — Vector Base Amplitude Panning (2D or 3D)
+//==============================================================================
+void VBAPAlgorithm::computeGains (const SourcePosition& source, const LayoutContext& ctx,
+                                   float* outputGains, int numSpeakers) const
 {
-    // Zero all gains
-    for (int s = 0; s < NUM_VIRTUAL_SPEAKERS; ++s)
-        outGains[s] = 0.0f;
-
-    // Source direction as unit Cartesian vector
-    float px, py, pz;
-    sphericalToCartesian (azimuthRad, elevationRad, px, py, pz);
-
-    const auto& triplets = getVBAPTriplets();
-    float bestGainSum = -1.0f;
-    int bestTri = -1;
-    float bestG[3] = {};
-
-    for (int t = 0; t < static_cast<int> (triplets.size()); ++t)
-    {
-        const auto& tri = triplets[t];
-
-        // g = inv * p (matrix-vector multiply)
-        float g0 = tri.inv[0][0] * px + tri.inv[0][1] * py + tri.inv[0][2] * pz;
-        float g1 = tri.inv[1][0] * px + tri.inv[1][1] * py + tri.inv[1][2] * pz;
-        float g2 = tri.inv[2][0] * px + tri.inv[2][1] * py + tri.inv[2][2] * pz;
-
-        // Source is inside this triangle if all gains are non-negative
-        if (g0 >= -1e-6f && g1 >= -1e-6f && g2 >= -1e-6f)
-        {
-            float sum = g0 + g1 + g2;
-            if (sum > bestGainSum)
-            {
-                bestGainSum = sum;
-                bestTri = t;
-                bestG[0] = std::max (0.0f, g0);
-                bestG[1] = std::max (0.0f, g1);
-                bestG[2] = std::max (0.0f, g2);
-            }
-        }
-    }
-
-    if (bestTri >= 0)
-    {
-        // Constant-power normalization
-        float power = bestG[0] * bestG[0] + bestG[1] * bestG[1] + bestG[2] * bestG[2];
-        float scale = (power > 1e-12f) ? (1.0f / std::sqrt (power)) : 0.0f;
-
-        outGains[triplets[bestTri].i] = bestG[0] * scale;
-        outGains[triplets[bestTri].j] = bestG[1] * scale;
-        outGains[triplets[bestTri].k] = bestG[2] * scale;
-    }
+    if (! ctx.triplets.empty())
+        computeVBAPGains3D (ctx.layout, ctx.triplets, source.azimuthRad, source.elevationRad, outputGains);
     else
-    {
-        // Fallback: nearest speaker (should not happen with correct triangulation)
-        float bestDot = -2.0f;
-        int bestSpeaker = 0;
-        for (int s = 0; s < NUM_VIRTUAL_SPEAKERS; ++s)
-        {
-            float sx, sy, sz;
-            sphericalToCartesian (virtualSpeakers[s].azimuthRad,
-                                  virtualSpeakers[s].elevationRad, sx, sy, sz);
-            float dot = px * sx + py * sy + pz * sz;
-            if (dot > bestDot)
-            {
-                bestDot = dot;
-                bestSpeaker = s;
-            }
-        }
-        outGains[bestSpeaker] = 1.0f;
-    }
+        computeVBAPGains2D (ctx.layout, source.azimuthRad, outputGains);
 }
 
 //==============================================================================
 // Modular 3D Audio Core — 3rd-Order Ambisonics (ACN/SN3D)
 //==============================================================================
 
-float OpenSpatialDelayProcessor::evalSH (int acn, float az, float el)
+static float evalSH (int acn, float az, float el)
 {
     // Real spherical harmonics, ACN ordering, SN3D normalization
     // az = azimuth (radians), el = elevation (radians)
@@ -1101,52 +1731,49 @@ void OpenSpatialDelayProcessor::computeAmbiDecodeMatrix()
             ambiDecodeMatrix[s][c] = augmented[s][c + 16];
 }
 
-void OpenSpatialDelayProcessor::computeAmbiSpeakerGains (float azimuthRad, float elevationRad,
-                                                          float* outGains) const
+//==============================================================================
+// AmbisonicsAlgorithm — 3rd-order HOA (ACN/SN3D) with max-rE weighting
+//==============================================================================
+void AmbisonicsAlgorithm::computeGains (const SourcePosition& source, const LayoutContext& ctx,
+                                         float* outputGains, int numSpeakers) const
 {
-    // Max-rE weights per order for 3rd-order Ambisonics
-    // These attenuate higher orders to maximize energy concentration of the decode,
-    // critical for non-uniform layouts (our 9.1.6 has no below-horizon speakers).
-    // Values: cos(order * π / (2*(N+1))) where N = HOA_ORDER = 3 (Zotter & Frank 2012)
+    constexpr int HOA_CH = OpenSpatialDelayProcessor::HOA_CHANNELS;
+
+    // Max-rE weights per order (Zotter & Frank 2012)
     static const float maxrE[4] = {
-        1.0f,                                                     // order 0
-        std::cos (juce::MathConstants<float>::pi / 8.0f),         // order 1: cos(π/8) ≈ 0.924
-        std::cos (2.0f * juce::MathConstants<float>::pi / 8.0f),  // order 2: cos(π/4) ≈ 0.707
-        std::cos (3.0f * juce::MathConstants<float>::pi / 8.0f),  // order 3: cos(3π/8) ≈ 0.383
+        1.0f,
+        std::cos (juce::MathConstants<float>::pi / 8.0f),
+        std::cos (2.0f * juce::MathConstants<float>::pi / 8.0f),
+        std::cos (3.0f * juce::MathConstants<float>::pi / 8.0f),
     };
-
-    // Map ACN index to order: 0→0, 1-3→1, 4-8→2, 9-15→3
     auto acnToOrder = [](int acn) -> int {
-        if (acn < 1) return 0;
-        if (acn < 4) return 1;
-        if (acn < 9) return 2;
-        return 3;
+        if (acn < 1) return 0; if (acn < 4) return 1;
+        if (acn < 9) return 2; return 3;
     };
 
-    // Step 1: Encode source direction into 16 ACN/SN3D coefficients with max-rE weighting
-    float coeffs[HOA_CHANNELS];
-    for (int c = 0; c < HOA_CHANNELS; ++c)
-        coeffs[c] = evalSH (c, azimuthRad, elevationRad) * maxrE[acnToOrder (c)];
+    // Step 1: SH encode with max-rE weighting
+    float coeffs[HOA_CH];
+    for (int c = 0; c < HOA_CH; ++c)
+        coeffs[c] = evalSH (c, source.azimuthRad, source.elevationRad) * maxrE[acnToOrder (c)];
 
     // Step 2: Decode via matrix multiply: gain[s] = sum_c D[s][c] * coeffs[c]
     float totalPower = 0.0f;
-    for (int s = 0; s < NUM_VIRTUAL_SPEAKERS; ++s)
+    for (int s = 0; s < numSpeakers; ++s)
     {
         float gain = 0.0f;
-        for (int c = 0; c < HOA_CHANNELS; ++c)
-            gain += ambiDecodeMatrix[s][c] * coeffs[c];
+        for (int c = 0; c < HOA_CH; ++c)
+            gain += ctx.ambiDecodeMatrix[s][c] * coeffs[c];
 
-        // Clamp negative gains to zero (negative = out-of-phase artefact)
-        outGains[s] = std::max (0.0f, gain);
-        totalPower += outGains[s] * outGains[s];
+        outputGains[s] = std::max (0.0f, gain);
+        totalPower += outputGains[s] * outputGains[s];
     }
 
-    // Step 3: Constant-power normalization for consistent loudness
+    // Step 3: Constant-power normalization
     if (totalPower > 1e-12f)
     {
         float scale = 1.0f / std::sqrt (totalPower);
-        for (int s = 0; s < NUM_VIRTUAL_SPEAKERS; ++s)
-            outGains[s] *= scale;
+        for (int s = 0; s < numSpeakers; ++s)
+            outputGains[s] *= scale;
     }
 }
 
@@ -1159,7 +1786,7 @@ void OpenSpatialDelayProcessor::computeBinauralSHWeights (int profileIndex)
     if (profileIndex == cachedBinauralProfileIndex)
         return;
 
-    const auto& profile = binauralProfiles[juce::jlimit (0, 4, profileIndex)];
+    const auto& profile = binauralProfiles[juce::jlimit (0, 4, profileIndex - 1)];
 
     // Clear accumulators
     for (int c = 0; c < HOA_CHANNELS; ++c)
@@ -1220,15 +1847,13 @@ void OpenSpatialDelayProcessor::computeBinauralSHWeights (int profileIndex)
     cachedBinauralProfileIndex = profileIndex;
 }
 
-//==============================================================================
-// Direct Ambisonics-to-Binaural: encode source to SH, decode directly to L/R
-//==============================================================================
-BinauralGains OpenSpatialDelayProcessor::computeAmbiBinauralGains (
-    float azimuthRad, float elevationRad, float distance, int profileIndex) const
+BinauralGains AmbisonicsAlgorithm::computeBinauralGains (
+    const SourcePosition& source, const BinauralContext& ctx) const
 {
-    const auto& profile = binauralProfiles[juce::jlimit (0, 4, profileIndex)];
+    constexpr int HOA_CH = OpenSpatialDelayProcessor::HOA_CHANNELS;
+    const auto& profile = ctx.profiles[juce::jlimit (0, 4, ctx.profileIndex - 1)];
 
-    // Max-rE weights per order (same as computeAmbiSpeakerGains)
+    // Max-rE weights per order
     static const float maxrE[4] = {
         1.0f,
         std::cos (juce::MathConstants<float>::pi / 8.0f),
@@ -1236,58 +1861,54 @@ BinauralGains OpenSpatialDelayProcessor::computeAmbiBinauralGains (
         std::cos (3.0f * juce::MathConstants<float>::pi / 8.0f),
     };
     auto acnToOrder = [](int acn) -> int {
-        if (acn < 1) return 0;
-        if (acn < 4) return 1;
-        if (acn < 9) return 2;
-        return 3;
+        if (acn < 1) return 0; if (acn < 4) return 1;
+        if (acn < 9) return 2; return 3;
     };
 
-    // Step 1: SH Encode with max-rE weighting
-    float coeffs[HOA_CHANNELS];
-    for (int c = 0; c < HOA_CHANNELS; ++c)
-        coeffs[c] = evalSH (c, azimuthRad, elevationRad) * maxrE[acnToOrder (c)];
+    // Step 1: SH encode with max-rE weighting
+    float coeffs[HOA_CH];
+    for (int c = 0; c < HOA_CH; ++c)
+        coeffs[c] = evalSH (c, source.azimuthRad, source.elevationRad) * maxrE[acnToOrder (c)];
 
     // Step 2: ILD via SH decode — dot product with pre-computed binaural weights
     float rawL = 0.0f, rawR = 0.0f;
-    for (int c = 0; c < HOA_CHANNELS; ++c)
+    for (int c = 0; c < HOA_CH; ++c)
     {
-        rawL += coeffs[c] * binauralSHWeightsL[c];
-        rawR += coeffs[c] * binauralSHWeightsR[c];
+        rawL += coeffs[c] * ctx.binauralSHWeightsL[c];
+        rawR += coeffs[c] * ctx.binauralSHWeightsR[c];
     }
 
-    // Clamp to non-negative (SH reconstruction can produce small negatives)
     rawL = std::max (0.0f, rawL);
     rawR = std::max (0.0f, rawR);
 
-    // Constant-power normalization to preserve energy
+    // Constant-power normalization (√2 so centered source gives ~1.0 per ear)
     float power = rawL * rawL + rawR * rawR;
     if (power > 1e-12f)
     {
-        float scale = std::sqrt (2.0f) / std::sqrt (power);  // √2 so centered source gives ~1.0 per ear
+        float scale = std::sqrt (2.0f) / std::sqrt (power);
         rawL *= scale;
         rawR *= scale;
     }
 
     // Step 3: ITD from first-order direction extraction
-    // ACN 1 = sinAz * cosEl = the lateral component — identical to computeBinauralGains
-    float lateral = coeffs[1] / std::max (0.001f, maxrE[1]);  // undo max-rE to get true lateral
+    float lateral = coeffs[1] / std::max (0.001f, maxrE[1]);
     float itdSeconds = (profile.headRadius / 343.0f)
                      * (std::abs (lateral) + std::asin (juce::jlimit (-1.0f, 1.0f, std::abs (lateral))));
-    float itdSamples = itdSeconds * static_cast<float> (currentSampleRate);
+    float itdSamples = itdSeconds * static_cast<float> (ctx.sampleRate);
 
-    // Step 4: Distance attenuation (same formula as computeBinauralGains)
-    float distGain = 1.0f / std::max (0.1f, distance * 4.0f + 0.25f);
+    // Step 4: Distance attenuation
+    float distGain = 1.0f / std::max (0.1f, source.distance * 4.0f + 0.25f);
 
     BinauralGains gains;
     gains.leftGain  = rawL * distGain;
     gains.rightGain = rawR * distGain;
 
-    if (lateral >= 0.0f)  // source on left
+    if (lateral >= 0.0f)
     {
         gains.leftDelaySamples  = 0.0f;
         gains.rightDelaySamples = itdSamples;
     }
-    else  // source on right
+    else
     {
         gains.leftDelaySamples  = itdSamples;
         gains.rightDelaySamples = 0.0f;
@@ -1299,8 +1920,8 @@ BinauralGains OpenSpatialDelayProcessor::computeAmbiBinauralGains (
 //==============================================================================
 // v0.2: 2D VBAP for flat layouts (Quad, 5.1, 7.1) — azimuth-only panning
 //==============================================================================
-void OpenSpatialDelayProcessor::computeVBAPGains2D (const SpeakerLayout& layout,
-                                                      float azimuthRad, float* outGains) const
+static void computeVBAPGains2D (const SpeakerLayout& layout,
+                                float azimuthRad, float* outGains)
 {
     const int N = layout.numSpeakers;
     for (int s = 0; s < N; ++s)
@@ -1403,9 +2024,10 @@ void OpenSpatialDelayProcessor::computeVBAPGains2D (const SpeakerLayout& layout,
 //==============================================================================
 // v0.2: 3D VBAP for height layouts (7.1.4, 9.1.6) — uses pre-computed triplets
 //==============================================================================
-void OpenSpatialDelayProcessor::computeVBAPGains3D (const SpeakerLayout& layout,
-                                                      float azimuthRad, float elevationRad,
-                                                      float* outGains) const
+static void computeVBAPGains3D (const SpeakerLayout& layout,
+                                const std::vector<VBAPTriplet>& triplets,
+                                float azimuthRad, float elevationRad,
+                                float* outGains)
 {
     const int N = layout.numSpeakers;
     for (int s = 0; s < N; ++s)
@@ -1420,9 +2042,9 @@ void OpenSpatialDelayProcessor::computeVBAPGains3D (const SpeakerLayout& layout,
     int bestTri = -1;
     float bestG[3] = {};
 
-    for (int t = 0; t < static_cast<int> (layoutVBAPTriplets.size()); ++t)
+    for (int t = 0; t < static_cast<int> (triplets.size()); ++t)
     {
-        const auto& tri = layoutVBAPTriplets[t];
+        const auto& tri = triplets[t];
 
         float g0 = tri.inv[0][0] * px + tri.inv[0][1] * py + tri.inv[0][2] * pz;
         float g1 = tri.inv[1][0] * px + tri.inv[1][1] * py + tri.inv[1][2] * pz;
@@ -1447,9 +2069,9 @@ void OpenSpatialDelayProcessor::computeVBAPGains3D (const SpeakerLayout& layout,
         float power = bestG[0] * bestG[0] + bestG[1] * bestG[1] + bestG[2] * bestG[2];
         float scale = (power > 1e-12f) ? (1.0f / std::sqrt (power)) : 0.0f;
 
-        outGains[layoutVBAPTriplets[bestTri].i] = bestG[0] * scale;
-        outGains[layoutVBAPTriplets[bestTri].j] = bestG[1] * scale;
-        outGains[layoutVBAPTriplets[bestTri].k] = bestG[2] * scale;
+        outGains[triplets[bestTri].i] = bestG[0] * scale;
+        outGains[triplets[bestTri].j] = bestG[1] * scale;
+        outGains[triplets[bestTri].k] = bestG[2] * scale;
     }
     else
     {
@@ -1473,87 +2095,79 @@ void OpenSpatialDelayProcessor::computeVBAPGains3D (const SpeakerLayout& layout,
 }
 
 //==============================================================================
-// v0.2: VBIP — Vector Base Intensity Panning (intensity-weighted VBAP)
+// VBIPAlgorithm — intensity-weighted VBAP (squared gains for tighter focus)
 //==============================================================================
-void OpenSpatialDelayProcessor::computeVBIPGains (const SpeakerLayout& layout,
-                                                    float azimuthRad, float elevationRad,
-                                                    float* outGains) const
+void VBIPAlgorithm::computeGains (const SourcePosition& source, const LayoutContext& ctx,
+                                   float* outputGains, int numSpeakers) const
 {
-    const int N = layout.numSpeakers;
-
-    // Check if layout has height speakers
-    bool hasHeight = (activeOutputFormat == OutputFormat::Surround7_1_4 ||
-                      activeOutputFormat == OutputFormat::Surround9_1_6);
-
     // Start with VBAP gains
-    if (hasHeight)
-        computeVBAPGains3D (layout, azimuthRad, elevationRad, outGains);
+    if (! ctx.triplets.empty())
+        computeVBAPGains3D (ctx.layout, ctx.triplets, source.azimuthRad, source.elevationRad, outputGains);
     else
-        computeVBAPGains2D (layout, azimuthRad, outGains);
+        computeVBAPGains2D (ctx.layout, source.azimuthRad, outputGains);
 
     // Square all gains for intensity weighting
     float sum = 0.0f;
-    for (int s = 0; s < N; ++s)
+    for (int s = 0; s < numSpeakers; ++s)
     {
-        outGains[s] = outGains[s] * outGains[s];
-        sum += outGains[s];
+        outputGains[s] = outputGains[s] * outputGains[s];
+        sum += outputGains[s];
     }
 
     // Normalize to constant power
     if (sum > 1e-12f)
     {
         float scale = 1.0f / std::sqrt (sum);
-        for (int s = 0; s < N; ++s)
-            outGains[s] *= scale;
+        for (int s = 0; s < numSpeakers; ++s)
+            outputGains[s] *= scale;
     }
 }
 
 //==============================================================================
-// v0.2: KNN — K-Nearest Neighbor panning
+// KNNAlgorithm — K-Nearest Neighbor panning (inverse-distance-squared)
 //==============================================================================
-void OpenSpatialDelayProcessor::computeKNNGains (const SpeakerLayout& layout,
-                                                   float azimuthRad, float elevationRad,
-                                                   float* outGains, int k) const
+void KNNAlgorithm::computeGains (const SourcePosition& source, const LayoutContext& ctx,
+                                  float* outputGains, int numSpeakers) const
 {
-    const int N = layout.numSpeakers;
-    for (int s = 0; s < N; ++s)
-        outGains[s] = 0.0f;
+    for (int s = 0; s < numSpeakers; ++s)
+        outputGains[s] = 0.0f;
 
-    if (N == 0) return;
-    k = std::min (k, N);
+    if (numSpeakers == 0) return;
+    constexpr int k = 3;
+    int kClamped = std::min (k, numSpeakers);
 
     // Source direction as unit Cartesian vector
-    float px = std::cos (elevationRad) * std::sin (azimuthRad);
-    float py = std::cos (elevationRad) * std::cos (azimuthRad);
-    float pz = std::sin (elevationRad);
+    float px = std::cos (source.elevationRad) * std::sin (source.azimuthRad);
+    float py = std::cos (source.elevationRad) * std::cos (source.azimuthRad);
+    float pz = std::sin (source.elevationRad);
 
     // Compute angular distances
     struct SpkDist { int index; float dist; };
     SpkDist dists[16];
-    for (int s = 0; s < N; ++s)
+    for (int s = 0; s < numSpeakers; ++s)
     {
-        float sx = std::cos (layout.speakers[s].elevationRad) * std::sin (layout.speakers[s].azimuthRad);
-        float sy = std::cos (layout.speakers[s].elevationRad) * std::cos (layout.speakers[s].azimuthRad);
-        float sz = std::sin (layout.speakers[s].elevationRad);
+        float sx = std::cos (ctx.layout.speakers[s].elevationRad) * std::sin (ctx.layout.speakers[s].azimuthRad);
+        float sy = std::cos (ctx.layout.speakers[s].elevationRad) * std::cos (ctx.layout.speakers[s].azimuthRad);
+        float sz = std::sin (ctx.layout.speakers[s].elevationRad);
         float dot = juce::jlimit (-1.0f, 1.0f, px * sx + py * sy + pz * sz);
         dists[s] = { s, std::acos (dot) };
     }
 
     // Partial sort to find K nearest
-    std::partial_sort (dists, dists + k, dists + N,
+    std::partial_sort (dists, dists + kClamped, dists + numSpeakers,
                        [](const SpkDist& a, const SpkDist& b) { return a.dist < b.dist; });
 
     // Check if source is exactly at a speaker
     if (dists[0].dist < 1e-4f)
     {
-        outGains[dists[0].index] = 1.0f;
+        outputGains[dists[0].index] = 1.0f;
         return;
     }
 
     // Inverse-distance-squared weighting
     float totalWeight = 0.0f;
     float weights[16] = {};
-    for (int i = 0; i < k; ++i)
+    for (int i = 0; i < kClamped; ++i)
     {
         float w = 1.0f / (dists[i].dist * dists[i].dist + 1e-6f);
         weights[i] = w;
@@ -1562,18 +2176,18 @@ void OpenSpatialDelayProcessor::computeKNNGains (const SpeakerLayout& layout,
 
     // Constant-power normalization
     float totalPower = 0.0f;
-    for (int i = 0; i < k; ++i)
+    for (int i = 0; i < kClamped; ++i)
     {
         float g = weights[i] / totalWeight;
-        outGains[dists[i].index] = g;
+        outputGains[dists[i].index] = g;
         totalPower += g * g;
     }
 
     if (totalPower > 1e-12f)
     {
         float scale = 1.0f / std::sqrt (totalPower);
-        for (int s = 0; s < N; ++s)
-            outGains[s] *= scale;
+        for (int s = 0; s < numSpeakers; ++s)
+            outputGains[s] *= scale;
     }
 }
 
@@ -1590,12 +2204,15 @@ void OpenSpatialDelayProcessor::updateSpeakerBinauralCache (int profileIndex)
     // Per-object distance attenuation is applied separately.
     const float nominalDistance = 0.1875f;
 
+    BinauralContext binCtx { profileIndex, currentSampleRate, binauralProfiles.data(),
+                             binauralSHWeightsL, binauralSHWeightsR };
+
     for (int s = 0; s < NUM_VIRTUAL_SPEAKERS; ++s)
     {
-        speakerBinauralCache[s] = computeBinauralGains (
-            virtualSpeakers[s].azimuthRad,
-            virtualSpeakers[s].elevationRad,
-            nominalDistance, profileIndex);
+        SourcePosition src { virtualSpeakers[s].azimuthRad,
+                             virtualSpeakers[s].elevationRad,
+                             nominalDistance };
+        speakerBinauralCache[s] = algDirectBinaural.computeBinauralGains (src, binCtx);
     }
 
     cachedProfileIndex = profileIndex;
@@ -1672,33 +2289,84 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     feedbackHPFilter.coefficients =
         juce::dsp::IIR::Coefficients<float>::makeHighPass (currentSampleRate, hpFreq);
 
-    // --- Read algorithm selection (block-rate) --------------------------------
+    // --- Read output layout (once per block for consistent snapshot) -----------
+    const auto& layoutState = getActiveLayout();
+    const auto& surLayout = layoutState.layout;
+
+    // --- Read algorithm selection (block-rate, unified virtual dispatch) ------
     int algorithmIndex = static_cast<int> (apvts.getRawParameterValue ("algorithm")->load());
-    bool isBinaural = (activeOutputFormat == OutputFormat::Binaural);
+    bool isBinaural = (layoutState.format == OutputFormat::Binaural);
 
-    // For surround output, force algorithm ≥ 1 (Direct Binaural not available)
-    if (! isBinaural && algorithmIndex == 0)
-        algorithmIndex = 1;  // Fall back to VBAP
+    auto* algo = algorithms[juce::jlimit (0, NUM_ALGORITHMS - 1, algorithmIndex)];
 
-    // Update spatial caches based on algorithm (block-rate, binaural path only)
+    // For surround output, fall back if algorithm doesn't support speakers
+    if (! isBinaural && ! algo->supportsSurround())
+        algo = algorithms[2];  // Fall back to VBAP (index 2 in alphabetical order)
+
+    // --- HRTF profile management (block-rate, binaural only) ---
+    bool useHRTF = false;
     if (isBinaural)
     {
-        if (algorithmIndex == 1 || algorithmIndex == 3)  // VBAP or VBIP: virtual speakers → binaural
-            updateSpeakerBinauralCache (profileIndex);
-        else if (algorithmIndex == 2)                     // Ambisonics: direct SH → binaural
-            computeBinauralSHWeights (profileIndex);
-        else if (algorithmIndex == 4)                     // KNN: virtual speakers → binaural
-            updateSpeakerBinauralCache (profileIndex);
+        // Load HRTF profile if changed (profile 0 = Simple, 1-5 = HRTF)
+        if (profileIndex != loadedHRTFProfileIndex)
+            loadHRTFProfile (profileIndex);
+
+        useHRTF = ! binauralRenderer.isSimpleMode();
     }
+
+    // Update spatial caches based on rendering mode (block-rate, binaural path only)
+    if (isBinaural && ! useHRTF)
+    {
+        // Simple (Woodworth) mode — use original per-sample binaural caches
+        if (algo->supportsBinauralDirect())
+        {
+            if (algo->getIndex() == 0)  // Ambisonics: pre-compute SH binaural weights
+                computeBinauralSHWeights (profileIndex);
+        }
+        else
+        {
+            // Speaker-based algorithms (VBAP, VBIP, KNN): need binaural cache
+            updateSpeakerBinauralCache (profileIndex);
+        }
+    }
+
+    // --- Build layout contexts (once per block) ---
+    // Virtual speaker layout for binaural path
+    static const SpeakerLayout virtualLayout = makeVirtualSpeakerLayout();
+    const auto& vbapTriplets = getVBAPTriplets();
+
+    LayoutContext layoutCtx = isBinaural
+        ? LayoutContext { virtualLayout, vbapTriplets, ambiDecodeMatrix, NUM_VIRTUAL_SPEAKERS }
+        : LayoutContext { surLayout, layoutState.vbapTriplets,
+                          layoutState.ambiDecodeMatrix, layoutState.ambiNumSpeakers };
+
+    BinauralContext binCtx { profileIndex, currentSampleRate, binauralProfiles.data(),
+                             binauralSHWeightsL, binauralSHWeightsR };
 
     // --- Read object states and pre-compute spatial gains -------------------
     ObjectState objects[MAX_OBJECTS];
-    BinauralGains objGains[MAX_OBJECTS];                              // Binaural path (algo 0, 2)
-    float objSpeakerGains[MAX_OBJECTS][NUM_VIRTUAL_SPEAKERS] = {};    // Binaural VBAP/VBIP/KNN (16 virtual speakers)
-    float objChannelGains[MAX_OBJECTS][16] = {};                      // Discrete surround path (all algos)
+    BinauralGains objGains[MAX_OBJECTS];                              // Direct binaural path
+    float objSpeakerGains[MAX_OBJECTS][NUM_VIRTUAL_SPEAKERS] = {};    // Binaural via virtual speakers
+    float objSHCoeffs[MAX_OBJECTS][HOA_CHANNELS] = {};                // Ambisonics SH coefficients (HRTF)
+    float objChannelGains[MAX_OBJECTS][16] = {};                      // Discrete surround path
     float objDistGain[MAX_OBJECTS] = {};                              // Distance attenuation
     int numActiveObjects = 0;
     int lastEnabledObjectIndex = -1;
+
+    // Flag: Ambisonics uses SH-domain HRTF path (not speaker-domain)
+    bool useAmbiSH = (isBinaural && useHRTF && algorithmIndex == 0);
+
+    // Max-rE weights per order (Zotter & Frank 2012) — used by Ambisonics SH path
+    static const float maxrE[4] = {
+        1.0f,
+        std::cos (juce::MathConstants<float>::pi / 8.0f),
+        std::cos (2.0f * juce::MathConstants<float>::pi / 8.0f),
+        std::cos (3.0f * juce::MathConstants<float>::pi / 8.0f),
+    };
+    auto acnToOrder = [](int acn) -> int {
+        if (acn < 1) return 0; if (acn < 4) return 1;
+        if (acn < 9) return 2; return 3;
+    };
 
     for (int t = 0; t < MAX_OBJECTS; ++t)
     {
@@ -1712,155 +2380,31 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             float elRad = juce::degreesToRadians (objects[t].elevationDeg);
             objDistGain[t] = 1.0f / std::max (0.1f, objects[t].distance * 4.0f + 0.25f);
 
-            if (isBinaural)
+            SourcePosition src { azRad, elRad, objects[t].distance };
+
+            if (useAmbiSH)
             {
-                // --- BINAURAL PATH (stereo output) ---
-                switch (algorithmIndex)
-                {
-                    case 0: // Direct Binaural
-                        objGains[t] = computeBinauralGains (azRad, elRad, objects[t].distance, profileIndex);
-                        break;
-                    case 1: // VBAP → virtual speakers → binaural
-                        computeVBAPGains (azRad, elRad, objSpeakerGains[t]);
-                        break;
-                    case 2: // Ambisonics → direct SH → binaural
-                        objGains[t] = computeAmbiBinauralGains (azRad, elRad, objects[t].distance, profileIndex);
-                        break;
-                    case 3: // VBIP → virtual speakers → binaural
-                    {
-                        computeVBAPGains (azRad, elRad, objSpeakerGains[t]);
-                        // Square gains for intensity weighting
-                        float sum = 0.0f;
-                        for (int sp = 0; sp < NUM_VIRTUAL_SPEAKERS; ++sp)
-                        {
-                            objSpeakerGains[t][sp] *= objSpeakerGains[t][sp];
-                            sum += objSpeakerGains[t][sp];
-                        }
-                        if (sum > 1e-12f)
-                        {
-                            float scale = 1.0f / std::sqrt (sum);
-                            for (int sp = 0; sp < NUM_VIRTUAL_SPEAKERS; ++sp)
-                                objSpeakerGains[t][sp] *= scale;
-                        }
-                        break;
-                    }
-                    case 4: // KNN → virtual speakers → binaural
-                    {
-                        // KNN for 16-speaker virtual layout
-                        float px = std::cos (elRad) * std::sin (azRad);
-                        float py = std::cos (elRad) * std::cos (azRad);
-                        float pz = std::sin (elRad);
-
-                        struct SpkD { int idx; float dist; };
-                        SpkD dists[NUM_VIRTUAL_SPEAKERS];
-                        for (int sp = 0; sp < NUM_VIRTUAL_SPEAKERS; ++sp)
-                        {
-                            float sx = std::cos (virtualSpeakers[sp].elevationRad) * std::sin (virtualSpeakers[sp].azimuthRad);
-                            float sy = std::cos (virtualSpeakers[sp].elevationRad) * std::cos (virtualSpeakers[sp].azimuthRad);
-                            float sz = std::sin (virtualSpeakers[sp].elevationRad);
-                            float dot = juce::jlimit (-1.0f, 1.0f, px * sx + py * sy + pz * sz);
-                            dists[sp] = { sp, std::acos (dot) };
-                        }
-                        constexpr int knn = 3;
-                        std::partial_sort (dists, dists + knn, dists + NUM_VIRTUAL_SPEAKERS,
-                                           [](const SpkD& a, const SpkD& b) { return a.dist < b.dist; });
-
-                        for (int sp = 0; sp < NUM_VIRTUAL_SPEAKERS; ++sp)
-                            objSpeakerGains[t][sp] = 0.0f;
-
-                        if (dists[0].dist < 1e-4f)
-                        {
-                            objSpeakerGains[t][dists[0].idx] = 1.0f;
-                        }
-                        else
-                        {
-                            float totalW = 0.0f;
-                            float weights[knn];
-                            for (int i = 0; i < knn; ++i)
-                            {
-                                weights[i] = 1.0f / (dists[i].dist * dists[i].dist + 1e-6f);
-                                totalW += weights[i];
-                            }
-                            float totalP = 0.0f;
-                            for (int i = 0; i < knn; ++i)
-                            {
-                                float g = weights[i] / totalW;
-                                objSpeakerGains[t][dists[i].idx] = g;
-                                totalP += g * g;
-                            }
-                            if (totalP > 1e-12f)
-                            {
-                                float sc = 1.0f / std::sqrt (totalP);
-                                for (int sp = 0; sp < NUM_VIRTUAL_SPEAKERS; ++sp)
-                                    objSpeakerGains[t][sp] *= sc;
-                            }
-                        }
-                        break;
-                    }
-                    default: break;
-                }
+                // Ambisonics + HRTF: compute SH coefficients for SH-domain convolution
+                // (bypasses speaker decode — avoids negative gain clamping issue)
+                for (int c = 0; c < HOA_CHANNELS; ++c)
+                    objSHCoeffs[t][c] = evalSH (c, azRad, elRad) * maxrE[acnToOrder (c)];
+            }
+            else if (isBinaural && useHRTF)
+            {
+                // HRTF mode (VBAP/VBIP/KNN): speaker gains → HRTF convolution
+                algo->computeGains (src, layoutCtx, objSpeakerGains[t], NUM_VIRTUAL_SPEAKERS);
+            }
+            else if (isBinaural && algo->supportsBinauralDirect())
+            {
+                // Simple mode: direct binaural path (Direct Binaural, Ambisonics)
+                objGains[t] = algo->computeBinauralGains (src, binCtx);
             }
             else
             {
-                // --- DISCRETE SURROUND PATH (multi-channel output) ---
-                bool hasHeight = (activeOutputFormat == OutputFormat::Surround7_1_4 ||
-                                  activeOutputFormat == OutputFormat::Surround9_1_6);
-
-                switch (algorithmIndex)
-                {
-                    case 1: // VBAP direct to output speakers
-                        if (hasHeight)
-                            computeVBAPGains3D (activeLayout, azRad, elRad, objChannelGains[t]);
-                        else
-                            computeVBAPGains2D (activeLayout, azRad, objChannelGains[t]);
-                        break;
-                    case 2: // Ambisonics → layout decode matrix
-                    {
-                        // Max-rE weights per order
-                        static const float maxrE[4] = {
-                            1.0f,
-                            std::cos (juce::MathConstants<float>::pi / 8.0f),
-                            std::cos (2.0f * juce::MathConstants<float>::pi / 8.0f),
-                            std::cos (3.0f * juce::MathConstants<float>::pi / 8.0f),
-                        };
-                        auto acnToOrder = [](int acn) -> int {
-                            if (acn < 1) return 0; if (acn < 4) return 1;
-                            if (acn < 9) return 2; return 3;
-                        };
-                        float coeffs[HOA_CHANNELS];
-                        for (int c = 0; c < HOA_CHANNELS; ++c)
-                            coeffs[c] = evalSH (c, azRad, elRad) * maxrE[acnToOrder (c)];
-
-                        float totalPower = 0.0f;
-                        for (int sp = 0; sp < discreteAmbiNumSpeakers; ++sp)
-                        {
-                            float gain = 0.0f;
-                            for (int c = 0; c < HOA_CHANNELS; ++c)
-                                gain += discreteAmbiDecodeMatrix[sp][c] * coeffs[c];
-                            objChannelGains[t][sp] = std::max (0.0f, gain);
-                            totalPower += objChannelGains[t][sp] * objChannelGains[t][sp];
-                        }
-                        if (totalPower > 1e-12f)
-                        {
-                            float sc = 1.0f / std::sqrt (totalPower);
-                            for (int sp = 0; sp < discreteAmbiNumSpeakers; ++sp)
-                                objChannelGains[t][sp] *= sc;
-                        }
-                        break;
-                    }
-                    case 3: // VBIP direct to output speakers
-                        computeVBIPGains (activeLayout, azRad, elRad, objChannelGains[t]);
-                        break;
-                    case 4: // KNN direct to output speakers
-                        computeKNNGains (activeLayout, azRad, elRad, objChannelGains[t]);
-                        break;
-                    default: // Fallback to VBAP
-                        if (hasHeight)
-                            computeVBAPGains3D (activeLayout, azRad, elRad, objChannelGains[t]);
-                        else
-                            computeVBAPGains2D (activeLayout, azRad, objChannelGains[t]);
-                        break;
-                }
+                // Speaker-based path (virtual speakers for binaural Simple, physical for surround)
+                float* out = isBinaural ? objSpeakerGains[t] : objChannelGains[t];
+                int n = isBinaural ? NUM_VIRTUAL_SPEAKERS : surLayout.numSpeakers;
+                algo->computeGains (src, layoutCtx, out, n);
             }
         }
     }
@@ -1900,10 +2444,168 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     float loopMultiplierTarget = static_cast<float>(std::max (1, lastEnabledObjectIndex + 1));
     smoothedLoopMultiplier.setTargetValue (loopMultiplierTarget);
 
-    if (isBinaural)
+    if (isBinaural && useHRTF)
     {
         // =====================================================================
-        // BINAURAL PATH (stereo output — identical to v0.1)
+        // HRTF BINAURAL PATH — 3-pass architecture
+        // Pass 1: Per-sample delay engine + spatial accumulation
+        //         Speaker-domain (VBAP/VBIP/KNN) or SH-domain (Ambisonics)
+        // Pass 2: Per-block HRTF convolution → wet L/R
+        // Pass 3: Per-sample dry/wet mix + output gain
+        // =====================================================================
+        auto* outL = buffer.getWritePointer (0);
+        auto* outR = buffer.getWritePointer (1);
+
+        // Zero accumulation buffers
+        if (useAmbiSH)
+        {
+            // SH-domain accumulation for Ambisonics
+            for (int ch = 0; ch < HOA_CHANNELS; ++ch)
+            {
+                if (shAccumBufs[ch].size() < static_cast<size_t> (numSamples))
+                    shAccumBufs[ch].resize (numSamples, 0.0f);
+                std::memset (shAccumBufs[ch].data(), 0, sizeof (float) * numSamples);
+            }
+        }
+        else
+        {
+            // Speaker-domain accumulation for VBAP/VBIP/KNN
+            for (int sp = 0; sp < NUM_VIRTUAL_SPEAKERS; ++sp)
+            {
+                if (speakerAccumBufs[sp].size() < static_cast<size_t> (numSamples))
+                    speakerAccumBufs[sp].resize (numSamples, 0.0f);
+                std::memset (speakerAccumBufs[sp].data(), 0, sizeof (float) * numSamples);
+            }
+        }
+
+        // Ensure wet buffers are sized
+        if (wetBufL.size() < static_cast<size_t> (numSamples))
+        {
+            wetBufL.resize (numSamples, 0.0f);
+            wetBufR.resize (numSamples, 0.0f);
+        }
+
+        // Capture smoothed value start positions for Pass 3 interpolation
+        float dwStart      = smoothedDryWet.getCurrentValue();
+        float outGainStart  = smoothedOutputGain.getCurrentValue();
+
+        // === PASS 1: Per-sample delay engine + spatial accumulation ===
+        for (int s = 0; s < numSamples; ++s)
+        {
+            float currentDelayMs = smoothedDelayTime.getNextValue();
+            float baseDelaySamples = currentDelayMs * 0.001f * static_cast<float> (currentSampleRate);
+            float currentLoopMult = smoothedLoopMultiplier.getNextValue();
+
+            float inGain  = smoothedInputGain.getNextValue();
+            /* dw, fb, outGain */ smoothedDryWet.getNextValue();
+            float fb      = smoothedFeedback.getNextValue();
+            /* outGain */         smoothedOutputGain.getNextValue();
+
+            float rawInput    = monoInputBuffer[s];
+            float inputSample = rawInput * inGain;
+
+            // STAGE 1: WRITE to delay line
+            float delayInput = inputSample + feedbackSample * fb;
+            delayInput = softClip (delayInput * 0.98f);
+            writeDelayLine (delayInput);
+
+            // STAGE 2: READ & ACCUMULATE
+            for (int t = 0; t < MAX_OBJECTS; ++t)
+            {
+                if (! objects[t].enabled) continue;
+
+                float objDelaySamples = static_cast<float>(t + 1) * baseDelaySamples;
+                objDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), objDelaySamples);
+                float objPitch = static_cast<float> (t + 1) * pitchSemitones;
+
+                float objMono = readPitchShifted (objDelaySamples, objPitch, t);
+                float dist = objDistGain[t];
+
+                if (useAmbiSH)
+                {
+                    // Ambisonics SH-domain: accumulate into per-SH-channel buffers
+                    float scaledMono = objMono * dist;
+                    for (int c = 0; c < HOA_CHANNELS; ++c)
+                        shAccumBufs[c][s] += scaledMono * objSHCoeffs[t][c];
+                }
+                else
+                {
+                    // Speaker-domain: accumulate into per-speaker buffers
+                    for (int sp = 0; sp < NUM_VIRTUAL_SPEAKERS; ++sp)
+                    {
+                        float gain = objSpeakerGains[t][sp];
+                        if (gain > 1e-8f)
+                            speakerAccumBufs[sp][s] += objMono * dist * gain;
+                    }
+                }
+            }
+
+            // STAGE 3: FEEDBACK (mono, pre-spatial — unchanged)
+            float fbDelaySamples = currentLoopMult * baseDelaySamples;
+            fbDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), fbDelaySamples);
+            float fbPitchShiftAmount = currentLoopMult * pitchSemitones;
+
+            float feedbackRaw = readPitchShifted (fbDelaySamples, fbPitchShiftAmount, MAX_OBJECTS);
+            float filtered = feedbackLPFilter.processSample (feedbackRaw);
+            filtered = feedbackHPFilter.processSample (filtered);
+            const float makeupGain = 1.0f + (fb * fb * 0.2f);
+            feedbackSample = softClip (filtered * makeupGain);
+            if (! std::isfinite (feedbackSample))
+            {
+                feedbackSample = 0.0f;
+                feedbackLPFilter.reset();
+                feedbackHPFilter.reset();
+            }
+        }
+
+        // === PASS 2: Per-block HRTF convolution ===
+        if (useAmbiSH)
+        {
+            // Ambisonics: SH-domain HRTF convolution
+            const float* shBufPtrs[HOA_CHANNELS];
+            for (int ch = 0; ch < HOA_CHANNELS; ++ch)
+                shBufPtrs[ch] = shAccumBufs[ch].data();
+
+            binauralRenderer.renderSHBuffers (shBufPtrs, HOA_CHANNELS,
+                                               numSamples, wetBufL.data(), wetBufR.data());
+        }
+        else
+        {
+            // VBAP/VBIP/KNN: speaker-domain HRTF convolution
+            const float* spkBufPtrs[NUM_VIRTUAL_SPEAKERS];
+            for (int sp = 0; sp < NUM_VIRTUAL_SPEAKERS; ++sp)
+                spkBufPtrs[sp] = speakerAccumBufs[sp].data();
+
+            binauralRenderer.renderSpeakerBuffers (spkBufPtrs, NUM_VIRTUAL_SPEAKERS,
+                                                    numSamples, wetBufL.data(), wetBufR.data());
+        }
+
+        // === PASS 3: Per-sample dry/wet mix + output gain ===
+        // Use linear interpolation of smoothed dw/outGain across the block
+        float dwEnd      = smoothedDryWet.getCurrentValue();
+        float outGainEnd  = smoothedOutputGain.getCurrentValue();
+        float invN = (numSamples > 1) ? 1.0f / static_cast<float> (numSamples - 1) : 1.0f;
+
+        for (int s = 0; s < numSamples; ++s)
+        {
+            float frac    = static_cast<float> (s) * invN;
+            float dw      = dwStart + frac * (dwEnd - dwStart);
+            float outGain = outGainStart + frac * (outGainEnd - outGainStart);
+            float rawInput = monoInputBuffer[s];
+
+            outL[s] = (rawInput * (1.0f - dw) + wetBufL[s] * dw) * outGain;
+            outR[s] = (rawInput * (1.0f - dw) + wetBufR[s] * dw) * outGain;
+        }
+
+        // Zero remaining channels when binaural is selected on a multi-channel bus
+        for (int ch = 2; ch < buffer.getNumChannels(); ++ch)
+            buffer.clear (ch, 0, numSamples);
+    }
+    else if (isBinaural)
+    {
+        // =====================================================================
+        // SIMPLE (WOODWORTH) BINAURAL PATH — original per-sample rendering
+        // Used when profile = "Simple (Low CPU)" — no HRTF convolution
         // =====================================================================
         auto* outL = buffer.getWritePointer (0);
         auto* outR = buffer.getWritePointer (1);
@@ -1937,12 +2639,18 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                 float objDelaySamples = static_cast<float>(t + 1) * baseDelaySamples;
                 objDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), objDelaySamples);
                 float objPitch = static_cast<float> (t + 1) * pitchSemitones;
-                objPitch = juce::jlimit (-MAX_CUMULATIVE_SEMITONES, MAX_CUMULATIVE_SEMITONES, objPitch);
+
                 float objMono = readPitchShifted (objDelaySamples, objPitch, t);
 
-                if (algorithmIndex == 1 || algorithmIndex == 3 || algorithmIndex == 4)
+                if (algo->supportsBinauralDirect())
                 {
-                    // VBAP / VBIP / KNN — route through virtual speakers → binaural renderer
+                    // Direct binaural path (Direct Binaural, Ambisonics)
+                    wetL += objMono * objGains[t].leftGain;
+                    wetR += objMono * objGains[t].rightGain;
+                }
+                else
+                {
+                    // Speaker-based path — route through virtual speakers → Woodworth cache
                     float dist = objDistGain[t];
                     for (int sp = 0; sp < NUM_VIRTUAL_SPEAKERS; ++sp)
                     {
@@ -1951,19 +2659,13 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                         wetR += spkSig * speakerBinauralCache[sp].rightGain;
                     }
                 }
-                else
-                {
-                    // Direct Binaural (algo 0) and Ambisonics Binaural (algo 2)
-                    wetL += objMono * objGains[t].leftGain;
-                    wetR += objMono * objGains[t].rightGain;
-                }
             }
 
             // === STAGE 3: FEEDBACK ===
             float fbDelaySamples = currentLoopMult * baseDelaySamples;
             fbDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), fbDelaySamples);
             float fbPitchShiftAmount = currentLoopMult * pitchSemitones;
-            fbPitchShiftAmount = juce::jlimit (-MAX_CUMULATIVE_SEMITONES, MAX_CUMULATIVE_SEMITONES, fbPitchShiftAmount);
+
             float feedbackRaw = readPitchShifted (fbDelaySamples, fbPitchShiftAmount, MAX_OBJECTS);
             float filtered = feedbackLPFilter.processSample (feedbackRaw);
             filtered = feedbackHPFilter.processSample (filtered);
@@ -1980,14 +2682,18 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             outL[s] = (rawInput * (1.0f - dw) + wetL * dw) * outGain;
             outR[s] = (rawInput * (1.0f - dw) + wetR * dw) * outGain;
         }
+
+        // Zero remaining channels when binaural is selected on a multi-channel bus
+        for (int ch = 2; ch < buffer.getNumChannels(); ++ch)
+            buffer.clear (ch, 0, numSamples);
     }
     else
     {
         // =====================================================================
         // DISCRETE SURROUND PATH (multi-channel output — v0.2)
         // =====================================================================
-        const int numSpeakers = activeLayout.numSpeakers;
-        const int lfeIdx = activeLayout.lfeChannelIndex;
+        const int numSpeakers = surLayout.numSpeakers;
+        const int lfeIdx = surLayout.lfeChannelIndex;
 
         // Get output channel write pointers
         float* outChannels[16] = {};
@@ -2025,7 +2731,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                 float objDelaySamples = static_cast<float>(t + 1) * baseDelaySamples;
                 objDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), objDelaySamples);
                 float objPitch = static_cast<float> (t + 1) * pitchSemitones;
-                objPitch = juce::jlimit (-MAX_CUMULATIVE_SEMITONES, MAX_CUMULATIVE_SEMITONES, objPitch);
+
                 float objMono = readPitchShifted (objDelaySamples, objPitch, t);
                 float dist = objDistGain[t];
 
@@ -2039,7 +2745,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             float fbDelaySamples = currentLoopMult * baseDelaySamples;
             fbDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), fbDelaySamples);
             float fbPitchShiftAmount = currentLoopMult * pitchSemitones;
-            fbPitchShiftAmount = juce::jlimit (-MAX_CUMULATIVE_SEMITONES, MAX_CUMULATIVE_SEMITONES, fbPitchShiftAmount);
+
             float feedbackRaw = readPitchShifted (fbDelaySamples, fbPitchShiftAmount, MAX_OBJECTS);
             float filtered = feedbackLPFilter.processSample (feedbackRaw);
             filtered = feedbackHPFilter.processSample (filtered);
@@ -2056,7 +2762,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             // Route spatialized signal to output channels
             for (int sp = 0; sp < numSpeakers; ++sp)
             {
-                int ch = activeLayout.speakers[sp].channelIndex;
+                int ch = surLayout.speakers[sp].channelIndex;
                 if (ch >= 0 && ch < numOutCh && outChannels[ch] != nullptr)
                     outChannels[ch][s] = channelAccum[sp] * dw * outGain;
             }
