@@ -38,6 +38,24 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
 
+# Windows: zlib is not a system library — fetch and build it statically
+# (macOS provides zlib via the SDK, so this is only needed on Windows)
+if(WIN32)
+    set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        zlib
+        GIT_REPOSITORY https://github.com/madler/zlib.git
+        GIT_TAG        v1.3.1
+        GIT_SHALLOW    TRUE
+    )
+    FetchContent_MakeAvailable(zlib)
+
+    # Make zlib findable by libmysofa's find_package(ZLIB)
+    set(ZLIB_FOUND TRUE CACHE BOOL "" FORCE)
+    set(ZLIB_LIBRARIES zlibstatic CACHE STRING "" FORCE)
+    set(ZLIB_INCLUDE_DIRS "${zlib_SOURCE_DIR}" "${zlib_BINARY_DIR}" CACHE STRING "" FORCE)
+endif()
+
 FetchContent_Declare(
     libmysofa
     GIT_REPOSITORY https://github.com/hoene/libmysofa.git
@@ -45,6 +63,11 @@ FetchContent_Declare(
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(libmysofa)
+
+# Windows: ensure zlib is linked into the final plugin
+if(WIN32)
+    target_link_libraries(mysofa-static PRIVATE zlibstatic)
+endif()
 
 # =============================================================================
 # SOFA HRTF BinaryData — 5 SOFA files embedded as binary resources
