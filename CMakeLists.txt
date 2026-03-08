@@ -104,6 +104,9 @@ target_include_directories(OpenSpatialDelay
         ${libmysofa_SOURCE_DIR}/src/hrtf
 )
 
+# libmysofa links zlib PRIVATE — with static libs, the final binary must also link zlib
+find_package(ZLIB REQUIRED)
+
 target_link_libraries(OpenSpatialDelay
     PRIVATE
         juce::juce_audio_utils
@@ -111,6 +114,7 @@ target_link_libraries(OpenSpatialDelay
         juce::juce_dsp
         HRTFData
         mysofa-static
+        ZLIB::ZLIB
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_lto_flags
