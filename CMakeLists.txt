@@ -42,6 +42,7 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
 # (macOS provides zlib via the SDK, so this is only needed on Windows)
 if(WIN32)
     set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
     FetchContent_Declare(
         zlib
         GIT_REPOSITORY https://github.com/madler/zlib.git
@@ -50,10 +51,16 @@ if(WIN32)
     )
     FetchContent_MakeAvailable(zlib)
 
-    # Make zlib findable by libmysofa's find_package(ZLIB)
+    # Create an IMPORTED ZLIB::ZLIB target so libmysofa's find_package(ZLIB) succeeds
+    if(NOT TARGET ZLIB::ZLIB)
+        add_library(ZLIB::ZLIB ALIAS zlibstatic)
+    endif()
     set(ZLIB_FOUND TRUE CACHE BOOL "" FORCE)
+    set(ZLIB_INCLUDE_DIRS "${zlib_SOURCE_DIR};${zlib_BINARY_DIR}" CACHE STRING "" FORCE)
     set(ZLIB_LIBRARIES zlibstatic CACHE STRING "" FORCE)
-    set(ZLIB_INCLUDE_DIRS "${zlib_SOURCE_DIR}" "${zlib_BINARY_DIR}" CACHE STRING "" FORCE)
+
+    # Skip install/export rules that cause CMake errors with FetchContent deps
+    set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "" FORCE)
 endif()
 
 FetchContent_Declare(
@@ -63,11 +70,6 @@ FetchContent_Declare(
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(libmysofa)
-
-# Windows: ensure zlib is linked into the final plugin
-if(WIN32)
-    target_link_libraries(mysofa-static PRIVATE zlibstatic)
-endif()
 
 # =============================================================================
 # SOFA HRTF BinaryData — 5 SOFA files embedded as binary resources
