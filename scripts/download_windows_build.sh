@@ -4,7 +4,6 @@
 #
 # Usage:
 #   bash scripts/download_windows_build.sh
-#   — or —
 #   cmake --build build --target download_windows_build
 
 set -e
@@ -62,4 +61,4 @@ echo "Windows VST3 downloaded to:"
 echo "  ${DEST_DIR}"
 echo ""
 echo "To install on Windows, copy the .vst3 folder to:"
-echo "  C:\\Program Files\\Common Files\\VST3\\"
+echo "  C:\Program Files\Common Files\VST3\\"
