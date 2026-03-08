@@ -38,31 +38,6 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
 
-# Windows: zlib is not a system library — fetch and build it statically
-# (macOS provides zlib via the SDK, so this is only needed on Windows)
-if(WIN32)
-    set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    set(SKIP_INSTALL_ALL ON CACHE BOOL "" FORCE)
-    FetchContent_Declare(
-        zlib
-        GIT_REPOSITORY https://github.com/madler/zlib.git
-        GIT_TAG        v1.3.1
-        GIT_SHALLOW    TRUE
-    )
-    FetchContent_MakeAvailable(zlib)
-
-    # Create an IMPORTED ZLIB::ZLIB target so libmysofa's find_package(ZLIB) succeeds
-    if(NOT TARGET ZLIB::ZLIB)
-        add_library(ZLIB::ZLIB ALIAS zlibstatic)
-    endif()
-    set(ZLIB_FOUND TRUE CACHE BOOL "" FORCE)
-    set(ZLIB_INCLUDE_DIRS "${zlib_SOURCE_DIR};${zlib_BINARY_DIR}" CACHE STRING "" FORCE)
-    set(ZLIB_LIBRARIES zlibstatic CACHE STRING "" FORCE)
-
-    # Skip install/export rules that cause CMake errors with FetchContent deps
-    set(CMAKE_SKIP_INSTALL_RULES ON CACHE BOOL "" FORCE)
-endif()
-
 FetchContent_Declare(
     libmysofa
     GIT_REPOSITORY https://github.com/hoene/libmysofa.git

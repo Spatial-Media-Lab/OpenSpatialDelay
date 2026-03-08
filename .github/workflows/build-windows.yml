@@ -16,8 +16,11 @@ jobs:
         with:
           submodules: recursive  # JUCE is a git submodule
 
+      - name: Install zlib via vcpkg
+        run: vcpkg install zlib:x64-windows-static
+
       - name: Configure CMake
-        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static
 
       - name: Build Release
         run: cmake --build build --config Release
