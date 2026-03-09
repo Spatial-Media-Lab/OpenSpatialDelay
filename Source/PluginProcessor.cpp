@@ -764,13 +764,14 @@ void BinauralRenderer::setProfile (int profileIndex, HRTFDatabase& hrtfDb)
     // but off-axis HRIRs vary. We sample 6 directions (front, back, L, R, up, down)
     // to get a representative avgRMS, then scale to targetRMS = 1/sqrt(irLen).
     // =========================================================================
+    constexpr float pi = juce::MathConstants<float>::pi;
     static const float refDirs[][2] = {
         { 0.0f, 0.0f },                                           // Front
-        { (float) M_PI, 0.0f },                                   // Back
-        { (float) (M_PI * 0.5), 0.0f },                           // Left
-        { (float) (-M_PI * 0.5), 0.0f },                          // Right
-        { 0.0f, (float) (M_PI * 0.25) },                          // Above-front
-        { 0.0f, (float) (-M_PI * 0.25) }                          // Below-front
+        { pi, 0.0f },                                             // Back
+        { pi * 0.5f, 0.0f },                                      // Left
+        { -pi * 0.5f, 0.0f },                                     // Right
+        { 0.0f, pi * 0.25f },                                     // Above-front
+        { 0.0f, -pi * 0.25f }                                     // Below-front
     };
     static constexpr int NUM_REF_DIRS = 6;
 
