@@ -219,8 +219,6 @@ private:
     juce::Slider filterHPSlider, filterLPSlider;
     juce::Slider dryWetSlider;
     juce::ComboBox algorithmBox, hrtfProfileBox, syncModeBox;
-    juce::ComboBox outputFormatBox;
-    juce::Label outputFormatLabel;
     juce::TextButton tempoSyncButton;
 
     // Object controls
@@ -250,7 +248,7 @@ private:
     std::unique_ptr<SliderAttachment> pitchShiftAttach;
     std::unique_ptr<SliderAttachment> filterHPAttach, filterLPAttach;
     std::unique_ptr<SliderAttachment> dryWetAttach;
-    std::unique_ptr<ComboBoxAttachment> algorithmAttach, hrtfProfileAttach, syncModeAttach, outputFormatAttach;
+    std::unique_ptr<ComboBoxAttachment> algorithmAttach, hrtfProfileAttach, syncModeAttach;
     std::unique_ptr<ButtonAttachment> tempoSyncAttach;
 
     // Per-object attachments (for the currently selected object)
@@ -263,7 +261,7 @@ private:
 
     // Section header positions (computed in resized, drawn in paint)
     int rpX = 0, rpW = 0;
-    int delayHeaderY = 0, toneHeaderY = 0, mixHeaderY = 0;
+    int configHeaderY = 0, delayHeaderY = 0, toneHeaderY = 0, mixHeaderY = 0;
     int objectHeaderY = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OpenSpatialDelayEditor)

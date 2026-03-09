@@ -209,7 +209,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     setSize (820, 580);
 
     // --- Title ---------------------------------------------------------------
-    titleLabel.setText ("OpenSpatialDelay v0.3", juce::dontSendNotification);
+    titleLabel.setText ("OpenSpatialDelay v0.1", juce::dontSendNotification);
     titleLabel.setColour (juce::Label::textColourId, Colours_OSD::accentCyan);
     addAndMakeVisible (titleLabel);
 
@@ -260,34 +260,12 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     };
 
     setupCombo (algorithmBox,   algorithmLabel,   "ALGORITHM",
-                "algorithm", { "Ambisonics", "KNN", "VBAP", "VBIP" }, algorithmAttach);
-    setupCombo (hrtfProfileBox, hrtfProfileLabel, "PROFILE",
-                "hrtfProfile", { "Simple", "Studio Ref", "Immersive", "Natural", "Precise", "Spatial" },
+                "algorithm", { "Direct Binaural", "VBAP", "Ambisonics" }, algorithmAttach);
+    setupCombo (hrtfProfileBox, hrtfProfileLabel, "HRTF",
+                "hrtfProfile", { "Studio Ref", "Immersive", "Natural", "Precise", "Spatial" },
                 hrtfProfileAttach);
     setupCombo (syncModeBox, delayTimeLabel, "SYNC MODE",
                 "syncMode", { "Notes", "Triplet", "Dotted", "16th" }, syncModeAttach);
-
-    // --- Output format dropdown (header bar) ---------------------------------
-    {
-        juce::StringArray formatNames;
-        for (const auto& info : OpenSpatialDelayProcessor::outputFormatRegistry)
-            formatNames.add (info.name);
-        setupCombo (outputFormatBox, outputFormatLabel, "OUTPUT",
-                    "outputFormat", formatNames, outputFormatAttach);
-    }
-
-    // --- Header dropdown labels: left-aligned, section-header style ----------
-    {
-        auto headerLblFont   = juce::FontOptions (10.0f).withStyle ("Bold");
-        auto headerLblColour = Colours_OSD::sectionText;
-
-        for (auto* lbl : { &algorithmLabel, &outputFormatLabel, &hrtfProfileLabel })
-        {
-            lbl->setFont (headerLblFont);
-            lbl->setColour (juce::Label::textColourId, headerLblColour);
-            lbl->setJustificationType (juce::Justification::centredLeft);
-        }
-    }
 
     // --- Tempo sync button (#5/#6) -------------------------------------------
     tempoSyncButton.setClickingTogglesState (true);
@@ -461,52 +439,6 @@ void OpenSpatialDelayEditor::timerCallback()
 {
     updateMapFromParameters();
     updateObjectButtonColours();
-
-    // v0.2: Bus-aware output format greying
-    int maxCh = processorRef.getMaxBusChannels();
-    for (int i = 0; i < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS; ++i)
-    {
-        const auto& info = OpenSpatialDelayProcessor::outputFormatRegistry[i];
-        bool available = (info.requiredChannels <= maxCh);
-        outputFormatBox.setItemEnabled (i + 1, available);
-    }
-
-    // Trigger layout recomputation if format changed
-    processorRef.requestOutputFormatChange (outputFormatBox.getSelectedItemIndex());
-
-    // v0.3: Context-sensitive UI based on output format
-    bool isBinaural = (processorRef.getActiveOutputFormat() == OpenSpatialDelayProcessor::OutputFormat::Binaural);
-
-    // HRTF Profile: only visible for binaural output
-    hrtfProfileBox.setVisible (isBinaural);
-    hrtfProfileLabel.setVisible (isBinaural);
-
-    // v0.3: Algorithm dropdown — output-format-aware
-    // Binaural: locked to "Direct Binaural" (HRTF at exact source position IS the rendering)
-    // Ambisonics output: locked to "Ambisonics Encode" (SH encoding bypasses algorithms)
-    // Surround: full algorithm selection (VBAP, VBIP, KNN, Ambisonics)
-    int fmtIdx = static_cast<int> (processorRef.getActiveOutputFormat());
-    bool isAmbiOutput = (fmtIdx >= 0 && fmtIdx < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS)
-                        && OpenSpatialDelayProcessor::outputFormatRegistry[fmtIdx].isAmbisonicsOutput;
-
-    if (isBinaural)
-    {
-        algorithmBox.setEnabled (false);
-        algorithmBox.setText ("Direct Binaural", juce::dontSendNotification);
-    }
-    else if (isAmbiOutput)
-    {
-        algorithmBox.setEnabled (false);
-        algorithmBox.setText ("Ambisonics Encode", juce::dontSendNotification);
-    }
-    else
-    {
-        algorithmBox.setEnabled (true);
-        // Restore APVTS-driven selection when switching back to surround
-        int algoIdx = static_cast<int> (processorRef.apvts.getRawParameterValue ("algorithm")->load());
-        algorithmBox.setSelectedItemIndex (algoIdx, juce::dontSendNotification);
-    }
-
     repaint();
 }
 
@@ -550,23 +482,24 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
 {
     g.fillAll (Colours_OSD::bg);
 
-    // Header bar (56px)
+    // Header bar
     g.setColour (Colours_OSD::headerBg);
-    g.fillRect (0, 0, getWidth(), 56);
+    g.fillRect (0, 0, getWidth(), 40);
     g.setColour (Colours_OSD::panelBorder);
-    g.drawLine (0.0f, 56.0f, (float) getWidth(), 56.0f, 1.0f);
+    g.drawLine (0.0f, 40.0f, (float) getWidth(), 40.0f, 1.0f);
     titleLabel.setFont (juce::FontOptions (18.0f).withStyle ("Bold"));
 
     // Right panel border (#3: wider panel)
     g.setColour (Colours_OSD::panelBorder);
-    g.drawRoundedRectangle ((float)(getWidth() - 266), 58.0f, 262.0f,
-                            (float)(getHeight() - 62), 8.0f, 1.0f);
+    g.drawRoundedRectangle ((float)(getWidth() - 266), 42.0f, 262.0f,
+                            (float)(getHeight() - 46), 8.0f, 1.0f);
 
     // Bottom panel border (#3: adjusted for wider right panel)
     g.drawRoundedRectangle (2.0f, (float)(getHeight() - 152),
                             (float)(getWidth() - 272), 148.0f, 8.0f, 1.0f);
 
     // --- Section headers (positions computed in resized) ---
+    drawSectionHeader (g, rpX, configHeaderY, rpW, "CONFIG");
     drawSectionHeader (g, rpX, delayHeaderY,  rpW, "DELAY");
     drawSectionHeader (g, rpX, toneHeaderY,   rpW, "TONE");
     drawSectionHeader (g, rpX, mixHeaderY,    rpW, "MIX");
@@ -612,38 +545,8 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
 void OpenSpatialDelayEditor::resized()
 {
     auto area = getLocalBounds();
-    auto header = area.removeFromTop (56);
-
-    // --- Header: Title (left) | Algorithm + Output + Monitor + HRTF (right-aligned) ---
-    // Row 1: small labels.  Row 2: title + dropdown boxes, left-aligned vertically.
-    const int hPad = 8, hGap = 8;
-    const int algoBoxW = 120, outBoxW = 120, hrtfBoxW = 90;
-    const int lblH = 14, boxH = 24;
-    int lblY = header.getY() + 10;              // label row — balanced clearance from top
-    int boxY = lblY + lblH + 4;                 // dropdown row — 4px gap below label
-
-    int rx = header.getRight() - hPad;
-
-    // HRTF Profile (rightmost — conditionally visible, sub-setting of Output)
-    rx -= hrtfBoxW;
-    hrtfProfileLabel.setBounds (rx, lblY, hrtfBoxW, lblH);
-    hrtfProfileBox.setBounds   (rx, boxY, hrtfBoxW, boxH);
-    rx -= hGap;
-
-    // Output Format
-    rx -= outBoxW;
-    outputFormatLabel.setBounds (rx, lblY, outBoxW, lblH);
-    outputFormatBox.setBounds   (rx, boxY, outBoxW, boxH);
-    rx -= hGap;
-
-    // Algorithm (leftmost dropdown)
-    rx -= algoBoxW;
-    algorithmLabel.setBounds (rx, lblY, algoBoxW, lblH);
-    algorithmBox.setBounds   (rx, boxY, algoBoxW, boxH);
-    algorithmLabel.setVisible (true);
-
-    // Title left-aligned with the dropdown row
-    titleLabel.setBounds (header.getX() + 12, boxY, rx - header.getX() - 24, boxH);
+    auto header = area.removeFromTop (40);
+    titleLabel.setBounds (header.reduced (10, 8));
 
     // === RIGHT PANEL (264px — #3: enlarged for breathing space) ==============
     auto rightPanel = area.removeFromRight (264).reduced (10, 4);
@@ -652,7 +555,21 @@ void OpenSpatialDelayEditor::resized()
     rpW = rightPanel.getWidth();
     int panelW = rpW;
 
-    // --- DELAY section (now starts at top of right panel) ---
+    // --- CONFIG section (#3: wider labels for "Algorithm" readability) ---
+    configHeaderY = rightPanel.getY();
+    rightPanel.removeFromTop (16);
+
+    auto algoRow = rightPanel.removeFromTop (22);
+    algorithmLabel.setBounds (algoRow.removeFromLeft (70));
+    algorithmBox.setBounds (algoRow.reduced (2, 0));
+    rightPanel.removeFromTop (4);
+
+    auto hrtfRow = rightPanel.removeFromTop (22);
+    hrtfProfileLabel.setBounds (hrtfRow.removeFromLeft (70));
+    hrtfProfileBox.setBounds (hrtfRow.reduced (2, 0));
+    rightPanel.removeFromTop (8);
+
+    // --- DELAY section ---
     delayHeaderY = rightPanel.getY();
     rightPanel.removeFromTop (16);
 
@@ -685,14 +602,14 @@ void OpenSpatialDelayEditor::resized()
     placeKnob (pitchShiftSlider, pitchShiftLabel, kx1, row1Y);
 
     // --- TONE section (#4: positioned after Feedback/Pitch, not on top) ---
-    toneHeaderY = row1Y + knobH + 20;
+    toneHeaderY = row1Y + knobH + 4;
 
     int row2Y = toneHeaderY + 16;
     placeKnob (filterHPSlider, filterHPLabel, kx0, row2Y);
     placeKnob (filterLPSlider, filterLPLabel, kx1, row2Y);
 
     // --- MIX section (#7: properly spaced below filters) ---
-    mixHeaderY = row2Y + knobH + 20;
+    mixHeaderY = row2Y + knobH + 4;
 
     int row3Y = mixHeaderY + 16;
     placeKnob (dryWetSlider,     dryWetLabel,     kx0, row3Y);
