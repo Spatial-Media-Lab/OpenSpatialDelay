@@ -2,7 +2,7 @@
 # Post-build plugin installer for macOS
 # Called automatically by CMake after each build
 
-PLUGIN_NAME="OpenSpatialDelay v0.2"
+PLUGIN_NAME="OpenSpatialDelay v0.3"
 BUILD_DIR="$1"
 AU_SRC="${BUILD_DIR}/OpenSpatialDelay_artefacts/Release/AU/${PLUGIN_NAME}.component"
 VST3_SRC="${BUILD_DIR}/OpenSpatialDelay_artefacts/Release/VST3/${PLUGIN_NAME}.vst3"

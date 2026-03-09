@@ -106,8 +106,6 @@ struct BinauralContext
     int profileIndex;
     double sampleRate;
     const BinauralProfile* profiles;             // pointer to the 5-profile array
-    const float* binauralSHWeightsL;             // pre-computed SH weights (Ambisonics only)
-    const float* binauralSHWeightsR;
 };
 
 //==============================================================================
@@ -222,18 +220,6 @@ public:
                               float* irL, float* irR,
                               float& delayL, float& delayR) const;
 
-    /** For Ambisonics: compute SH-projected HRIRs.
-        Integrates Y_c(dir) × HRIR(dir) over all measurement positions.
-        Writes numSHChannels × irLength floats to shIRsL and shIRsR. */
-    void computeSHProjectedHRIRs (float* shIRsL, float* shIRsR,
-                                   int numSHChannels) const;
-
-    /** Get the HRIR for a specific virtual speaker position.
-        Used by the BinauralRenderer for speaker-based algorithms. */
-    void getHRIRForSpeaker (const VirtualSpeaker& speaker,
-                            float* irL, float* irR,
-                            float& delayL, float& delayR) const;
-
     int getIRLength() const { return irLength; }
     int getNumPositions() const { return numPositions; }
     bool isLoaded() const { return loaded; }
@@ -293,30 +279,30 @@ private:
 class BinauralRenderer
 {
 public:
-    static constexpr int MAX_CONVOLVERS = 16;  // Max speakers or SH channels
+    static constexpr int MAX_SOURCES = 12;     // Per-source direct binaural (v0.3)
 
     BinauralRenderer() = default;
 
     /** Prepare all convolvers for the given sample rate and block size. */
     void prepare (double sampleRate, int maxBlockSize);
 
-    /** Load a new HRTF profile. Sets up convolvers for all virtual speakers
-        and (optionally) SH-domain HRIRs for Ambisonics. */
-    void setProfile (int profileIndex, HRTFDatabase& hrtfDb,
-                     const VirtualSpeaker* speakers, int numSpeakers,
-                     int numSHChannels);
+    /** Load a new HRTF profile. Computes normGain and prepares source convolvers.
+        v0.3: No longer sets up virtual speaker or SH convolvers. */
+    void setProfile (int profileIndex, HRTFDatabase& hrtfDb);
 
-    /** Render speaker accumulation buffers through HRTF convolvers.
-        Used by VBAP, VBIP, KNN (virtual speaker algorithms).
-        speakerBufs: [numSpeakers][numSamples], outL/outR: [numSamples] */
-    void renderSpeakerBuffers (const float* const* speakerBufs, int numSpeakers,
-                                int numSamples, float* outL, float* outR);
+    /** Update a single source's HRIR based on its current 3D position.
+        Realtime-safe: KD-tree lookup + in-place FFT, no allocation.
+        Called from processBlock at block boundaries when position changes. */
+    void updateSourceHRIR (int sourceIndex, float azRad, float elRad,
+                           HRTFDatabase& db);
 
-    /** Render SH accumulation buffers through SH-domain HRTF convolvers.
-        Used by Ambisonics algorithm.
-        shBufs: [numSHChannels][numSamples], outL/outR: [numSamples] */
-    void renderSHBuffers (const float* const* shBufs, int numSHChannels,
-                           int numSamples, float* outL, float* outR);
+    /** Render per-source accumulation buffers through HRTF convolvers.
+        sourceBufs: [numSources][numSamples], outL/outR: [numSamples]
+        Only enabled sources are convolved. */
+    void renderSourceBuffers (const float* const* sourceBufs,
+                              const bool* sourceEnabled,
+                              int numSources, int numSamples,
+                              float* outL, float* outR);
 
     /** Check if the renderer is in Simple (Woodworth) mode. */
     bool isSimpleMode() const { return activeProfile == 0; }
@@ -328,17 +314,16 @@ public:
     void reset();
 
 private:
-    // Virtual speaker convolvers: per-speaker × 2 ears
-    PartitionedConvolver speakerConvL[MAX_CONVOLVERS];
-    PartitionedConvolver speakerConvR[MAX_CONVOLVERS];
-
-    // SH-domain convolvers: per-SH-channel × 2 ears
-    PartitionedConvolver shConvL[MAX_CONVOLVERS];
-    PartitionedConvolver shConvR[MAX_CONVOLVERS];
+    // v0.3: Per-source direct binaural convolvers
+    PartitionedConvolver sourceConvL[MAX_SOURCES];
+    PartitionedConvolver sourceConvR[MAX_SOURCES];
+    float  cachedSourceAz[MAX_SOURCES] = {};     // radians, for ~1° change detection
+    float  cachedSourceEl[MAX_SOURCES] = {};
+    bool   sourceConvReady[MAX_SOURCES] = {};     // true after first HRIR loaded
+    float  storedNormGain = 1.0f;                 // cross-profile normalization
+    int    storedIRLength = 0;                    // cached for updateSourceHRIR
 
     int activeProfile = 0;   // Default = Simple (Woodworth fallback)
-    int activeSpeakers = 0;
-    int activeSHChannels = 0;
 
     double currentSampleRate = 44100.0;
     int currentBlockSize = 512;
@@ -348,7 +333,8 @@ private:
 };
 
 //==============================================================================
-class OpenSpatialDelayProcessor : public juce::AudioProcessor
+class OpenSpatialDelayProcessor : public juce::AudioProcessor,
+                                  private juce::Timer
 {
 public:
     static constexpr int MAX_OBJECTS = 12;
@@ -358,8 +344,15 @@ public:
     static constexpr int HOA_ORDER = 3;
     static constexpr int HOA_CHANNELS = (HOA_ORDER + 1) * (HOA_ORDER + 1); // = 16
 
-    // v0.2: Multi-channel output format
-    enum class OutputFormat { Binaural = 0, Quad, Surround5_1, Surround7_1, Surround7_1_4, Surround9_1_6, Octaphonic };
+    // v0.2: Multi-channel output format (indices 0-6 preserved for preset compat)
+    enum class OutputFormat {
+        Binaural = 0, Quad, Surround5_1, Surround7_1, Surround7_1_4, Surround9_1_6, Octaphonic,
+        // v0.3: Additional surround formats
+        Surround5_0, Surround7_0, Surround5_1_2, Surround5_1_4,
+        Surround7_0_2, Surround7_1_2, Surround7_1_6,
+        // v0.3: Ambisonics output (AmbiX ACN/SN3D)
+        AmbisonicsFOA, AmbisonicsSOA, AmbisonicsHOA
+    };
 
     // Output format registry — single source of truth for all supported formats
     // Reusable across Spatial Media Library plugins
@@ -371,8 +364,10 @@ public:
         int requiredChannels;       // Minimum bus channels needed
         bool hasLFE;
         bool hasHeight;
+        bool isAmbisonicsOutput;    // true for FOA/SOA/HOA output encoding
+        int  ambiOrder;             // 0 for non-ambi, 1/2/3 for Ambisonics output
     };
-    static constexpr int NUM_OUTPUT_FORMATS = 7;
+    static constexpr int NUM_OUTPUT_FORMATS = 17;
     static const std::array<OutputFormatInfo, NUM_OUTPUT_FORMATS> outputFormatRegistry;
 
     // Double-buffered layout state for lock-free audio thread reads
@@ -452,11 +447,12 @@ private:
 
     //--- Modular 3D Audio Core ------------------------------------------------
     static const std::vector<VBAPTriplet>& getVBAPTriplets();
-    void updateSpeakerBinauralCache (int profileIndex);
     void computeAmbiDecodeMatrix();
 
-    // Direct Ambisonics-to-Binaural decode (v0.1 — bypasses virtual speakers)
-    void computeBinauralSHWeights (int profileIndex);
+
+    // Shared Ambisonics decode matrix computation (used by activateLayout)
+    static void computeAmbiDecodeForLayout (const SpeakerLayout& layout,
+                                            float outMatrix[][16], int& outNumSpeakers);
 
     //--- v0.2: Multi-channel output support ---
     OutputFormat detectOutputFormat (int numOutputChannels) const;
@@ -474,11 +470,18 @@ private:
     static constexpr int NUM_ALGORITHMS = 4;
     SpatializationAlgorithm* algorithms[NUM_ALGORITHMS] = {};
 
-    //--- HRTF convolution system ---
+    //--- HRTF convolution system (double-buffered for thread-safe profile switching) ---
     HRTFDatabase   hrtfDatabase;
-    BinauralRenderer binauralRenderer;
+    BinauralRenderer binauralRenderers[2];
+    std::atomic<int> activeRendererIndex { 0 };
+    int prepareRendererIndex = 1;
     void loadHRTFProfile (int profileIndex);
+    void loadHRTFProfileIntoRenderer (int profileIndex, BinauralRenderer& renderer);
     int loadedHRTFProfileIndex = -1;
+
+    //--- v0.3: Background HRTF loading (via Timer) ---
+    void timerCallback() override;
+    std::atomic<int> targetHRTFProfile { 0 };
 
     //--- DSP state ------------------------------------------------------------
     double currentSampleRate = 44100.0;
@@ -504,15 +507,8 @@ private:
     juce::LinearSmoothedValue<float> smoothedLoopMultiplier;
 
     // Modular 3D Audio Core state
-    BinauralGains speakerBinauralCache[NUM_VIRTUAL_SPEAKERS] = {};
-    int cachedProfileIndex = -1;
-    float ambiDecodeMatrix[NUM_VIRTUAL_SPEAKERS][HOA_CHANNELS] = {};  // v0.2+ speaker decode
+    float ambiDecodeMatrix[NUM_VIRTUAL_SPEAKERS][HOA_CHANNELS] = {};  // v0.2+ surround decode
 
-    // Direct Ambisonics-to-Binaural decode weights (v0.1)
-    // Computed by projecting the ILD model onto the SH basis via Fibonacci sphere sampling
-    float binauralSHWeightsL[HOA_CHANNELS] = {};
-    float binauralSHWeightsR[HOA_CHANNELS] = {};
-    int cachedBinauralProfileIndex = -1;
 
     // v0.2: Double-buffered output layout for lock-free format switching
     OutputLayoutState layoutBuffers[2];
@@ -539,11 +535,10 @@ private:
     // Pre-allocated work buffers (avoid allocation in processBlock)
     std::vector<float> monoInputBuffer;
 
-    // HRTF 3-pass work buffers (pre-allocated in prepareToPlay)
-    // Pass 1 accumulates per-speaker or per-SH-channel signals
-    std::vector<float> speakerAccumBufs[NUM_VIRTUAL_SPEAKERS];  // [speaker][sample]
-    std::vector<float> shAccumBufs[HOA_CHANNELS];               // [sh_channel][sample]
-    std::vector<float> wetBufL, wetBufR;                        // Pass 2 output / Pass 3 input
+    // v0.3: Direct binaural work buffers (pre-allocated in prepareToPlay)
+    // Per-source accumulation buffers for direct HRTF convolution
+    std::vector<float> sourceAccumBufs[MAX_OBJECTS];  // [source][sample]
+    std::vector<float> wetBufL, wetBufR;              // Convolution output / dry-wet mix input
 
     // Smoothed parameters
     juce::SmoothedValue<float> smoothedDryWet;

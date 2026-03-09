@@ -6,3 +6,6 @@ CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 Makefile
+
+# Pre-built plugin binaries (stored locally only — too large for git)
+Archive/*/builds/

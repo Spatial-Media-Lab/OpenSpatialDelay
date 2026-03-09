@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(OpenSpatialDelay VERSION 0.2.0 LANGUAGES C CXX)
+project(OpenSpatialDelay VERSION 0.3.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -77,9 +77,9 @@ juce_add_plugin(OpenSpatialDelay
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     PLUGIN_MANUFACTURER_CODE Smli
-    PLUGIN_CODE Osd2
+    PLUGIN_CODE Osd3
     FORMATS ${PLUGIN_FORMATS}
-    PRODUCT_NAME "OpenSpatialDelay v0.2"
+    PRODUCT_NAME "OpenSpatialDelay v0.3"
     COPY_PLUGIN_AFTER_BUILD FALSE
 )
 

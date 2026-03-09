@@ -209,7 +209,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     setSize (820, 580);
 
     // --- Title ---------------------------------------------------------------
-    titleLabel.setText ("OpenSpatialDelay v0.2", juce::dontSendNotification);
+    titleLabel.setText ("OpenSpatialDelay v0.3", juce::dontSendNotification);
     titleLabel.setColour (juce::Label::textColourId, Colours_OSD::accentCyan);
     addAndMakeVisible (titleLabel);
 
@@ -474,12 +474,38 @@ void OpenSpatialDelayEditor::timerCallback()
     // Trigger layout recomputation if format changed
     processorRef.requestOutputFormatChange (outputFormatBox.getSelectedItemIndex());
 
-    // v0.2: Context-sensitive UI — HRTF Profile only visible for binaural output
+    // v0.3: Context-sensitive UI based on output format
     bool isBinaural = (processorRef.getActiveOutputFormat() == OpenSpatialDelayProcessor::OutputFormat::Binaural);
 
     // HRTF Profile: only visible for binaural output
     hrtfProfileBox.setVisible (isBinaural);
     hrtfProfileLabel.setVisible (isBinaural);
+
+    // v0.3: Algorithm dropdown — output-format-aware
+    // Binaural: locked to "Direct Binaural" (HRTF at exact source position IS the rendering)
+    // Ambisonics output: locked to "Ambisonics Encode" (SH encoding bypasses algorithms)
+    // Surround: full algorithm selection (VBAP, VBIP, KNN, Ambisonics)
+    int fmtIdx = static_cast<int> (processorRef.getActiveOutputFormat());
+    bool isAmbiOutput = (fmtIdx >= 0 && fmtIdx < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS)
+                        && OpenSpatialDelayProcessor::outputFormatRegistry[fmtIdx].isAmbisonicsOutput;
+
+    if (isBinaural)
+    {
+        algorithmBox.setEnabled (false);
+        algorithmBox.setText ("Direct Binaural", juce::dontSendNotification);
+    }
+    else if (isAmbiOutput)
+    {
+        algorithmBox.setEnabled (false);
+        algorithmBox.setText ("Ambisonics Encode", juce::dontSendNotification);
+    }
+    else
+    {
+        algorithmBox.setEnabled (true);
+        // Restore APVTS-driven selection when switching back to surround
+        int algoIdx = static_cast<int> (processorRef.apvts.getRawParameterValue ("algorithm")->load());
+        algorithmBox.setSelectedItemIndex (algoIdx, juce::dontSendNotification);
+    }
 
     repaint();
 }
@@ -588,10 +614,10 @@ void OpenSpatialDelayEditor::resized()
     auto area = getLocalBounds();
     auto header = area.removeFromTop (56);
 
-    // --- Header: Title (left) | Algorithm + Output + HRTF (right-aligned) ---
+    // --- Header: Title (left) | Algorithm + Output + Monitor + HRTF (right-aligned) ---
     // Row 1: small labels.  Row 2: title + dropdown boxes, left-aligned vertically.
-    const int hPad = 8, hGap = 12;
-    const int algoBoxW = 138, outBoxW = 138, hrtfBoxW = 100;
+    const int hPad = 8, hGap = 8;
+    const int algoBoxW = 120, outBoxW = 120, hrtfBoxW = 90;
     const int lblH = 14, boxH = 24;
     int lblY = header.getY() + 10;              // label row — balanced clearance from top
     int boxY = lblY + lblH + 4;                 // dropdown row — 4px gap below label

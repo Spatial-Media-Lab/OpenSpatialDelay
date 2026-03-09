@@ -94,3 +94,37 @@ Frozen snapshot in `Archive/v0.2/`:
 - `PluginProcessor_v0.2.cpp`
 - `PluginEditor_v0.2.h`
 - `PluginEditor_v0.2.cpp`
+
+---
+
+## v0.3 (active development)
+**Direct Binaural Rendering + Architecture Refinement**
+
+### Direct Binaural Rendering
+- Per-source HRTF convolution: each tap's 3D position (azimuth + elevation) maps directly to an HRTF lookup via SOFA file
+- No intermediate virtual speaker layout — eliminates the monitoring format dropdown
+- 12 per-source PartitionedConvolvers replace 16 virtual speaker convolvers
+- Realtime-safe HRIR updates at block boundaries via libmysofa KD-tree lookup (~1° threshold)
+- Full height rendering via SOFA sphere measurements (superior to fixed virtual speaker elevations)
+- Cross-profile normalization preserved for per-source HRIRs
+
+### Output-Format-Aware Algorithm Selection
+- Binaural (2ch bus): algorithm locked to "Direct Binaural", dropdown greyed out
+- Surround (>2ch bus): full algorithm menu active (VBAP, VBIP, KNN, Ambisonics)
+- Clean separation: binaural and surround are peer rendering paths, not layered
+
+### Architecture Cleanup
+- Removed: virtual speaker convolver bank (speakerConvL/R[16]), SH convolver bank (shConvL/R[16])
+- Removed: renderSpeakerBuffers(), renderSHBuffers(), computeSHProjectedHRIRs()
+- Removed: MonitoringFormat enum, MonitoringLayoutState, monitoring format APVTS parameter + UI
+- Removed: updateSpeakerBinauralCache(), speaker-layout VBAP triplets and Ambisonics decode matrices
+- Simplified processBlock binaural branching from 3 paths to 2
+
+### Known Limitations
+
+**Missing Air Absorption Distance Filter (Spec Section 4.3)**
+
+The spec calls for a "6 dB/doubling distance high-shelf filter" to simulate frequency-dependent
+air absorption. The current implementation applies level attenuation only (`distGain = 1/(d*4+0.25)`)
+with no frequency-dependent distance filtering. This will be addressed in a future version
+alongside enhanced distance modeling.
