@@ -1,0 +1,26 @@
+###########
+# Filetypes
+###########
+*.log
+*.asv
+*.vscode
+
+#########
+# Folders
+#########
+.vs/
+_compiledPlugins
+**/Builds
+**/JuceLibraryCode
+build
+src
+VST
+VST3
+LV2
+Standalone
+fftw
+
+#############
+# macOS Stuff
+#############
+.DS_Store

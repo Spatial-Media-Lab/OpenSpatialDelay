@@ -97,7 +97,7 @@ Frozen snapshot in `Archive/v0.2/`:
 
 ---
 
-## v0.3 (active development)
+## v0.3 — FROZEN
 **Direct Binaural Rendering + Architecture Refinement**
 
 ### Direct Binaural Rendering
@@ -128,3 +128,155 @@ The spec calls for a "6 dB/doubling distance high-shelf filter" to simulate freq
 air absorption. The current implementation applies level attenuation only (`distGain = 1/(d*4+0.25)`)
 with no frequency-dependent distance filtering. This will be addressed in a future version
 alongside enhanced distance modeling.
+
+---
+
+## v0.4 (2026-03-10) — FROZEN
+**Enhanced DSP: DBAP, Doppler, Air Absorption**
+
+Major feature release adding DBAP algorithm, per-object Doppler effect, air absorption
+distance filtering, and comprehensive UI reorganization with design hierarchy.
+
+### DBAP Algorithm (Distance-Based Amplitude Panning)
+- New `DBAPAlgorithm` class implementing Lossius et al. (ICMC 2009)
+- Computes speaker gains from Euclidean distances in Cartesian space
+- Inverse-distance-squared weighting (`a=2`, 6 dB/doubling rolloff) with constant-power normalization
+- Ideal for irregular/non-standard speaker layouts where VBAP triangulation fails
+- Added as 6th algorithm (5 user-facing): Ambisonics, DBAP, KNN, VBAP, VBIP
+
+### Doppler Effect (Per-Object)
+- Per-object Doppler amount knob (`object{N}_dopplerAmount` parameter, 0=off, >0=on at that intensity)
+- No global Doppler control — each tap controls its own Doppler independently
+- Per-block velocity tracking: Cartesian position delta / block duration
+- Exponential moving average smoothing (alpha=0.1) prevents clicks from sudden parameter jumps
+- Pitch shift: `semitones = 12 * log2(c / (c + v * amount))`, clamped to +-12 semitones
+- Speed of sound: 343 m/s at 20C, distance mapped to 0-10m physical scale
+- Doppler only applies to direct tap output, NOT to the feedback path
+
+### Air Absorption Distance Filter (Global)
+- Global `airAbsorption` toggle parameter (enabled by default)
+- Per-object IIR low-pass filter driven by each tap's distance
+- Cutoff formula: `cutoff = 20000 * exp(-4 * distance)` Hz
+- At distance=0: full bandwidth (20kHz). At distance=1: ~366 Hz cutoff
+- Filter coefficients update once per block (safe for IIR stability)
+- Only applies to direct tap output, NOT to the feedback path
+- Resolves v0.3 Known Limitation: "Missing Air Absorption Distance Filter"
+
+### UI Reorganization
+- **Design hierarchy established:** Right panel = global, Bottom panel = per-object, Header = routing
+- **Right panel sections:** DELAY → TONE (with AIR toggle) → MIX (signal flow order)
+- **Bottom panel per-object controls:** ON/OFF, AZIMUTH, ELEV, DIST, DOPPLER
+- DBAP added to algorithm dropdown (5 user-facing algorithms)
+- Per-object DOPPLER amount knob (amber accent, 0=off)
+- AIR absorption toggle right-aligned in TONE section header (cyan accent)
+- Algorithm dropdown hidden entirely for Binaural output (was greyed out in v0.3)
+- Algorithm and HRTF Profile dropdowns share same header position (swap based on output format)
+- Title bar updated to "OpenSpatialDelay v0.4"
+
+### Version Bump Checklist (Standard Practice)
+Every version bump updates: CMakeLists.txt (VERSION, PLUGIN_CODE, PRODUCT_NAME),
+install_plugins.sh, PluginEditor.cpp title bar, VERSION_HISTORY.md, CLAUDE.md
+
+### Files
+Frozen snapshot in `Archive/v0.4/`:
+- `PluginProcessor_v0.4.h`
+- `PluginProcessor_v0.4.cpp`
+- `PluginEditor_v0.4.h`
+- `PluginEditor_v0.4.cpp`
+
+---
+
+## v0.5 (2026-03-11) — FROZEN
+**Stereo Variants, Output Reordering, MDAP Algorithm, Bug Fixes, Code Optimization, Framework Foundations**
+
+Major feature release adding 5 stereo output variants (mic simulations), MDAP algorithm,
+reordering all output formats by category then channel count, refactoring processBlock into
+dedicated render methods, comprehensive code optimization, build warning elimination, and
+trajectory/ADM-OSC parameter stubs for v0.6+.
+
+### Stereo Variant Rendering (5 modes)
+- New `renderStereoVariant()` — 5th rendering path alongside HRTF, Woodworth, Ambisonics, Surround
+- **Stereo:** Equal-power pan law from azimuth
+- **Stereo (VBAP):** 2-speaker VBAP at ±30° virtual speakers
+- **Stereo (XY):** Coincident cardioid pair at ±45°
+- **Stereo (MS):** Mid-Side encoding (Mid=cos(az), Side=sin(az), L=M+S, R=M−S)
+- **Stereo (Blumlein):** Crossed figure-8 pair at ±45°
+- Elevation contributes only to distance attenuation (real mic pairs don't capture height in L/R)
+- Stereo gains pre-computed per block (block-rate), per-sample delay engine shared with other paths
+
+### MDAP Algorithm (Multiple-Direction Amplitude Panning)
+- New `MDAPAlgorithm` class — VBAP with 8 auxiliary sub-sources on a spread ring
+- Produces wider, more stable spatial images than point-source VBAP
+- 7th algorithm total (6 user-facing): Ambisonics, DBAP, KNN, MDAP, VBAP, VBIP
+
+### Output Format Reordering (22 total)
+- 22 output formats ordered by category, then ascending channel count:
+  - Binaural (1): Binaural (default)
+  - Stereo (1): Stereo (5 sub-modes via algorithm parameter)
+  - Surround (13): Quad, 5.0, 5.1, 7.0, 5.1.2, 7.1, Oct, 7.0.2, 5.1.4, 7.1.2, 7.1.4, 7.1.6, 9.1.6
+  - Ambisonics (6): FOA, SOA, HOA, 4OA, 5OA, 6OA
+- `OutputFormatInfo` struct gains `isStereoVariant` field
+- Parameter migration in `setStateInformation` maps v0.4 indices (17 formats) → v0.5 indices (21 formats)
+- `pluginStateVersion` property added to state XML for version detection
+
+### Bug Fixes
+- **VBAP 3D L/R swap fix:** `computeVBAPGains3D()` used max gain sum to select among overlapping
+  brute-force triangles, which always picked the widest triangle spanning the L/R axis. Fixed by
+  changing to min gain sum criterion (tightest enclosing triangle). Corrected all height-channel
+  format rendering (5.1.2 through 9.1.6) with VBAP, VBIP, and MDAP algorithms.
+
+### processBlock Refactoring
+- Extracted 5 rendering paths into dedicated private methods:
+  - `renderDirectBinauralHRTF()` — 3-pass HRTF convolution
+  - `renderSimpleBinauralWoodworth()` — Woodworth ITD+ILD
+  - `renderAmbisonicsOutput()` — SH encode + NFC-HOA shelf filters
+  - `renderDiscreteSurround()` — speaker gains + LFE
+  - `renderStereoVariant()` — mic simulation (new)
+- Shared inline helpers: `readObjectSample()`, `processFeedbackSample()`
+- processBlock is now a thin dispatcher: parameter reads → object state → dispatch
+
+### Code Optimization
+- **Parameter pointer caching:** Per-object `std::atomic<float>*` arrays cached at construction,
+  eliminating 72+ string allocations per audio block
+- **Doppler/air absorption gating:** Skip expensive sqrt/log2/trig/filter recalculation when
+  object positions are static (threshold >1e-5)
+- **Feedback filter gating:** Skip `makeLowPass()`/`makeHighPass()` when frequency unchanged (>0.1 Hz)
+- **Pitch window caching:** Pre-computed `sampleRate * 0.250f` in prepareToPlay
+- **Build warnings eliminated:** 0 warnings from project source (56 sign-conversion fixes,
+  unused param/variable cleanup, dead code removal, JUCE infinity warning suppression)
+- **Dead code removed:** Unused `noteDivisionRatios[]`, `kFontName`, `sinEl3`,
+  dead `AmbisonicsAlgorithm::computeBinauralGains()` override
+
+### Build Optimizations
+- Power-of-2 delay buffer with bitmask indexing (eliminates integer division in hot path)
+- `-ffast-math` (macOS) / `/fp:fast /arch:AVX2` (Windows) compiler flags
+- Contiguous `sourceAccumBufStorage` allocation replaces 12 separate vectors
+
+### Framework Documentation
+- Added `# SPATIAL MEDIA LIBRARY` section boundary comments throughout PluginProcessor.h and .cpp
+- Clear `SPATIAL FRAMEWORK` vs `DELAY-SPECIFIC` vs `MIXED` labels on all major code sections
+- Guides future plugin authors on what to reuse (~68% framework) vs replace (~32% delay-specific)
+
+### UI Updates
+- Output format dropdown shows 22 formats (auto-populated from registry)
+- Stereo variants: both Algorithm and HRTF Profile dropdowns hidden
+- Binaural: HRTF Profile visible, Algorithm hidden (unchanged)
+- Surround: Algorithm visible and enabled (unchanged)
+- Ambisonics: Algorithm visible but disabled, shows "Ambisonics Encode" (unchanged)
+
+### Trajectory + ADM-OSC Foundation (Stubs)
+- `juce_osc` module linked in CMakeLists.txt
+- Per-object trajectory parameters (inactive): `trajectoryShape` (6 shapes), `trajectorySpeed`
+- Global `admOscEnabled` parameter (inactive)
+- Parameter IDs established so presets saved in v0.5 carry forward to v0.6+
+
+### Files
+Frozen snapshot in `Archive/v0.5/`:
+- `PluginProcessor_v0.5.h`
+- `PluginProcessor_v0.5.cpp`
+- `PluginEditor_v0.5.h`
+- `PluginEditor_v0.5.cpp`
+- `CMakeLists_v0.5.txt`
+
+### Output
+- 22 output formats (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
