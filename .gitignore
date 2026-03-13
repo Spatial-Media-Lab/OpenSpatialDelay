@@ -9,3 +9,6 @@ Makefile
 
 # Pre-built plugin binaries (stored locally only — too large for git)
 Archive/*/builds/
+
+# Screenshots (local review/bug-report only, not needed in repo)
+docs/screenshots/
