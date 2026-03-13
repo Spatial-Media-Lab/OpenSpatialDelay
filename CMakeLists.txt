@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(OpenSpatialDelay VERSION 0.3.0 LANGUAGES C CXX)
+project(OpenSpatialDelay VERSION 0.6.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -77,9 +77,9 @@ juce_add_plugin(OpenSpatialDelay
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     PLUGIN_MANUFACTURER_CODE Smli
-    PLUGIN_CODE Osd3
+    PLUGIN_CODE Osd6
     FORMATS ${PLUGIN_FORMATS}
-    PRODUCT_NAME "OpenSpatialDelay v0.3"
+    PRODUCT_NAME "OpenSpatialDelay v0.6"
     COPY_PLUGIN_AFTER_BUILD FALSE
 )
 
@@ -112,6 +112,7 @@ target_link_libraries(OpenSpatialDelay
         juce::juce_audio_utils
         juce::juce_audio_plugin_client
         juce::juce_dsp
+        juce::juce_osc
         HRTFData
         mysofa-static
         ZLIB::ZLIB
@@ -120,6 +121,15 @@ target_link_libraries(OpenSpatialDelay
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags
 )
+
+# =============================================================================
+# v0.5: Fast-math and vectorization flags (safe — explicit NaN guards exist)
+# =============================================================================
+if(APPLE)
+    target_compile_options(OpenSpatialDelay PRIVATE -ffast-math -Wno-nan-infinity-disabled)
+elseif(MSVC)
+    target_compile_options(OpenSpatialDelay PRIVATE /fp:fast /arch:AVX2)
+endif()
 
 # =============================================================================
 # Post-build: install plugins (macOS only)

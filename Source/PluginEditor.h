@@ -25,6 +25,7 @@ public:
 
     void setObjectState (int index, float azimuthDeg, float elevationDeg,
                          float distance, bool enabled);
+    void setOscOverride (int index, bool active) { if (index >= 0 && index < MAX_OBJECTS) oscOverride[(size_t)index] = active; }
     void setSelectedObject (int index) { selectedObject = index; repaint(); }
 
     void addListener (Listener* l)    { listeners.add (l); }
@@ -40,6 +41,7 @@ private:
     };
 
     std::array<ObjectInfo, MAX_OBJECTS> objects;
+    std::array<bool, MAX_OBJECTS> oscOverride = {};  // v0.6: per-object OSC override indicator
     int selectedObject = -1;
     int draggedObject  = -1;
 
@@ -230,6 +232,28 @@ private:
     juce::TextButton objEnabledButton;  // styled power button instead of checkbox
     int currentObjectIndex = 0;
 
+    // v0.4: Per-object Doppler amount knob
+    juce::Slider objDopplerSlider;
+    juce::Label objDopplerLabel;
+
+    // v0.6: Per-object trajectory controls (bottom panel)
+    juce::ComboBox objTrajectoryBox;
+    juce::Label objTrajectoryLabel;
+    juce::Slider objTrajectorySpeedSlider;
+    juce::Label objTrajectorySpeedLabel;
+
+    // v0.6: Preset browser (header bar)
+    juce::ComboBox presetBox;
+    juce::TextButton presetPrevButton, presetNextButton, presetSaveButton;
+    void refreshPresetBox();
+
+    // v0.6: ADM-OSC toggle + editable port label
+    juce::TextButton oscToggleButton;
+    juce::Label oscPortLabel;
+
+    // v0.4: Global air absorption toggle
+    juce::TextButton airAbsorptionButton;
+
     // Labels
     juce::Label titleLabel;
     juce::Label inputGainLabel, outputGainLabel;
@@ -250,12 +274,24 @@ private:
     std::unique_ptr<SliderAttachment> pitchShiftAttach;
     std::unique_ptr<SliderAttachment> filterHPAttach, filterLPAttach;
     std::unique_ptr<SliderAttachment> dryWetAttach;
-    std::unique_ptr<ComboBoxAttachment> algorithmAttach, hrtfProfileAttach, syncModeAttach, outputFormatAttach;
+    std::unique_ptr<ComboBoxAttachment> hrtfProfileAttach, syncModeAttach, outputFormatAttach;
+    int lastAlgoCategoryShown = -1;  // Track format category to avoid redundant combo rebuilds
     std::unique_ptr<ButtonAttachment> tempoSyncAttach;
+
+    // v0.4: Global DSP attachments
+    std::unique_ptr<ButtonAttachment> airAbsorptionAttach;
 
     // Per-object attachments (for the currently selected object)
     std::unique_ptr<SliderAttachment> objAzAttach, objElAttach, objDistAttach;
     std::unique_ptr<ButtonAttachment> objEnabledAttach;
+    std::unique_ptr<SliderAttachment> objDopplerAttach;  // v0.4: per-object Doppler amount
+
+    // v0.6: Per-object trajectory attachments (rebound in selectObject)
+    std::unique_ptr<ComboBoxAttachment> objTrajectoryAttach;
+    std::unique_ptr<SliderAttachment>   objTrajectorySpeedAttach;
+
+    // v0.6: ADM-OSC toggle attachment
+    std::unique_ptr<ButtonAttachment> oscToggleAttach;
 
     void selectObject (int index);
     void updateObjectButtonColours();

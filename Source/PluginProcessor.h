@@ -6,6 +6,11 @@
 // libmysofa — SOFA file reader for HRTF data
 struct MYSOFA_EASY;  // Forward declaration (avoids including mysofa.h in header)
 
+// #############################################################################
+// SPATIAL MEDIA LIBRARY — Reusable spatial audio data structures
+// These structs are shared across all plugins in the Spatial Media Library suite.
+// #############################################################################
+
 //==============================================================================
 // Binaural profile: defines virtual head characteristics for simplified HRTF
 //==============================================================================
@@ -108,6 +113,12 @@ struct BinauralContext
     const BinauralProfile* profiles;             // pointer to the 5-profile array
 };
 
+// #############################################################################
+// SPATIAL MEDIA LIBRARY — Spatialization algorithm interface & implementations
+// Abstract base + 7 concrete algorithms. Reusable across all SML plugins.
+// To add a new plugin: implement your DSP, use these algorithms via computeGains().
+// #############################################################################
+
 //==============================================================================
 // Abstract spatialization algorithm interface
 // Shared across the Spatial Media Library plugin suite
@@ -127,8 +138,8 @@ public:
     virtual bool supportsBinauralDirect() const { return false; }
 
     /** Compute direct binaural gains (only called if supportsBinauralDirect() is true). */
-    virtual BinauralGains computeBinauralGains (const SourcePosition& source,
-                                                const BinauralContext& ctx) const { return {}; }
+    virtual BinauralGains computeBinauralGains (const SourcePosition& /*source*/,
+                                                const BinauralContext& /*ctx*/) const { return {}; }
 
     /** Whether this algorithm supports surround speaker output. */
     virtual bool supportsSurround() const { return true; }
@@ -176,9 +187,6 @@ class AmbisonicsAlgorithm : public SpatializationAlgorithm
 public:
     void computeGains (const SourcePosition& source, const LayoutContext& ctx,
                        float* outputGains, int numSpeakers) const override;
-    bool supportsBinauralDirect() const override { return true; }
-    BinauralGains computeBinauralGains (const SourcePosition& source,
-                                        const BinauralContext& ctx) const override;
     bool supportsSHDomain() const override { return true; }
     juce::String getName() const override { return "Ambisonics (HOA)"; }
 };
@@ -200,6 +208,34 @@ public:
                        float* outputGains, int numSpeakers) const override;
     juce::String getName() const override { return "KNN"; }
 };
+
+/** Distance-Based Amplitude Panning (Lossius et al., ICMC 2009).
+    Computes speaker gains from Euclidean distances in Cartesian space.
+    Ideal for irregular/non-standard speaker layouts where VBAP triangulation fails. */
+class DBAPAlgorithm : public SpatializationAlgorithm
+{
+public:
+    void computeGains (const SourcePosition& source, const LayoutContext& ctx,
+                       float* outputGains, int numSpeakers) const override;
+    juce::String getName() const override { return "DBAP"; }
+};
+
+/** Multiple-Direction Amplitude Panning (Pulkki 2000).
+    Creates source spread by rendering multiple VBAP sub-sources on a ring
+    around the main direction. Produces wider, more stable spatial images. */
+class MDAPAlgorithm : public SpatializationAlgorithm
+{
+public:
+    void computeGains (const SourcePosition& source, const LayoutContext& ctx,
+                       float* outputGains, int numSpeakers) const override;
+    juce::String getName() const override { return "MDAP"; }
+};
+
+// #############################################################################
+// SPATIAL MEDIA LIBRARY — HRTF & binaural rendering infrastructure
+// HRTFDatabase, PartitionedConvolver, and BinauralRenderer are reusable
+// by any SML plugin that needs binaural output via HRTF convolution.
+// #############################################################################
 
 //==============================================================================
 // HRTF Database — loads SOFA files and provides HRIR lookup
@@ -332,9 +368,17 @@ private:
     std::vector<float> convTmpL, convTmpR;
 };
 
+// #############################################################################
+// PLUGIN-SPECIFIC — OpenSpatialDelay processor class
+// This class wires the reusable spatial framework (above) to the delay engine.
+// Other SML plugins would replace this class with their own DSP processor,
+// reusing the structs, algorithms, HRTFDatabase, and BinauralRenderer above.
+// #############################################################################
+
 //==============================================================================
 class OpenSpatialDelayProcessor : public juce::AudioProcessor,
-                                  private juce::Timer
+                                  private juce::Timer,
+                                  private juce::OSCReceiver::Listener<juce::OSCReceiver::MessageLoopCallback>
 {
 public:
     static constexpr int MAX_OBJECTS = 12;
@@ -342,16 +386,26 @@ public:
     // Modular 3D Audio Core constants
     static constexpr int NUM_VIRTUAL_SPEAKERS = 16;
     static constexpr int HOA_ORDER = 3;
-    static constexpr int HOA_CHANNELS = (HOA_ORDER + 1) * (HOA_ORDER + 1); // = 16
+    static constexpr int HOA_CHANNELS = (HOA_ORDER + 1) * (HOA_ORDER + 1); // = 16 (surround decode cap)
+    static constexpr int MAX_AMBI_ORDER = 6;
+    static constexpr int MAX_AMBI_CHANNELS = (MAX_AMBI_ORDER + 1) * (MAX_AMBI_ORDER + 1); // = 49
 
-    // v0.2: Multi-channel output format (indices 0-6 preserved for preset compat)
+    // v0.5: Output formats — Binaural first, then Stereo, Surround, Ambisonics
+    // 1 Binaural + 1 Stereo + 13 Surround + 6 Ambisonics = 21 total
+    // Stereo mode (Equal Power, VBAP, XY, MS, Blumlein) selected via algorithm parameter
     enum class OutputFormat {
-        Binaural = 0, Quad, Surround5_1, Surround7_1, Surround7_1_4, Surround9_1_6, Octaphonic,
-        // v0.3: Additional surround formats
-        Surround5_0, Surround7_0, Surround5_1_2, Surround5_1_4,
-        Surround7_0_2, Surround7_1_2, Surround7_1_6,
-        // v0.3: Ambisonics output (AmbiX ACN/SN3D)
-        AmbisonicsFOA, AmbisonicsSOA, AmbisonicsHOA
+        // Binaural (HRTF head model) — default
+        Binaural = 0,
+        // Stereo (mode selected by algorithm param indices 6-10)
+        Stereo,
+        // Surround (ascending channel count)
+        Quad, Surround5_0, Surround5_1, Surround7_0,
+        Surround5_1_2, Surround7_1, Octaphonic,
+        Surround7_0_2, Surround5_1_4, Surround7_1_2,
+        Surround7_1_4, Surround7_1_6, Surround9_1_6,
+        // Ambisonics output (AmbiX ACN/SN3D)
+        AmbisonicsFOA, AmbisonicsSOA, AmbisonicsHOA,
+        Ambisonics4OA, Ambisonics5OA, Ambisonics6OA
     };
 
     // Output format registry — single source of truth for all supported formats
@@ -365,9 +419,10 @@ public:
         bool hasLFE;
         bool hasHeight;
         bool isAmbisonicsOutput;    // true for FOA/SOA/HOA output encoding
-        int  ambiOrder;             // 0 for non-ambi, 1/2/3 for Ambisonics output
+        int  ambiOrder;             // 0 for non-ambi, 1-6 for Ambisonics output
+        bool isStereoVariant;       // true for Stereo (single entry, mode via algorithm param)
     };
-    static constexpr int NUM_OUTPUT_FORMATS = 17;
+    static constexpr int NUM_OUTPUT_FORMATS = 21;
     static const std::array<OutputFormatInfo, NUM_OUTPUT_FORMATS> outputFormatRegistry;
 
     // Double-buffered layout state for lock-free audio thread reads
@@ -427,6 +482,63 @@ public:
     // Access for the editor
     ObjectState getObjectState (int objectIndex) const;
 
+    // v0.6: OSC state accessors for editor
+    bool isOscConnected() const { return oscConnected; }
+    bool isOscOverrideActive (int objectIndex) const
+    {
+        return (objectIndex >= 0 && objectIndex < MAX_OBJECTS)
+               ? oscOverrideActive[objectIndex].load (std::memory_order_relaxed) : false;
+    }
+
+    // v0.6: OSC port configuration (editable from editor)
+    int getOscReceivePort() const { return oscReceivePort; }
+    void setOscReceivePort (int port);
+
+    //--- v0.6: Preset system --------------------------------------------------
+    struct PresetData
+    {
+        juce::String name;
+        // Global params
+        float delayTime = 500.0f;
+        bool  tempoSync = false;
+        float noteDivision = 4.0f;
+        int   syncMode = 0;
+        float feedback = 0.3f;
+        float filterLP = 20000.0f;
+        float filterHP = 20.0f;
+        float pitchShift = 0.0f;
+        float dryWet = 0.5f;
+        float inputGain = 0.0f;
+        float outputGain = 0.0f;
+        bool  airAbsorption = false;
+        int   algorithm = 4;       // VBAP
+        int   hrtfProfile = 0;
+        // Per-tap data
+        struct TapData
+        {
+            bool  enabled = false;
+            float azimuthDeg = 0.0f;
+            float elevationDeg = 0.0f;
+            float distance = 0.5f;
+            float dopplerAmount = 0.0f;
+            int   trajectoryShape = 0;
+            float trajectorySpeed = 1.0f;
+        };
+        TapData taps[MAX_OBJECTS] = {};
+    };
+
+    static constexpr int NUM_FACTORY_PRESETS = 8;
+    static const PresetData factoryPresets[NUM_FACTORY_PRESETS];
+
+    int  getNumPresets() const;
+    int  getCurrentPresetIndex() const { return currentPresetIndex; }
+    juce::StringArray getPresetNames() const;
+    void loadPreset (int index);
+    void saveUserPreset (const juce::String& name);
+    void loadNextPreset();
+    void loadPreviousPreset();
+    static juce::File getUserPresetDirectory();
+
     static const std::array<BinauralProfile, 5> binauralProfiles;
 
     // HRTF profile names for UI (6 profiles: 5 HRTF + 1 Simple)
@@ -439,13 +551,38 @@ public:
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
-    //--- DSP helpers ----------------------------------------------------------
+    //--- DELAY-SPECIFIC: DSP helpers ------------------------------------------
     void   writeDelayLine (float sample);
     float  readDelayLine  (float delaySamples) const;
     float  readPitchShifted (float delaySamples, float semitones, int phaseIndex);
     float getTempoSyncedDelayMs (int noteDivisionIndex) const;
 
-    //--- Modular 3D Audio Core ------------------------------------------------
+    //--- DELAY-SPECIFIC: Render path methods (v0.5 refactor) ------------------
+    /** Read one tap sample: delay + pitch shift + air absorption. */
+    float readObjectSample (int objectIndex, float baseDelaySamples, float pitchSemitones);
+    /** Process feedback: read from end of chain, filter, soft-clip, NaN guard. */
+    void  processFeedbackSample (float currentLoopMult, float baseDelaySamples,
+                                 float pitchSemitones, float fb);
+
+    void renderDirectBinauralHRTF (juce::AudioBuffer<float>& buffer, int numSamples,
+                                   const ObjectState* objects, const float* objDistGain,
+                                   float pitchSemitones);
+    void renderSimpleBinauralWoodworth (juce::AudioBuffer<float>& buffer, int numSamples,
+                                       const ObjectState* objects, const BinauralGains* objGains,
+                                       float pitchSemitones);
+    void renderAmbisonicsOutput (juce::AudioBuffer<float>& buffer, int numSamples,
+                                const ObjectState* objects, const float* objDistGain,
+                                float pitchSemitones, int ambiOrder);
+    void renderStereoVariant (juce::AudioBuffer<float>& buffer, int numSamples,
+                             const ObjectState* objects, const float* objDistGain,
+                             float pitchSemitones, int stereoMode);
+    void renderDiscreteSurround (juce::AudioBuffer<float>& buffer, int numSamples,
+                                const ObjectState* objects,
+                                const float (*objChannelGains)[16],
+                                const float* objDistGain, float pitchSemitones,
+                                const SpeakerLayout& surLayout);
+
+    //--- SPATIAL FRAMEWORK: Modular 3D Audio Core ----------------------------
     static const std::vector<VBAPTriplet>& getVBAPTriplets();
     void computeAmbiDecodeMatrix();
 
@@ -454,12 +591,12 @@ private:
     static void computeAmbiDecodeForLayout (const SpeakerLayout& layout,
                                             float outMatrix[][16], int& outNumSpeakers);
 
-    //--- v0.2: Multi-channel output support ---
+    //--- SPATIAL FRAMEWORK: Multi-channel output support ---
     OutputFormat detectOutputFormat (int numOutputChannels) const;
     OutputFormat resolveEffectiveFormat (OutputFormat requested, int busChannels) const;
     void activateLayout (OutputFormat format);
 
-    //--- Spatialization algorithms (polymorphic dispatch via SpatializationAlgorithm*) ---
+    //--- SPATIAL FRAMEWORK: Spatialization algorithms (polymorphic dispatch) ---
     // 4 user-facing algorithms (alphabetical): Ambisonics (0), KNN (1), VBAP (2), VBIP (3)
     // DirectBinaural is internal-only — used for Woodworth binaural cache in "Simple (Low CPU)"
     DirectBinauralAlgorithm  algDirectBinaural;  // Kept for Simple profile Woodworth gains
@@ -467,10 +604,12 @@ private:
     AmbisonicsAlgorithm      algAmbisonics;
     VBIPAlgorithm            algVBIP;
     KNNAlgorithm             algKNN;
-    static constexpr int NUM_ALGORITHMS = 4;
+    DBAPAlgorithm            algDBAP;            // v0.4: Distance-Based Amplitude Panning
+    MDAPAlgorithm            algMDAP;            // v0.5: Multiple-Direction Amplitude Panning
+    static constexpr int NUM_ALGORITHMS = 6;
     SpatializationAlgorithm* algorithms[NUM_ALGORITHMS] = {};
 
-    //--- HRTF convolution system (double-buffered for thread-safe profile switching) ---
+    //--- SPATIAL FRAMEWORK: HRTF convolution (double-buffered for thread safety) ---
     HRTFDatabase   hrtfDatabase;
     BinauralRenderer binauralRenderers[2];
     std::atomic<int> activeRendererIndex { 0 };
@@ -479,16 +618,51 @@ private:
     void loadHRTFProfileIntoRenderer (int profileIndex, BinauralRenderer& renderer);
     int loadedHRTFProfileIndex = -1;
 
-    //--- v0.3: Background HRTF loading (via Timer) ---
+    //--- SPATIAL FRAMEWORK: Background HRTF loading (via Timer) ---
     void timerCallback() override;
     std::atomic<int> targetHRTFProfile { 0 };
 
-    //--- DSP state ------------------------------------------------------------
+    //--- v0.6: ADM-OSC Receive -------------------------------------------------
+    void oscMessageReceived (const juce::OSCMessage& message) override;
+    void handleOSCPosition (int objectIndex, float azDeg, float elDeg, float dist);
+
+    juce::OSCReceiver oscReceiver;
+    int  oscReceivePort = 4002;                         // Default ADM-OSC receive port
+    bool oscConnected = false;                          // Current connection state
+    bool prevAdmOscEnabled = false;                     // Edge-detect for enable/disable transitions
+    std::atomic<float>* cachedParam_admOscEnabled = nullptr;
+
+    // Per-object OSC override: when active, OSC controls position (trajectory paused)
+    std::atomic<bool> oscOverrideActive[MAX_OBJECTS] = {};
+    double oscLastReceiveTime[MAX_OBJECTS] = {};        // juce::Time::getMillisecondCounterHiRes()
+
+    // Partial Cartesian state (for individual /x, /y, /z messages)
+    float oscCartesianX[MAX_OBJECTS] = {};
+    float oscCartesianY[MAX_OBJECTS] = {};
+    float oscCartesianZ[MAX_OBJECTS] = {};
+
+    //--- v0.6: Per-object trajectory animation engine --------------------------
+    std::atomic<float>* cachedParam_trajectoryShape[MAX_OBJECTS] = {};
+    std::atomic<float>* cachedParam_trajectorySpeed[MAX_OBJECTS] = {};
+
+    float trajectoryPhase[MAX_OBJECTS] = {};            // 0..1 animation progress per object
+    float baseAzimuth[MAX_OBJECTS]   = {};              // Captured when trajectory starts
+    float baseElevation[MAX_OBJECTS] = {};
+    float baseDistance[MAX_OBJECTS]   = {};
+    int   prevTrajectoryShape[MAX_OBJECTS] = {};        // Detect shape changes (None→active)
+
+    // Trajectory shape computation (pure functions)
+    struct TrajectoryResult { float azDeg, elDeg, dist; };
+    static TrajectoryResult computeTrajectory (int shape, float phase,
+                                               float baseAz, float baseEl, float baseDist);
+
+    //--- DELAY-SPECIFIC: DSP state --------------------------------------------
     double currentSampleRate = 44100.0;
 
-    // Main delay buffer (circular)
+    // Main delay buffer (circular, power-of-2 size for bitmask indexing)
     std::vector<float> delayBuffer;
     int delayBufferSize = 0;
+    int delayBufferMask = 0;   // v0.5: = delayBufferSize - 1, for & instead of %
     int writePosition   = 0;
 
     // Feedback state
@@ -506,7 +680,7 @@ private:
     // Smooth loop multiplier — prevents clicks when enabling/disabling objects
     juce::LinearSmoothedValue<float> smoothedLoopMultiplier;
 
-    // Modular 3D Audio Core state
+    //--- SPATIAL FRAMEWORK: Layout & decode state ----------------------------
     float ambiDecodeMatrix[NUM_VIRTUAL_SPEAKERS][HOA_CHANNELS] = {};  // v0.2+ surround decode
 
 
@@ -535,16 +709,54 @@ private:
     // Pre-allocated work buffers (avoid allocation in processBlock)
     std::vector<float> monoInputBuffer;
 
-    // v0.3: Direct binaural work buffers (pre-allocated in prepareToPlay)
-    // Per-source accumulation buffers for direct HRTF convolution
-    std::vector<float> sourceAccumBufs[MAX_OBJECTS];  // [source][sample]
-    std::vector<float> wetBufL, wetBufR;              // Convolution output / dry-wet mix input
+    // v0.5: Contiguous per-source accumulation buffers for direct HRTF convolution
+    std::vector<float> sourceAccumBufStorage;          // MAX_OBJECTS * maxBlockSize (contiguous)
+    float* sourceAccumBufPtrs[MAX_OBJECTS] = {};       // pointers into storage
+    std::vector<float> wetBufL, wetBufR;               // Convolution output / dry-wet mix input
 
     // Smoothed parameters
     juce::SmoothedValue<float> smoothedDryWet;
     juce::SmoothedValue<float> smoothedFeedback;
     juce::SmoothedValue<float> smoothedInputGain;
     juce::SmoothedValue<float> smoothedOutputGain;
+
+    // v0.4: Air absorption — global toggle, per-object LP filter driven by distance
+    juce::dsp::IIR::Filter<float> airAbsorptionFilter[MAX_OBJECTS];
+
+    // v0.5: NFC-HOA — per-order shelf filters for near-field compensation (Ambisonics output only)
+    // Applied internally in renderAmbisonicsOutput(), not exposed to user
+    static constexpr float NFC_REFERENCE_RADIUS = 1.5f;  // meters (typical studio monitoring distance)
+    juce::dsp::IIR::Filter<float> nfcFilters[MAX_OBJECTS][MAX_AMBI_ORDER];  // 12 objects × 6 orders
+    float prevNfcDistance[MAX_OBJECTS] = {};
+
+    // v0.5: Cached per-object parameter pointers (avoid string lookup in processBlock)
+    std::atomic<float>* cachedParam_enabled[MAX_OBJECTS]       = {};
+    std::atomic<float>* cachedParam_azimuth[MAX_OBJECTS]       = {};
+    std::atomic<float>* cachedParam_elevation[MAX_OBJECTS]     = {};
+    std::atomic<float>* cachedParam_distance[MAX_OBJECTS]      = {};
+    std::atomic<float>* cachedParam_dopplerAmount[MAX_OBJECTS]  = {};
+
+    // v0.5: Cached feedback filter frequencies (skip recalculation when unchanged)
+    float cachedFeedbackLPFreq = -1.0f;
+    float cachedFeedbackHPFreq = -1.0f;
+
+    // v0.5: Cached pitch shifter window size (set in prepareToPlay, constant within session)
+    float cachedPitchWindowSamples = 0.0f;
+
+    // v0.4: Doppler effect — per-object checkbox, global amount, velocity tracking
+    float prevAzimuth[MAX_OBJECTS]   = {};   // radians, previous block
+    float prevElevation[MAX_OBJECTS] = {};   // radians, previous block
+    float prevDistance[MAX_OBJECTS]   = {};   // normalized 0..1, previous block
+    float dopplerSemitones[MAX_OBJECTS] = {};  // computed per-block
+    float smoothedRadialVelocity[MAX_OBJECTS] = {};  // EMA-smoothed velocity
+
+    //--- v0.6: Preset system (private) -----------------------------------------
+    int currentPresetIndex = 0;
+    std::vector<PresetData> userPresets;
+    void loadUserPresetsFromDisk();
+    PresetData captureCurrentState() const;
+    static PresetData parsePresetJson (const juce::String& json);
+    static juce::String serializePresetToJson (const PresetData& preset);
 
     //--------------------------------------------------------------------------
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OpenSpatialDelayProcessor)
