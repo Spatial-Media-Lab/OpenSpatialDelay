@@ -1865,11 +1865,11 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         g.drawText (titleText, titleX, 0, (int) titleTextW + 4, kHeaderHeight,
                     juce::Justification::centredLeft);
 
-        // "v0.8" dim version tag — JetBrains Mono 9px
+        // "v0.7" dim version tag — JetBrains Mono 9px
         int versionX = titleX + (int) titleTextW + 4;
         g.setColour (Colours_OSD::textDim);
         g.setFont (makeFont (ableton12Look.jetbrainsRegular, 11.0f));
-        g.drawText ("v0.8", versionX, 0, 40, kHeaderHeight,
+        g.drawText ("v0.7", versionX, 0, 40, kHeaderHeight,
                     juce::Justification::centredLeft);
     }
 

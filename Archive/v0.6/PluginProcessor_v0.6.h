@@ -390,15 +390,6 @@ public:
     static constexpr int MAX_AMBI_ORDER = 6;
     static constexpr int MAX_AMBI_CHANNELS = (MAX_AMBI_ORDER + 1) * (MAX_AMBI_ORDER + 1); // = 49
 
-    // v0.7: ACN channel index → SH order lookup (constexpr for compile-time optimization)
-    static constexpr int acnToOrder (int acn)
-    {
-        if (acn < 1)  return 0;  if (acn < 4)  return 1;
-        if (acn < 9)  return 2;  if (acn < 16) return 3;
-        if (acn < 25) return 4;  if (acn < 36) return 5;
-        return 6;
-    }
-
     // v0.5: Output formats — Binaural first, then Stereo, Surround, Ambisonics
     // 1 Binaural + 1 Stereo + 13 Surround + 6 Ambisonics = 21 total
     // Stereo mode (Equal Power, VBAP, XY, MS, Blumlein) selected via algorithm parameter
@@ -503,21 +494,6 @@ public:
     int getOscReceivePort() const { return oscReceivePort; }
     void setOscReceivePort (int port);
 
-    // v0.7: OSC Send accessors for editor
-    bool isOscSendConnected() const { return oscSendConnected; }
-    bool getOscSendEnabled() const { return oscSendEnabled; }
-    void setOscSendEnabled (bool enabled);
-
-    // v0.7: Per-tap activity level (RMS) for UI glow animation
-    float getTapActivityRMS (int i) const
-    {
-        return (i >= 0 && i < MAX_OBJECTS) ? tapActivityRMS[i].load (std::memory_order_relaxed) : 0.0f;
-    }
-    int getOscSendPort() const { return oscSendPort; }
-    void setOscSendPort (int port);
-    juce::String getOscSendIP() const { return oscSendIP; }
-    void setOscSendIP (const juce::String& ip);
-
     //--- v0.6: Preset system --------------------------------------------------
     struct PresetData
     {
@@ -545,7 +521,6 @@ public:
             float elevationDeg = 0.0f;
             float distance = 0.5f;
             float dopplerAmount = 0.0f;
-            float pitchShift = 0.0f;      // v0.7: per-tap pitch override (semitones, 0=use global)
             int   trajectoryShape = 0;
             float trajectorySpeed = 1.0f;
         };
@@ -580,7 +555,6 @@ private:
     void   writeDelayLine (float sample);
     float  readDelayLine  (float delaySamples) const;
     float  readPitchShifted (float delaySamples, float semitones, int phaseIndex);
-    float  readVarispeed (float delaySamples, float semitones, int phaseIndex);
     float getTempoSyncedDelayMs (int noteDivisionIndex) const;
 
     //--- DELAY-SPECIFIC: Render path methods (v0.5 refactor) ------------------
@@ -658,17 +632,6 @@ private:
     bool prevAdmOscEnabled = false;                     // Edge-detect for enable/disable transitions
     std::atomic<float>* cachedParam_admOscEnabled = nullptr;
 
-    // v0.7: ADM-OSC Send state
-    juce::OSCSender oscSender;
-    bool oscSendEnabled = false;
-    bool oscSendConnected = false;
-    int  oscSendPort = 4003;
-    juce::String oscSendIP = "127.0.0.1";
-    int  oscSendTickCounter = 0;                           // 60Hz ticks → send every 2nd (30Hz)
-    float oscSendPrevAz[MAX_OBJECTS]   = {};               // position-change gating
-    float oscSendPrevEl[MAX_OBJECTS]   = {};
-    float oscSendPrevDist[MAX_OBJECTS] = {};
-
     // Per-object OSC override: when active, OSC controls position (trajectory paused)
     std::atomic<bool> oscOverrideActive[MAX_OBJECTS] = {};
     double oscLastReceiveTime[MAX_OBJECTS] = {};        // juce::Time::getMillisecondCounterHiRes()
@@ -689,8 +652,7 @@ private:
     int   prevTrajectoryShape[MAX_OBJECTS] = {};        // Detect shape changes (None→active)
 
     // Trajectory shape computation (pure functions)
-    // controlsAz/El/Dist flags indicate which axes the shape actively modifies
-    struct TrajectoryResult { float azDeg, elDeg, dist; bool controlsAz, controlsEl, controlsDist; };
+    struct TrajectoryResult { float azDeg, elDeg, dist; };
     static TrajectoryResult computeTrajectory (int shape, float phase,
                                                float baseAz, float baseEl, float baseDist);
 
@@ -708,33 +670,9 @@ private:
     juce::dsp::IIR::Filter<float> feedbackLPFilter;
     juce::dsp::IIR::Filter<float> feedbackHPFilter;
 
-    // Per-tap output filters (same coefficients as feedback, independent state per tap)
-    juce::dsp::IIR::Filter<float> tapLPFilter[MAX_OBJECTS];
-    juce::dsp::IIR::Filter<float> tapHPFilter[MAX_OBJECTS];
-
-    // Pitch shifter state — 4-grain WSOLA with transient preservation
+    // Per-object pitch shifter state (grain phase counters)
     // MAX_OBJECTS + 1: indices 0..11 for objects, index 12 for feedback pitch shifter
-    static constexpr int kPitchGrains = 4;
-    struct PitchGrainState {
-        float phase[4] = {};       // per-grain phase within window (samples)
-        float grainOffset[4] = {}; // per-grain read offset from xcorr alignment
-        // Onset detector state
-        float envSlow = 0.0f;      // slow envelope follower (background level)
-        float envFast = 0.0f;      // fast envelope follower (transient tracking)
-        bool  onsetActive = false;
-        int   onsetCountdown = 0;
-    };
-    PitchGrainState pitchState[MAX_OBJECTS + 1] = {};
-
-    // Varispeed pitch shift state — tape-speed dual-head with short crossfade
-    // Used for global cumulative pitch and feedback pitch (smooth, artifact-free)
-    struct VarispeedState {
-        float drift = 0.0f;          // accumulated read position drift (samples)
-        float fadingDrift = 0.0f;    // drift of the fading-out head during crossfade
-        int   crossfadeRemaining = 0; // samples left in crossfade (0 = not crossfading)
-        int   crossfadeLength = 0;    // total crossfade length (samples)
-    };
-    VarispeedState varispeedState[MAX_OBJECTS + 1] = {};  // 12 objects + 1 feedback
+    float pitchPhase[MAX_OBJECTS + 1] = {};
 
     // Smoothing for delay time to create "Repitch" effect
     juce::LinearSmoothedValue<float> smoothedDelayTime;
@@ -768,19 +706,6 @@ private:
         return x;
     }
 
-    // Output Limiter — musical +2dB ceiling for speaker protection during self-oscillation
-    static float outputLimiter (float x)
-    {
-        if (! std::isfinite (x))
-            return 0.0f;
-        const float threshold = 1.2589f;  // +2 dB
-        if (x > threshold)
-            return threshold + (x - threshold) / (1.0f + (x - threshold) * (x - threshold));
-        if (x < -threshold)
-            return -threshold + (x + threshold) / (1.0f + (x + threshold) * (x + threshold));
-        return x;
-    }
-
     // Pre-allocated work buffers (avoid allocation in processBlock)
     std::vector<float> monoInputBuffer;
 
@@ -804,10 +729,6 @@ private:
     juce::dsp::IIR::Filter<float> nfcFilters[MAX_OBJECTS][MAX_AMBI_ORDER];  // 12 objects × 6 orders
     float prevNfcDistance[MAX_OBJECTS] = {};
 
-    // v0.7: Cached max-rE weights (recomputed only when ambi order changes)
-    int cachedMaxrEOrder = -1;
-    float cachedMaxrE[MAX_AMBI_ORDER + 1] = {};
-
     // v0.5: Cached per-object parameter pointers (avoid string lookup in processBlock)
     std::atomic<float>* cachedParam_enabled[MAX_OBJECTS]       = {};
     std::atomic<float>* cachedParam_azimuth[MAX_OBJECTS]       = {};
@@ -815,15 +736,9 @@ private:
     std::atomic<float>* cachedParam_distance[MAX_OBJECTS]      = {};
     std::atomic<float>* cachedParam_dopplerAmount[MAX_OBJECTS]  = {};
 
-    // v0.7: Per-object pitch shift override (cached parameter pointers)
-    std::atomic<float>* cachedParam_pitchShift[MAX_OBJECTS]    = {};
-
-    // v0.5: Cached feedback filter frequencies + Q (skip recalculation when unchanged)
+    // v0.5: Cached feedback filter frequencies (skip recalculation when unchanged)
     float cachedFeedbackLPFreq = -1.0f;
     float cachedFeedbackHPFreq = -1.0f;
-    float cachedFilterHPQ = -1.0f;
-    float cachedFilterLPQ = -1.0f;
-    bool  filterBypassed = false;  // v0.7: true when HP/LP at defaults (skip filter in feedback)
 
     // v0.5: Cached pitch shifter window size (set in prepareToPlay, constant within session)
     float cachedPitchWindowSamples = 0.0f;
@@ -834,10 +749,6 @@ private:
     float prevDistance[MAX_OBJECTS]   = {};   // normalized 0..1, previous block
     float dopplerSemitones[MAX_OBJECTS] = {};  // computed per-block
     float smoothedRadialVelocity[MAX_OBJECTS] = {};  // EMA-smoothed velocity
-
-    // v0.7: Per-tap activity for UI glow (written in processBlock, read by editor timer)
-    std::atomic<float> tapActivityRMS[MAX_OBJECTS] = {};
-    float tapPeakAccum[MAX_OBJECTS] = {};  // per-block peak accumulator (reset each block)
 
     //--- v0.6: Preset system (private) -----------------------------------------
     int currentPresetIndex = 0;

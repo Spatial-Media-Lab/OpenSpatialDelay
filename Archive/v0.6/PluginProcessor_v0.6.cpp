@@ -391,32 +391,26 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID ("tempoSync", 1), "Tempo Sync", false));
 
-    // Note division: value = number of 16th notes. Range: 0.5 (1/32) to 32 (2/1)
-    // Steps at musical intervals: 0.5, 1, 2, 4, 8, 16, 32
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("noteDivision", 1), "Note Division",
-        juce::NormalisableRange<float> (0.5f, 32.0f, 0.5f), 4.0f,
+        juce::NormalisableRange<float> (1.0f, 16.0f, 1.0f), 4.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) {
-                // value = number of 16th notes
-                float sixteenths = value;
-                if (std::abs (sixteenths - 32.0f)  < 0.01f) return juce::String ("2/1");
-                if (std::abs (sixteenths - 16.0f)  < 0.01f) return juce::String ("1/1");
-                if (std::abs (sixteenths - 8.0f)   < 0.01f) return juce::String ("1/2");
-                if (std::abs (sixteenths - 4.0f)   < 0.01f) return juce::String ("1/4");
-                if (std::abs (sixteenths - 2.0f)   < 0.01f) return juce::String ("1/8");
-                if (std::abs (sixteenths - 1.0f)   < 0.01f) return juce::String ("1/16");
-                if (std::abs (sixteenths - 0.5f)   < 0.01f) return juce::String ("1/32");
-                // For other values, show as fraction of 16ths
-                if (sixteenths >= 1.0f)
-                    return juce::String (juce::roundToInt (sixteenths)) + "/16";
-                return juce::String (sixteenths, 1) + "/16";
+                // value is 1..16 representing number of 16th notes
+                // 4 = 1/4 note, 2 = 1/8 note, 1 = 1/16 note, 8 = 1/2 note, 16 = 1/1
+                int sixteenths = juce::roundToInt (value);
+                if (sixteenths == 16) return juce::String ("1/1");
+                if (sixteenths == 8)  return juce::String ("1/2");
+                if (sixteenths == 4)  return juce::String ("1/4");
+                if (sixteenths == 2)  return juce::String ("1/8");
+                if (sixteenths == 1)  return juce::String ("1/16");
+                // For irregular values, show x/16
+                return juce::String (sixteenths) + "/16";
             })));
 
-    // v0.7: Reworked to 3-state: Straight (0), Dotted (1), Triplet (2)
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
-        juce::ParameterID ("syncMode", 7), "Sync Mode",
-        juce::StringArray { "Straight", "Dotted", "Triplet" }, 0));
+        juce::ParameterID ("syncMode", 1), "Sync Mode",
+        juce::StringArray { "Notes", "Triplet", "Dotted", "16th" }, 0));
 
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -445,24 +439,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
                 return juce::String (juce::roundToInt (value)) + " Hz";
             })));
 
-    // v0.7: Separate HP and LP resonance (Q). Range 0.5 (gentle) to 8.0 (sharp peak). Default: 0.707 (Butterworth).
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("filterHPQ", 7), "HP Resonance",
-        juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
+        juce::ParameterID ("pitchShift", 1), "Pitch Shift",
+        juce::NormalisableRange<float> (-24.0f, 24.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-            [](float value, int) { return juce::String (value, 2); })));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("filterLPQ", 7), "LP Resonance",
-        juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-            [](float value, int) { return juce::String (value, 2); })));
-
-    // v0.7: Global pitch shift in cents (±200 ct). Per-tap override in semitones is separate.
-    params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("pitchShift", 7), "Pitch Shift",
-        juce::NormalisableRange<float> (-200.0f, 200.0f, 1.0f), 0.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-            [](float value, int) { return juce::String (juce::roundToInt (value)) + " ct"; })));
+            [](float value, int) { return juce::String (value, 1) + " st"; })));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("dryWet", 1), "Dry/Wet",
@@ -470,27 +451,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (
             [](float value, int) { return juce::String (juce::roundToInt(value * 100.0f)) + "%"; })));
 
-    // Input gain: -100 dB (shown as -∞) to +40 dB
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("inputGain", 1), "Input Gain",
-        juce::NormalisableRange<float> (-100.0f, 40.0f, 0.1f, 3.0f), 0.0f,
+        juce::NormalisableRange<float> (-60.0f, 12.0f, 0.1f, 2.0f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-            [](float value, int) {
-                if (value <= -99.9f)
-                    return juce::String (juce::CharPointer_UTF8 ("-\xe2\x88\x9e dB"));
-                return juce::String (value, 1) + " dB";
-            })));
+            [](float value, int) { return juce::String (value, 1) + " dB"; })));
 
-    // Output gain: -100 dB (shown as -∞) to +12 dB
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("outputGain", 1), "Output Gain",
-        juce::NormalisableRange<float> (-100.0f, 12.0f, 0.1f, 3.0f), 0.0f,
+        juce::NormalisableRange<float> (-60.0f, 12.0f, 0.1f, 2.0f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-            [](float value, int) {
-                if (value <= -99.9f)
-                    return juce::String (juce::CharPointer_UTF8 ("-\xe2\x88\x9e dB"));
-                return juce::String (value, 1) + " dB";
-            })));
+            [](float value, int) { return juce::String (value, 1) + " dB"; })));
 
 
 
@@ -565,13 +536,6 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (
                 [](float value, int) { return juce::String (juce::roundToInt(value * 100.0f)) + "%"; })));
 
-        // v0.7: Per-object pitch shift override (semitones, integer ±24, 0=use global cumulative)
-        params.push_back (std::make_unique<juce::AudioParameterFloat> (
-            id ("pitchShift"), name ("Pitch Shift"),
-            juce::NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 0.0f,
-            juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-                [](float value, int) { return juce::String (juce::roundToInt (value)) + " st"; })));
-
         // v0.6: Per-object trajectory (shape + speed)
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("trajectoryShape"), name ("Trajectory Shape"),
@@ -579,15 +543,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout
 
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("trajectorySpeed"), name ("Trajectory Speed"),
-            juce::NormalisableRange<float> (0.0f, 5.0f, 0.01f), 0.3f,
-            juce::AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
-                [](float value, int) { return juce::String (value, 2) + " Hz"; })));
+            juce::NormalisableRange<float> (0.0f, 10.0f, 0.01f), 1.0f));
     }
-
-    // v0.7: Input format (Mono / Stereo)
-    params.push_back (std::make_unique<juce::AudioParameterChoice> (
-        juce::ParameterID ("inputFormat", 7), "Input Format",
-        juce::StringArray { "Mono", "Stereo" }, 0));
 
     // v0.5: ADM-OSC global parameter stub (engine deferred to v0.6+)
     params.push_back (std::make_unique<juce::AudioParameterBool> (
@@ -1141,50 +1098,13 @@ void OpenSpatialDelayProcessor::timerCallback()
             auto result = computeTrajectory (shape, trajectoryPhase[t],
                                              baseAzimuth[t], baseElevation[t], baseDistance[t]);
 
-            // Only write parameters that this trajectory shape actively controls
             auto objStr = juce::String (t + 1);
-            if (result.controlsAz)
-                if (auto* azParam = apvts.getParameter ("object" + objStr + "_azimuth"))
-                    azParam->setValueNotifyingHost (azParam->convertTo0to1 (result.azDeg));
-            if (result.controlsEl)
-                if (auto* elParam = apvts.getParameter ("object" + objStr + "_elevation"))
-                    elParam->setValueNotifyingHost (elParam->convertTo0to1 (result.elDeg));
-            if (result.controlsDist)
-                if (auto* distParam = apvts.getParameter ("object" + objStr + "_distance"))
-                    distParam->setValueNotifyingHost (distParam->convertTo0to1 (result.dist));
-        }
-    }
-
-    // --- v0.7: ADM-OSC Send — broadcast enabled object positions at 30Hz ---
-    if (oscSendEnabled && oscSendConnected && ++oscSendTickCounter >= 2)
-    {
-        oscSendTickCounter = 0;
-        for (int t = 0; t < MAX_OBJECTS; ++t)
-        {
-            if (cachedParam_enabled[t] == nullptr
-                || cachedParam_enabled[t]->load() < 0.5f)
-                continue;
-
-            float az   = cachedParam_azimuth[t]->load();
-            float el   = cachedParam_elevation[t]->load();
-            float dist = cachedParam_distance[t]->load();
-
-            // Position-change gating: only send when position actually moved
-            if (std::abs (az - oscSendPrevAz[t]) < 0.1f
-                && std::abs (el - oscSendPrevEl[t]) < 0.1f
-                && std::abs (dist - oscSendPrevDist[t]) < 0.001f)
-                continue;
-
-            oscSendPrevAz[t]   = az;
-            oscSendPrevEl[t]   = el;
-            oscSendPrevDist[t] = dist;
-
-            // ADM-OSC: /adm/obj/N/aed azimuth elevation distance
-            juce::OSCMessage msg ("/adm/obj/" + juce::String (t + 1) + "/aed");
-            msg.addFloat32 (az);
-            msg.addFloat32 (el);
-            msg.addFloat32 (dist);
-            oscSender.send (msg);
+            if (auto* azParam = apvts.getParameter ("object" + objStr + "_azimuth"))
+                azParam->setValueNotifyingHost (azParam->convertTo0to1 (result.azDeg));
+            if (auto* elParam = apvts.getParameter ("object" + objStr + "_elevation"))
+                elParam->setValueNotifyingHost (elParam->convertTo0to1 (result.elDeg));
+            if (auto* distParam = apvts.getParameter ("object" + objStr + "_distance"))
+                distParam->setValueNotifyingHost (distParam->convertTo0to1 (result.dist));
         }
     }
 }
@@ -1222,7 +1142,6 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
         cachedParam_elevation[i]     = apvts.getRawParameterValue (prefix + "elevation");
         cachedParam_distance[i]      = apvts.getRawParameterValue (prefix + "distance");
         cachedParam_dopplerAmount[i] = apvts.getRawParameterValue (prefix + "dopplerAmount");
-        cachedParam_pitchShift[i]    = apvts.getRawParameterValue (prefix + "pitchShift");
         cachedParam_trajectoryShape[i] = apvts.getRawParameterValue (prefix + "trajectoryShape");
         cachedParam_trajectorySpeed[i] = apvts.getRawParameterValue (prefix + "trajectorySpeed");
     }
@@ -1239,8 +1158,6 @@ OpenSpatialDelayProcessor::~OpenSpatialDelayProcessor()
     // v0.6: Disconnect OSC receiver before destruction
     oscReceiver.disconnect();
     oscReceiver.removeListener (this);
-    // v0.7: Disconnect OSC sender
-    oscSender.disconnect();
 }
 
 //==============================================================================
@@ -1264,50 +1181,6 @@ void OpenSpatialDelayProcessor::setOscReceivePort (int port)
     }
 }
 
-//==============================================================================
-// v0.7: OSC Send control methods
-//==============================================================================
-void OpenSpatialDelayProcessor::setOscSendEnabled (bool enabled)
-{
-    if (enabled == oscSendEnabled)
-        return;
-
-    oscSendEnabled = enabled;
-    if (enabled)
-    {
-        oscSendConnected = oscSender.connect (oscSendIP, oscSendPort);
-    }
-    else
-    {
-        oscSender.disconnect();
-        oscSendConnected = false;
-    }
-}
-
-void OpenSpatialDelayProcessor::setOscSendPort (int port)
-{
-    if (port == oscSendPort)
-        return;
-    oscSendPort = port;
-    if (oscSendEnabled)
-    {
-        oscSender.disconnect();
-        oscSendConnected = oscSender.connect (oscSendIP, oscSendPort);
-    }
-}
-
-void OpenSpatialDelayProcessor::setOscSendIP (const juce::String& ip)
-{
-    if (ip == oscSendIP)
-        return;
-    oscSendIP = ip;
-    if (oscSendEnabled)
-    {
-        oscSender.disconnect();
-        oscSendConnected = oscSender.connect (oscSendIP, oscSendPort);
-    }
-}
-
 // #############################################################################
 // v0.6: Preset System — Factory presets, load/save, JSON serialization
 // #############################################################################
@@ -1324,10 +1197,10 @@ const OpenSpatialDelayProcessor::PresetData
         500.0f, false, 4.0f, 0, 0.3f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
         false, 4 /*VBAP*/, 0,
         {
-            { true, -45.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 1: front-left
-            { true,  45.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 2: front-right
-            { true, -135.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 3: rear-left
-            { true,  135.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 4: rear-right
+            { true, -45.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 1: front-left
+            { true,  45.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 2: front-right
+            { true, -135.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 3: rear-left
+            { true,  135.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 4: rear-right
             {}, {}, {}, {}, {}, {}, {}, {}
         }
     },
@@ -1337,8 +1210,8 @@ const OpenSpatialDelayProcessor::PresetData
         350.0f, false, 4.0f, 0, 0.5f, 18000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
         false, 4 /*VBAP*/, 0,
         {
-            { true, -90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 1: hard left
-            { true,  90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 2: hard right
+            { true, -90.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 1: hard left
+            { true,  90.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 2: hard right
             {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
         }
     },
@@ -1348,10 +1221,10 @@ const OpenSpatialDelayProcessor::PresetData
         250.0f, false, 4.0f, 0, 0.4f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
         false, 4 /*VBAP*/, 0,
         {
-            { true,   0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 1: front
-            { true,  90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 2: right
-            { true, 180.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 3: rear
-            { true, -90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 4: left
+            { true,   0.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 1: front
+            { true,  90.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 2: right
+            { true, 180.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 3: rear
+            { true, -90.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 4: left
             {}, {}, {}, {}, {}, {}, {}, {}
         }
     },
@@ -1361,11 +1234,11 @@ const OpenSpatialDelayProcessor::PresetData
         300.0f, false, 4.0f, 0, 0.35f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
         false, 4 /*VBAP*/, 0,
         {
-            { true,    0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // C
-            { true,  -30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // L
-            { true,   30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // R
-            { true, -110.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Ls
-            { true,  110.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Rs
+            { true,    0.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // C
+            { true,  -30.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // L
+            { true,   30.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // R
+            { true, -110.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Ls
+            { true,  110.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Rs
             {}, {}, {}, {}, {}, {}, {}
         }
     },
@@ -1375,13 +1248,13 @@ const OpenSpatialDelayProcessor::PresetData
         250.0f, false, 4.0f, 0, 0.35f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
         false, 4 /*VBAP*/, 0,
         {
-            { true,    0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // C
-            { true,  -30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // L
-            { true,   30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // R
-            { true,  -90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Ls
-            { true,   90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Rs
-            { true, -135.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Lrs
-            { true,  135.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Rrs
+            { true,    0.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // C
+            { true,  -30.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // L
+            { true,   30.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // R
+            { true,  -90.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Ls
+            { true,   90.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Rs
+            { true, -135.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Lrs
+            { true,  135.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Rrs
             {}, {}, {}, {}, {}
         }
     },
@@ -1391,17 +1264,17 @@ const OpenSpatialDelayProcessor::PresetData
         200.0f, false, 4.0f, 0, 0.3f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
         false, 4 /*VBAP*/, 0,
         {
-            { true,    0.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // C
-            { true,  -30.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // L
-            { true,   30.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // R
-            { true,  -90.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Ls
-            { true,   90.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Rs
-            { true, -135.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Lrs
-            { true,  135.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Rrs
-            { true,  -45.0f, 45.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Ltf
-            { true,   45.0f, 45.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Rtf
-            { true, -135.0f, 45.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Ltr
-            { true,  135.0f, 45.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Rtr
+            { true,    0.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },  // C
+            { true,  -30.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },  // L
+            { true,   30.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },  // R
+            { true,  -90.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },  // Ls
+            { true,   90.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },  // Rs
+            { true, -135.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },  // Lrs
+            { true,  135.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },  // Rrs
+            { true,  -45.0f, 45.0f, 0.5f, 0.0f, 0, 1.0f },  // Ltf
+            { true,   45.0f, 45.0f, 0.5f, 0.0f, 0, 1.0f },  // Rtf
+            { true, -135.0f, 45.0f, 0.5f, 0.0f, 0, 1.0f },  // Ltr
+            { true,  135.0f, 45.0f, 0.5f, 0.0f, 0, 1.0f },  // Rtr
             {}
         }
     },
@@ -1411,14 +1284,14 @@ const OpenSpatialDelayProcessor::PresetData
         200.0f, false, 4.0f, 0, 0.4f, 16000.0f, 40.0f, 2.0f, 0.5f, 0.0f, 0.0f,
         false, 4 /*VBAP*/, 0,
         {
-            { true,    0.0f,  -20.0f, 0.7f, 0.2f, 0.0f, 2 /*Orbit*/, 1.5f },
-            { true,   45.0f,  -10.0f, 0.6f, 0.2f, 0.0f, 2 /*Orbit*/, 1.8f },
-            { true,   90.0f,    0.0f, 0.5f, 0.2f, 0.0f, 2 /*Orbit*/, 2.0f },
-            { true,  135.0f,   10.0f, 0.5f, 0.2f, 0.0f, 2 /*Orbit*/, 2.2f },
-            { true,  180.0f,   20.0f, 0.4f, 0.2f, 0.0f, 2 /*Orbit*/, 2.5f },
-            { true, -135.0f,   30.0f, 0.4f, 0.2f, 0.0f, 2 /*Orbit*/, 2.8f },
-            { true,  -90.0f,   40.0f, 0.3f, 0.2f, 0.0f, 2 /*Orbit*/, 3.0f },
-            { true,  -45.0f,   50.0f, 0.3f, 0.2f, 0.0f, 2 /*Orbit*/, 3.2f },
+            { true,    0.0f,  -20.0f, 0.7f, 0.2f, 2 /*Orbit*/, 1.5f },
+            { true,   45.0f,  -10.0f, 0.6f, 0.2f, 2 /*Orbit*/, 1.8f },
+            { true,   90.0f,    0.0f, 0.5f, 0.2f, 2 /*Orbit*/, 2.0f },
+            { true,  135.0f,   10.0f, 0.5f, 0.2f, 2 /*Orbit*/, 2.2f },
+            { true,  180.0f,   20.0f, 0.4f, 0.2f, 2 /*Orbit*/, 2.5f },
+            { true, -135.0f,   30.0f, 0.4f, 0.2f, 2 /*Orbit*/, 2.8f },
+            { true,  -90.0f,   40.0f, 0.3f, 0.2f, 2 /*Orbit*/, 3.0f },
+            { true,  -45.0f,   50.0f, 0.3f, 0.2f, 2 /*Orbit*/, 3.2f },
             {}, {}, {}, {}
         }
     },
@@ -1428,12 +1301,12 @@ const OpenSpatialDelayProcessor::PresetData
         350.0f, false, 4.0f, 0, 0.45f, 14000.0f, 30.0f, -1.0f, 0.5f, 0.0f, 0.0f,
         false, 4 /*VBAP*/, 0,
         {
-            { true,  -30.0f,  40.0f, 0.3f, 0.1f, 0.0f, 0, 1.0f },   // High left
-            { true,   60.0f,  25.0f, 0.4f, 0.1f, 0.0f, 0, 1.0f },   // Mid-high right
-            { true, -120.0f,  10.0f, 0.5f, 0.1f, 0.0f, 0, 1.0f },   // Mid left-rear
-            { true,  150.0f,  -5.0f, 0.6f, 0.1f, 0.0f, 0, 1.0f },   // Low right-rear
-            { true,  -60.0f, -20.0f, 0.7f, 0.1f, 0.0f, 0, 1.0f },   // Lower left
-            { true,   90.0f, -35.0f, 0.8f, 0.1f, 0.0f, 0, 1.0f },   // Lowest right
+            { true,  -30.0f,  40.0f, 0.3f, 0.1f, 0, 1.0f },   // High left
+            { true,   60.0f,  25.0f, 0.4f, 0.1f, 0, 1.0f },   // Mid-high right
+            { true, -120.0f,  10.0f, 0.5f, 0.1f, 0, 1.0f },   // Mid left-rear
+            { true,  150.0f,  -5.0f, 0.6f, 0.1f, 0, 1.0f },   // Low right-rear
+            { true,  -60.0f, -20.0f, 0.7f, 0.1f, 0, 1.0f },   // Lower left
+            { true,   90.0f, -35.0f, 0.8f, 0.1f, 0, 1.0f },   // Lowest right
             {}, {}, {}, {}, {}, {}
         }
     }
@@ -1515,7 +1388,6 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
         setFloat  (prefix + "elevation",       tap.elevationDeg);
         setFloat  (prefix + "distance",        tap.distance);
         setFloat  (prefix + "dopplerAmount",   tap.dopplerAmount);
-        setFloat  (prefix + "pitchShift",      tap.pitchShift);
         setChoice (prefix + "trajectoryShape", tap.trajectoryShape);
         setFloat  (prefix + "trajectorySpeed", tap.trajectorySpeed);
     }
@@ -1564,7 +1436,6 @@ OpenSpatialDelayProcessor::PresetData OpenSpatialDelayProcessor::captureCurrentS
         tap.elevationDeg    = apvts.getRawParameterValue (prefix + "elevation")->load();
         tap.distance        = apvts.getRawParameterValue (prefix + "distance")->load();
         tap.dopplerAmount   = apvts.getRawParameterValue (prefix + "dopplerAmount")->load();
-        tap.pitchShift      = apvts.getRawParameterValue (prefix + "pitchShift")->load();
         tap.trajectoryShape = static_cast<int> (apvts.getRawParameterValue (prefix + "trajectoryShape")->load());
         tap.trajectorySpeed = apvts.getRawParameterValue (prefix + "trajectorySpeed")->load();
     }
@@ -1605,7 +1476,6 @@ juce::String OpenSpatialDelayProcessor::serializePresetToJson (const PresetData&
         tapObj->setProperty ("elevationDeg",    tap.elevationDeg);
         tapObj->setProperty ("distance",        tap.distance);
         tapObj->setProperty ("dopplerAmount",   tap.dopplerAmount);
-        tapObj->setProperty ("pitchShift",      tap.pitchShift);
         tapObj->setProperty ("trajectoryShape", tap.trajectoryShape);
         tapObj->setProperty ("trajectorySpeed", tap.trajectorySpeed);
         tapsArray.add (juce::var (tapObj));
@@ -1651,7 +1521,6 @@ OpenSpatialDelayProcessor::PresetData
                     tap.elevationDeg    = static_cast<float> (tapObj->getProperty ("elevationDeg"));
                     tap.distance        = static_cast<float> (tapObj->getProperty ("distance"));
                     tap.dopplerAmount   = static_cast<float> (tapObj->getProperty ("dopplerAmount"));
-                    tap.pitchShift      = static_cast<float> (tapObj->getProperty ("pitchShift"));
                     tap.trajectoryShape = static_cast<int>   (tapObj->getProperty ("trajectoryShape"));
                     tap.trajectorySpeed = static_cast<float> (tapObj->getProperty ("trajectorySpeed"));
                 }
@@ -2097,28 +1966,9 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     writePosition = 0;
     feedbackSample = 0.0f;
     
-    // Reset all pitch shifter grain states (including the feedback shifter at index MAX_OBJECTS)
-    for (auto& ps : pitchState)
-    {
-        for (int g = 0; g < kPitchGrains; ++g)
-        {
-            ps.phase[g] = 0.0f;
-            ps.grainOffset[g] = 0.0f;
-        }
-        ps.envSlow = 0.0f;
-        ps.envFast = 0.0f;
-        ps.onsetActive = false;
-        ps.onsetCountdown = 0;
-    }
-
-    // Reset all varispeed states
-    for (auto& vs : varispeedState)
-    {
-        vs.drift = 0.0f;
-        vs.fadingDrift = 0.0f;
-        vs.crossfadeRemaining = 0;
-        vs.crossfadeLength = 0;
-    }
+    // Reset all pitch shifter phases (including the feedback shifter at index MAX_OBJECTS)
+    for (int i = 0; i < MAX_OBJECTS + 1; ++i)
+        pitchPhase[i] = 0.0f;
 
     // Pre-allocate mono input buffer
     monoInputBuffer.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
@@ -2129,23 +1979,11 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     feedbackHPFilter.prepare (spec);
     feedbackLPFilter.reset();
     feedbackHPFilter.reset();
-    for (int t = 0; t < MAX_OBJECTS; ++t)
-    {
-        tapLPFilter[t].prepare (spec);
-        tapHPFilter[t].prepare (spec);
-        tapLPFilter[t].reset();
-        tapHPFilter[t].reset();
-    }
     cachedFeedbackLPFreq = -1.0f;  // Force recalculation on first block
     cachedFeedbackHPFreq = -1.0f;
 
-    // Cache pitch shifter window size (64ms for 4-grain WSOLA)
-    cachedPitchWindowSamples = static_cast<float> (sampleRate) * 0.064f;
-
-    // Initialize grain phases staggered by 25% of window (75% overlap)
-    for (auto& ps : pitchState)
-        for (int g = 0; g < kPitchGrains; ++g)
-            ps.phase[g] = g * (cachedPitchWindowSamples / static_cast<float> (kPitchGrains));
+    // Cache pitch shifter window size (constant within session)
+    cachedPitchWindowSamples = static_cast<float> (sampleRate) * 0.250f;
 
     // Initialize smoothed values — setCurrentAndTargetValue prevents stale ramps
     // after mid-session prepareToPlay calls (e.g., bus renegotiation)
@@ -2290,206 +2128,49 @@ float OpenSpatialDelayProcessor::readDelayLine (float delaySamples) const
 }
 
 //==============================================================================
-// Pitch Shifter — 4-grain WSOLA with Transient Preservation
-// 4 grains, 64ms window, 75% overlap, normalized cross-correlation (stride-1).
-// Dual-envelope onset detector resets grains during transients to preserve
-// sharp attacks on drums and percussive material.
+// Pitch Shifter — Warm Dual-Head with 250ms Hann Crossfade
+// Two read heads with long window. No splice detection — natural phase
+// misalignment creates warm, chorused character. ~4 splices/sec for smooth,
+// ambient quality.
 //==============================================================================
 float OpenSpatialDelayProcessor::readPitchShifted (float delaySamples,
                                                      float semitones, int phaseIndex)
 {
-    if (std::abs (semitones) < 0.001f)  // ~0.1 cents threshold
+    if (std::abs (semitones) < 0.005f)
         return readDelayLine (delaySamples);
 
     const float windowSamples = cachedPitchWindowSamples;
-    if (windowSamples < 1.0f) return readDelayLine (delaySamples);
-
     const float ratio = std::pow (2.0f, semitones / 12.0f);
-    const float phaseInc = 1.0f - ratio;  // how much grain phase advances per sample
     const float twoPi = 2.0f * juce::MathConstants<float>::pi;
 
-    auto& gs = pitchState[phaseIndex];
+    float& phase = pitchPhase[phaseIndex];
 
-    // ── Onset detection (dual-envelope follower) ──────────────────────
-    const float fastAttCoeff  = 0.98f;     // ~0.5ms attack @ 48kHz
-    const float fastRelCoeff  = 0.9995f;   // ~100ms release
-    const float slowAttCoeff  = 0.9998f;   // ~20ms attack
-    const float slowRelCoeff  = 0.99995f;  // ~400ms release
-    const float onsetThresh   = 2.5f;      // fast/slow ratio to trigger onset
-    const int   onsetDuration = 192;       // ~4ms @ 48kHz
-
-    float absInput = std::abs (readDelayLine (delaySamples));
-
-    gs.envFast = (absInput > gs.envFast)
-        ? absInput + fastAttCoeff * (gs.envFast - absInput)
-        : gs.envFast * fastRelCoeff;
-    gs.envSlow = (absInput > gs.envSlow)
-        ? absInput + slowAttCoeff * (gs.envSlow - absInput)
-        : gs.envSlow * slowRelCoeff;
-
-    bool newOnset = (gs.envFast > gs.envSlow * onsetThresh)
-                 && (gs.envSlow > 1e-6f)
-                 && (gs.onsetCountdown == 0);
-
-    if (newOnset)
+    // Head 1 position (clamp defensively)
+    float p1 = phase;
+    if (p1 < 0.0f || p1 >= windowSamples)
     {
-        gs.onsetCountdown = onsetDuration;
-        gs.onsetActive = true;
-        for (int g = 0; g < kPitchGrains; ++g)
-        {
-            gs.phase[g] = g * (windowSamples / static_cast<float> (kPitchGrains));
-            gs.grainOffset[g] = 0.0f;
-        }
-    }
-    if (gs.onsetCountdown > 0)
-        gs.onsetCountdown--;
-    else
-        gs.onsetActive = false;
-
-    // ── 4-grain overlap-add ───────────────────────────────────────────
-    float output = 0.0f;
-
-    for (int g = 0; g < kPitchGrains; ++g)
-    {
-        float p = gs.phase[g];
-
-        // Defensive clamp
-        if (p < 0.0f || p >= windowSamples)
-        {
-            p = std::fmod (p, windowSamples);
-            if (p < 0.0f) p += windowSamples;
-        }
-
-        // Hann window gain for this grain
-        float hannGain = 0.5f - 0.5f * std::cos (twoPi * p / windowSamples);
-
-        // Read from delay line at grain's offset position
-        float readPos = delaySamples + p + gs.grainOffset[g];
-        output += readDelayLine (readPos) * hannGain;
-
-        // Advance grain phase
-        float newPhase = p + phaseInc;
-
-        // Check for grain wrap (reset)
-        if (newPhase >= windowSamples || newPhase < 0.0f)
-        {
-            newPhase = std::fmod (newPhase, windowSamples);
-            if (newPhase < 0.0f) newPhase += windowSamples;
-
-            if (gs.onsetActive)
-            {
-                gs.grainOffset[g] = 0.0f;
-            }
-            else
-            {
-                // Normalized cross-correlation splice alignment (stride-1)
-                const int refLen = 128;                        // ~2.7ms reference @ 48kHz
-                const int searchHalf = 240;                    // ±5ms @ 48kHz
-                float candidateBase = delaySamples + newPhase;
-
-                // Pre-compute reference samples and energy once
-                float refBuf[128];
-                float refEnergy = 0.0f;
-                for (int j = 0; j < refLen; ++j)
-                {
-                    refBuf[j] = readDelayLine (delaySamples + p + static_cast<float> (j));
-                    refEnergy += refBuf[j] * refBuf[j];
-                }
-
-                int bestOffset = 0;
-                float bestCorr = -1e30f;
-
-                for (int off = -searchHalf; off <= searchHalf; ++off)
-                {
-                    float corr = 0.0f;
-                    float candEnergy = 0.0f;
-                    for (int j = 0; j < refLen; ++j)
-                    {
-                        float c = readDelayLine (candidateBase + static_cast<float> (off + j));
-                        corr += refBuf[j] * c;
-                        candEnergy += c * c;
-                    }
-                    float norm = std::sqrt (refEnergy * candEnergy);
-                    if (norm > 1e-10f)
-                        corr /= norm;
-                    if (corr > bestCorr)
-                    {
-                        bestCorr = corr;
-                        bestOffset = off;
-                    }
-                }
-                gs.grainOffset[g] = static_cast<float> (bestOffset);
-            }
-        }
-
-        gs.phase[g] = newPhase;
+        p1 = std::fmod (p1, windowSamples);
+        if (p1 < 0.0f) p1 += windowSamples;
     }
 
-    // Normalize: 4 Hann windows at 75% overlap sum to ~2.0 at any point
-    return output * 0.5f;
-}
+    // Head 2: fixed half-window offset (no splice correction = warm character)
+    float p2 = std::fmod (phase + windowSamples * 0.5f, windowSamples);
+    if (p2 < 0.0f) p2 += windowSamples;
 
-//==============================================================================
-// Varispeed Pitch Shifter — Tape-Speed with Short Crossfade
-// Single active read head drifting at playback ratio. When drift exceeds max,
-// a short (~10ms) equal-power crossfade resets to nominal position.
-// Used for global cumulative pitch and feedback pitch.
-//==============================================================================
-float OpenSpatialDelayProcessor::readVarispeed (float delaySamples,
-                                                  float semitones, int phaseIndex)
-{
-    if (std::abs (semitones) < 0.001f)
-        return readDelayLine (delaySamples);
+    // Hann crossfade
+    float gain1 = 0.5f - 0.5f * std::cos (twoPi * p1 / windowSamples);
+    float gain2 = 1.0f - gain1;
 
-    auto& vs = varispeedState[phaseIndex];
-    const float ratio = std::pow (2.0f, semitones / 12.0f);
-    const float driftInc = ratio - 1.0f;
+    // Read from delay line
+    float s1 = readDelayLine (delaySamples + p1);
+    float s2 = readDelayLine (delaySamples + p2);
 
-    // Advance drift: read pointer moves at 'ratio' speed relative to write
-    vs.drift += driftInc;
+    // Advance phase (continuous accumulation)
+    phase += (1.0f - ratio);
+    phase = std::fmod (phase, windowSamples);
+    if (phase < 0.0f) phase += windowSamples;
 
-    // Max drift before crossfade: cap at ~83ms (4000 samples) or 40% of delay
-    float maxDrift = juce::jlimit (480.0f, 4000.0f, delaySamples * 0.4f);
-
-    // During crossfade: blend fading head with new primary head
-    if (vs.crossfadeRemaining > 0)
-    {
-        float primaryPos = delaySamples - vs.drift;
-        float primary = readDelayLine (primaryPos);
-
-        float fadingPos = delaySamples - vs.fadingDrift;
-        float fading = readDelayLine (fadingPos);
-        vs.fadingDrift += driftInc;
-
-        float t = 1.0f - static_cast<float> (vs.crossfadeRemaining)
-                       / static_cast<float> (vs.crossfadeLength);
-        float halfPi = juce::MathConstants<float>::halfPi;
-        float gainNew = std::sin (t * halfPi);
-        float gainOld = std::cos (t * halfPi);
-
-        vs.crossfadeRemaining--;
-        return primary * gainNew + fading * gainOld;
-    }
-
-    // Check if drift exceeded max → initiate crossfade to nominal position
-    if (std::abs (vs.drift) > maxDrift)
-    {
-        vs.fadingDrift = vs.drift;
-        vs.drift = 0.0f;
-        vs.crossfadeLength = 480;   // ~10ms @ 48kHz
-        vs.crossfadeRemaining = vs.crossfadeLength;
-
-        // First crossfade sample: fully on the fading (old) head
-        float fadingPos = delaySamples - vs.fadingDrift;
-        float fading = readDelayLine (fadingPos);
-        vs.fadingDrift += driftInc;
-
-        vs.crossfadeRemaining--;
-        return fading;  // gainOld=1, gainNew=0 at t=0
-    }
-
-    // Normal operation: single head reading at drifted position
-    return readDelayLine (delaySamples - vs.drift);
+    return s1 * gain1 + s2 * gain2;
 }
 
 // #############################################################################
@@ -2574,12 +2255,13 @@ float OpenSpatialDelayProcessor::getTempoSyncedDelayMs (int noteDivisionIndex) c
     // Echo knob value (noteDivisionIndex) represents number of 16th units
     double duration = (double)noteDivisionIndex * sixteenthMs;
 
-    // v0.7: Apply mode multiplier (0=Straight, 1=Dotted, 2=Triplet)
+    // Apply mode multiplier
     int mode = static_cast<int> (apvts.getRawParameterValue ("syncMode")->load());
-    if (mode == 1) // Dotted
-        duration *= 1.5;
-    else if (mode == 2) // Triplet
+    if (mode == 1) // Triplet
         duration *= (2.0 / 3.0);
+    else if (mode == 2) // Dotted
+        duration *= 1.5;
+    // Notes and 16th use face value (1.0x)
 
     return static_cast<float> (duration);
 }
@@ -3254,14 +2936,15 @@ void DBAPAlgorithm::computeGains (const SourcePosition& source, const LayoutCont
     if (numSpeakers == 0) return;
 
     // Convert source position (azimuth, elevation, distance) to Cartesian
-    // Source distance maps to radial position within speaker sphere (0..1 → 0..speakerRadius)
-    constexpr float speakerRadius = 1.0f;
-    float physicalDist = source.distance * speakerRadius;
+    // Source distance maps to radial position in 3D space (0..1 → 0..10 meters)
+    float physicalDist = source.distance * 10.0f;
     float srcX = physicalDist * std::cos (source.elevationRad) * std::sin (source.azimuthRad);
     float srcY = physicalDist * std::cos (source.elevationRad) * std::cos (source.azimuthRad);
     float srcZ = physicalDist * std::sin (source.elevationRad);
 
     // Compute Euclidean distance from source to each speaker
+    // Speakers are placed at unit distance (1.0) on the sphere
+    constexpr float speakerRadius = 1.0f;
     constexpr float epsilon = 0.001f;  // Avoid division by zero
 
     float totalWeight = 0.0f;
@@ -3462,35 +3145,10 @@ float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDe
 {
     float objDelaySamples = static_cast<float> (objectIndex + 1) * baseDelaySamples;
     objDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), objDelaySamples);
+    float objPitch = static_cast<float> (objectIndex + 1) * pitchSemitones + dopplerSemitones[objectIndex];
 
-    // v0.7: Per-tap pitch override. Non-zero = use override; 0 = cumulative global.
-    float perTapPitch = cachedParam_pitchShift[objectIndex]->load (std::memory_order_relaxed);
-    float objPitch;
-    if (perTapPitch != 0.0f)
-        objPitch = perTapPitch + dopplerSemitones[objectIndex];
-    else
-        objPitch = static_cast<float> (objectIndex + 1) * pitchSemitones + dopplerSemitones[objectIndex];
-
-    // Dispatch: varispeed for global cumulative pitch, WSOLA for per-tap overrides
-    float objMono;
-    if (perTapPitch != 0.0f)
-        objMono = readPitchShifted (objDelaySamples, objPitch, objectIndex);
-    else
-        objMono = readVarispeed (objDelaySamples, objPitch, objectIndex);
-    float result = airAbsorptionFilter[objectIndex].processSample (objMono);
-
-    // v0.7: Per-tap output filter (same coefficients as feedback filter)
-    // Ensures first cycle of taps is filtered, not just feedback repeats
-    if (! filterBypassed)
-        result = tapHPFilter[objectIndex].processSample (
-                     tapLPFilter[objectIndex].processSample (result));
-
-    // v0.7: Accumulate per-tap peak for UI activity glow
-    float absVal = std::abs (result);
-    if (absVal > tapPeakAccum[objectIndex])
-        tapPeakAccum[objectIndex] = absVal;
-
-    return result;
+    float objMono = readPitchShifted (objDelaySamples, objPitch, objectIndex);
+    return airAbsorptionFilter[objectIndex].processSample (objMono);
 }
 
 void OpenSpatialDelayProcessor::processFeedbackSample (float currentLoopMult,
@@ -3501,9 +3159,9 @@ void OpenSpatialDelayProcessor::processFeedbackSample (float currentLoopMult,
     fbDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), fbDelaySamples);
     float fbPitchShiftAmount = currentLoopMult * pitchSemitones;
 
-    float feedbackRaw = readVarispeed (fbDelaySamples, fbPitchShiftAmount, MAX_OBJECTS);
-    float filtered = filterBypassed ? feedbackRaw
-        : feedbackHPFilter.processSample (feedbackLPFilter.processSample (feedbackRaw));
+    float feedbackRaw = readPitchShifted (fbDelaySamples, fbPitchShiftAmount, MAX_OBJECTS);
+    float filtered = feedbackLPFilter.processSample (feedbackRaw);
+    filtered = feedbackHPFilter.processSample (filtered);
     const float makeupGain = 1.0f + (fb * fb * 0.2f);
     feedbackSample = softClip (filtered * makeupGain);
     if (! std::isfinite (feedbackSample))
@@ -3528,27 +3186,16 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     if (delayBuffer.empty() || numSamples <= 0)
         return;
 
-    // v0.7: Reset per-tap peak accumulators for this block
-    for (int i = 0; i < MAX_OBJECTS; ++i)
-        tapPeakAccum[i] = 0.0f;
-
     // --- Read parameter values -----------------------------------------------
     bool  tempoSync       = apvts.getRawParameterValue ("tempoSync")->load() > 0.5f;
     int   noteDivision    = static_cast<int> (apvts.getRawParameterValue ("noteDivision")->load());
     float lpFreq          = apvts.getRawParameterValue ("filterLP")->load();
     float hpFreq          = apvts.getRawParameterValue ("filterHP")->load();
-    float filterHPQ       = apvts.getRawParameterValue ("filterHPQ")->load();
-    float filterLPQ       = apvts.getRawParameterValue ("filterLPQ")->load();
-    filterBypassed  = (lpFreq >= 19999.0f && hpFreq <= 21.0f);
     int   profileIndex    = static_cast<int> (apvts.getRawParameterValue ("hrtfProfile")->load());
-    // v0.7: Global pitch is in cents (±200), convert to semitones for DSP
-    float pitchSemitones  = apvts.getRawParameterValue ("pitchShift")->load() / 100.0f;
+    float pitchSemitones  = apvts.getRawParameterValue ("pitchShift")->load();
 
     // v0.4: Air absorption parameter read
     bool  useAirAbsorption = apvts.getRawParameterValue ("airAbsorption")->load() > 0.5f;
-
-    // v0.7: Input format (0=Mono, 1=Stereo). Stereo DSP deferred — always mono for now.
-    // int inputFormat = static_cast<int> (apvts.getRawParameterValue ("inputFormat")->load());
 
     // (#3) Calculate target base delay
     float targetBaseDelayMs;
@@ -3569,29 +3216,19 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     smoothedInputGain.setTargetValue  (juce::Decibels::decibelsToGain (inGainDb));
     smoothedOutputGain.setTargetValue (juce::Decibels::decibelsToGain (outGainDb));
 
-    // --- Update feedback filters (only when frequency or Q changes) -----------
-    bool lpQChanged = std::abs (filterLPQ - cachedFilterLPQ) > 0.001f;
-    bool hpQChanged = std::abs (filterHPQ - cachedFilterHPQ) > 0.001f;
-    bool lpChanged = std::abs (lpFreq - cachedFeedbackLPFreq) > 0.1f || lpQChanged;
-    bool hpChanged = std::abs (hpFreq - cachedFeedbackHPFreq) > 0.1f || hpQChanged;
-    if (lpChanged)
+    // --- Update feedback filters (only when frequency changes) ----------------
+    if (std::abs (lpFreq - cachedFeedbackLPFreq) > 0.1f)
     {
-        auto lpCoeffs = juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, lpFreq, filterLPQ);
-        feedbackLPFilter.coefficients = lpCoeffs;
-        for (int t = 0; t < MAX_OBJECTS; ++t)
-            tapLPFilter[t].coefficients = lpCoeffs;
+        feedbackLPFilter.coefficients =
+            juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, lpFreq);
         cachedFeedbackLPFreq = lpFreq;
     }
-    if (hpChanged)
+    if (std::abs (hpFreq - cachedFeedbackHPFreq) > 0.1f)
     {
-        auto hpCoeffs = juce::dsp::IIR::Coefficients<float>::makeHighPass (currentSampleRate, hpFreq, filterHPQ);
-        feedbackHPFilter.coefficients = hpCoeffs;
-        for (int t = 0; t < MAX_OBJECTS; ++t)
-            tapHPFilter[t].coefficients = hpCoeffs;
+        feedbackHPFilter.coefficients =
+            juce::dsp::IIR::Coefficients<float>::makeHighPass (currentSampleRate, hpFreq);
         cachedFeedbackHPFreq = hpFreq;
     }
-    if (lpQChanged) cachedFilterLPQ = filterLPQ;
-    if (hpQChanged) cachedFilterHPQ = filterHPQ;
 
     // --- Read output layout (once per block for consistent snapshot) -----------
     const auto& layoutState = getActiveLayout();
@@ -3681,7 +3318,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     {
         float blockDuration = static_cast<float> (numSamples) / static_cast<float> (currentSampleRate);
         constexpr float speedOfSound = 343.0f;   // m/s at 20°C
-        constexpr float emaAlpha = 0.2f;          // Smoothing factor for velocity
+        constexpr float emaAlpha = 0.1f;          // Smoothing factor for velocity
         constexpr float maxDopplerSemitones = 12.0f;
 
         for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -3722,15 +3359,10 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                     float py = prevPhysDist * std::cos (prevElevation[t]) * std::cos (prevAzimuth[t]);
                     float pz = prevPhysDist * std::sin (prevElevation[t]);
 
-                    // Virtual ear Doppler — offset listener position for audible
-                    // binaural Doppler from orbiting/tangentially moving sources.
-                    // Anatomical ear offset is ~0.085m; exaggerated for creative effect.
-                    constexpr float earOffset = 2.5f;   // virtual ear x-offset (meters, exaggerated for creative effect)
-                    float dxC = cx - earOffset;
-                    float dxP = px - earOffset;
-                    float distToEarCur  = std::sqrt (dxC * dxC + cy * cy + cz * cz);
-                    float distToEarPrev = std::sqrt (dxP * dxP + py * py + pz * pz);
-                    float rawRadialVelocity = (distToEarCur - distToEarPrev) / blockDuration;
+                    // Radial velocity = rate of change of distance from source to listener (origin)
+                    float curDist3D  = std::sqrt (cx * cx + cy * cy + cz * cz);
+                    float prevDist3D = std::sqrt (px * px + py * py + pz * pz);
+                    float rawRadialVelocity = (curDist3D - prevDist3D) / blockDuration;
 
                     // Exponential moving average smoothing to avoid clicks
                     smoothedRadialVelocity[t] = emaAlpha * rawRadialVelocity
@@ -3866,10 +3498,6 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         renderDiscreteSurround (buffer, numSamples, objects, objChannelGains,
                                 objDistGain, pitchSemitones, surLayout);
     }
-
-    // v0.7: Store per-tap peak to atomics for UI glow
-    for (int i = 0; i < MAX_OBJECTS; ++i)
-        tapActivityRMS[i].store (tapPeakAccum[i], std::memory_order_relaxed);
 }
 
 //==============================================================================
@@ -3975,8 +3603,8 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
         float outGain = outGainStart + frac * (outGainEnd - outGainStart);
         float rawInput = monoInputBuffer[static_cast<size_t> (s)];
 
-        outL[s] = outputLimiter ((rawInput * (1.0f - dw) + wetBufL[static_cast<size_t> (s)] * dw) * outGain);
-        outR[s] = outputLimiter ((rawInput * (1.0f - dw) + wetBufR[static_cast<size_t> (s)] * dw) * outGain);
+        outL[s] = (rawInput * (1.0f - dw) + wetBufL[static_cast<size_t> (s)] * dw) * outGain;
+        outR[s] = (rawInput * (1.0f - dw) + wetBufR[static_cast<size_t> (s)] * dw) * outGain;
     }
 
     // Zero remaining channels when binaural is selected on a multi-channel bus
@@ -4034,8 +3662,8 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
         processFeedbackSample (currentLoopMult, baseDelaySamples, pitchSemitones, fb);
 
         // === STAGE 4: OUTPUT MIX ===
-        outL[s] = outputLimiter ((rawInput * (1.0f - dw) + wetL * dw) * outGain);
-        outR[s] = outputLimiter ((rawInput * (1.0f - dw) + wetR * dw) * outGain);
+        outL[s] = (rawInput * (1.0f - dw) + wetL * dw) * outGain;
+        outR[s] = (rawInput * (1.0f - dw) + wetR * dw) * outGain;
     }
 
     // Zero remaining channels when binaural is selected on a multi-channel bus
@@ -4154,8 +3782,8 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
         processFeedbackSample (currentLoopMult, baseDelaySamples, pitchSemitones, fb);
 
         // === STAGE 4: OUTPUT MIX ===
-        outL[s] = outputLimiter ((rawInput * (1.0f - dw) + wetL * dw) * outGain);
-        outR[s] = outputLimiter ((rawInput * (1.0f - dw) + wetR * dw) * outGain);
+        outL[s] = (rawInput * (1.0f - dw) + wetL * dw) * outGain;
+        outR[s] = (rawInput * (1.0f - dw) + wetR * dw) * outGain;
     }
 
     // Zero remaining channels when stereo is selected on a multi-channel bus
@@ -4180,14 +3808,17 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
 
     // Max-rE weights per SH order for perceptual quality (Zotter & Frank 2012)
     // w_n = cos(n * pi / (2*N + 2))  where N = max order used in this block
-    // v0.7: Cached — only recomputed when ambiOrder changes (rare: output format switch)
-    if (ambiOrder != cachedMaxrEOrder)
-    {
-        const float maxrEDenom = 2.0f * static_cast<float> (ambiOrder) + 2.0f;
-        for (int n = 0; n <= ambiOrder; ++n)
-            cachedMaxrE[n] = std::cos (static_cast<float> (n) * juce::MathConstants<float>::pi / maxrEDenom);
-        cachedMaxrEOrder = ambiOrder;
-    }
+    const float maxrEDenom = 2.0f * static_cast<float> (ambiOrder) + 2.0f;
+    float maxrE[MAX_AMBI_ORDER + 1];
+    for (int n = 0; n <= ambiOrder; ++n)
+        maxrE[n] = std::cos (static_cast<float> (n) * juce::MathConstants<float>::pi / maxrEDenom);
+
+    auto acnToOrder = [](int acn) -> int {
+        if (acn < 1)  return 0;  if (acn < 4)  return 1;
+        if (acn < 9)  return 2;  if (acn < 16) return 3;
+        if (acn < 25) return 4;  if (acn < 36) return 5;
+        return 6;
+    };
 
     // --- NFC-HOA: Update filter coefficients when distance changes (block-rate) ---
     for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -4227,7 +3858,7 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
         float azRad = juce::degreesToRadians (objects[t].azimuthDeg);
         float elRad = juce::degreesToRadians (objects[t].elevationDeg);
         for (int c = 0; c < numAmbiCh; ++c)
-            objSHCoeffs[t][c] = evalSH (c, azRad, elRad) * cachedMaxrE[acnToOrder (c)];
+            objSHCoeffs[t][c] = evalSH (c, azRad, elRad) * maxrE[acnToOrder (c)];
     }
 
     // Get output channel write pointers
@@ -4287,12 +3918,12 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
         for (int c = 0; c < numAmbiCh && c < numOutCh; ++c)
         {
             if (outChannels[c] != nullptr)
-                outChannels[c][s] = outputLimiter (ambiAccum[c] * dw * outGain);
+                outChannels[c][s] = ambiAccum[c] * dw * outGain;
         }
 
         // Dry: omnidirectional (W channel = ACN 0 only)
         if (outChannels[0] != nullptr)
-            outChannels[0][s] = outputLimiter (outChannels[0][s] + rawInput * (1.0f - dw) * outGain);
+            outChannels[0][s] += rawInput * (1.0f - dw) * outGain;
     }
 }
 
@@ -4359,18 +3990,18 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
         {
             int ch = surLayout.speakers[sp].channelIndex;
             if (ch >= 0 && ch < numOutCh && outChannels[ch] != nullptr)
-                outChannels[ch][s] = outputLimiter (channelAccum[sp] * dw * outGain);
+                outChannels[ch][s] = channelAccum[sp] * dw * outGain;
         }
 
         // Dry signal → L and R only (channels 0 and 1)
         float drySignal = rawInput * (1.0f - dw) * outGain;
-        if (outChannels[0] != nullptr) outChannels[0][s] = outputLimiter (outChannels[0][s] + drySignal);
-        if (outChannels[1] != nullptr) outChannels[1][s] = outputLimiter (outChannels[1][s] + drySignal);
+        if (outChannels[0] != nullptr) outChannels[0][s] += drySignal;
+        if (outChannels[1] != nullptr) outChannels[1][s] += drySignal;
 
         // LFE generation — low-pass filtered mono sum at −10 dB
         if (lfeIdx >= 0 && lfeIdx < numOutCh && outChannels[lfeIdx] != nullptr)
         {
-            float lfeSig = outputLimiter (lfeFilter.processSample (wetMono) * 0.316f * dw * outGain);  // −10 dB ≈ 0.316
+            float lfeSig = lfeFilter.processSample (wetMono) * 0.316f * dw * outGain;  // −10 dB ≈ 0.316
             outChannels[lfeIdx][s] = lfeSig;
         }
     }
@@ -4381,19 +4012,6 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
 // OSC message parsing (ADM-OSC namespace), position updates via APVTS,
 // Cartesian→Polar conversion (ITU-R BS.2127-0), and trajectory shape functions.
 // #############################################################################
-
-//==============================================================================
-// Cartesian→Polar conversion per ITU-R BS.2127-0
-// Converts ADM-OSC Cartesian (x,y,z) to polar (azimuth, elevation, distance)
-//==============================================================================
-static inline void cartesianToPolar (float x, float y, float z,
-                                     float& azDeg, float& elDeg, float& dist)
-{
-    azDeg = std::atan2 (-x, y) * (180.0f / juce::MathConstants<float>::pi);
-    float r = std::sqrt (x * x + y * y);
-    elDeg = std::atan2 (z, r) * (180.0f / juce::MathConstants<float>::pi);
-    dist = juce::jlimit (0.0f, 1.0f, std::sqrt (x * x + y * y + z * z));
-}
 
 //==============================================================================
 // ADM-OSC Receive — message thread callback (MessageLoopCallback)
@@ -4453,33 +4071,44 @@ void OpenSpatialDelayProcessor::oscMessageReceived (const juce::OSCMessage& mess
     else if (property == "/xyz" && message.size() >= 3
              && message[0].isFloat32() && message[1].isFloat32() && message[2].isFloat32())
     {
-        float azDeg, elDeg, dist;
-        cartesianToPolar (message[0].getFloat32(), message[1].getFloat32(),
-                          message[2].getFloat32(), azDeg, elDeg, dist);
+        // Cartesian→Polar conversion per ITU-R BS.2127-0
+        float x = message[0].getFloat32();
+        float y = message[1].getFloat32();
+        float z = message[2].getFloat32();
+        float azDeg = std::atan2 (-x, y) * (180.0f / juce::MathConstants<float>::pi);
+        float r = std::sqrt (x * x + y * y);
+        float elDeg = std::atan2 (z, r) * (180.0f / juce::MathConstants<float>::pi);
+        float dist = juce::jlimit (0.0f, 1.0f, std::sqrt (x * x + y * y + z * z));
         handleOSCPosition (objIdx, azDeg, elDeg, dist);
     }
     else if (property == "/x" && message.size() >= 1 && message[0].isFloat32())
     {
         oscCartesianX[objIdx] = message[0].getFloat32();
-        float azDeg, elDeg, dist;
-        cartesianToPolar (oscCartesianX[objIdx], oscCartesianY[objIdx],
-                          oscCartesianZ[objIdx], azDeg, elDeg, dist);
+        float x = oscCartesianX[objIdx], y = oscCartesianY[objIdx], z = oscCartesianZ[objIdx];
+        float azDeg = std::atan2 (-x, y) * (180.0f / juce::MathConstants<float>::pi);
+        float r = std::sqrt (x * x + y * y);
+        float elDeg = std::atan2 (z, r) * (180.0f / juce::MathConstants<float>::pi);
+        float dist = juce::jlimit (0.0f, 1.0f, std::sqrt (x * x + y * y + z * z));
         handleOSCPosition (objIdx, azDeg, elDeg, dist);
     }
     else if (property == "/y" && message.size() >= 1 && message[0].isFloat32())
     {
         oscCartesianY[objIdx] = message[0].getFloat32();
-        float azDeg, elDeg, dist;
-        cartesianToPolar (oscCartesianX[objIdx], oscCartesianY[objIdx],
-                          oscCartesianZ[objIdx], azDeg, elDeg, dist);
+        float x = oscCartesianX[objIdx], y = oscCartesianY[objIdx], z = oscCartesianZ[objIdx];
+        float azDeg = std::atan2 (-x, y) * (180.0f / juce::MathConstants<float>::pi);
+        float r = std::sqrt (x * x + y * y);
+        float elDeg = std::atan2 (z, r) * (180.0f / juce::MathConstants<float>::pi);
+        float dist = juce::jlimit (0.0f, 1.0f, std::sqrt (x * x + y * y + z * z));
         handleOSCPosition (objIdx, azDeg, elDeg, dist);
     }
     else if (property == "/z" && message.size() >= 1 && message[0].isFloat32())
     {
         oscCartesianZ[objIdx] = message[0].getFloat32();
-        float azDeg, elDeg, dist;
-        cartesianToPolar (oscCartesianX[objIdx], oscCartesianY[objIdx],
-                          oscCartesianZ[objIdx], azDeg, elDeg, dist);
+        float x = oscCartesianX[objIdx], y = oscCartesianY[objIdx], z = oscCartesianZ[objIdx];
+        float azDeg = std::atan2 (-x, y) * (180.0f / juce::MathConstants<float>::pi);
+        float r = std::sqrt (x * x + y * y);
+        float elDeg = std::atan2 (z, r) * (180.0f / juce::MathConstants<float>::pi);
+        float dist = juce::jlimit (0.0f, 1.0f, std::sqrt (x * x + y * y + z * z));
         handleOSCPosition (objIdx, azDeg, elDeg, dist);
     }
 }
@@ -4521,9 +4150,6 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
                                                float baseAz, float baseEl, float baseDist)
 {
     TrajectoryResult r;
-    r.controlsAz = false;
-    r.controlsEl = false;
-    r.controlsDist = false;
 
     switch (shape)
     {
@@ -4531,53 +4157,38 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
             r.azDeg = baseAz + 360.0f * phase;
             r.elDeg = baseEl + 45.0f * std::sin (phase * juce::MathConstants<float>::twoPi);
             r.dist  = 0.3f + 0.7f * (0.5f + 0.5f * std::cos (phase * juce::MathConstants<float>::twoPi));
-            r.controlsAz = r.controlsEl = r.controlsDist = true;
             break;
 
-        case 2: // Orbit — circular orbit (azimuth only)
+        case 2: // Orbit — circular orbit, elevation & distance stay at base
             r.azDeg = baseAz + 360.0f * phase;
             r.elDeg = baseEl;
             r.dist  = baseDist;
-            r.controlsAz = true;
             break;
 
         case 3: // Bounce — azimuth ping-pongs ±90°, elevation bounces ±30°
         {
+            // Triangle wave: 0→1→0 over one phase cycle
             float tri = 1.0f - std::abs (2.0f * phase - 1.0f);
             r.azDeg = baseAz + 90.0f * (2.0f * tri - 1.0f);
             r.elDeg = baseEl + 30.0f * (2.0f * tri - 1.0f);
             r.dist  = baseDist;
-            r.controlsAz = r.controlsEl = true;
             break;
         }
 
-        case 4: // Figure-8 — Lissajous on horizontal plane (azimuth × distance)
-        {
-            float p = phase * juce::MathConstants<float>::twoPi;
-            r.azDeg = baseAz + 90.0f * std::sin (p);
-            r.elDeg = baseEl;
-            r.dist  = juce::jlimit (0.0f, 1.0f,
-                                    baseDist + 0.35f * std::sin (p * 2.0f));
-            r.controlsAz = r.controlsDist = true;
+        case 4: // Figure-8 — Lissajous pattern
+            r.azDeg = baseAz + 90.0f  * std::sin (phase * juce::MathConstants<float>::twoPi);
+            r.elDeg = baseEl + 45.0f  * std::sin (phase * juce::MathConstants<float>::twoPi * 2.0f);
+            r.dist  = baseDist;
             break;
-        }
 
-        case 5: // Random — multi-layer irrational-frequency oscillators (all axes)
+        case 5: // Random — smoothed random walk using sin-based pseudo-random
         {
+            // Use deterministic oscillators at irrational frequency ratios for smooth "random" motion
             float p = phase * juce::MathConstants<float>::twoPi;
-            r.azDeg = baseAz + 50.0f * std::sin (p * 1.0f)
-                             + 35.0f * std::sin (p * 2.7183f + 0.7f)
-                             + 20.0f * std::sin (p * 4.6692f + 2.1f)
-                             + 12.0f * std::sin (p * 7.3891f + 4.3f);
-            r.elDeg = baseEl + 30.0f * std::sin (p * 1.4142f + 1.1f)
-                             + 20.0f * std::sin (p * 3.1416f + 3.5f)
-                             + 12.0f * std::sin (p * 5.8598f + 0.3f)
-                             +  8.0f * std::sin (p * 8.5397f + 5.7f);
+            r.azDeg = baseAz + 60.0f * std::sin (p * 1.0f) + 30.0f * std::sin (p * 2.7183f);
+            r.elDeg = baseEl + 25.0f * std::sin (p * 1.4142f) + 15.0f * std::sin (p * 3.1416f);
             r.dist  = juce::jlimit (0.0f, 1.0f,
-                                    baseDist + 0.25f * std::sin (p * 1.7321f + 2.3f)
-                                             + 0.15f * std::sin (p * 3.8730f + 4.9f)
-                                             + 0.10f * std::sin (p * 6.2832f + 1.6f));
-            r.controlsAz = r.controlsEl = r.controlsDist = true;
+                                    baseDist + 0.3f * std::sin (p * 1.7321f) + 0.1f * std::sin (p * 2.2361f));
             break;
         }
 
@@ -4611,13 +4222,9 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
 void OpenSpatialDelayProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
-    state.setProperty ("pluginStateVersion", 11, nullptr);  // v0.7 state format (11 = per-tap pitch, input format, OSC send)
+    state.setProperty ("pluginStateVersion", 10, nullptr);  // v0.6 state format (10 = per-object trajectory, preset system)
     state.setProperty ("oscReceivePort", oscReceivePort, nullptr);  // v0.6: persist OSC port
     state.setProperty ("currentPresetIndex", currentPresetIndex, nullptr);  // v0.6: persist preset selection
-    // v0.7: persist OSC Send settings
-    state.setProperty ("oscSendEnabled", oscSendEnabled, nullptr);
-    state.setProperty ("oscSendPort", oscSendPort, nullptr);
-    state.setProperty ("oscSendIP", oscSendIP, nullptr);
     std::unique_ptr<juce::XmlElement> xml (state.createXml());
     copyXmlToBinary (*xml, destData);
 }
@@ -4904,13 +4511,6 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
 
     // v0.6: Restore preset index (non-APVTS property)
     currentPresetIndex = static_cast<int> (tree.getProperty ("currentPresetIndex", 0));
-
-    // v0.7: Restore OSC Send settings
-    oscSendPort = static_cast<int> (tree.getProperty ("oscSendPort", 4003));
-    oscSendIP   = tree.getProperty ("oscSendIP", "127.0.0.1").toString();
-    bool savedSendEnabled = static_cast<bool> (tree.getProperty ("oscSendEnabled", false));
-    if (savedSendEnabled)
-        setOscSendEnabled (true);
 
     apvts.replaceState (tree);
 }

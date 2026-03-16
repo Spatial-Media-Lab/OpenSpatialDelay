@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(OpenSpatialDelay VERSION 0.8.0 LANGUAGES C CXX)
+project(OpenSpatialDelay VERSION 0.6.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -61,22 +61,6 @@ juce_add_binary_data(HRTFData
 )
 
 # =============================================================================
-# Font BinaryData — DM Sans + JetBrains Mono embedded as binary resources
-# =============================================================================
-juce_add_binary_data(FontData
-    HEADER_NAME "FontData.h"
-    NAMESPACE FontData
-    SOURCES
-        fonts/DM_Sans-Regular.ttf
-        fonts/DM_Sans-Medium.ttf
-        fonts/DM_Sans-SemiBold.ttf
-        fonts/DM_Sans-Bold.ttf
-        fonts/JetBrains_Mono-Regular.ttf
-        fonts/JetBrains_Mono-Medium.ttf
-        fonts/JetBrains_Mono-Bold.ttf
-)
-
-# =============================================================================
 # Plugin target
 # =============================================================================
 # AU is macOS-only; Windows gets VST3 only
@@ -93,9 +77,9 @@ juce_add_plugin(OpenSpatialDelay
     NEEDS_MIDI_OUTPUT FALSE
     IS_MIDI_EFFECT FALSE
     PLUGIN_MANUFACTURER_CODE Smli
-    PLUGIN_CODE Osd8
+    PLUGIN_CODE Osd6
     FORMATS ${PLUGIN_FORMATS}
-    PRODUCT_NAME "OpenSpatialDelay v0.8"
+    PRODUCT_NAME "OpenSpatialDelay v0.6"
     COPY_PLUGIN_AFTER_BUILD FALSE
 )
 
@@ -130,7 +114,6 @@ target_link_libraries(OpenSpatialDelay
         juce::juce_dsp
         juce::juce_osc
         HRTFData
-        FontData
         mysofa-static
         ZLIB::ZLIB
     PUBLIC
