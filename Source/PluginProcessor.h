@@ -508,6 +508,9 @@ public:
     bool getOscSendEnabled() const { return oscSendEnabled; }
     void setOscSendEnabled (bool enabled);
 
+    // v0.8: Delay channel routing for per-tap input selection
+    enum class DelayChannel { Mono = 0, Left = 1, Right = 2 };
+
     // v0.7: Per-tap activity level (RMS) for UI glow animation
     float getTapActivityRMS (int i) const
     {
@@ -535,6 +538,9 @@ public:
         float inputGain = 0.0f;
         float outputGain = 0.0f;
         bool  airAbsorption = false;
+        bool  wobbleEnabled = false; // v0.8: Wobble modulation enable toggle
+        float wobbleAmount = 0.0f;   // v0.8: Wobble modulation depth (0..100)
+        float wobbleMorph = 0.0f;    // v0.8: Wobble waveform morph (0..100)
         int   algorithm = 4;       // VBAP
         int   hrtfProfile = 0;
         // Per-tap data
@@ -548,6 +554,8 @@ public:
             float pitchShift = 0.0f;      // v0.7: per-tap pitch override (semitones, 0=use global)
             int   trajectoryShape = 0;
             float trajectorySpeed = 1.0f;
+            int   trajectoryDirection = 0;  // v0.8: 0=Forward, 1=Reverse
+            int   inputChannel = 0;           // v0.8: 0=L+R, 1=L, 2=R
         };
         TapData taps[MAX_OBJECTS] = {};
     };
@@ -577,10 +585,12 @@ private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     //--- DELAY-SPECIFIC: DSP helpers ------------------------------------------
-    void   writeDelayLine (float sample);
-    float  readDelayLine  (float delaySamples) const;
-    float  readPitchShifted (float delaySamples, float semitones, int phaseIndex);
-    float  readVarispeed (float delaySamples, float semitones, int phaseIndex);
+    void   writeDelayLine (float sampleL, float sampleR);
+    float  readDelayLineL    (float delaySamples) const;
+    float  readDelayLineR    (float delaySamples) const;
+    float  readDelayLineMono (float delaySamples) const;
+    float  readPitchShifted (float delaySamples, float semitones, int phaseIndex, DelayChannel ch = DelayChannel::Mono);
+    float  readVarispeed (float delaySamples, float semitones, int phaseIndex, DelayChannel ch = DelayChannel::Mono);
     float getTempoSyncedDelayMs (int noteDivisionIndex) const;
 
     //--- DELAY-SPECIFIC: Render path methods (v0.5 refactor) ------------------
@@ -681,6 +691,7 @@ private:
     //--- v0.6: Per-object trajectory animation engine --------------------------
     std::atomic<float>* cachedParam_trajectoryShape[MAX_OBJECTS] = {};
     std::atomic<float>* cachedParam_trajectorySpeed[MAX_OBJECTS] = {};
+    std::atomic<float>* cachedParam_trajectoryDirection[MAX_OBJECTS] = {};  // v0.8: 0=Forward, 1=Reverse
 
     float trajectoryPhase[MAX_OBJECTS] = {};            // 0..1 animation progress per object
     float baseAzimuth[MAX_OBJECTS]   = {};              // Captured when trajectory starts
@@ -692,13 +703,16 @@ private:
     // controlsAz/El/Dist flags indicate which axes the shape actively modifies
     struct TrajectoryResult { float azDeg, elDeg, dist; bool controlsAz, controlsEl, controlsDist; };
     static TrajectoryResult computeTrajectory (int shape, float phase,
-                                               float baseAz, float baseEl, float baseDist);
+                                               float baseAz, float baseEl, float baseDist,
+                                               bool reverse = false);
 
     //--- DELAY-SPECIFIC: DSP state --------------------------------------------
     double currentSampleRate = 44100.0;
 
-    // Main delay buffer (circular, power-of-2 size for bitmask indexing)
-    std::vector<float> delayBuffer;
+    // Main delay buffers (circular, power-of-2 size for bitmask indexing)
+    // v0.8: Dual delay lines for stereo input routing
+    std::vector<float> delayBufferL;
+    std::vector<float> delayBufferR;
     int delayBufferSize = 0;
     int delayBufferMask = 0;   // v0.5: = delayBufferSize - 1, for & instead of %
     int writePosition   = 0;
@@ -735,6 +749,12 @@ private:
         int   crossfadeLength = 0;    // total crossfade length (samples)
     };
     VarispeedState varispeedState[MAX_OBJECTS + 1] = {};  // 12 objects + 1 feedback
+
+    // v0.8: Wobble modulation (LFO synced to delay time)
+    float wobblePhase = 0.0f;
+    float blockWobbleAmount = 0.0f;  // read once per block from APVTS
+    float blockWobbleMorph = 0.0f;
+    inline float applyWobble (float baseDelaySamples, float currentDelayMs);
 
     // Smoothing for delay time to create "Repitch" effect
     juce::LinearSmoothedValue<float> smoothedDelayTime;
@@ -783,6 +803,8 @@ private:
 
     // Pre-allocated work buffers (avoid allocation in processBlock)
     std::vector<float> monoInputBuffer;
+    std::vector<float> inputBufferL;   // v0.8: per-channel input for stereo delay lines
+    std::vector<float> inputBufferR;
 
     // v0.5: Contiguous per-source accumulation buffers for direct HRTF convolution
     std::vector<float> sourceAccumBufStorage;          // MAX_OBJECTS * maxBlockSize (contiguous)
@@ -817,6 +839,9 @@ private:
 
     // v0.7: Per-object pitch shift override (cached parameter pointers)
     std::atomic<float>* cachedParam_pitchShift[MAX_OBJECTS]    = {};
+
+    // v0.8: Per-object input channel selection (cached parameter pointers)
+    std::atomic<float>* cachedParam_inputChannel[MAX_OBJECTS]  = {};
 
     // v0.5: Cached feedback filter frequencies + Q (skip recalculation when unchanged)
     float cachedFeedbackLPFreq = -1.0f;

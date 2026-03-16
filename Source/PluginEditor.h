@@ -185,7 +185,17 @@ public:
 
     juce::Label* createSliderTextBox (juce::Slider& slider) override
     {
-        auto* label = juce::LookAndFeel_V4::createSliderTextBox (slider);
+        auto* label = new juce::Label();
+        // Copy essential setup from LookAndFeel_V4::createSliderTextBox
+        label->setJustificationType (juce::Justification::centred);
+        label->setKeyboardType (juce::TextInputTarget::decimalKeyboard);
+        label->setColour (juce::Label::textColourId, slider.findColour (juce::Slider::textBoxTextColourId));
+        label->setColour (juce::Label::backgroundColourId,
+                          (slider.getSliderStyle() == juce::Slider::LinearBar
+                           || slider.getSliderStyle() == juce::Slider::LinearBarVertical)
+                              ? juce::Colours::transparentBlack
+                              : slider.findColour (juce::Slider::textBoxBackgroundColourId));
+        label->setColour (juce::Label::outlineColourId, slider.findColour (juce::Slider::textBoxOutlineColourId));
         // Match the small knob value font (JetBrains Mono 11px)
         if (jetbrainsRegular)
             label->setFont (juce::Font (juce::FontOptions (jetbrainsRegular).withHeight (11.0f)));
@@ -258,6 +268,73 @@ private:
 };
 
 //==============================================================================
+// Reusable toggle pill: 5px indicator dot + uppercase label, ON/OFF/HOVER states
+//==============================================================================
+class IndicatorToggle : public juce::Button
+{
+public:
+    IndicatorToggle (const juce::String& label, const juce::Colour& accentColour,
+                     juce::Typeface::Ptr typeface);
+
+    /** Compute preferred width for a given label (static for layout calculations). */
+    static int getPreferredWidth (juce::Typeface::Ptr typeface, const juce::String& text);
+
+    static constexpr int kHeight = 18;
+
+    void paintButton (juce::Graphics& g, bool isMouseOverButton, bool isButtonDown) override;
+
+    /** Update accent colour dynamically (e.g. tap-color-aware ON button). */
+    void setAccentColour (const juce::Colour& newAccent) { accent = newAccent; repaint(); }
+
+private:
+    juce::String label;
+    juce::Colour accent;
+    juce::Typeface::Ptr typeface;
+
+    static constexpr float kFontSize  = 10.0f;
+    static constexpr float kKerning   = 0.08f;
+    static constexpr float kDotRadius = 2.5f;
+    static constexpr float kLeftPad   = 6.0f;
+    static constexpr float kDotGap    = 4.0f;
+    static constexpr float kRightPad  = 7.0f;
+    static constexpr float kCornerR   = 4.0f;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (IndicatorToggle)
+};
+
+//==============================================================================
+/** Centred-text button with no indicator dot — same visual language as IndicatorToggle. */
+class StyledButton : public juce::Button
+{
+public:
+    StyledButton (const juce::String& label, const juce::Colour& accentColour,
+                  juce::Typeface::Ptr typeface);
+
+    static int getPreferredWidth (juce::Typeface::Ptr typeface, const juce::String& text);
+
+    static constexpr int kHeight = 18;
+
+    void paintButton (juce::Graphics& g, bool isMouseOverButton, bool isButtonDown) override;
+
+    void setLabel (const juce::String& newLabel) { label = newLabel; repaint(); }
+    void setAccentColour (const juce::Colour& newAccent) { accent = newAccent; repaint(); }
+    void setAlwaysActive (bool active) { alwaysActive = active; repaint(); }
+
+private:
+    juce::String label;
+    juce::Colour accent;
+    juce::Typeface::Ptr typeface;
+    bool alwaysActive = false;
+
+    static constexpr float kFontSize = 10.0f;
+    static constexpr float kKerning  = 0.08f;
+    static constexpr float kHPad     = 8.0f;
+    static constexpr float kCornerR  = 4.0f;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (StyledButton)
+};
+
+//==============================================================================
 // Main plugin editor
 //==============================================================================
 class OpenSpatialDelayEditor : public juce::AudioProcessorEditor,
@@ -276,9 +353,8 @@ public:
     void mouseExit (const juce::MouseEvent& e) override;
 
 private:
-    bool smlBadgeHovered = false;
-    bool smlBadgePressed = false;
-    bool fltTagHovered = false;
+    std::unique_ptr<StyledButton> smlButton;  // header branding link
+    bool modIsActive = false;     // v0.8: MOD section enable state
     // Layout constants (v0.7: updated bottom panel height)
     static constexpr int kWindowWidth      = 820;
     static constexpr int kWindowHeight     = 580;
@@ -293,11 +369,6 @@ private:
     void drawSelectionBox (juce::Graphics& g, juce::Component& label, juce::Component& slider);
     // Helper for drawing section headers
     void drawSectionHeader (juce::Graphics& g, int x, int y, int w, const juce::String& text);
-    // Helper for drawing styled toggle buttons (fill + border + text)
-    void paintStyledToggle (juce::Graphics& g, juce::TextButton& btn,
-                            const juce::Colour& onColour, const juce::String& text,
-                            float fontSize, juce::Colour textOnColour = juce::Colours::black);
-
     // SpatialMapComponent::Listener
     void objectPositionChanged (int objectIndex, float azimuthDeg, float distance) override;
     void objectSelected (int objectIndex) override;
@@ -318,14 +389,14 @@ private:
     juce::ComboBox algorithmBox, hrtfProfileBox, syncModeBox;
     juce::ComboBox outputFormatBox;
     juce::Label outputFormatLabel;
-    juce::TextButton tempoSyncButton;
-    juce::TextButton syncDottedButton, syncTripletButton;  // v0.7: note modifier toggles
+    std::unique_ptr<StyledButton> tempoSyncButton;
+    std::unique_ptr<StyledButton> syncDottedButton, syncTripletButton;  // v0.7: note modifier toggles
 
     // Object controls
     std::array<juce::TextButton, OpenSpatialDelayProcessor::MAX_OBJECTS> objectButtons;
     ReverseSlider objAzimuthSlider;
     juce::Slider objElevationSlider, objDistanceSlider;
-    juce::TextButton objEnabledButton;  // styled power button instead of checkbox
+    std::unique_ptr<IndicatorToggle> objEnabledButton;  // tap ON/OFF — accent matches tap color
     int currentObjectIndex = 0;
 
     // v0.4: Per-object Doppler amount knob
@@ -336,9 +407,15 @@ private:
     juce::Slider objPitchShiftSlider;
     juce::Label objPitchShiftLabel;
 
+    // v0.8: Per-object input channel cycling button (bottom panel)
+    std::unique_ptr<StyledButton> objInputChannelButton;
+    juce::ComboBox   objInputChannelBox;    // hidden, for APVTS binding
+
     // v0.6: Per-object trajectory controls (bottom panel)
     juce::ComboBox objTrajectoryBox;
     juce::Label objTrajectoryLabel;
+    std::unique_ptr<StyledButton> objTrajectoryFwdButton, objTrajectoryRevButton;  // v0.8: direction arrows
+    juce::ComboBox objTrajectoryDirBox;  // v0.8: hidden, for APVTS binding
     juce::Slider objTrajectorySpeedSlider;
     juce::Label objTrajectorySpeedLabel;
 
@@ -356,16 +433,25 @@ private:
     FilterGraphComponent filterGraph;
 
     // v0.6: ADM-OSC Receive toggle + editable port label
-    juce::TextButton oscToggleButton;
+    std::unique_ptr<IndicatorToggle> oscToggleButton;
     juce::Label oscPortLabel;
 
     // v0.7: ADM-OSC Send toggle + IP/port fields
-    juce::TextButton oscSendToggleButton;
+    std::unique_ptr<IndicatorToggle> oscSendToggleButton;
     juce::Label oscSendIPLabel;
     juce::Label oscSendPortLabel;
 
+    // v0.8: Wobble modulation knobs (right panel, MOD section)
+    juce::Slider wobbleAmountSlider, wobbleMorphSlider;
+    juce::Label wobbleAmountLabel, wobbleMorphLabel;
+    int modHeaderY = 0;  // section header Y position
+
     // v0.4: Global air absorption toggle
-    juce::TextButton airAbsorptionButton;
+    std::unique_ptr<IndicatorToggle> airAbsorptionButton;
+
+    // v0.8: IndicatorToggle instances for FLT and MOD section headers
+    std::unique_ptr<IndicatorToggle> fltToggle;
+    std::unique_ptr<IndicatorToggle> modToggle;
 
     // Labels
     juce::Label titleLabel;
@@ -396,6 +482,9 @@ private:
     // v0.4: Global DSP attachments
     std::unique_ptr<ButtonAttachment> airAbsorptionAttach;
 
+    // v0.8: Wobble modulation attachments
+    std::unique_ptr<SliderAttachment> wobbleAmountAttach, wobbleMorphAttach;
+
     // Per-object attachments (for the currently selected object)
     std::unique_ptr<SliderAttachment> objAzAttach, objElAttach, objDistAttach;
     std::unique_ptr<ButtonAttachment> objEnabledAttach;
@@ -407,9 +496,13 @@ private:
     // v0.7: Input format attachment
     std::unique_ptr<ComboBoxAttachment> inputFormatAttach;
 
+    // v0.8: Per-object input channel attachment (rebound in selectObject)
+    std::unique_ptr<ComboBoxAttachment> objInputChannelAttach;
+
     // v0.6: Per-object trajectory attachments (rebound in selectObject)
     std::unique_ptr<ComboBoxAttachment> objTrajectoryAttach;
     std::unique_ptr<SliderAttachment>   objTrajectorySpeedAttach;
+    std::unique_ptr<ComboBoxAttachment> objTrajectoryDirAttach;  // v0.8
 
     // v0.6: ADM-OSC toggle attachment
     std::unique_ptr<ButtonAttachment> oscToggleAttach;
@@ -428,6 +521,9 @@ private:
 
     // v0.7: Filter active state (for dimming FLT tag + readout)
     bool filterIsActive = true;
+    // v0.8: Frozen filter readout values for when filter is disabled
+    float lastActiveHP = 200.0f, lastActiveLP = 8000.0f;
+    float lastActiveHPQ = 0.707f, lastActiveLPQ = 0.707f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OpenSpatialDelayEditor)
 };
