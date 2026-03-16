@@ -52,36 +52,8 @@ private:
     std::pair<float, float> pixelToSpatial (juce::Point<float> pixel) const;
     int findObjectAt (juce::Point<float> pos) const;
 
-    // v0.7: Star field — deterministic twinkling dots
-    struct Star { float x, y, phase, speed, size; juce::Colour colour; };
-    std::vector<Star> stars;
-    float starTime = 0.0f;
-    void generateStars();
-
-    // v0.7: Per-object activity level (0..1) for glow animation
-    std::array<float, MAX_OBJECTS> activityLevel = {};
-    // v0.7: Per-object pulse phase (0..1, cycles at ~3s) for expanding ring effect
-    std::array<float, MAX_OBJECTS> pulsePhase = {};
-
 public:
     static const juce::Colour objectColours[MAX_OBJECTS];
-    void advanceStarAnimation (float dt) { starTime += dt; }
-    void setObjectActivityLevel (int index, float level) { if (index >= 0 && index < MAX_OBJECTS) activityLevel[(size_t)index] = level; }
-    void advancePulsePhases (float dt)
-    {
-        for (int i = 0; i < MAX_OBJECTS; ++i)
-        {
-            if (activityLevel[(size_t)i] > 0.01f)
-            {
-                pulsePhase[(size_t)i] += dt / 3.0f;  // 3-second cycle
-                if (pulsePhase[(size_t)i] >= 1.0f) pulsePhase[(size_t)i] -= 1.0f;
-            }
-            else
-            {
-                pulsePhase[(size_t)i] = 0.0f;
-            }
-        }
-    }
 private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SpatialMapComponent)
@@ -131,130 +103,82 @@ private:
 };
 
 //==============================================================================
-// Observatory v6 LookAndFeel — custom fonts, knobs, buttons, dropdowns
+// Ableton 12 style LookAndFeel for knobs
 //==============================================================================
 class Ableton12Look : public juce::LookAndFeel_V4
 {
 public:
-    // Custom typefaces loaded from embedded binary data
-    juce::Typeface::Ptr dmSansRegular, dmSansMedium, dmSansSemiBold, dmSansBold;
-    juce::Typeface::Ptr jetbrainsRegular, jetbrainsMedium, jetbrainsBold;
-
-    Ableton12Look();
-
-    juce::Typeface::Ptr getTypefaceForFont (const juce::Font& f) override
+    Ableton12Look()
     {
-        if (f.getStyleFlags() & juce::Font::bold)
-            return dmSansBold;
-        return dmSansRegular;
+        setDefaultSansSerifTypefaceName ("sans-serif");
+        // (#9) Consistent dropdown / popup menu colors
+        setColour (juce::PopupMenu::backgroundColourId,            juce::Colour (0xff111827));
+        setColour (juce::PopupMenu::textColourId,                  juce::Colour (0xffe2e8f0));
+        setColour (juce::PopupMenu::highlightedBackgroundColourId, juce::Colour (0xff00d4ff));
+        setColour (juce::PopupMenu::highlightedTextColourId,       juce::Colours::black);
+        setColour (juce::ComboBox::backgroundColourId,             juce::Colour (0xff111827));
+        setColour (juce::ComboBox::textColourId,                   juce::Colour (0xffe2e8f0));
+        setColour (juce::ComboBox::outlineColourId,                juce::Colour (0xff334155));
+        setColour (juce::ComboBox::arrowColourId,                  juce::Colour (0xffb0bec5));
     }
 
     void drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
                            float sliderPos, const float rotaryStartAngle,
-                           const float rotaryEndAngle, juce::Slider& slider) override;
+                           const float rotaryEndAngle, juce::Slider& slider) override
+    {
+        float knobDiameter = 48.0f;
+        auto knobBounds = juce::Rectangle<float> (x + (width - knobDiameter) * 0.5f,
+                                                  y + (height - knobDiameter) * 0.5f,
+                                                  knobDiameter, knobDiameter);
 
+        auto radius = knobDiameter * 0.5f;
+        auto toX = knobBounds.getCentreX();
+        auto toY = knobBounds.getCentreY();
+        auto angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
+        auto lineW = 3.5f;
+
+        // Background Track (#323232)
+        juce::Path backgroundTrack;
+        backgroundTrack.addCentredArc (toX, toY, radius, radius, 0.0f, rotaryStartAngle, rotaryEndAngle, true);
+        g.setColour (juce::Colour (0xFF323232));
+        g.strokePath (backgroundTrack, juce::PathStrokeType (lineW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+        // Active Value Arc (uses accent colour from slider property, default cyan)
+        if (slider.isEnabled())
+        {
+            auto accentColour = slider.findColour (juce::Slider::thumbColourId);
+            if (accentColour == juce::Colours::transparentBlack)
+                accentColour = juce::Colour (0xFF32D2FF);  // default cyan
+
+            juce::Path valueArc;
+            valueArc.addCentredArc (toX, toY, radius, radius, 0.0f, rotaryStartAngle, angle, true);
+            g.setColour (accentColour);
+            g.strokePath (valueArc, juce::PathStrokeType (lineW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+
+        // Indicator Needle (White)
+        g.setColour (juce::Colours::white);
+        juce::Path needle;
+        needle.addRectangle (-0.75f, -radius, 1.5f, radius * 0.45f);
+        g.fillPath (needle, juce::AffineTransform::rotation (angle).translated (toX, toY));
+    }
+
+    // (#1) Clean button background — skip entirely for transparent buttons
     void drawButtonBackground (juce::Graphics& g, juce::Button& button,
                                const juce::Colour& backgroundColour,
-                               bool isMouseOverButton, bool isButtonDown) override;
-
-    void drawComboBox (juce::Graphics& g, int width, int height, bool isButtonDown,
-                       int buttonX, int buttonY, int buttonW, int buttonH,
-                       juce::ComboBox& box) override;
-
-    juce::Font getComboBoxFont (juce::ComboBox&) override
+                               bool isMouseOverButton, bool isButtonDown) override
     {
-        return juce::Font (juce::FontOptions (dmSansRegular).withHeight (13.0f));
+        if (backgroundColour.isTransparent())
+            return;  // ON/OFF button is fully custom-painted in Editor::paint()
+
+        auto bounds = button.getLocalBounds().toFloat().reduced (0.5f);
+        auto baseColour = backgroundColour;
+        if (isButtonDown)            baseColour = baseColour.darker (0.15f);
+        else if (isMouseOverButton)  baseColour = baseColour.brighter (0.08f);
+
+        g.setColour (baseColour);
+        g.fillRoundedRectangle (bounds, 4.0f);
     }
-
-    juce::Font getPopupMenuFont() override
-    {
-        return juce::Font (juce::FontOptions (dmSansRegular).withHeight (13.0f));
-    }
-
-    void drawLabel (juce::Graphics& g, juce::Label& label) override;
-
-    juce::Font getTextButtonFont (juce::TextButton&, int buttonHeight) override
-    {
-        // Object selector buttons (22px) → JetBrains Mono Medium 12px
-        // Other buttons → JetBrains Mono Medium 10px
-        float h = (buttonHeight >= 22) ? 12.0f : 10.0f;
-        if (jetbrainsMedium)
-            return juce::Font (juce::FontOptions (jetbrainsMedium).withHeight (h));
-        return juce::Font (juce::FontOptions (h));
-    }
-
-    juce::Label* createSliderTextBox (juce::Slider& slider) override
-    {
-        auto* label = juce::LookAndFeel_V4::createSliderTextBox (slider);
-        // Match the small knob value font (JetBrains Mono 11px)
-        if (jetbrainsRegular)
-            label->setFont (juce::Font (juce::FontOptions (jetbrainsRegular).withHeight (11.0f)));
-        else
-            label->setFont (juce::Font (juce::FontOptions (11.0f)));
-        label->setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
-        label->setColour (juce::Label::backgroundWhenEditingColourId, juce::Colour (0xff0A0A14));
-        label->setColour (juce::TextEditor::highlightColourId, juce::Colour (0x407457d1));
-        return label;
-    }
-};
-
-//==============================================================================
-// v0.7: Ableton Echo-style filter graph with two XY-draggable dots
-// HP dot: X=HP freq, Y=HP Q.  LP dot: X=LP freq, Y=LP Q.
-// Draws actual magnitude response curves with resonance peaks.
-//==============================================================================
-class FilterGraphComponent : public juce::Component
-{
-public:
-    FilterGraphComponent();
-
-    void paint (juce::Graphics& g) override;
-    void mouseDown (const juce::MouseEvent& e) override;
-    void mouseDrag (const juce::MouseEvent& e) override;
-    void mouseUp (const juce::MouseEvent& e) override;
-
-    /** Set the HP/LP frequency values (Hz) for display. Call from timer. */
-    void setFrequencies (float hpHz, float lpHz);
-
-    /** Set separate HP and LP resonance Q. Call from timer. */
-    void setQ (float hpQ, float lpQ);
-
-    /** Callback when user drags a handle horizontally (frequency). */
-    std::function<void (float hpHz, float lpHz)> onFrequencyChanged;
-
-    /** Callback when user drags HP Q vertically. */
-    std::function<void (float q)> onHPQChanged;
-
-    /** Callback when user drags LP Q vertically. */
-    std::function<void (float q)> onLPQChanged;
-
-    /** Enable/disable the filter display (dims when off). */
-    void setEnabled (bool enabled) { filterEnabled = enabled; repaint(); }
-
-private:
-    float hpFreq = 20.0f;      // Hz
-    float lpFreq = 20000.0f;   // Hz
-    float hpQ = 0.707f;        // HP resonance
-    float lpQ = 0.707f;        // LP resonance
-    bool  filterEnabled = true;
-
-    static constexpr float kMinFreq = 20.0f;
-    static constexpr float kMaxFreq = 20000.0f;
-
-    enum DragTarget { None, HP, LP };
-    DragTarget currentDrag = None;
-    float dragStartY = 0.0f;
-    float dragStartQ = 0.707f;
-
-    float freqToX (float freqHz) const;
-    float xToFreq (float x) const;
-
-    /** Compute 2nd-order HP magnitude at frequency f given cutoff fc and Q. */
-    static float hpMagnitude (float f, float fc, float q);
-    /** Compute 2nd-order LP magnitude at frequency f given cutoff fc and Q. */
-    static float lpMagnitude (float f, float fc, float q);
-
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FilterGraphComponent)
 };
 
 //==============================================================================
@@ -270,33 +194,14 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
-    void mouseDown (const juce::MouseEvent& e) override;
-    void mouseUp (const juce::MouseEvent& e) override;
-    void mouseMove (const juce::MouseEvent& e) override;
-    void mouseExit (const juce::MouseEvent& e) override;
 
 private:
-    bool smlBadgeHovered = false;
-    bool smlBadgePressed = false;
-    bool fltTagHovered = false;
-    // Layout constants (v0.7: updated bottom panel height)
-    static constexpr int kWindowWidth      = 820;
-    static constexpr int kWindowHeight     = 580;
-    static constexpr int kHeaderHeight     = 52;
-    static constexpr int kRightPanelWidth  = 264;
-    static constexpr int kBottomPanelHeight = 120;
-    static constexpr int kPadding          = 8;
-
     void timerCallback() override;
 
     // Helper for drawing Ableton-style corner selection box
     void drawSelectionBox (juce::Graphics& g, juce::Component& label, juce::Component& slider);
     // Helper for drawing section headers
     void drawSectionHeader (juce::Graphics& g, int x, int y, int w, const juce::String& text);
-    // Helper for drawing styled toggle buttons (fill + border + text)
-    void paintStyledToggle (juce::Graphics& g, juce::TextButton& btn,
-                            const juce::Colour& onColour, const juce::String& text,
-                            float fontSize, juce::Colour textOnColour = juce::Colours::black);
 
     // SpatialMapComponent::Listener
     void objectPositionChanged (int objectIndex, float azimuthDeg, float distance) override;
@@ -319,7 +224,6 @@ private:
     juce::ComboBox outputFormatBox;
     juce::Label outputFormatLabel;
     juce::TextButton tempoSyncButton;
-    juce::TextButton syncDottedButton, syncTripletButton;  // v0.7: note modifier toggles
 
     // Object controls
     std::array<juce::TextButton, OpenSpatialDelayProcessor::MAX_OBJECTS> objectButtons;
@@ -332,10 +236,6 @@ private:
     juce::Slider objDopplerSlider;
     juce::Label objDopplerLabel;
 
-    // v0.7: Per-object pitch shift knob (bottom panel)
-    juce::Slider objPitchShiftSlider;
-    juce::Label objPitchShiftLabel;
-
     // v0.6: Per-object trajectory controls (bottom panel)
     juce::ComboBox objTrajectoryBox;
     juce::Label objTrajectoryLabel;
@@ -344,25 +244,12 @@ private:
 
     // v0.6: Preset browser (header bar)
     juce::ComboBox presetBox;
-    juce::Label presetLabel;
     juce::TextButton presetPrevButton, presetNextButton, presetSaveButton;
     void refreshPresetBox();
 
-    // v0.7: Input format dropdown (header bar)
-    juce::ComboBox inputFormatBox;
-    juce::Label inputFormatLabel;
-
-    // v0.7: Filter graph component (replaces HP/LP knobs in TONE section)
-    FilterGraphComponent filterGraph;
-
-    // v0.6: ADM-OSC Receive toggle + editable port label
+    // v0.6: ADM-OSC toggle + editable port label
     juce::TextButton oscToggleButton;
     juce::Label oscPortLabel;
-
-    // v0.7: ADM-OSC Send toggle + IP/port fields
-    juce::TextButton oscSendToggleButton;
-    juce::Label oscSendIPLabel;
-    juce::Label oscSendPortLabel;
 
     // v0.4: Global air absorption toggle
     juce::TextButton airAbsorptionButton;
@@ -389,8 +276,6 @@ private:
     std::unique_ptr<SliderAttachment> dryWetAttach;
     std::unique_ptr<ComboBoxAttachment> hrtfProfileAttach, syncModeAttach, outputFormatAttach;
     int lastAlgoCategoryShown = -1;  // Track format category to avoid redundant combo rebuilds
-    int lastMaxBusChannels    = -1;  // v0.7: Gate format availability re-check
-    int lastOscPort           = -1;  // v0.7: Gate OSC port label sync
     std::unique_ptr<ButtonAttachment> tempoSyncAttach;
 
     // v0.4: Global DSP attachments
@@ -400,12 +285,6 @@ private:
     std::unique_ptr<SliderAttachment> objAzAttach, objElAttach, objDistAttach;
     std::unique_ptr<ButtonAttachment> objEnabledAttach;
     std::unique_ptr<SliderAttachment> objDopplerAttach;  // v0.4: per-object Doppler amount
-
-    // v0.7: Per-object pitch shift attachment (rebound in selectObject)
-    std::unique_ptr<SliderAttachment> objPitchShiftAttach;
-
-    // v0.7: Input format attachment
-    std::unique_ptr<ComboBoxAttachment> inputFormatAttach;
 
     // v0.6: Per-object trajectory attachments (rebound in selectObject)
     std::unique_ptr<ComboBoxAttachment> objTrajectoryAttach;
@@ -418,16 +297,10 @@ private:
     void updateObjectButtonColours();
     void updateMapFromParameters();
 
-    // v0.7: Smoothed per-tap activity for glow animation
-    float smoothedActivity[OpenSpatialDelayProcessor::MAX_OBJECTS] = {};
-
     // Section header positions (computed in resized, drawn in paint)
     int rpX = 0, rpW = 0;
     int delayHeaderY = 0, toneHeaderY = 0, mixHeaderY = 0, oscHeaderY = 0;
     int objectHeaderY = 0;
-
-    // v0.7: Filter active state (for dimming FLT tag + readout)
-    bool filterIsActive = true;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OpenSpatialDelayEditor)
 };

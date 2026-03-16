@@ -280,3 +280,150 @@ Frozen snapshot in `Archive/v0.5/`:
 
 ### Output
 - 22 output formats (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
+
+---
+
+## v0.6 (2026-03-13) — FROZEN
+**ADM-OSC Receive + Trajectory Animation + Preset System + UI Polish**
+
+Major feature release adding ADM-OSC Receive for external position control, per-object
+trajectory animation (6 shapes), a complete preset system with factory presets and user
+save/load, a 6th HRTF profile, IEM-faithful elevation visualization, and comprehensive
+UI polish across 10 targeted fixes.
+
+### ADM-OSC Receive
+- `juce::OSCReceiver` with `MessageLoopCallback` listener (message thread, safe for APVTS updates)
+- Parses `/adm/obj/N/` namespace: `azim`, `elev`, `dist`, `aed`, `xyz`, `x`, `y`, `z`
+- Cartesian→Polar conversion per ITU-R BS.2127-0: `azDeg = atan2(-x,y)*(180/pi)`, `elDeg = atan2(z,sqrt(x²+y²))*(180/pi)`
+- 500ms override timeout: OSC takes priority over trajectory, auto-releases after timeout
+- Partial Cartesian accumulation for individual `/x`, `/y`, `/z` messages
+- Default port 4002, persisted in state XML as non-APVTS ValueTree property
+- Connection managed by `admOscEnabled` toggle parameter
+- Edge-detect enable/disable transitions in timer callback for auto-reconnect
+
+### Trajectory Animation
+- 6 trajectory shapes per object: None, Spiral, Orbit, Bounce, Figure-8, Random
+- `computeTrajectory()` pure static function (stateless, testable)
+- 60Hz message-thread timer advances phase, writes to APVTS via `setValueNotifyingHost()`
+- Base position captured on shape change (None→active transition)
+- OSC override takes priority — trajectory paused during external control
+- Per-object `trajectoryShape` (0-5) and `trajectorySpeed` (0.1-10.0x) APVTS parameters
+
+### Preset System
+- 8 factory presets: Default plus 7 specialized spatial delay configurations
+- `PresetData` struct with 28 parameters (global + per-tap × 12)
+- User presets: save/load from `~/Library/Application Support/OpenSpatialDelay/Presets/` (JSON)
+- API: `loadPreset()`, `saveUserPreset()`, `loadNextPreset()`, `loadPreviousPreset()`
+- Header UI: ComboBox dropdown + prev/next navigation buttons + Save button
+- Current preset index persisted in state XML
+
+### 6th HRTF Profile
+- Bernschuetz KU100 Full2Deg (CC BY 3.0) — "Spatial" preset
+- 6 HRTF profiles total: Simple (Woodworth), MIT KEMAR, SADIE II D2, CIPIC Subject003, HUTUBS PP2, Bernschuetz KU100
+
+### IEM-Faithful Elevation Visualization
+- Hemisphere alpha: objects above horizon render solid/opaque, below render transparent (0.3 alpha)
+- Selection halo: translucent ring around selected object, alpha varies by hemisphere
+- Asymmetric dot scaling: +5px upward (z > 0), -3px downward (z < 0) — preserves 11px minimum at -90°
+- Path-based faux bold number labels: `GlyphArrangement::createPath()` + `fillPath()` + `strokePath(0.8f)` for guaranteed visual weight regardless of font system
+- Pixel-grid snapping for HiDPI: `std::round()` on dot positions + `juce::roundToInt()` on all compass labels
+- Object outline stroke (1.2px) at full colour for visibility in both hemispheres
+
+### UI Polish (10 Fixes)
+- OSC section relocated from header bar to right panel below MIX (new "OSC" section with `drawSectionHeader`)
+- ELEV slider height matched to adjacent rotary knobs (50×80px, shifted up for alignment)
+- Bottom panel spacing tightened: inter-control gaps compressed (90→84, 70→64, 50→46) to prevent speed knob overflow
+- Preset dropdown height matched to Output Format/Algorithm dropdowns (full 24px `boxH`)
+- HiDPI pixel snapping with `juce::roundToInt()` replacing `(int)` casts throughout
+- OSC port field styled with background (`#151525`) and border (`#334155`) matching ComboBox appearance
+- Elevation label "+90°" offset increased from -10px to -14px for clearance from halo
+- Redundant OSC connection status dot removed (button colour already indicates state)
+- Compass labels (F/B/L/R) pixel-snapped for HiDPI clarity
+- "Port:" label painted between OSC toggle and editable port field in right panel
+
+### Testing Tool
+- `scripts/adm_osc_test.py` — Python CLI using `python-osc` library
+- 7 test modes: `--manual`, `--orbit`, `--sweep`, `--multi`, `--xyz`, `--aed`, `--axes`
+- Configurable port (default 4002), send rate (default 60 Hz), object selection
+- Real-time animation modes with Ctrl+C interruption
+
+### Timer Consolidation
+- Single 60Hz message-thread timer handles 4 responsibilities:
+  1. HRTF profile loading (background → double-buffered renderer)
+  2. OSC connection management (edge-detect enable, reconnect on port change)
+  3. OSC override timeout (per-object 500ms release)
+  4. Trajectory animation (phase advance, APVTS update)
+
+### State Persistence
+- `pluginStateVersion = 10` (v0.5 was version 9)
+- State migration from v0.5 in `setStateInformation()`: v0.5 output format indices mapped to v0.6
+- `oscReceivePort` persisted as non-APVTS ValueTree property
+- `currentPresetIndex` persisted in state XML
+
+### Files
+Frozen snapshot in `Archive/v0.6/`:
+- `PluginProcessor_v0.6.h`
+- `PluginProcessor_v0.6.cpp`
+- `PluginEditor_v0.6.h`
+- `PluginEditor_v0.6.cpp`
+- `CMakeLists_v0.6.txt`
+
+### Output
+- 22 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
+
+---
+
+## v0.7 (2026-03-16) — FROZEN
+**ADM-OSC Send + Output Limiter + Doppler Fix + UI Refinement**
+
+Feature release adding ADM-OSC Send for broadcasting tap positions to external renderers,
+an output limiter to prevent DAW speaker protection muting during self-oscillation, Doppler
+effect fix for orbit trajectories, and continued UI polish.
+
+### ADM-OSC Send
+- `juce::OSCSender` broadcasting `/adm/obj/N/aed` messages to external renderers (SPAT Revolution, L-ISA, Dolby Atmos Renderer)
+- New parameters: `admOscSendEnabled` (bool toggle), non-APVTS: `oscSendIP` (string, default `"127.0.0.1"`), `oscSendPort` (int, default 4003)
+- 30Hz send rate (every 2nd tick of 60Hz timer) per ADM-OSC best practice
+- Position-change gating: only sends when position changes (>0.1° azimuth/elevation, >0.001 distance threshold)
+- UI: SEND toggle + IP field + send port field in OSC section of right panel
+- State persistence: IP and port persisted in state XML
+
+### Output Limiter
+- Musical +2dB ceiling (`outputLimiter()`) prevents DAW speaker protection muting during self-oscillation with high filter resonance
+- Rational approximation soft saturator: linear passthrough below threshold, soft saturation above
+- Modeled after Ableton Echo's output protection approach
+- Applied in all 5 rendering paths: Direct Binaural HRTF, Simple Binaural Woodworth, Stereo Variants, Ambisonics Output, Discrete Surround
+
+### Doppler Effect Fix
+- **Virtual ear offset:** Replaced scalar 3D distance (which is constant during orbit due to trigonometric identity) with distance-to-virtual-ear calculation. 2.5m x-axis offset breaks the symmetry for audible binaural Doppler from orbiting sources
+- **Varispeed threshold lowered:** `readVarispeed()` early-return threshold reduced from 0.05 semitones (~5 cents) to 0.001 (~0.1 cents), eliminating silent gaps at zero-crossings during orbit oscillation
+- **EMA alpha increased:** Exponential moving average smoothing alpha increased from 0.1 to 0.2 for 2x faster velocity tracking of 1Hz orbit oscillation
+
+### Testing Tool Update
+- `scripts/adm_osc_test.py` updated to v0.7 with new `--listen` mode
+- Receives and prints incoming ADM-OSC messages from plugin's OSC Send
+- Configurable listen port (default 4003)
+- Handler for `/adm/obj/*/aed` with formatted output (object ID, azimuth, elevation, distance)
+- Default handler for all other ADM-OSC messages
+- 8 test modes total: `--manual`, `--orbit`, `--sweep`, `--multi`, `--xyz`, `--aed`, `--axes`, `--listen`
+
+### UI Refinements
+- OSC section expanded with SEND toggle, IP field, and send port field
+- Custom font system with DM Sans + JetBrains Mono binary resources
+- Continued UI polish from v0.6 design review
+
+### State Persistence
+- `pluginStateVersion = 11` (v0.6 was version 10)
+- `oscSendIP` and `oscSendPort` persisted as non-APVTS ValueTree properties
+- `admOscSendEnabled` persisted as APVTS parameter
+
+### Files
+Frozen snapshot in `Archive/v0.7/`:
+- `PluginProcessor_v0.7.h`
+- `PluginProcessor_v0.7.cpp`
+- `PluginEditor_v0.7.h`
+- `PluginEditor_v0.7.cpp`
+- `CMakeLists_v0.7.txt`
+
+### Output
+- 22 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)

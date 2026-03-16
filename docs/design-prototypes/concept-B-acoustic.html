@@ -1,0 +1,1610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenSpatialDelay — Concept B: Acoustic / Waveform</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+
+  /* ================================================================
+     OKLCH Color Palette — Acoustic / Waveform — Sound Made Visible
+     Warm tinted neutrals, coral-orange primary, deep teal secondary
+     ================================================================ */
+  :root {
+    --bg-deep:        oklch(9% 0.01 50);
+    --bg-panel:       oklch(13% 0.008 50);
+    --bg-header:      oklch(11% 0.009 50);
+    --bg-recessed:    oklch(7% 0.008 50);
+    --bg-well:        oklch(10% 0.008 50);
+    --border-warm:    oklch(22% 0.01 50);
+    --border-dim:     oklch(17% 0.008 50);
+    --accent-coral:   oklch(75% 0.16 30);
+    --accent-coral-dim: oklch(55% 0.10 30);
+    --accent-teal:    oklch(60% 0.12 195);
+    --accent-teal-dim: oklch(42% 0.08 195);
+    --accent-gold:    oklch(80% 0.12 80);
+    --accent-gold-dim: oklch(58% 0.08 80);
+    --text-cream:     oklch(88% 0.008 60);
+    --text-muted:     oklch(58% 0.015 50);
+    --text-dim:       oklch(38% 0.01 50);
+    --text-whisper:   oklch(28% 0.008 50);
+    --ring-glow:      oklch(75% 0.16 30 / 0.15);
+    --plugin-w: 820px;
+    --plugin-h: 580px;
+    --header-h: 56px;
+    --right-panel-w: 264px;
+    --bottom-panel-h: 150px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: oklch(6% 0.008 50);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: 'Outfit', -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ================================================================
+     Plugin Frame
+     ================================================================ */
+  .plugin {
+    width: var(--plugin-w);
+    height: var(--plugin-h);
+    background: var(--bg-deep);
+    border-radius: 8px;
+    overflow: hidden;
+    display: grid;
+    grid-template-rows: var(--header-h) 1fr var(--bottom-panel-h);
+    grid-template-columns: 1fr var(--right-panel-w);
+    box-shadow:
+      0 0 0 1px var(--border-warm),
+      0 24px 80px rgba(0,0,0,0.55),
+      0 4px 16px rgba(0,0,0,0.35);
+    position: relative;
+  }
+
+  /* ================================================================
+     HEADER — 56px
+     ================================================================ */
+  .header {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    background: var(--bg-header);
+    border-bottom: 1px solid var(--border-warm);
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    gap: 8px;
+    position: relative;
+    z-index: 10;
+  }
+
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      oklch(75% 0.10 30 / 0.25) 20%,
+      oklch(75% 0.16 30 / 0.4) 50%,
+      oklch(75% 0.10 30 / 0.25) 80%,
+      transparent 100%);
+  }
+
+  .sml-badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--accent-coral);
+    border: 1px solid oklch(75% 0.10 30 / 0.35);
+    border-radius: 10px;
+    padding: 2px 6px 1px;
+    flex-shrink: 0;
+  }
+
+  .plugin-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-cream);
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+  }
+
+  .plugin-version {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-left: -2px;
+  }
+
+  .header-spacer { flex: 1; }
+
+  /* Header dropdowns */
+  .header-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .header-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 9px;
+    font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding-left: 2px;
+  }
+
+  .header-select {
+    background: var(--bg-recessed);
+    border: 1px solid var(--border-warm);
+    border-radius: 6px;
+    color: var(--text-cream);
+    font-family: 'Outfit', sans-serif;
+    font-size: 11px;
+    font-weight: 400;
+    padding: 3px 8px;
+    height: 24px;
+    min-width: 120px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L4 4L7 1' stroke='%23897060' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    padding-right: 22px;
+    transition: border-color 0.3s ease;
+  }
+  .header-select:hover { border-color: var(--accent-coral-dim); }
+  .header-select:focus { outline: none; border-color: var(--accent-coral); }
+
+  /* Preset row */
+  .preset-group {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+  }
+
+  .preset-select {
+    width: 130px;
+  }
+
+  .preset-btn {
+    background: var(--bg-recessed);
+    border: 1px solid var(--border-warm);
+    color: var(--text-muted);
+    font-family: 'Outfit', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    height: 24px;
+    padding: 0 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border-radius: 6px;
+  }
+  .preset-btn:hover { border-color: var(--accent-coral-dim); color: var(--text-cream); }
+
+  .preset-nav { width: 24px; text-align: center; }
+  .preset-save { width: 44px; border-radius: 6px; }
+
+  /* ================================================================
+     SPATIAL MAP — The living acoustic field
+     ================================================================ */
+  .spatial-map {
+    grid-column: 1;
+    grid-row: 2;
+    position: relative;
+    overflow: hidden;
+    margin: 4px;
+    border-radius: 6px;
+    background:
+      radial-gradient(ellipse at center, oklch(13% 0.012 40 / 0.6) 0%, oklch(9% 0.01 50 / 0) 70%),
+      var(--bg-deep);
+  }
+
+  /* Interference pattern background */
+  .map-interference {
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-radial-gradient(circle at 50% 50%, transparent 0px, transparent 18px, oklch(22% 0.008 50 / 0.04) 19px, transparent 20px),
+      repeating-radial-gradient(circle at 45% 48%, transparent 0px, transparent 24px, oklch(22% 0.008 50 / 0.03) 25px, transparent 26px),
+      repeating-radial-gradient(circle at 55% 52%, transparent 0px, transparent 21px, oklch(22% 0.008 50 / 0.03) 22px, transparent 23px);
+    opacity: 0.7;
+    pointer-events: none;
+  }
+
+  /* Distance rings — breathing animation */
+  .map-rings {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+
+  .distance-ring {
+    position: absolute;
+    border: 1px solid oklch(75% 0.16 30 / 0.12);
+    border-radius: 50%;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    /* sized by JS to be perfectly circular */
+  }
+
+  .distance-ring:nth-child(1) {
+    animation: breathe 4s ease-in-out infinite;
+    animation-delay: 0s;
+  }
+  .distance-ring:nth-child(2) {
+    animation: breathe 4s ease-in-out infinite;
+    animation-delay: -1s;
+  }
+  .distance-ring:nth-child(3) {
+    animation: breathe 4s ease-in-out infinite;
+    animation-delay: -2s;
+  }
+  .distance-ring:nth-child(4) {
+    animation: breathe 4s ease-in-out infinite;
+    animation-delay: -3s;
+  }
+
+  @keyframes breathe {
+    0%, 100% { transform: translate(-50%, -50%) scale(0.998); opacity: 1; }
+    50%      { transform: translate(-50%, -50%) scale(1.002); opacity: 0.7; }
+  }
+
+  /* Crosshairs — organic, soft */
+  .map-crosshair-h, .map-crosshair-v {
+    position: absolute;
+    pointer-events: none;
+  }
+  .map-crosshair-h {
+    top: 50%; left: 5%; right: 5%;
+    height: 1px;
+    background: oklch(30% 0.01 50 / 0.5);
+    filter: blur(0.3px);
+    transform: translateY(-0.5px);
+  }
+  .map-crosshair-v {
+    left: 50%; top: 5%; bottom: 5%;
+    width: 1px;
+    background: oklch(30% 0.01 50 / 0.5);
+    filter: blur(0.3px);
+    transform: translateX(-0.5px);
+  }
+
+  /* Center listener icon — stylized ear / sound waves */
+  .listener-icon {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 24px; height: 24px;
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  .listener-core {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 6px; height: 6px;
+    background: var(--text-cream);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0.9;
+  }
+
+  .listener-arc {
+    position: absolute;
+    top: 50%; left: 50%;
+    border: 1.2px solid oklch(88% 0.008 60 / 0.35);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .listener-arc:nth-child(2) { width: 12px; height: 12px; border-left-color: transparent; border-bottom-color: transparent; transform: translate(-50%, -50%) rotate(-45deg); }
+  .listener-arc:nth-child(3) { width: 18px; height: 18px; border-left-color: transparent; border-bottom-color: transparent; transform: translate(-50%, -50%) rotate(-45deg); }
+
+  /* Cardinal labels */
+  .cardinal {
+    position: absolute;
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-muted);
+    pointer-events: none;
+    z-index: 5;
+    width: 20px;
+    text-align: center;
+  }
+  .cardinal-f { top: 4%; left: 50%; transform: translateX(-50%); }
+  .cardinal-b { bottom: 3%; left: 50%; transform: translateX(-50%); }
+  .cardinal-l { left: 1%; top: 50%; transform: translateY(-50%); }
+  .cardinal-r { right: 1%; top: 50%; transform: translateY(-50%); }
+
+  /* ================================================================
+     TAP DOTS — Pulsing living entities
+     ================================================================ */
+  .tap-dot {
+    position: absolute;
+    width: 12px; height: 12px;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    cursor: pointer;
+    transition: filter 0.3s ease;
+  }
+
+  .tap-dot:hover { filter: brightness(1.3); }
+  .tap-dot:hover .tap-core { animation-play-state: paused; }
+
+  .tap-core {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    animation: tapPulse 2.5s ease-in-out infinite;
+  }
+
+  .tap-dot[data-tap="1"] .tap-core { background: oklch(70% 0.18 20); animation-delay: 0s; }
+  .tap-dot[data-tap="2"] .tap-core { background: oklch(75% 0.16 45); animation-delay: -0.6s; }
+  .tap-dot[data-tap="3"] .tap-core { background: oklch(80% 0.14 75); animation-delay: -1.2s; }
+  .tap-dot[data-tap="4"] .tap-core { background: oklch(72% 0.14 140); animation-delay: -1.8s; }
+
+  /* Warm hue-shifted palette for all 12 taps */
+  .tap-dot[data-tap="5"] .tap-core  { background: oklch(68% 0.14 160); animation-delay: -0.3s; }
+  .tap-dot[data-tap="6"] .tap-core  { background: oklch(65% 0.13 180); animation-delay: -0.9s; }
+  .tap-dot[data-tap="7"] .tap-core  { background: oklch(62% 0.12 195); animation-delay: -1.5s; }
+  .tap-dot[data-tap="8"] .tap-core  { background: oklch(60% 0.13 220); animation-delay: -2.1s; }
+  .tap-dot[data-tap="9"] .tap-core  { background: oklch(63% 0.15 250); animation-delay: -0.4s; }
+  .tap-dot[data-tap="10"] .tap-core { background: oklch(60% 0.16 280); animation-delay: -1.0s; }
+  .tap-dot[data-tap="11"] .tap-core { background: oklch(65% 0.16 310); animation-delay: -1.6s; }
+  .tap-dot[data-tap="12"] .tap-core { background: oklch(68% 0.17 340); animation-delay: -2.2s; }
+
+  @keyframes tapPulse {
+    0%, 100% { transform: scale(0.9); opacity: 0.7; }
+    50%      { transform: scale(1.1); opacity: 1.0; }
+  }
+
+  /* Tap number label */
+  .tap-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 8px;
+    font-weight: 700;
+    color: oklch(12% 0.01 50);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* Ripple ring emanating from each tap */
+  .tap-ripple {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    animation: rippleExpand 3.5s ease-out infinite;
+  }
+
+  .tap-dot[data-tap="1"] .tap-ripple { border: 1px solid oklch(70% 0.18 20 / 0.5); animation-delay: 0s; }
+  .tap-dot[data-tap="2"] .tap-ripple { border: 1px solid oklch(75% 0.16 45 / 0.5); animation-delay: -0.8s; }
+  .tap-dot[data-tap="3"] .tap-ripple { border: 1px solid oklch(80% 0.14 75 / 0.5); animation-delay: -1.6s; }
+  .tap-dot[data-tap="4"] .tap-ripple { border: 1px solid oklch(72% 0.14 140 / 0.5); animation-delay: -2.4s; }
+
+  @keyframes rippleExpand {
+    0%   { width: 12px; height: 12px; opacity: 0.6; }
+    100% { width: 60px; height: 60px; opacity: 0; }
+  }
+
+  /* Comet trail behind each tap */
+  .tap-trail {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 24px; height: 4px;
+    pointer-events: none;
+    border-radius: 2px;
+    opacity: 0.4;
+    z-index: 1;
+  }
+
+  /* Selection halo */
+  .tap-dot.selected::before {
+    content: '';
+    position: absolute;
+    inset: -5px;
+    border-radius: 50%;
+    border: 1.5px solid currentColor;
+    opacity: 0.5;
+    animation: haloBreath 2s ease-in-out infinite;
+  }
+
+  @keyframes haloBreath {
+    0%, 100% { opacity: 0.3; transform: scale(1); }
+    50%      { opacity: 0.6; transform: scale(1.08); }
+  }
+
+  /* ================================================================
+     RIGHT PANEL — Control sections
+     ================================================================ */
+  .right-panel {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    background: var(--bg-panel);
+    border-left: 1px solid var(--border-warm);
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* Section header */
+  .section-header {
+    font-family: 'Outfit', sans-serif;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 6px 0 4px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-header::before {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, var(--border-warm) 0%, transparent 100%);
+  }
+
+  .section-header::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--border-warm) 100%);
+  }
+
+  .section-header span {
+    flex-shrink: 0;
+  }
+
+  /* Section header with toggle */
+  .section-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 0 4px;
+  }
+
+  .section-header-row .section-header {
+    padding: 0;
+    flex: 1;
+  }
+
+  /* Knob pair row */
+  .knob-row {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    padding: 2px 0 4px;
+  }
+
+  /* ================================================================
+     KNOB — Organic, warm, rounded
+     ================================================================ */
+  .knob {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 90px;
+    gap: 2px;
+  }
+
+  .knob-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 10px;
+    font-weight: 400;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-align: center;
+    height: 14px;
+    line-height: 14px;
+  }
+
+  .knob-svg-wrap {
+    width: 48px;
+    height: 48px;
+    position: relative;
+    cursor: pointer;
+  }
+
+  .knob-svg-wrap svg {
+    width: 48px;
+    height: 48px;
+  }
+
+  .knob-track {
+    fill: none;
+    stroke: oklch(18% 0.008 50);
+    stroke-width: 3;
+    stroke-linecap: round;
+  }
+
+  .knob-value-arc {
+    fill: none;
+    stroke-width: 3;
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 3px currentColor);
+    transition: stroke-dashoffset 0.3s ease;
+  }
+
+  .knob-value-arc.coral  { stroke: var(--accent-coral); color: var(--accent-coral); }
+  .knob-value-arc.teal   { stroke: var(--accent-teal); color: var(--accent-teal); }
+  .knob-value-arc.gold   { stroke: var(--accent-gold); color: var(--accent-gold); }
+
+  /* Indicator dot at end of arc */
+  .knob-indicator {
+    r: 2.5;
+    fill: var(--text-cream);
+    filter: drop-shadow(0 0 2px oklch(88% 0.008 60 / 0.5));
+    transition: all 0.3s ease;
+  }
+
+  .knob-value-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--text-cream);
+    text-align: center;
+    height: 14px;
+    line-height: 14px;
+  }
+
+  /* Sync button group */
+  .sync-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 0;
+  }
+
+  .sync-row {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+  }
+
+  /* Toggle buttons */
+  .toggle-btn {
+    background: var(--bg-recessed);
+    border: 1px solid var(--border-warm);
+    border-radius: 10px;
+    color: var(--text-dim);
+    font-family: 'Outfit', sans-serif;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 10px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    line-height: 16px;
+    height: 20px;
+  }
+
+  .toggle-btn:hover {
+    border-color: var(--accent-coral-dim);
+    color: var(--text-muted);
+  }
+
+  .toggle-btn.active {
+    background: var(--accent-coral);
+    border-color: var(--accent-coral);
+    color: oklch(12% 0.01 50);
+  }
+
+  .toggle-btn.active-teal {
+    background: var(--accent-teal);
+    border-color: var(--accent-teal);
+    color: oklch(12% 0.01 50);
+  }
+
+  .toggle-btn.active-gold {
+    background: var(--accent-gold);
+    border-color: var(--accent-gold);
+    color: oklch(12% 0.01 50);
+  }
+
+  /* OSC section */
+  .osc-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+  }
+
+  .osc-port-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.03em;
+  }
+
+  .osc-port-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--text-cream);
+    background: var(--bg-recessed);
+    border: 1px solid var(--border-dim);
+    border-radius: 4px;
+    padding: 1px 6px;
+    min-width: 44px;
+    text-align: center;
+  }
+
+  /* ================================================================
+     BOTTOM PANEL — Object selector + per-tap controls
+     ================================================================ */
+  .bottom-panel {
+    grid-column: 1;
+    grid-row: 3;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border-warm);
+    padding: 6px 8px 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Object selector row */
+  .obj-selector {
+    display: flex;
+    gap: 2px;
+  }
+
+  .obj-btn {
+    flex: 1;
+    height: 26px;
+    border: 1px solid var(--border-warm);
+    border-radius: 12px;
+    background: var(--bg-recessed);
+    color: var(--text-dim);
+    font-family: 'Outfit', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .obj-btn:hover {
+    border-color: var(--text-muted);
+    color: var(--text-muted);
+  }
+
+  .obj-btn.selected {
+    border-color: transparent;
+    color: oklch(12% 0.01 50);
+    font-weight: 600;
+  }
+
+  .obj-btn.enabled {
+    border-color: var(--border-warm);
+    color: var(--text-muted);
+  }
+
+  /* Per-object controls row */
+  .obj-controls {
+    display: flex;
+    align-items: flex-start;
+    gap: 0;
+    padding-top: 2px;
+  }
+
+  /* ON/OFF pill toggle */
+  .on-off-toggle {
+    width: 38px;
+    height: 22px;
+    border-radius: 11px;
+    background: var(--bg-recessed);
+    border: 1px solid var(--border-warm);
+    cursor: pointer;
+    position: relative;
+    margin-top: 14px;
+    margin-right: 8px;
+    transition: all 0.3s ease;
+    flex-shrink: 0;
+  }
+
+  .on-off-toggle.active {
+    background: var(--accent-coral);
+    border-color: var(--accent-coral);
+  }
+
+  .on-off-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: all 0.3s ease;
+  }
+
+  .on-off-toggle.active::after {
+    left: 18px;
+    background: oklch(12% 0.01 50);
+  }
+
+  .on-off-label {
+    position: absolute;
+    top: -16px;
+    left: 0;
+    font-family: 'Outfit', sans-serif;
+    font-size: 9px;
+    font-weight: 500;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  /* Bottom panel knobs — smaller */
+  .obj-knob {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 80px;
+    gap: 1px;
+    margin-left: 4px;
+  }
+
+  .obj-knob .knob-label {
+    font-size: 9px;
+    height: 13px;
+    line-height: 13px;
+  }
+
+  .obj-knob .knob-svg-wrap {
+    width: 42px;
+    height: 42px;
+  }
+  .obj-knob .knob-svg-wrap svg {
+    width: 42px;
+    height: 42px;
+  }
+
+  .obj-knob .knob-value-text {
+    font-size: 9px;
+    height: 12px;
+    line-height: 12px;
+  }
+
+  /* Elevation — vertical slider style */
+  .obj-elev {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 56px;
+    margin-left: 4px;
+  }
+
+  .elev-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 9px;
+    font-weight: 400;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    height: 13px;
+    line-height: 13px;
+  }
+
+  .elev-track {
+    width: 4px;
+    height: 48px;
+    background: oklch(18% 0.008 50);
+    border-radius: 2px;
+    position: relative;
+    margin: 3px 0;
+  }
+
+  .elev-fill {
+    position: absolute;
+    bottom: 50%;
+    left: 0;
+    width: 100%;
+    background: var(--accent-coral);
+    border-radius: 2px;
+    height: 25%;
+    filter: drop-shadow(0 0 3px oklch(75% 0.16 30 / 0.4));
+    transition: height 0.3s ease;
+  }
+
+  .elev-thumb {
+    position: absolute;
+    left: 50%;
+    bottom: calc(50% + 25% - 4px);
+    width: 10px; height: 10px;
+    background: var(--text-cream);
+    border-radius: 50%;
+    transform: translateX(-50%);
+    filter: drop-shadow(0 0 2px oklch(88% 0.008 60 / 0.4));
+    transition: bottom 0.3s ease;
+  }
+
+  .elev-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--text-cream);
+    height: 12px;
+    line-height: 12px;
+  }
+
+  /* Trajectory dropdown */
+  .obj-traj {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 80px;
+    margin-left: 4px;
+  }
+
+  .traj-select {
+    background: var(--bg-recessed);
+    border: 1px solid var(--border-warm);
+    border-radius: 6px;
+    color: var(--text-cream);
+    font-family: 'Outfit', sans-serif;
+    font-size: 10px;
+    padding: 2px 6px;
+    height: 22px;
+    width: 76px;
+    margin-top: 10px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='8' height='5' viewBox='0 0 8 5' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L4 4L7 1' stroke='%23897060' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+    padding-right: 18px;
+    transition: border-color 0.3s ease;
+  }
+  .traj-select:hover { border-color: var(--accent-gold-dim); }
+
+  /* ================================================================
+     KNOB SVG HELPER — Arc geometry
+     ================================================================ */
+  /* SVG arcs calculated in JS below */
+
+  /* ================================================================
+     ANIMATIONS
+     ================================================================ */
+  @keyframes rippleExpand {
+    0%   { width: 12px; height: 12px; opacity: 0.5; }
+    100% { width: 56px; height: 56px; opacity: 0; }
+  }
+
+  /* Smooth all the things */
+  * { transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+
+  /* Scroll style for right panel */
+  .right-panel::-webkit-scrollbar { width: 3px; }
+  .right-panel::-webkit-scrollbar-track { background: transparent; }
+  .right-panel::-webkit-scrollbar-thumb { background: var(--border-warm); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div class="plugin">
+  <!-- ================================================================
+       HEADER
+       ================================================================ -->
+  <div class="header">
+    <span class="sml-badge">SML</span>
+    <span class="plugin-title">OpenSpatialDelay</span>
+    <span class="plugin-version">v0.7</span>
+
+    <span class="header-spacer"></span>
+
+    <!-- Preset browser -->
+    <div class="preset-group">
+      <div class="header-group">
+        <span class="header-label">Preset</span>
+        <select class="header-select preset-select">
+          <option>Init — Default</option>
+          <option>Spiral Wash</option>
+          <option>Orbital Echo</option>
+          <option>Ping Pong Wide</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:2px;align-items:flex-end;">
+        <button class="preset-btn preset-nav">&lt;</button>
+        <button class="preset-btn preset-nav">&gt;</button>
+        <button class="preset-btn preset-save">Save</button>
+      </div>
+    </div>
+
+    <!-- Output Format -->
+    <div class="header-group">
+      <span class="header-label">Output</span>
+      <select class="header-select" style="min-width:120px;">
+        <option>Binaural</option>
+        <option selected>Stereo</option>
+        <option>5.1 Surround</option>
+        <option>7.1.4 Atmos</option>
+        <option>Ambisonics FOA</option>
+      </select>
+    </div>
+
+    <!-- HRTF Profile / Algorithm -->
+    <div class="header-group">
+      <span class="header-label">Stereo Mode</span>
+      <select class="header-select" style="min-width:120px;">
+        <option selected>Equal Power</option>
+        <option>VBAP</option>
+        <option>XY Pair</option>
+        <option>Mid-Side</option>
+        <option>Blumlein</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       SPATIAL MAP — The Acoustic Field
+       ================================================================ -->
+  <div class="spatial-map" id="spatialMap">
+    <!-- Interference pattern background -->
+    <div class="map-interference"></div>
+
+    <!-- Crosshairs -->
+    <div class="map-crosshair-h"></div>
+    <div class="map-crosshair-v"></div>
+
+    <!-- Distance rings -->
+    <div class="map-rings">
+      <div class="distance-ring"></div>
+      <div class="distance-ring"></div>
+      <div class="distance-ring"></div>
+      <div class="distance-ring"></div>
+    </div>
+
+    <!-- Center listener icon -->
+    <div class="listener-icon">
+      <div class="listener-core"></div>
+      <div class="listener-arc"></div>
+      <div class="listener-arc"></div>
+    </div>
+
+    <!-- Cardinal labels -->
+    <div class="cardinal cardinal-f">F</div>
+    <div class="cardinal cardinal-b">B</div>
+    <div class="cardinal cardinal-l">L</div>
+    <div class="cardinal cardinal-r">R</div>
+
+    <!-- Tap dots (positioned via JS) -->
+    <div class="tap-dot selected" data-tap="1" id="tap1">
+      <div class="tap-trail" id="trail1"></div>
+      <div class="tap-ripple"></div>
+      <div class="tap-core"></div>
+      <div class="tap-label">1</div>
+    </div>
+    <div class="tap-dot" data-tap="2" id="tap2">
+      <div class="tap-trail" id="trail2"></div>
+      <div class="tap-ripple"></div>
+      <div class="tap-core"></div>
+      <div class="tap-label">2</div>
+    </div>
+    <div class="tap-dot" data-tap="3" id="tap3">
+      <div class="tap-trail" id="trail3"></div>
+      <div class="tap-ripple"></div>
+      <div class="tap-core"></div>
+      <div class="tap-label">3</div>
+    </div>
+    <div class="tap-dot" data-tap="4" id="tap4">
+      <div class="tap-trail" id="trail4"></div>
+      <div class="tap-ripple"></div>
+      <div class="tap-core"></div>
+      <div class="tap-label">4</div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       RIGHT PANEL
+       ================================================================ -->
+  <div class="right-panel">
+    <!-- DELAY section -->
+    <div class="section-header"><span>Delay</span></div>
+
+    <div class="knob-row">
+      <div class="knob" id="knob-input">
+        <div class="knob-label">Input</div>
+        <div class="knob-svg-wrap"></div>
+        <div class="knob-value-text">0.0 dB</div>
+      </div>
+      <div class="knob" id="knob-time">
+        <div class="knob-label">Time</div>
+        <div class="knob-svg-wrap"></div>
+        <div class="knob-value-text">350 ms</div>
+      </div>
+    </div>
+
+    <div class="sync-group">
+      <div class="sync-row">
+        <button class="toggle-btn" id="syncBtn">Sync</button>
+        <select class="header-select" style="min-width:70px;height:20px;font-size:10px;padding:1px 6px;">
+          <option>Repeat</option>
+          <option>Dotted</option>
+          <option>Triplet</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="knob-row">
+      <div class="knob" id="knob-feedback">
+        <div class="knob-label">Feedback</div>
+        <div class="knob-svg-wrap"></div>
+        <div class="knob-value-text">45%</div>
+      </div>
+      <div class="knob" id="knob-pitch">
+        <div class="knob-label">Pitch</div>
+        <div class="knob-svg-wrap"></div>
+        <div class="knob-value-text">0 st</div>
+      </div>
+    </div>
+
+    <!-- TONE section -->
+    <div class="section-header-row">
+      <div class="section-header"><span>Tone</span></div>
+      <button class="toggle-btn" id="airBtn" style="font-size:9px;padding:2px 8px;">AIR</button>
+    </div>
+
+    <div class="knob-row">
+      <div class="knob" id="knob-hp">
+        <div class="knob-label">HP</div>
+        <div class="knob-svg-wrap"></div>
+        <div class="knob-value-text">80 Hz</div>
+      </div>
+      <div class="knob" id="knob-lp">
+        <div class="knob-label">LP</div>
+        <div class="knob-svg-wrap"></div>
+        <div class="knob-value-text">12 kHz</div>
+      </div>
+    </div>
+
+    <!-- MIX section -->
+    <div class="section-header"><span>Mix</span></div>
+
+    <div class="knob-row">
+      <div class="knob" id="knob-drywet">
+        <div class="knob-label">Dry/Wet</div>
+        <div class="knob-svg-wrap"></div>
+        <div class="knob-value-text">50%</div>
+      </div>
+      <div class="knob" id="knob-output">
+        <div class="knob-label">Output</div>
+        <div class="knob-svg-wrap"></div>
+        <div class="knob-value-text">0.0 dB</div>
+      </div>
+    </div>
+
+    <!-- OSC section -->
+    <div class="section-header"><span>OSC</span></div>
+
+    <div class="osc-row">
+      <button class="toggle-btn" id="oscBtn">OSC</button>
+      <span class="osc-port-label">Port</span>
+      <span class="osc-port-value">4002</span>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       BOTTOM PANEL
+       ================================================================ -->
+  <div class="bottom-panel">
+    <!-- Object selector buttons -->
+    <div class="obj-selector" id="objSelector">
+      <button class="obj-btn selected" data-obj="1">1</button>
+      <button class="obj-btn enabled" data-obj="2">2</button>
+      <button class="obj-btn enabled" data-obj="3">3</button>
+      <button class="obj-btn enabled" data-obj="4">4</button>
+      <button class="obj-btn" data-obj="5">5</button>
+      <button class="obj-btn" data-obj="6">6</button>
+      <button class="obj-btn" data-obj="7">7</button>
+      <button class="obj-btn" data-obj="8">8</button>
+      <button class="obj-btn" data-obj="9">9</button>
+      <button class="obj-btn" data-obj="10">10</button>
+      <button class="obj-btn" data-obj="11">11</button>
+      <button class="obj-btn" data-obj="12">12</button>
+    </div>
+
+    <!-- Per-object controls -->
+    <div class="obj-controls">
+      <!-- ON/OFF -->
+      <div style="position:relative;">
+        <span class="on-off-label">ON</span>
+        <div class="on-off-toggle active" id="onOffToggle"></div>
+      </div>
+
+      <!-- Azimuth -->
+      <div class="obj-knob" id="knob-azimuth">
+        <div class="knob-label">Azimuth</div>
+        <div class="knob-svg-wrap"></div>
+        <div class="knob-value-text">315&deg;</div>
+      </div>
+
+      <!-- Elevation -->
+      <div class="obj-elev">
+        <span class="elev-label">Elev</span>
+        <div class="elev-track">
+          <div class="elev-fill"></div>
+          <div class="elev-thumb"></div>
+        </div>
+        <span class="elev-value">15&deg;</span>
+      </div>
+
+      <!-- Distance -->
+      <div class="obj-knob" id="knob-distance">
+        <div class="knob-label">Distance</div>
+        <div class="knob-svg-wrap"></div>
+        <div class="knob-value-text">0.50</div>
+      </div>
+
+      <!-- Doppler -->
+      <div class="obj-knob" id="knob-doppler">
+        <div class="knob-label">Doppler</div>
+        <div class="knob-svg-wrap"></div>
+        <div class="knob-value-text">0%</div>
+      </div>
+
+      <!-- Trajectory -->
+      <div class="obj-traj">
+        <span class="knob-label" style="font-size:9px;">Traj</span>
+        <select class="traj-select">
+          <option>None</option>
+          <option>Spiral</option>
+          <option>Orbit</option>
+          <option>Bounce</option>
+          <option>Figure-8</option>
+          <option>Random</option>
+        </select>
+      </div>
+
+      <!-- Speed -->
+      <div class="obj-knob" id="knob-speed">
+        <div class="knob-label">Speed</div>
+        <div class="knob-svg-wrap"></div>
+        <div class="knob-value-text">1.0x</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================
+     JAVASCRIPT — Interactions + Knob rendering + Tap positioning
+     ================================================================ -->
+<script>
+(function() {
+  'use strict';
+
+  // ----------------------------------------------------------------
+  // Tap state
+  // ----------------------------------------------------------------
+  const tapState = {
+    1: { azDeg: 315, dist: 0.5, enabled: true },
+    2: { azDeg: 45,  dist: 0.5, enabled: true },
+    3: { azDeg: 225, dist: 0.5, enabled: true },
+    4: { azDeg: 135, dist: 0.5, enabled: true },
+    5: { azDeg: 0, dist: 0.5, enabled: false },
+    6: { azDeg: 0, dist: 0.5, enabled: false },
+    7: { azDeg: 0, dist: 0.5, enabled: false },
+    8: { azDeg: 0, dist: 0.5, enabled: false },
+    9: { azDeg: 0, dist: 0.5, enabled: false },
+    10: { azDeg: 0, dist: 0.5, enabled: false },
+    11: { azDeg: 0, dist: 0.5, enabled: false },
+    12: { azDeg: 0, dist: 0.5, enabled: false }
+  };
+
+  let selectedTap = 1;
+
+  // Tap colors (warm hue-shifted for enabled taps)
+  const tapColors = {
+    1:  'oklch(70% 0.18 20)',
+    2:  'oklch(75% 0.16 45)',
+    3:  'oklch(80% 0.14 75)',
+    4:  'oklch(72% 0.14 140)',
+    5:  'oklch(68% 0.14 160)',
+    6:  'oklch(65% 0.13 180)',
+    7:  'oklch(62% 0.12 195)',
+    8:  'oklch(60% 0.13 220)',
+    9:  'oklch(63% 0.15 250)',
+    10: 'oklch(60% 0.16 280)',
+    11: 'oklch(65% 0.16 310)',
+    12: 'oklch(68% 0.17 340)'
+  };
+
+  // ----------------------------------------------------------------
+  // Size distance rings to be perfectly circular
+  // ----------------------------------------------------------------
+  function sizeRings() {
+    const map = document.getElementById('spatialMap');
+    const w = map.offsetWidth;
+    const h = map.offsetHeight;
+    const radius = Math.min(w, h) * 0.45;
+    const rings = document.querySelectorAll('.distance-ring');
+    const fractions = [0.25, 0.5, 0.75, 1.0];
+    rings.forEach(function(ring, i) {
+      const diam = fractions[i] * radius * 2;
+      ring.style.width = diam + 'px';
+      ring.style.height = diam + 'px';
+    });
+
+    // Size crosshairs to match outermost ring
+    const hLine = document.querySelector('.map-crosshair-h');
+    const vLine = document.querySelector('.map-crosshair-v');
+    if (hLine) {
+      const halfR = radius;
+      hLine.style.left = (w / 2 - halfR) + 'px';
+      hLine.style.right = 'auto';
+      hLine.style.width = (halfR * 2) + 'px';
+    }
+    if (vLine) {
+      const halfR = radius;
+      vLine.style.top = (h / 2 - halfR) + 'px';
+      vLine.style.bottom = 'auto';
+      vLine.style.height = (halfR * 2) + 'px';
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // Position taps on spatial map
+  // ----------------------------------------------------------------
+  function positionTaps() {
+    const map = document.getElementById('spatialMap');
+    const rect = map.getBoundingClientRect();
+    const w = map.offsetWidth;
+    const h = map.offsetHeight;
+    const radius = Math.min(w, h) * 0.45;
+    const cx = w * 0.5;
+    const cy = h * 0.5;
+
+    for (let i = 1; i <= 12; i++) {
+      const el = document.getElementById('tap' + i);
+      if (!el) continue;
+
+      const state = tapState[i];
+      if (!state.enabled) {
+        el.style.display = 'none';
+        continue;
+      }
+
+      el.style.display = '';
+      const azRad = state.azDeg * Math.PI / 180;
+      // Plugin convention: azimuth 0 = front, CW positive
+      // x = cx - sin(az) * dist * radius  (left = positive azimuth)
+      // y = cy - cos(az) * dist * radius  (front = up)
+      const px = cx - Math.sin(azRad) * state.dist * radius;
+      const py = cy - Math.cos(azRad) * state.dist * radius;
+
+      el.style.left = px + 'px';
+      el.style.top  = py + 'px';
+
+      // Position trail (comet tail pointing away from center)
+      const trail = document.getElementById('trail' + i);
+      if (trail) {
+        // Trail points from tap toward center (visually: "away from movement direction")
+        const dx = cx - px;
+        const dy = cy - py;
+        const len = Math.sqrt(dx*dx + dy*dy);
+        if (len > 1) {
+          const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+          // Trail extends AWAY from center (opposite direction)
+          trail.style.transform = 'translate(-100%, -50%) rotate(' + (angle + 180) + 'deg)';
+          trail.style.transformOrigin = 'right center';
+          trail.style.background = 'linear-gradient(90deg, transparent, ' + tapColors[i] + ')';
+          trail.style.opacity = '0.35';
+        }
+      }
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // SVG Knob Renderer
+  // ----------------------------------------------------------------
+  function createKnobSVG(container, value01, colorClass, size) {
+    size = size || 48;
+    const wrap = container.querySelector('.knob-svg-wrap');
+    if (!wrap) return;
+
+    const r = (size - 6) / 2;
+    const cx = size / 2;
+    const cy = size / 2;
+    const startAngle = 135;  // degrees
+    const endAngle = 405;    // degrees
+    const range = endAngle - startAngle;
+
+    // Arc helper
+    function polarToCart(cx, cy, r, angleDeg) {
+      const rad = (angleDeg - 90) * Math.PI / 180;
+      return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+    }
+
+    function describeArc(cx, cy, r, startAng, endAng) {
+      const s = polarToCart(cx, cy, r, startAng);
+      const e = polarToCart(cx, cy, r, endAng);
+      const largeArc = (endAng - startAng) > 180 ? 1 : 0;
+      return 'M ' + s.x + ' ' + s.y + ' A ' + r + ' ' + r + ' 0 ' + largeArc + ' 1 ' + e.x + ' ' + e.y;
+    }
+
+    const valueAngle = startAngle + value01 * range;
+    const indicatorPos = polarToCart(cx, cy, r, valueAngle);
+
+    // Track path
+    const trackPath = describeArc(cx, cy, r, startAngle, endAngle);
+    // Value path
+    const valuePath = value01 > 0.005 ? describeArc(cx, cy, r, startAngle, valueAngle) : '';
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', size);
+    svg.setAttribute('height', size);
+    svg.setAttribute('viewBox', '0 0 ' + size + ' ' + size);
+
+    // Soft well background
+    const bgCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    bgCircle.setAttribute('cx', cx);
+    bgCircle.setAttribute('cy', cy);
+    bgCircle.setAttribute('r', r - 4);
+    bgCircle.setAttribute('fill', 'oklch(10% 0.006 50)');
+    bgCircle.setAttribute('filter', 'url(#innerShadow)');
+    svg.appendChild(bgCircle);
+
+    // Define inner shadow filter
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    const filter = document.createElementNS('http://www.w3.org/2000/svg', 'filter');
+    filter.setAttribute('id', 'innerShadow');
+    filter.setAttribute('x', '-50%'); filter.setAttribute('y', '-50%');
+    filter.setAttribute('width', '200%'); filter.setAttribute('height', '200%');
+    const feFlood = document.createElementNS('http://www.w3.org/2000/svg', 'feFlood');
+    feFlood.setAttribute('flood-color', 'black');
+    feFlood.setAttribute('flood-opacity', '0.3');
+    filter.appendChild(feFlood);
+    const feComp = document.createElementNS('http://www.w3.org/2000/svg', 'feComposite');
+    feComp.setAttribute('in2', 'SourceAlpha'); feComp.setAttribute('operator', 'in');
+    filter.appendChild(feComp);
+    const feBlur = document.createElementNS('http://www.w3.org/2000/svg', 'feGaussianBlur');
+    feBlur.setAttribute('stdDeviation', '2');
+    filter.appendChild(feBlur);
+    const feOff = document.createElementNS('http://www.w3.org/2000/svg', 'feOffset');
+    feOff.setAttribute('dx', '0'); feOff.setAttribute('dy', '1');
+    filter.appendChild(feOff);
+    const feMerge = document.createElementNS('http://www.w3.org/2000/svg', 'feMerge');
+    const feMN1 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+    feMerge.appendChild(feMN1);
+    const feMN2 = document.createElementNS('http://www.w3.org/2000/svg', 'feMergeNode');
+    feMN2.setAttribute('in', 'SourceGraphic');
+    feMerge.appendChild(feMN2);
+    filter.appendChild(feMerge);
+    defs.appendChild(filter);
+    svg.appendChild(defs);
+
+    // Track
+    const track = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    track.setAttribute('d', trackPath);
+    track.setAttribute('class', 'knob-track');
+    svg.appendChild(track);
+
+    // Value arc
+    if (valuePath) {
+      const arc = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      arc.setAttribute('d', valuePath);
+      arc.setAttribute('class', 'knob-value-arc ' + colorClass);
+      svg.appendChild(arc);
+    }
+
+    // Indicator dot
+    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    dot.setAttribute('cx', indicatorPos.x);
+    dot.setAttribute('cy', indicatorPos.y);
+    dot.setAttribute('class', 'knob-indicator');
+    svg.appendChild(dot);
+
+    wrap.innerHTML = '';
+    wrap.appendChild(svg);
+  }
+
+  // ----------------------------------------------------------------
+  // Initialize all knobs
+  // ----------------------------------------------------------------
+  function initKnobs() {
+    // Right panel knobs — [id, value01, colorClass]
+    const knobs = [
+      ['knob-input',    0.5,   'coral'],   // 0 dB
+      ['knob-time',     0.35,  'coral'],   // 350ms
+      ['knob-feedback', 0.45,  'coral'],   // 45%
+      ['knob-pitch',    0.5,   'coral'],   // 0 st (center)
+      ['knob-hp',       0.08,  'teal'],    // 80 Hz
+      ['knob-lp',       0.85,  'teal'],    // 12 kHz
+      ['knob-drywet',   0.5,   'gold'],    // 50%
+      ['knob-output',   0.5,   'gold'],    // 0 dB
+    ];
+
+    knobs.forEach(function(k) {
+      const el = document.getElementById(k[0]);
+      if (el) createKnobSVG(el, k[1], k[2], 48);
+    });
+
+    // Bottom panel knobs — smaller
+    const objKnobs = [
+      ['knob-azimuth',  315/360, 'coral'],
+      ['knob-distance', 0.5,     'coral'],
+      ['knob-doppler',  0,       'gold'],
+      ['knob-speed',    0.5,     'gold'],
+    ];
+
+    objKnobs.forEach(function(k) {
+      const el = document.getElementById(k[0]);
+      if (el) createKnobSVG(el, k[1], k[2], 42);
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Object selector interaction
+  // ----------------------------------------------------------------
+  function selectObject(num) {
+    selectedTap = num;
+
+    // Update selector buttons
+    document.querySelectorAll('.obj-btn').forEach(function(btn) {
+      const n = parseInt(btn.dataset.obj);
+      btn.classList.toggle('selected', n === num);
+      if (n === num) {
+        btn.style.background = tapColors[n];
+        btn.style.borderColor = 'transparent';
+        btn.style.color = 'oklch(12% 0.01 50)';
+      } else if (tapState[n].enabled) {
+        btn.classList.add('enabled');
+        btn.style.background = '';
+        btn.style.borderColor = '';
+        btn.style.color = '';
+      } else {
+        btn.classList.remove('enabled');
+        btn.style.background = '';
+        btn.style.borderColor = '';
+        btn.style.color = '';
+      }
+    });
+
+    // Update tap dot selection
+    document.querySelectorAll('.tap-dot').forEach(function(dot) {
+      const n = parseInt(dot.dataset.tap);
+      dot.classList.toggle('selected', n === num);
+      dot.style.color = tapColors[n];
+    });
+
+    // Update ON/OFF toggle
+    const toggle = document.getElementById('onOffToggle');
+    toggle.classList.toggle('active', tapState[num].enabled);
+
+    // Update knob values for selected tap
+    updateObjControls(num);
+  }
+
+  function updateObjControls(num) {
+    const state = tapState[num];
+    // Update azimuth value text
+    const azKnob = document.getElementById('knob-azimuth');
+    if (azKnob) {
+      const valText = azKnob.querySelector('.knob-value-text');
+      if (valText) valText.textContent = Math.round(state.azDeg) + '\u00B0';
+      createKnobSVG(azKnob, ((state.azDeg % 360) + 360) % 360 / 360, 'coral', 42);
+    }
+    const distKnob = document.getElementById('knob-distance');
+    if (distKnob) {
+      const valText = distKnob.querySelector('.knob-value-text');
+      if (valText) valText.textContent = state.dist.toFixed(2);
+      createKnobSVG(distKnob, state.dist, 'coral', 42);
+    }
+  }
+
+  // ----------------------------------------------------------------
+  // Click handlers
+  // ----------------------------------------------------------------
+  document.getElementById('objSelector').addEventListener('click', function(e) {
+    const btn = e.target.closest('.obj-btn');
+    if (!btn) return;
+    selectObject(parseInt(btn.dataset.obj));
+  });
+
+  // Tap dots clickable on map
+  document.querySelectorAll('.tap-dot').forEach(function(dot) {
+    dot.addEventListener('click', function() {
+      selectObject(parseInt(dot.dataset.tap));
+    });
+  });
+
+  // ON/OFF toggle
+  document.getElementById('onOffToggle').addEventListener('click', function() {
+    tapState[selectedTap].enabled = !tapState[selectedTap].enabled;
+    this.classList.toggle('active', tapState[selectedTap].enabled);
+
+    // Show/hide tap dot on map
+    const tapEl = document.getElementById('tap' + selectedTap);
+    if (tapEl) {
+      tapEl.style.display = tapState[selectedTap].enabled ? '' : 'none';
+    }
+
+    // Update selector button
+    const btn = document.querySelector('.obj-btn[data-obj="' + selectedTap + '"]');
+    if (btn) {
+      if (tapState[selectedTap].enabled) {
+        btn.classList.add('enabled');
+      } else {
+        btn.classList.remove('enabled');
+      }
+    }
+    positionTaps();
+    selectObject(selectedTap);
+  });
+
+  // Toggle buttons (SYNC, AIR, OSC)
+  document.getElementById('syncBtn').addEventListener('click', function() {
+    this.classList.toggle('active');
+  });
+
+  document.getElementById('airBtn').addEventListener('click', function() {
+    this.classList.toggle('active-teal');
+  });
+
+  document.getElementById('oscBtn').addEventListener('click', function() {
+    this.classList.toggle('active-teal');
+  });
+
+  // ----------------------------------------------------------------
+  // Initialize
+  // ----------------------------------------------------------------
+  window.addEventListener('load', function() {
+    initKnobs();
+    sizeRings();
+    positionTaps();
+    selectObject(1);
+  });
+
+  window.addEventListener('resize', function() {
+    sizeRings();
+    positionTaps();
+  });
+
+  // Also reposition when map dimensions are available
+  // (RAF to catch post-layout)
+  requestAnimationFrame(function() {
+    requestAnimationFrame(function() {
+      sizeRings();
+      positionTaps();
+    });
+  });
+
+})();
+</script>
+
+</body>
+</html>

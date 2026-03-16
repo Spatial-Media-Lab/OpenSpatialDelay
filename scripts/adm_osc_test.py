@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-ADM-OSC Testing Tool for OpenSpatialDelay v0.6
+ADM-OSC Testing Tool for OpenSpatialDelay v0.7
 
-Sends ADM-OSC position messages to the plugin's OSC receiver for testing.
-Supports polar (azimuth/elevation/distance) and Cartesian (xyz) messages.
+Sends ADM-OSC position messages to the plugin's OSC receiver for testing,
+or listens for outgoing ADM-OSC messages from the plugin's OSC sender.
 
 Dependencies:
     pip install python-osc
@@ -27,6 +27,10 @@ Usage:
     # Send combined AED (azimuth, elevation, distance) message
     python scripts/adm_osc_test.py --aed 1 90.0 20.0 0.8
 
+    # Listen for ADM-OSC Send messages from the plugin (default port 4003)
+    python scripts/adm_osc_test.py --listen
+    python scripts/adm_osc_test.py --listen --listen-port 4003
+
     # Change target port (default: 4002)
     python scripts/adm_osc_test.py --orbit 1 --port 4002
 
@@ -41,6 +45,8 @@ import time
 
 try:
     from pythonosc import udp_client
+    from pythonosc import dispatcher as osc_dispatcher
+    from pythonosc import osc_server
 except ImportError:
     print("Error: python-osc not installed. Run: pip install python-osc")
     sys.exit(1)
@@ -147,16 +153,48 @@ def run_individual_axes(client, obj, rate):
         print("\nStopped.")
 
 
+def run_listen(port):
+    """Listen for incoming ADM-OSC messages and print them."""
+    print(f"Listening for ADM-OSC messages on port {port} (Ctrl+C to stop)")
+    msg_count = [0]
+
+    def handle_aed(address, *args):
+        msg_count[0] += 1
+        # Extract object number from address: /adm/obj/N/aed
+        parts = address.split("/")
+        obj = parts[3] if len(parts) >= 5 else "?"
+        if len(args) >= 3:
+            print(f"  [{msg_count[0]:6d}] obj {obj:>2s}  az={args[0]:+8.2f}°  el={args[1]:+7.2f}°  dist={args[2]:.3f}")
+        else:
+            print(f"  [{msg_count[0]:6d}] {address} {list(args)}")
+
+    def handle_default(address, *args):
+        msg_count[0] += 1
+        print(f"  [{msg_count[0]:6d}] {address} {list(args)}")
+
+    d = osc_dispatcher.Dispatcher()
+    d.map("/adm/obj/*/aed", handle_aed)
+    d.set_default_handler(handle_default)
+
+    server = osc_server.BlockingOSCUDPServer(("0.0.0.0", port), d)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print(f"\nStopped. Received {msg_count[0]} messages.")
+        server.server_close()
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="ADM-OSC Testing Tool for OpenSpatialDelay v0.6",
+        description="ADM-OSC Testing Tool for OpenSpatialDelay v0.7",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
 
-    parser.add_argument("--port", type=int, default=4002, help="OSC target port (default: 4002)")
+    parser.add_argument("--port", type=int, default=4002, help="OSC target port for sending (default: 4002)")
     parser.add_argument("--host", type=str, default="127.0.0.1", help="OSC target host (default: 127.0.0.1)")
     parser.add_argument("--rate", type=int, default=60, help="Send rate in Hz for continuous modes (default: 60)")
+    parser.add_argument("--listen-port", type=int, default=4003, help="Port to listen on in --listen mode (default: 4003)")
 
     # Mutually exclusive test modes
     group = parser.add_mutually_exclusive_group(required=True)
@@ -174,8 +212,14 @@ def main():
                        help="Send combined AED message: object# azimuth elevation distance")
     group.add_argument("--axes", type=int, metavar="OBJ",
                        help="Send individual /x, /y, /z messages (test partial Cartesian)")
+    group.add_argument("--listen", action="store_true",
+                       help="Listen for ADM-OSC Send messages from the plugin")
 
     args = parser.parse_args()
+
+    if args.listen:
+        run_listen(args.listen_port)
+        return
 
     client = udp_client.SimpleUDPClient(args.host, args.port)
     print(f"ADM-OSC Test → {args.host}:{args.port}")
