@@ -2068,9 +2068,9 @@ void OpenSpatialDelayEditor::drawSelectionBox (juce::Graphics& g, juce::Componen
 
 void OpenSpatialDelayEditor::drawSectionHeader (juce::Graphics& g, int x, int y, int w, const juce::String& text)
 {
-    // Observatory v6: JetBrains Mono Bold 8.5px, wide tracking
+    // Observatory v6: JetBrains Mono Bold, wide tracking
     g.setColour (Colours_OSD::textDim);
-    juce::Font headerFont = makeFont (ableton12Look.jetbrainsBold, 10.5f, 0.15f);
+    juce::Font headerFont = makeFont (ableton12Look.jetbrainsBold, 11.0f, 0.15f);
     g.setFont (headerFont);
     g.drawText (text, x, y, w, 12, juce::Justification::centredLeft);
     juce::GlyphArrangement glyphs;
@@ -2194,8 +2194,8 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
     {
         auto btnBounds = objInputChannelButton->getBounds();
         g.setColour (Colours_OSD::textDim);
-        g.setFont (makeFont (ableton12Look.jetbrainsMedium, 8.5f, 0.10f));
-        g.drawText ("INPUT", btnBounds.getX(), btnBounds.getY() - 9, btnBounds.getWidth(), 9,
+        g.setFont (makeFont (ableton12Look.jetbrainsMedium, 10.0f, 0.12f));
+        g.drawText ("INPUT", btnBounds.getX(), btnBounds.getY() - 10, btnBounds.getWidth(), 10,
                     juce::Justification::centred);
     }
 
@@ -2211,8 +2211,8 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         auto fwdBounds = objTrajectoryFwdButton->getBounds();
         int dirLabelW = fwdBounds.getRight() - revBounds.getX();
         g.setColour (Colours_OSD::textDim);
-        g.setFont (makeFont (ableton12Look.jetbrainsMedium, 8.5f, 0.10f));
-        g.drawText ("DIR", revBounds.getX(), revBounds.getY() - 10, dirLabelW, 10,
+        g.setFont (makeFont (ableton12Look.jetbrainsMedium, 10.0f, 0.12f));
+        g.drawText ("DIRECTION", revBounds.getX(), revBounds.getY() - 10, dirLabelW, 10,
                     juce::Justification::centred);
     }
 
@@ -2261,7 +2261,7 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         auto filterBounds = filterGraph.getBounds();
         float readoutAlpha = filterIsActive ? 1.0f : 0.3f;
         g.setColour (Colours_OSD::textDim.withAlpha (readoutAlpha));
-        g.setFont (makeFont (ableton12Look.jetbrainsRegular, 10.0f, 0.04f));
+        g.setFont (makeFont (ableton12Look.jetbrainsRegular, 11.0f, 0.04f));
         g.drawText ("HP " + hpStr + "  Res " + juce::String (hpq, 2)
                     + "    LP " + lpStr + "  Res " + juce::String (lpq, 2),
                     filterBounds.getX(), filterBounds.getBottom() + 2,
