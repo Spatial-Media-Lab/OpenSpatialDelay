@@ -518,6 +518,31 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID ("airAbsorption", 4), "Air Absorption", false));
 
+    // v0.8: Wobble modulation (delay time LFO)
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID ("wobbleAmount", 8), "Wobble Amount",
+        juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f,
+        juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (
+            [](float value, int) {
+                if (value < 10.0f)
+                    return juce::String (value, 1) + "%";
+                return juce::String (juce::roundToInt (value)) + "%";
+            })));
+
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID ("wobbleMorph", 8), "Wobble Morph",
+        juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f,
+        juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (
+            [](float value, int) {
+                if (value < 10.0f)
+                    return juce::String (value, 1) + "%";
+                return juce::String (juce::roundToInt (value)) + "%";
+            })));
+
+    // v0.8: Wobble modulation enable toggle
+    params.push_back (std::make_unique<juce::AudioParameterBool> (
+        juce::ParameterID ("wobbleEnabled", 8), "Wobble Enabled", false));
+
     // --- Per-object parameters ------------------------------------------------
     for (int i = 0; i < MAX_OBJECTS; ++i)
     {
@@ -565,7 +590,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (
                 [](float value, int) { return juce::String (juce::roundToInt(value * 100.0f)) + "%"; })));
 
-        // v0.7: Per-object pitch shift override (semitones, integer ±24, 0=use global cumulative)
+        // v0.8: Per-object pitch shift offset (semitones, integer ±24, additive on top of global cumulative)
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("pitchShift"), name ("Pitch Shift"),
             juce::NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 0.0f,
@@ -582,6 +607,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             juce::NormalisableRange<float> (0.0f, 5.0f, 0.01f), 0.3f,
             juce::AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
                 [](float value, int) { return juce::String (value, 2) + " Hz"; })));
+
+        // v0.8: Per-object trajectory direction (0=Forward/CCW, 1=Reverse/CW)
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            id ("trajectoryDirection"), name ("Trajectory Direction"),
+            juce::StringArray { "Forward", "Reverse" }, 0));
+
+        // v0.8: Per-object input channel selection (only active when Input Format = Stereo)
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            id ("inputChannel"), name ("Input Channel"),
+            juce::StringArray { "L+R", "L", "R" }, 0));
     }
 
     // v0.7: Input format (Mono / Stereo)
@@ -1138,8 +1173,13 @@ void OpenSpatialDelayProcessor::timerCallback()
             if (trajectoryPhase[t] >= 1.0f)
                 trajectoryPhase[t] -= std::floor (trajectoryPhase[t]);
 
+            // v0.8: Read trajectory direction (0=Forward, 1=Reverse)
+            bool reverse = (cachedParam_trajectoryDirection[t] != nullptr
+                            && cachedParam_trajectoryDirection[t]->load() > 0.5f);
+
             auto result = computeTrajectory (shape, trajectoryPhase[t],
-                                             baseAzimuth[t], baseElevation[t], baseDistance[t]);
+                                             baseAzimuth[t], baseElevation[t], baseDistance[t],
+                                             reverse);
 
             // Only write parameters that this trajectory shape actively controls
             auto objStr = juce::String (t + 1);
@@ -1200,8 +1240,8 @@ void OpenSpatialDelayProcessor::timerCallback()
 //==============================================================================
 OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     : AudioProcessor (BusesProperties()
-                        .withInput  ("Input",  juce::AudioChannelSet::mono(),   true)
-                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+                        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                        .withOutput ("Output", juce::AudioChannelSet::discreteChannels (50), true)),
       apvts (*this, nullptr, "Parameters", createParameterLayout())
 {
     // Initialize polymorphic algorithm pointer array (O(1) index lookup)
@@ -1225,6 +1265,8 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
         cachedParam_pitchShift[i]    = apvts.getRawParameterValue (prefix + "pitchShift");
         cachedParam_trajectoryShape[i] = apvts.getRawParameterValue (prefix + "trajectoryShape");
         cachedParam_trajectorySpeed[i] = apvts.getRawParameterValue (prefix + "trajectorySpeed");
+        cachedParam_trajectoryDirection[i] = apvts.getRawParameterValue (prefix + "trajectoryDirection");
+        cachedParam_inputChannel[i]      = apvts.getRawParameterValue (prefix + "inputChannel");
     }
 
     // v0.6: ADM-OSC global parameter pointer
@@ -1322,7 +1364,7 @@ const OpenSpatialDelayProcessor::PresetData
     {
         "Default",
         500.0f, false, 4.0f, 0, 0.3f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
+        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
         {
             { true, -45.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 1: front-left
             { true,  45.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 2: front-right
@@ -1335,7 +1377,7 @@ const OpenSpatialDelayProcessor::PresetData
     {
         "Stereo Ping-Pong",
         350.0f, false, 4.0f, 0, 0.5f, 18000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
+        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
         {
             { true, -90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 1: hard left
             { true,  90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 2: hard right
@@ -1346,7 +1388,7 @@ const OpenSpatialDelayProcessor::PresetData
     {
         "Circle (Quad)",
         250.0f, false, 4.0f, 0, 0.4f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
+        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
         {
             { true,   0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 1: front
             { true,  90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 2: right
@@ -1359,7 +1401,7 @@ const OpenSpatialDelayProcessor::PresetData
     {
         "Surround 5.1",
         300.0f, false, 4.0f, 0, 0.35f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
+        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
         {
             { true,    0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // C
             { true,  -30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // L
@@ -1373,7 +1415,7 @@ const OpenSpatialDelayProcessor::PresetData
     {
         "Surround 7.1",
         250.0f, false, 4.0f, 0, 0.35f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
+        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
         {
             { true,    0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // C
             { true,  -30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // L
@@ -1389,7 +1431,7 @@ const OpenSpatialDelayProcessor::PresetData
     {
         "Atmos 7.1.4",
         200.0f, false, 4.0f, 0, 0.3f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
+        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
         {
             { true,    0.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // C
             { true,  -30.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // L
@@ -1409,7 +1451,7 @@ const OpenSpatialDelayProcessor::PresetData
     {
         "Rising Spiral",
         200.0f, false, 4.0f, 0, 0.4f, 16000.0f, 40.0f, 2.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
+        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
         {
             { true,    0.0f,  -20.0f, 0.7f, 0.2f, 0.0f, 2 /*Orbit*/, 1.5f },
             { true,   45.0f,  -10.0f, 0.6f, 0.2f, 0.0f, 2 /*Orbit*/, 1.8f },
@@ -1426,7 +1468,7 @@ const OpenSpatialDelayProcessor::PresetData
     {
         "Falling Cascade",
         350.0f, false, 4.0f, 0, 0.45f, 14000.0f, 30.0f, -1.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
+        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
         {
             { true,  -30.0f,  40.0f, 0.3f, 0.1f, 0.0f, 0, 1.0f },   // High left
             { true,   60.0f,  25.0f, 0.4f, 0.1f, 0.0f, 0, 1.0f },   // Mid-high right
@@ -1500,6 +1542,9 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
     setFloat  ("inputGain",    preset->inputGain);
     setFloat  ("outputGain",   preset->outputGain);
     setBool   ("airAbsorption", preset->airAbsorption);
+    setBool   ("wobbleEnabled", preset->wobbleEnabled);
+    setFloat  ("wobbleAmount", preset->wobbleAmount);
+    setFloat  ("wobbleMorph",  preset->wobbleMorph);
     setChoice ("algorithm",    preset->algorithm);
     setChoice ("hrtfProfile",  preset->hrtfProfile);
     // NOTE: outputFormat, admOscEnabled, oscReceivePort are NOT modified by presets
@@ -1518,6 +1563,8 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
         setFloat  (prefix + "pitchShift",      tap.pitchShift);
         setChoice (prefix + "trajectoryShape", tap.trajectoryShape);
         setFloat  (prefix + "trajectorySpeed", tap.trajectorySpeed);
+        setChoice (prefix + "trajectoryDirection", tap.trajectoryDirection);
+        setChoice (prefix + "inputChannel",        tap.inputChannel);
     }
 
     currentPresetIndex = index;
@@ -1552,6 +1599,9 @@ OpenSpatialDelayProcessor::PresetData OpenSpatialDelayProcessor::captureCurrentS
     pd.inputGain    = apvts.getRawParameterValue ("inputGain")->load();
     pd.outputGain   = apvts.getRawParameterValue ("outputGain")->load();
     pd.airAbsorption = apvts.getRawParameterValue ("airAbsorption")->load() > 0.5f;
+    pd.wobbleEnabled = apvts.getRawParameterValue ("wobbleEnabled")->load() > 0.5f;
+    pd.wobbleAmount  = apvts.getRawParameterValue ("wobbleAmount")->load();
+    pd.wobbleMorph   = apvts.getRawParameterValue ("wobbleMorph")->load();
     pd.algorithm    = static_cast<int> (apvts.getRawParameterValue ("algorithm")->load());
     pd.hrtfProfile  = static_cast<int> (apvts.getRawParameterValue ("hrtfProfile")->load());
 
@@ -1567,6 +1617,8 @@ OpenSpatialDelayProcessor::PresetData OpenSpatialDelayProcessor::captureCurrentS
         tap.pitchShift      = apvts.getRawParameterValue (prefix + "pitchShift")->load();
         tap.trajectoryShape = static_cast<int> (apvts.getRawParameterValue (prefix + "trajectoryShape")->load());
         tap.trajectorySpeed = apvts.getRawParameterValue (prefix + "trajectorySpeed")->load();
+        tap.trajectoryDirection = static_cast<int> (apvts.getRawParameterValue (prefix + "trajectoryDirection")->load());
+        tap.inputChannel        = static_cast<int> (apvts.getRawParameterValue (prefix + "inputChannel")->load());
     }
 
     return pd;
@@ -1592,6 +1644,9 @@ juce::String OpenSpatialDelayProcessor::serializePresetToJson (const PresetData&
     obj->setProperty ("inputGain",     pd.inputGain);
     obj->setProperty ("outputGain",    pd.outputGain);
     obj->setProperty ("airAbsorption", pd.airAbsorption);
+    obj->setProperty ("wobbleEnabled", pd.wobbleEnabled);
+    obj->setProperty ("wobbleAmount",  pd.wobbleAmount);
+    obj->setProperty ("wobbleMorph",   pd.wobbleMorph);
     obj->setProperty ("algorithm",     pd.algorithm);
     obj->setProperty ("hrtfProfile",   pd.hrtfProfile);
 
@@ -1608,6 +1663,8 @@ juce::String OpenSpatialDelayProcessor::serializePresetToJson (const PresetData&
         tapObj->setProperty ("pitchShift",      tap.pitchShift);
         tapObj->setProperty ("trajectoryShape", tap.trajectoryShape);
         tapObj->setProperty ("trajectorySpeed", tap.trajectorySpeed);
+        tapObj->setProperty ("trajectoryDirection", tap.trajectoryDirection);
+        tapObj->setProperty ("inputChannel",        tap.inputChannel);
         tapsArray.add (juce::var (tapObj));
     }
     obj->setProperty ("taps", tapsArray);
@@ -1635,6 +1692,9 @@ OpenSpatialDelayProcessor::PresetData
         pd.inputGain     = static_cast<float> (obj->getProperty ("inputGain"));
         pd.outputGain    = static_cast<float> (obj->getProperty ("outputGain"));
         pd.airAbsorption = static_cast<bool>  (obj->getProperty ("airAbsorption"));
+        pd.wobbleEnabled = static_cast<bool>  (obj->getProperty ("wobbleEnabled"));
+        pd.wobbleAmount  = static_cast<float> (obj->getProperty ("wobbleAmount"));
+        pd.wobbleMorph   = static_cast<float> (obj->getProperty ("wobbleMorph"));
         pd.algorithm     = static_cast<int>   (obj->getProperty ("algorithm"));
         pd.hrtfProfile   = static_cast<int>   (obj->getProperty ("hrtfProfile"));
 
@@ -1654,6 +1714,8 @@ OpenSpatialDelayProcessor::PresetData
                     tap.pitchShift      = static_cast<float> (tapObj->getProperty ("pitchShift"));
                     tap.trajectoryShape = static_cast<int>   (tapObj->getProperty ("trajectoryShape"));
                     tap.trajectorySpeed = static_cast<float> (tapObj->getProperty ("trajectorySpeed"));
+                    tap.trajectoryDirection = static_cast<int> (tapObj->getProperty ("trajectoryDirection"));
+                    tap.inputChannel        = static_cast<int> (tapObj->getProperty ("inputChannel"));
                 }
             }
         }
@@ -1752,8 +1814,10 @@ bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layou
     if (outputSet == juce::AudioChannelSet::discreteChannels (9))  return true;  // SOA
     if (outputSet == juce::AudioChannelSet::discreteChannels (16)) return true;  // HOA (3rd)
     if (outputSet == juce::AudioChannelSet::discreteChannels (25)) return true;  // 4th order
+    if (outputSet == juce::AudioChannelSet::discreteChannels (26)) return true;  // v0.8: 4OA stereo-pair (13×2)
     if (outputSet == juce::AudioChannelSet::discreteChannels (36)) return true;  // 5th order
     if (outputSet == juce::AudioChannelSet::discreteChannels (49)) return true;  // 6th order
+    if (outputSet == juce::AudioChannelSet::discreteChannels (50)) return true;  // v0.8: 6OA stereo-pair (25×2)
 
     return false;
 }
@@ -2093,10 +2157,16 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
             delayBufferSize <<= 1;
         delayBufferMask = delayBufferSize - 1;
     }
-    delayBuffer.assign (static_cast<size_t> (delayBufferSize), 0.0f);
+    delayBufferL.assign (static_cast<size_t> (delayBufferSize), 0.0f);
+    delayBufferR.assign (static_cast<size_t> (delayBufferSize), 0.0f);
     writePosition = 0;
     feedbackSample = 0.0f;
-    
+
+    // v0.8: Reset wobble modulation state
+    wobblePhase = 0.0f;
+    blockWobbleAmount = 0.0f;
+    blockWobbleMorph = 0.0f;
+
     // Reset all pitch shifter grain states (including the feedback shifter at index MAX_OBJECTS)
     for (auto& ps : pitchState)
     {
@@ -2120,8 +2190,10 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
         vs.crossfadeLength = 0;
     }
 
-    // Pre-allocate mono input buffer
+    // Pre-allocate input buffers
     monoInputBuffer.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+    inputBufferL.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+    inputBufferR.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
 
     // Initialize filters
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock, 1 };
@@ -2241,8 +2313,11 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
 
 void OpenSpatialDelayProcessor::releaseResources()
 {
-    delayBuffer.clear();
+    delayBufferL.clear();
+    delayBufferR.clear();
     monoInputBuffer.clear();
+    inputBufferL.clear();
+    inputBufferR.clear();
 }
 
 // #############################################################################
@@ -2255,38 +2330,49 @@ void OpenSpatialDelayProcessor::releaseResources()
 //==============================================================================
 // Delay line helpers
 //==============================================================================
-void OpenSpatialDelayProcessor::writeDelayLine (float sample)
+void OpenSpatialDelayProcessor::writeDelayLine (float sampleL, float sampleR)
 {
-    delayBuffer[static_cast<size_t> (writePosition)] = sample;
+    delayBufferL[static_cast<size_t> (writePosition)] = sampleL;
+    delayBufferR[static_cast<size_t> (writePosition)] = sampleR;
     writePosition = (writePosition + 1) & delayBufferMask;  // v0.5: bitmask wrap
 }
 
-float OpenSpatialDelayProcessor::readDelayLine (float delaySamples) const
+// v0.8: Templated helper — Cubic Hermite interpolation from a given buffer
+static inline float readDelayBuffer (const std::vector<float>& buf, int writePos,
+                                     int bufMask, int bufSize, float delaySamples)
 {
-    // readPos is floating point index relative to write head
-    float readPos = static_cast<float> (writePosition) - delaySamples - 1.0f;
-
-    // Handle wrap-around (add bufSize once is sufficient since readPos > -bufSize)
-    if (readPos < 0.0f) readPos += static_cast<float> (delayBufferSize);
+    float readPos = static_cast<float> (writePos) - delaySamples - 1.0f;
+    if (readPos < 0.0f) readPos += static_cast<float> (bufSize);
 
     int   i1 = static_cast<int> (readPos);
     float f  = readPos - static_cast<float> (i1);
 
-    // v0.5: Get 4 points for Cubic Hermite Interpolation — bitmask wrap instead of modulo
-    int i0 = (i1 - 1) & delayBufferMask;
-    int i2 = (i1 + 1) & delayBufferMask;
-    int i3 = (i1 + 2) & delayBufferMask;
-    i1 = i1 & delayBufferMask;
+    int i0 = (i1 - 1) & bufMask;
+    int i2 = (i1 + 1) & bufMask;
+    int i3 = (i1 + 2) & bufMask;
+    i1 = i1 & bufMask;
 
-    float y0 = delayBuffer[static_cast<size_t> (i0)];
-    float y1 = delayBuffer[static_cast<size_t> (i1)];
-    float y2 = delayBuffer[static_cast<size_t> (i2)];
-    float y3 = delayBuffer[static_cast<size_t> (i3)];
+    float y0 = buf[static_cast<size_t> (i0)];
+    float y1 = buf[static_cast<size_t> (i1)];
+    float y2 = buf[static_cast<size_t> (i2)];
+    float y3 = buf[static_cast<size_t> (i3)];
 
-    // Cubic Hermite spline interpolation (Catmull-Rom variant)
-    // This significantly reduces high-frequency roll-off compared to linear interpolation,
-    // which is essential for preserving the brightness required for self-oscillation.
     return y1 + 0.5f * f * (y2 - y0 + f * (2.0f * y0 - 5.0f * y1 + 4.0f * y2 - y3 + f * (3.0f * (y1 - y2) + y3 - y0)));
+}
+
+float OpenSpatialDelayProcessor::readDelayLineL (float delaySamples) const
+{
+    return readDelayBuffer (delayBufferL, writePosition, delayBufferMask, delayBufferSize, delaySamples);
+}
+
+float OpenSpatialDelayProcessor::readDelayLineR (float delaySamples) const
+{
+    return readDelayBuffer (delayBufferR, writePosition, delayBufferMask, delayBufferSize, delaySamples);
+}
+
+float OpenSpatialDelayProcessor::readDelayLineMono (float delaySamples) const
+{
+    return (readDelayLineL (delaySamples) + readDelayLineR (delaySamples)) * 0.5f;
 }
 
 //==============================================================================
@@ -2296,13 +2382,24 @@ float OpenSpatialDelayProcessor::readDelayLine (float delaySamples) const
 // sharp attacks on drums and percussive material.
 //==============================================================================
 float OpenSpatialDelayProcessor::readPitchShifted (float delaySamples,
-                                                     float semitones, int phaseIndex)
+                                                     float semitones, int phaseIndex,
+                                                     DelayChannel ch)
 {
+    // v0.8: Channel-aware delay line read dispatch
+    auto readDL = [this, ch](float pos) -> float {
+        switch (ch) {
+            case DelayChannel::Left:  return readDelayLineL (pos);
+            case DelayChannel::Right: return readDelayLineR (pos);
+            case DelayChannel::Mono:  return readDelayLineMono (pos);
+        }
+        return readDelayLineMono (pos);
+    };
+
     if (std::abs (semitones) < 0.001f)  // ~0.1 cents threshold
-        return readDelayLine (delaySamples);
+        return readDL (delaySamples);
 
     const float windowSamples = cachedPitchWindowSamples;
-    if (windowSamples < 1.0f) return readDelayLine (delaySamples);
+    if (windowSamples < 1.0f) return readDL (delaySamples);
 
     const float ratio = std::pow (2.0f, semitones / 12.0f);
     const float phaseInc = 1.0f - ratio;  // how much grain phase advances per sample
@@ -2318,7 +2415,7 @@ float OpenSpatialDelayProcessor::readPitchShifted (float delaySamples,
     const float onsetThresh   = 2.5f;      // fast/slow ratio to trigger onset
     const int   onsetDuration = 192;       // ~4ms @ 48kHz
 
-    float absInput = std::abs (readDelayLine (delaySamples));
+    float absInput = std::abs (readDL (delaySamples));
 
     gs.envFast = (absInput > gs.envFast)
         ? absInput + fastAttCoeff * (gs.envFast - absInput)
@@ -2365,7 +2462,7 @@ float OpenSpatialDelayProcessor::readPitchShifted (float delaySamples,
 
         // Read from delay line at grain's offset position
         float readPos = delaySamples + p + gs.grainOffset[g];
-        output += readDelayLine (readPos) * hannGain;
+        output += readDL (readPos) * hannGain;
 
         // Advance grain phase
         float newPhase = p + phaseInc;
@@ -2392,7 +2489,7 @@ float OpenSpatialDelayProcessor::readPitchShifted (float delaySamples,
                 float refEnergy = 0.0f;
                 for (int j = 0; j < refLen; ++j)
                 {
-                    refBuf[j] = readDelayLine (delaySamples + p + static_cast<float> (j));
+                    refBuf[j] = readDL (delaySamples + p + static_cast<float> (j));
                     refEnergy += refBuf[j] * refBuf[j];
                 }
 
@@ -2405,7 +2502,7 @@ float OpenSpatialDelayProcessor::readPitchShifted (float delaySamples,
                     float candEnergy = 0.0f;
                     for (int j = 0; j < refLen; ++j)
                     {
-                        float c = readDelayLine (candidateBase + static_cast<float> (off + j));
+                        float c = readDL (candidateBase + static_cast<float> (off + j));
                         corr += refBuf[j] * c;
                         candEnergy += c * c;
                     }
@@ -2436,10 +2533,21 @@ float OpenSpatialDelayProcessor::readPitchShifted (float delaySamples,
 // Used for global cumulative pitch and feedback pitch.
 //==============================================================================
 float OpenSpatialDelayProcessor::readVarispeed (float delaySamples,
-                                                  float semitones, int phaseIndex)
+                                                  float semitones, int phaseIndex,
+                                                  DelayChannel ch)
 {
+    // v0.8: Channel-aware delay line read dispatch
+    auto readDL = [this, ch](float pos) -> float {
+        switch (ch) {
+            case DelayChannel::Left:  return readDelayLineL (pos);
+            case DelayChannel::Right: return readDelayLineR (pos);
+            case DelayChannel::Mono:  return readDelayLineMono (pos);
+        }
+        return readDelayLineMono (pos);
+    };
+
     if (std::abs (semitones) < 0.001f)
-        return readDelayLine (delaySamples);
+        return readDL (delaySamples);
 
     auto& vs = varispeedState[phaseIndex];
     const float ratio = std::pow (2.0f, semitones / 12.0f);
@@ -2455,10 +2563,10 @@ float OpenSpatialDelayProcessor::readVarispeed (float delaySamples,
     if (vs.crossfadeRemaining > 0)
     {
         float primaryPos = delaySamples - vs.drift;
-        float primary = readDelayLine (primaryPos);
+        float primary = readDL (primaryPos);
 
         float fadingPos = delaySamples - vs.fadingDrift;
-        float fading = readDelayLine (fadingPos);
+        float fading = readDL (fadingPos);
         vs.fadingDrift += driftInc;
 
         float t = 1.0f - static_cast<float> (vs.crossfadeRemaining)
@@ -2481,7 +2589,7 @@ float OpenSpatialDelayProcessor::readVarispeed (float delaySamples,
 
         // First crossfade sample: fully on the fading (old) head
         float fadingPos = delaySamples - vs.fadingDrift;
-        float fading = readDelayLine (fadingPos);
+        float fading = readDL (fadingPos);
         vs.fadingDrift += driftInc;
 
         vs.crossfadeRemaining--;
@@ -2489,7 +2597,7 @@ float OpenSpatialDelayProcessor::readVarispeed (float delaySamples,
     }
 
     // Normal operation: single head reading at drifted position
-    return readDelayLine (delaySamples - vs.drift);
+    return readDL (delaySamples - vs.drift);
 }
 
 // #############################################################################
@@ -3454,6 +3562,47 @@ ObjectState OpenSpatialDelayProcessor::getObjectState (int objectIndex) const
 // and render logic, calling the spatial algorithms via computeGains().
 // #############################################################################
 
+// v0.8: Wobble waveform — morphs between 4 shapes based on morph parameter (0..100)
+static float computeWobbleWaveform (float phase, float morphPercent)
+{
+    float twoPi = juce::MathConstants<float>::twoPi;
+    float p = phase * twoPi;
+
+    // 4 base waveforms
+    float sine = std::sin (p);
+    float triangle = 2.0f * std::abs (2.0f * phase - 1.0f) - 1.0f;
+    float roundedSquare = std::tanh (4.0f * std::sin (p));
+    float irregular = std::sin (p)
+                    + 0.3f * std::sin (2.0f * p + 0.7f)
+                    + 0.15f * std::sin (3.0f * p + 1.3f)
+                    + 0.08f * std::sin (5.0f * p + 2.1f);
+    irregular *= 0.65f;  // normalize roughly to +/-1
+
+    // Crossfade between adjacent shapes (0->sine, 33->triangle, 66->roundedSq, 100->irregular)
+    float t = morphPercent / 100.0f * 3.0f;  // 0..3
+    int seg = juce::jlimit (0, 2, static_cast<int> (t));
+    float frac = t - static_cast<float> (seg);
+
+    float shapes[4] = { sine, triangle, roundedSquare, irregular };
+    return shapes[seg] * (1.0f - frac) + shapes[seg + 1] * frac;
+}
+
+// v0.8: Apply wobble modulation to base delay (per-sample, modifies wobblePhase)
+inline float OpenSpatialDelayProcessor::applyWobble (float baseDelaySamples, float currentDelayMs)
+{
+    if (blockWobbleAmount <= 0.0f)
+        return baseDelaySamples;
+
+    float lfoFreqHz = 1000.0f / std::max (1.0f, currentDelayMs);
+    wobblePhase += lfoFreqHz / static_cast<float> (currentSampleRate);
+    if (wobblePhase >= 1.0f)
+        wobblePhase -= std::floor (wobblePhase);
+
+    float waveform = computeWobbleWaveform (wobblePhase, blockWobbleMorph);
+    constexpr float maxDeviation = 0.006f;  // 0.6% of delay time at max amount
+    return baseDelaySamples * (1.0f + blockWobbleAmount * waveform * maxDeviation);
+}
+
 //==============================================================================
 // v0.5: Shared inline helpers for render methods
 //==============================================================================
@@ -3463,20 +3612,18 @@ float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDe
     float objDelaySamples = static_cast<float> (objectIndex + 1) * baseDelaySamples;
     objDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), objDelaySamples);
 
-    // v0.7: Per-tap pitch override. Non-zero = use override; 0 = cumulative global.
+    // v0.8: Per-tap pitch is additive on top of cumulative global pitch.
+    // Global cumulative: tap k gets (k+1) × globalPitch. Per-tap offset adds on top.
+    // This ensures LFO modulation of global pitch affects all taps even with per-tap offsets.
     float perTapPitch = cachedParam_pitchShift[objectIndex]->load (std::memory_order_relaxed);
-    float objPitch;
-    if (perTapPitch != 0.0f)
-        objPitch = perTapPitch + dopplerSemitones[objectIndex];
-    else
-        objPitch = static_cast<float> (objectIndex + 1) * pitchSemitones + dopplerSemitones[objectIndex];
+    float objPitch = static_cast<float> (objectIndex + 1) * pitchSemitones
+                   + perTapPitch + dopplerSemitones[objectIndex];
 
-    // Dispatch: varispeed for global cumulative pitch, WSOLA for per-tap overrides
-    float objMono;
-    if (perTapPitch != 0.0f)
-        objMono = readPitchShifted (objDelaySamples, objPitch, objectIndex);
-    else
-        objMono = readVarispeed (objDelaySamples, objPitch, objectIndex);
+    // v0.8: Per-tap input channel routing
+    int inputCh = static_cast<int> (cachedParam_inputChannel[objectIndex]->load (std::memory_order_relaxed));
+    DelayChannel ch = (inputCh == 1) ? DelayChannel::Left : (inputCh == 2) ? DelayChannel::Right : DelayChannel::Mono;
+
+    float objMono = readVarispeed (objDelaySamples, objPitch, objectIndex, ch);
     float result = airAbsorptionFilter[objectIndex].processSample (objMono);
 
     // v0.7: Per-tap output filter (same coefficients as feedback filter)
@@ -3501,7 +3648,7 @@ void OpenSpatialDelayProcessor::processFeedbackSample (float currentLoopMult,
     fbDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), fbDelaySamples);
     float fbPitchShiftAmount = currentLoopMult * pitchSemitones;
 
-    float feedbackRaw = readVarispeed (fbDelaySamples, fbPitchShiftAmount, MAX_OBJECTS);
+    float feedbackRaw = readVarispeed (fbDelaySamples, fbPitchShiftAmount, MAX_OBJECTS, DelayChannel::Mono);
     float filtered = filterBypassed ? feedbackRaw
         : feedbackHPFilter.processSample (feedbackLPFilter.processSample (feedbackRaw));
     const float makeupGain = 1.0f + (fb * fb * 0.2f);
@@ -3525,7 +3672,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     auto numSamples       = buffer.getNumSamples();
     auto numInputChannels = getTotalNumInputChannels();
 
-    if (delayBuffer.empty() || numSamples <= 0)
+    if (delayBufferL.empty() || numSamples <= 0)
         return;
 
     // v0.7: Reset per-tap peak accumulators for this block
@@ -3547,8 +3694,15 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // v0.4: Air absorption parameter read
     bool  useAirAbsorption = apvts.getRawParameterValue ("airAbsorption")->load() > 0.5f;
 
-    // v0.7: Input format (0=Mono, 1=Stereo). Stereo DSP deferred — always mono for now.
-    // int inputFormat = static_cast<int> (apvts.getRawParameterValue ("inputFormat")->load());
+    // v0.8: Wobble modulation (block-rate parameter reads, gated by wobbleEnabled)
+    {
+        bool wobbleEnabled = apvts.getRawParameterValue ("wobbleEnabled")->load() > 0.5f;
+        blockWobbleAmount = wobbleEnabled ? (apvts.getRawParameterValue ("wobbleAmount")->load() / 100.0f) : 0.0f;
+        blockWobbleMorph  = apvts.getRawParameterValue ("wobbleMorph")->load();
+    }
+
+    // v0.8: Input format (0=Mono, 1=Stereo) — selects whether dual delay lines receive L/R or summed mono
+    int inputFormat = static_cast<int> (apvts.getRawParameterValue ("inputFormat")->load());
 
     // (#3) Calculate target base delay
     float targetBaseDelayMs;
@@ -3804,22 +3958,45 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         }
     }
 
-    // --- Prepare mono input --------------------------------------------------
-    if (monoInputBuffer.size() < static_cast<size_t> (numSamples))
-        monoInputBuffer.resize (static_cast<size_t> (numSamples));
+    // --- Prepare input buffers ------------------------------------------------
+    auto ns = static_cast<size_t> (numSamples);
+    if (monoInputBuffer.size() < ns)  monoInputBuffer.resize (ns);
+    if (inputBufferL.size() < ns)     inputBufferL.resize (ns);
+    if (inputBufferR.size() < ns)     inputBufferR.resize (ns);
 
     if (numInputChannels == 1)
     {
         auto* in = buffer.getReadPointer (0);
         for (int i = 0; i < numSamples; ++i)
+        {
             monoInputBuffer[static_cast<size_t> (i)] = in[i];
+            inputBufferL[static_cast<size_t> (i)] = in[i];
+            inputBufferR[static_cast<size_t> (i)] = in[i];
+        }
     }
     else
     {
         auto* inL = buffer.getReadPointer (0);
         auto* inR = buffer.getReadPointer (1);
-        for (int i = 0; i < numSamples; ++i)
-            monoInputBuffer[static_cast<size_t> (i)] = (inL[i] + inR[i]) * 0.5f;
+        if (inputFormat == 1)  // Stereo: keep L and R separate
+        {
+            for (int i = 0; i < numSamples; ++i)
+            {
+                inputBufferL[static_cast<size_t> (i)] = inL[i];
+                inputBufferR[static_cast<size_t> (i)] = inR[i];
+                monoInputBuffer[static_cast<size_t> (i)] = (inL[i] + inR[i]) * 0.5f;
+            }
+        }
+        else  // Mono: sum to mono, write same signal to both
+        {
+            for (int i = 0; i < numSamples; ++i)
+            {
+                float mono = (inL[i] + inR[i]) * 0.5f;
+                monoInputBuffer[static_cast<size_t> (i)] = mono;
+                inputBufferL[static_cast<size_t> (i)] = mono;
+                inputBufferR[static_cast<size_t> (i)] = mono;
+            }
+        }
     }
 
     // --- Clear output buffer -------------------------------------------------
@@ -3925,6 +4102,7 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
     {
         float currentDelayMs = smoothedDelayTime.getNextValue();
         float baseDelaySamples = currentDelayMs * 0.001f * static_cast<float> (currentSampleRate);
+        baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);  // v0.8: Wobble modulation
         float currentLoopMult = smoothedLoopMultiplier.getNextValue();
 
         float inGain = smoothedInputGain.getNextValue();
@@ -3932,13 +4110,13 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
         float fb     = smoothedFeedback.getNextValue();
         /* outGain */  smoothedOutputGain.getNextValue();
 
-        float rawInput    = monoInputBuffer[static_cast<size_t> (s)];
-        float inputSample = rawInput * inGain;
-
-        // STAGE 1: WRITE to delay line
-        float delayInput = inputSample + feedbackSample * fb;
-        delayInput = softClip (delayInput * 0.98f);
-        writeDelayLine (delayInput);
+        // STAGE 1: WRITE to delay line (dual L/R)
+        float rawL = inputBufferL[static_cast<size_t> (s)] * inGain;
+        float rawR = inputBufferR[static_cast<size_t> (s)] * inGain;
+        float delayInputL = softClip ((rawL + feedbackSample * fb) * 0.98f);
+        float delayInputR = softClip ((rawR + feedbackSample * fb) * 0.98f);
+        writeDelayLine (delayInputL, delayInputR);
+        // rawInput not needed here — PASS 3 reads monoInputBuffer directly
 
         // STAGE 2: READ & ACCUMULATE (per-source mono × distance gain)
         for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -4002,6 +4180,7 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
     {
         float currentDelayMs = smoothedDelayTime.getNextValue();
         float baseDelaySamples = currentDelayMs * 0.001f * static_cast<float> (currentSampleRate);
+        baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);  // v0.8: Wobble modulation
         float currentLoopMult = smoothedLoopMultiplier.getNextValue();
 
         float inGain  = smoothedInputGain.getNextValue();
@@ -4009,13 +4188,13 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
         float fb      = smoothedFeedback.getNextValue();
         float outGain = smoothedOutputGain.getNextValue();
 
-        float rawInput    = monoInputBuffer[static_cast<size_t> (s)];
-        float inputSample = rawInput * inGain;
-
-        // === STAGE 1: WRITE ===
-        float delayInput = inputSample + feedbackSample * fb;
-        delayInput = softClip (delayInput * 0.98f);
-        writeDelayLine (delayInput);
+        // === STAGE 1: WRITE (dual L/R) ===
+        float rawL = inputBufferL[static_cast<size_t> (s)] * inGain;
+        float rawR = inputBufferR[static_cast<size_t> (s)] * inGain;
+        float delayInputL = softClip ((rawL + feedbackSample * fb) * 0.98f);
+        float delayInputR = softClip ((rawR + feedbackSample * fb) * 0.98f);
+        writeDelayLine (delayInputL, delayInputR);
+        float rawInput = monoInputBuffer[static_cast<size_t> (s)] * inGain;  // for dry mix
 
         // === STAGE 2: READ & SPATIALIZE ===
         float wetL = 0.0f, wetR = 0.0f;
@@ -4123,6 +4302,7 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
     {
         float currentDelayMs = smoothedDelayTime.getNextValue();
         float baseDelaySamples = currentDelayMs * 0.001f * static_cast<float> (currentSampleRate);
+        baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);  // v0.8: Wobble modulation
         float currentLoopMult = smoothedLoopMultiplier.getNextValue();
 
         float inGain  = smoothedInputGain.getNextValue();
@@ -4130,13 +4310,13 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
         float fb      = smoothedFeedback.getNextValue();
         float outGain = smoothedOutputGain.getNextValue();
 
-        float rawInput    = monoInputBuffer[static_cast<size_t> (s)];
-        float inputSample = rawInput * inGain;
-
-        // === STAGE 1: WRITE ===
-        float delayInput = inputSample + feedbackSample * fb;
-        delayInput = softClip (delayInput * 0.98f);
-        writeDelayLine (delayInput);
+        // === STAGE 1: WRITE (dual L/R) ===
+        float rawL = inputBufferL[static_cast<size_t> (s)] * inGain;
+        float rawR = inputBufferR[static_cast<size_t> (s)] * inGain;
+        float delayInputL = softClip ((rawL + feedbackSample * fb) * 0.98f);
+        float delayInputR = softClip ((rawR + feedbackSample * fb) * 0.98f);
+        writeDelayLine (delayInputL, delayInputR);
+        float rawInput = monoInputBuffer[static_cast<size_t> (s)] * inGain;  // for dry mix
 
         // === STAGE 2: READ & SPATIALIZE ===
         float wetL = 0.0f, wetR = 0.0f;
@@ -4240,6 +4420,7 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
     {
         float currentDelayMs = smoothedDelayTime.getNextValue();
         float baseDelaySamples = currentDelayMs * 0.001f * static_cast<float> (currentSampleRate);
+        baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);  // v0.8: Wobble modulation
         float currentLoopMult = smoothedLoopMultiplier.getNextValue();
 
         float inGain  = smoothedInputGain.getNextValue();
@@ -4247,13 +4428,13 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
         float fb      = smoothedFeedback.getNextValue();
         float outGain = smoothedOutputGain.getNextValue();
 
-        float rawInput    = monoInputBuffer[static_cast<size_t> (s)];
-        float inputSample = rawInput * inGain;
-
-        // === STAGE 1: WRITE ===
-        float delayInput = inputSample + feedbackSample * fb;
-        delayInput = softClip (delayInput * 0.98f);
-        writeDelayLine (delayInput);
+        // === STAGE 1: WRITE (dual L/R) ===
+        float rawL = inputBufferL[static_cast<size_t> (s)] * inGain;
+        float rawR = inputBufferR[static_cast<size_t> (s)] * inGain;
+        float delayInputL = softClip ((rawL + feedbackSample * fb) * 0.98f);
+        float delayInputR = softClip ((rawR + feedbackSample * fb) * 0.98f);
+        writeDelayLine (delayInputL, delayInputR);
+        float rawInput = monoInputBuffer[static_cast<size_t> (s)] * inGain;  // for dry mix
 
         // === STAGE 2: READ & SH ENCODE (with NFC-HOA) ===
         float ambiAccum[MAX_AMBI_CHANNELS] = {};
@@ -4319,6 +4500,7 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
     {
         float currentDelayMs = smoothedDelayTime.getNextValue();
         float baseDelaySamples = currentDelayMs * 0.001f * static_cast<float> (currentSampleRate);
+        baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);  // v0.8: Wobble modulation
         float currentLoopMult = smoothedLoopMultiplier.getNextValue();
 
         float inGain  = smoothedInputGain.getNextValue();
@@ -4326,13 +4508,13 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
         float fb      = smoothedFeedback.getNextValue();
         float outGain = smoothedOutputGain.getNextValue();
 
-        float rawInput    = monoInputBuffer[static_cast<size_t> (s)];
-        float inputSample = rawInput * inGain;
-
-        // === STAGE 1: WRITE ===
-        float delayInput = inputSample + feedbackSample * fb;
-        delayInput = softClip (delayInput * 0.98f);
-        writeDelayLine (delayInput);
+        // === STAGE 1: WRITE (dual L/R) ===
+        float rawL = inputBufferL[static_cast<size_t> (s)] * inGain;
+        float rawR = inputBufferR[static_cast<size_t> (s)] * inGain;
+        float delayInputL = softClip ((rawL + feedbackSample * fb) * 0.98f);
+        float delayInputR = softClip ((rawR + feedbackSample * fb) * 0.98f);
+        writeDelayLine (delayInputL, delayInputR);
+        float rawInput = monoInputBuffer[static_cast<size_t> (s)] * inGain;  // for dry mix
 
         // === STAGE 2: READ & SPATIALIZE ===
         float channelAccum[16] = {};
@@ -4518,8 +4700,13 @@ void OpenSpatialDelayProcessor::handleOSCPosition (int objIdx, float azDeg, floa
 //==============================================================================
 OpenSpatialDelayProcessor::TrajectoryResult
 OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
-                                               float baseAz, float baseEl, float baseDist)
+                                               float baseAz, float baseEl, float baseDist,
+                                               bool reverse)
 {
+    // v0.8: Reverse direction — flip phase so trajectory runs backwards
+    if (reverse)
+        phase = 1.0f - phase;
+
     TrajectoryResult r;
     r.controlsAz = false;
     r.controlsEl = false;
@@ -4611,7 +4798,7 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
 void OpenSpatialDelayProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
-    state.setProperty ("pluginStateVersion", 11, nullptr);  // v0.7 state format (11 = per-tap pitch, input format, OSC send)
+    state.setProperty ("pluginStateVersion", 12, nullptr);  // v0.8 state format (12 = wobble modulation)
     state.setProperty ("oscReceivePort", oscReceivePort, nullptr);  // v0.6: persist OSC port
     state.setProperty ("currentPresetIndex", currentPresetIndex, nullptr);  // v0.6: persist preset selection
     // v0.7: persist OSC Send settings
