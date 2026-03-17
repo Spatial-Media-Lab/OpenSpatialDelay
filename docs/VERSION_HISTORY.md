@@ -427,3 +427,68 @@ Frozen snapshot in `Archive/v0.7/`:
 
 ### Output
 - 22 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
+
+---
+
+## v0.8 (2026-03-17) — FROZEN
+**Stereo Input + Wobble Modulation + Per-Tap Pitch + UI Redesign**
+
+Feature release adding stereo input routing with per-tap channel selection, wobble
+modulation (delay-time LFO), per-tap additive pitch shift, trajectory direction
+control, and comprehensive UI redesign with new button components and color system.
+
+### Stereo Input Routing
+- Dual delay lines (`delayBufferL`, `delayBufferR`) for independent L/R input processing
+- Per-tap input channel selection: L+R (summed), L only, R only
+- New APVTS parameter: `object{N}_inputChannel` (choice: 0=L+R, 1=L, 2=R)
+- INPUT button in bottom panel cycles through modes with color coding (white=L+R, blue=L, red=R)
+
+### Wobble Modulation
+- Delay time LFO with morphable waveform (sine → triangle → square)
+- 3 new APVTS parameters: `wobbleEnabled` (bool), `wobbleAmount` (0–100), `wobbleMorph` (0–100)
+- LFO frequency auto-syncs to delay time for musical modulation
+- MOD section in right panel with enable toggle + AMOUNT and MORPH knobs
+- Rose/pink accent color for modulation controls
+
+### Per-Tap Pitch Shift (Additive)
+- Changed from override mode (v0.7) to additive: per-tap pitch adds on top of global cumulative pitch
+- Formula: `totalSemitones = (k × globalPitch / 100) + perTapPitch + dopplerSemitones`
+- Existing `object{N}_pitchShift` parameter, behavior changed
+
+### Trajectory Direction Control
+- New `object{N}_trajectoryDirection` parameter (choice: 0=Forward, 1=Reverse)
+- Phase flip in `computeTrajectory()` for reverse playback
+- Forward/Reverse arrow buttons (← →) in bottom panel trajectory section
+
+### UI: New Button Components
+- `IndicatorToggle` — reusable toggle pill with 5px indicator dot + uppercase label
+- `StyledButton` — centred-text button with no indicator dot, same visual language
+- Applied to: tap ON/OFF, tempo sync, OSC toggles, air absorption, FLT/MOD headers, input channel, trajectory direction
+
+### UI: Color System Overhaul
+- Lifted backgrounds (12–16% lightness) replacing flat black
+- Increased border visibility with subtle warm-grey strokes
+- Gold sync accent for tempo sync buttons
+- Rose/pink accent for modulation controls
+- L/R channel colors: blue (left), red (right) for input channel button
+- Consistent `Colours_OSD` namespace throughout
+
+### UI: Spatial Map Refinements
+- Thinner distance rings (0.7f stroke matching center reticle weight)
+- Brighter crosshair dashed lines (0.6f alpha matching rings)
+- Centered F/B cardinal labels using float-precision bounding rectangles
+
+### State Persistence
+- `pluginStateVersion = 12` (v0.7 was version 11)
+- New parameters: `wobbleEnabled`, `wobbleAmount`, `wobbleMorph`, `object{N}_trajectoryDirection`, `object{N}_inputChannel`
+
+### Files
+Frozen snapshot in `Archive/v0.8/`:
+- `PluginProcessor_v0.8.h`
+- `PluginProcessor_v0.8.cpp`
+- `PluginEditor_v0.8.h`
+- `PluginEditor_v0.8.cpp`
+- `CMakeLists_v0.8.txt`
+
+### Output
+- 22 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
