@@ -7,6 +7,17 @@
 struct MYSOFA_EASY;  // Forward declaration (avoids including mysofa.h in header)
 
 // #############################################################################
+// SPATIAL MEDIA LIBRARY — Extraction Guide
+// Sections marked "SPATIAL MEDIA LIBRARY" or "SPATIAL FRAMEWORK" are reusable
+// across future SML plugins. To create a new plugin:
+//   1. Keep all SPATIAL MEDIA LIBRARY sections (IO, algorithms, HRTF, layouts,
+//      OSC receive/send, bus negotiation, utility DSP)
+//   2. Replace all DELAY-SPECIFIC sections (delay line, pitch shift, feedback,
+//      wobble, trajectories, render loop internals)
+//   3. Parameter layout (MIXED) — keep spatial params, replace effect-specific
+// #############################################################################
+
+// #############################################################################
 // SPATIAL MEDIA LIBRARY — Reusable spatial audio data structures
 // These structs are shared across all plugins in the Spatial Media Library suite.
 // #############################################################################
@@ -589,7 +600,6 @@ private:
     float  readDelayLineL    (float delaySamples) const;
     float  readDelayLineR    (float delaySamples) const;
     float  readDelayLineMono (float delaySamples) const;
-    float  readPitchShifted (float delaySamples, float semitones, int phaseIndex, DelayChannel ch = DelayChannel::Mono);
     float  readVarispeed (float delaySamples, float semitones, int phaseIndex, DelayChannel ch = DelayChannel::Mono);
     float getTempoSyncedDelayMs (int noteDivisionIndex) const;
 
@@ -658,7 +668,7 @@ private:
     void timerCallback() override;
     std::atomic<int> targetHRTFProfile { 0 };
 
-    //--- v0.6: ADM-OSC Receive -------------------------------------------------
+    //--- SPATIAL MEDIA LIBRARY: ADM-OSC Receive --------------------------------
     void oscMessageReceived (const juce::OSCMessage& message) override;
     void handleOSCPosition (int objectIndex, float azDeg, float elDeg, float dist);
 
@@ -668,7 +678,7 @@ private:
     bool prevAdmOscEnabled = false;                     // Edge-detect for enable/disable transitions
     std::atomic<float>* cachedParam_admOscEnabled = nullptr;
 
-    // v0.7: ADM-OSC Send state
+    //--- SPATIAL MEDIA LIBRARY: ADM-OSC Send state ---
     juce::OSCSender oscSender;
     bool oscSendEnabled = false;
     bool oscSendConnected = false;
@@ -693,6 +703,14 @@ private:
     std::atomic<float>* cachedParam_trajectorySpeed[MAX_OBJECTS] = {};
     std::atomic<float>* cachedParam_trajectoryDirection[MAX_OBJECTS] = {};  // v0.8: 0=Forward, 1=Reverse
 
+    // Cached RangedAudioParameter* for trajectory setValueNotifyingHost (avoids string lookups in timer)
+    juce::RangedAudioParameter* trajParam_azimuth[MAX_OBJECTS]   = {};
+    juce::RangedAudioParameter* trajParam_elevation[MAX_OBJECTS] = {};
+    juce::RangedAudioParameter* trajParam_distance[MAX_OBJECTS]  = {};
+
+    // Pre-built OSC address strings for ADM-OSC Send (avoids per-tick string allocation)
+    juce::String oscSendAddress[MAX_OBJECTS];
+
     float trajectoryPhase[MAX_OBJECTS] = {};            // 0..1 animation progress per object
     float baseAzimuth[MAX_OBJECTS]   = {};              // Captured when trajectory starts
     float baseElevation[MAX_OBJECTS] = {};
@@ -707,6 +725,12 @@ private:
                                                bool reverse = false);
 
     //--- DELAY-SPECIFIC: DSP state --------------------------------------------
+    // Tuning constants (named to avoid magic numbers in hot paths)
+    static constexpr float kFeedbackInputHeadroom  = 0.98f;   // prevents feedback runaway at unity
+    static constexpr float kMakeupGainCoeff        = 0.2f;    // self-oscillation loss compensation
+    static constexpr float kFilterLP_BypassThresh  = 19999.0f; // LP freq >= this → filter bypassed
+    static constexpr float kFilterHP_BypassThresh  = 21.0f;    // HP freq <= this → filter bypassed
+
     double currentSampleRate = 44100.0;
 
     // Main delay buffers (circular, power-of-2 size for bitmask indexing)
@@ -726,20 +750,6 @@ private:
     juce::dsp::IIR::Filter<float> tapLPFilter[MAX_OBJECTS];
     juce::dsp::IIR::Filter<float> tapHPFilter[MAX_OBJECTS];
 
-    // Pitch shifter state — 4-grain WSOLA with transient preservation
-    // MAX_OBJECTS + 1: indices 0..11 for objects, index 12 for feedback pitch shifter
-    static constexpr int kPitchGrains = 4;
-    struct PitchGrainState {
-        float phase[4] = {};       // per-grain phase within window (samples)
-        float grainOffset[4] = {}; // per-grain read offset from xcorr alignment
-        // Onset detector state
-        float envSlow = 0.0f;      // slow envelope follower (background level)
-        float envFast = 0.0f;      // fast envelope follower (transient tracking)
-        bool  onsetActive = false;
-        int   onsetCountdown = 0;
-    };
-    PitchGrainState pitchState[MAX_OBJECTS + 1] = {};
-
     // Varispeed pitch shift state — tape-speed dual-head with short crossfade
     // Used for global cumulative pitch and feedback pitch (smooth, artifact-free)
     struct VarispeedState {
@@ -750,11 +760,14 @@ private:
     };
     VarispeedState varispeedState[MAX_OBJECTS + 1] = {};  // 12 objects + 1 feedback
 
-    // v0.8: Wobble modulation (LFO synced to delay time)
-    float wobblePhase = 0.0f;
+    // Block-rate cached conversion factor: ms → samples (set at top of processBlock)
+    float blockMsToSamples = 0.0f;
+
+    // v0.9: Wobble modulation — multi-layer tape wow/flutter emulation
+    float wobblePhases[4] = {};
     float blockWobbleAmount = 0.0f;  // read once per block from APVTS
     float blockWobbleMorph = 0.0f;
-    inline float applyWobble (float baseDelaySamples, float currentDelayMs);
+    inline float applyWobble (float baseDelaySamples);
 
     // Smoothing for delay time to create "Repitch" effect
     juce::LinearSmoothedValue<float> smoothedDelayTime;
@@ -774,6 +787,7 @@ private:
 
     juce::dsp::IIR::Filter<float> lfeFilter;     // 120 Hz LP for LFE generation
 
+    //--- SPATIAL FRAMEWORK: Utility DSP (reusable by any SML plugin) ----------
     // Soft Clipper helper (NaN-safe, preserves natural asymptotic curve for self-oscillation)
     static float softClip (float x)
     {
@@ -831,17 +845,37 @@ private:
     float cachedMaxrE[MAX_AMBI_ORDER + 1] = {};
 
     // v0.5: Cached per-object parameter pointers (avoid string lookup in processBlock)
-    std::atomic<float>* cachedParam_enabled[MAX_OBJECTS]       = {};
-    std::atomic<float>* cachedParam_azimuth[MAX_OBJECTS]       = {};
-    std::atomic<float>* cachedParam_elevation[MAX_OBJECTS]     = {};
-    std::atomic<float>* cachedParam_distance[MAX_OBJECTS]      = {};
-    std::atomic<float>* cachedParam_dopplerAmount[MAX_OBJECTS]  = {};
+    struct CachedObjectParams {
+        std::atomic<float>* enabled       = nullptr;
+        std::atomic<float>* azimuth       = nullptr;
+        std::atomic<float>* elevation     = nullptr;
+        std::atomic<float>* distance      = nullptr;
+        std::atomic<float>* dopplerAmount = nullptr;
+        std::atomic<float>* pitchShift    = nullptr;  // v0.7: per-tap additive pitch
+        std::atomic<float>* inputChannel  = nullptr;  // v0.8: L+R/L/R selection
+    };
+    CachedObjectParams cachedObj[MAX_OBJECTS];
 
-    // v0.7: Per-object pitch shift override (cached parameter pointers)
-    std::atomic<float>* cachedParam_pitchShift[MAX_OBJECTS]    = {};
-
-    // v0.8: Per-object input channel selection (cached parameter pointers)
-    std::atomic<float>* cachedParam_inputChannel[MAX_OBJECTS]  = {};
+    // Cached global parameter pointers (avoid string lookup in processBlock)
+    std::atomic<float>* cachedParam_tempoSync      = nullptr;
+    std::atomic<float>* cachedParam_noteDivision    = nullptr;
+    std::atomic<float>* cachedParam_filterLP        = nullptr;
+    std::atomic<float>* cachedParam_filterHP        = nullptr;
+    std::atomic<float>* cachedParam_filterHPQ       = nullptr;
+    std::atomic<float>* cachedParam_filterLPQ       = nullptr;
+    std::atomic<float>* cachedParam_hrtfProfile     = nullptr;
+    std::atomic<float>* cachedParam_globalPitchShift = nullptr;
+    std::atomic<float>* cachedParam_airAbsorption   = nullptr;
+    std::atomic<float>* cachedParam_wobbleEnabled   = nullptr;
+    std::atomic<float>* cachedParam_wobbleAmount    = nullptr;
+    std::atomic<float>* cachedParam_wobbleMorph     = nullptr;
+    std::atomic<float>* cachedParam_inputFormat     = nullptr;
+    std::atomic<float>* cachedParam_delayTime       = nullptr;
+    std::atomic<float>* cachedParam_dryWet          = nullptr;
+    std::atomic<float>* cachedParam_feedback        = nullptr;
+    std::atomic<float>* cachedParam_inputGain       = nullptr;
+    std::atomic<float>* cachedParam_outputGain      = nullptr;
+    std::atomic<float>* cachedParam_algorithm       = nullptr;
 
     // v0.5: Cached feedback filter frequencies + Q (skip recalculation when unchanged)
     float cachedFeedbackLPFreq = -1.0f;
@@ -849,9 +883,6 @@ private:
     float cachedFilterHPQ = -1.0f;
     float cachedFilterLPQ = -1.0f;
     bool  filterBypassed = false;  // v0.7: true when HP/LP at defaults (skip filter in feedback)
-
-    // v0.5: Cached pitch shifter window size (set in prepareToPlay, constant within session)
-    float cachedPitchWindowSamples = 0.0f;
 
     // v0.4: Doppler effect — per-object checkbox, global amount, velocity tracking
     float prevAzimuth[MAX_OBJECTS]   = {};   // radians, previous block

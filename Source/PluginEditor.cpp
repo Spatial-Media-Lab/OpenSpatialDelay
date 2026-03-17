@@ -93,26 +93,30 @@ int IndicatorToggle::getPreferredWidth (juce::Typeface::Ptr tf, const juce::Stri
          + (int) kRightPad;
 }
 
+// Shared background + border painting for toggle-style buttons
+static void paintToggleButtonBg (juce::Graphics& g, juce::Rectangle<float> bounds,
+                                  const juce::Colour& accent, bool isOn, bool isHover, float cornerR)
+{
+    float bgAlpha = isOn ? 0.08f : 0.0f;
+    if (isHover) bgAlpha += 0.06f;
+    g.setColour (isOn ? accent.withAlpha (bgAlpha)
+                      : (isHover ? accent.withAlpha (0.04f) : Colours_OSD::bgRecessed));
+    g.fillRoundedRectangle (bounds, cornerR);
+
+    float borderAlpha = isOn ? 0.6f : 0.0f;
+    if (isHover && !isOn)  borderAlpha = 0.3f;
+    else if (isHover && isOn) borderAlpha = 0.85f;
+    g.setColour (isOn || isHover ? accent.withAlpha (borderAlpha) : Colours_OSD::borderSubtle);
+    g.drawRoundedRectangle (bounds.reduced (0.5f), cornerR, 1.0f);
+}
+
 void IndicatorToggle::paintButton (juce::Graphics& g, bool isMouseOverButton, bool /*isButtonDown*/)
 {
     auto bounds = getLocalBounds().toFloat();
     if (bounds.getWidth() <= 0.0f) return;
 
     bool isOn = getToggleState();
-
-    // Background
-    float bgAlpha = isOn ? 0.08f : 0.0f;
-    if (isMouseOverButton) bgAlpha += 0.06f;
-    g.setColour (isOn ? accent.withAlpha (bgAlpha)
-                      : (isMouseOverButton ? accent.withAlpha (0.04f) : Colours_OSD::bgRecessed));
-    g.fillRoundedRectangle (bounds, kCornerR);
-
-    // Border
-    float borderAlpha = isOn ? 0.6f : 0.0f;
-    if (isMouseOverButton && !isOn)  borderAlpha = 0.3f;
-    else if (isMouseOverButton && isOn) borderAlpha = 0.85f;
-    g.setColour (isOn || isMouseOverButton ? accent.withAlpha (borderAlpha) : Colours_OSD::borderSubtle);
-    g.drawRoundedRectangle (bounds.reduced (0.5f), kCornerR, 1.0f);
+    paintToggleButtonBg (g, bounds, accent, isOn, isMouseOverButton, kCornerR);
 
     // Indicator dot
     float dotX = bounds.getX() + kLeftPad + kDotRadius;
@@ -163,19 +167,7 @@ void StyledButton::paintButton (juce::Graphics& g, bool isMouseOverButton, bool 
 
     bool isOn = alwaysActive || getToggleState();
 
-    // Background — identical algebra to IndicatorToggle
-    float bgAlpha = isOn ? 0.08f : 0.0f;
-    if (isMouseOverButton) bgAlpha += 0.06f;
-    g.setColour (isOn ? accent.withAlpha (bgAlpha)
-                      : (isMouseOverButton ? accent.withAlpha (0.04f) : Colours_OSD::bgRecessed));
-    g.fillRoundedRectangle (bounds, kCornerR);
-
-    // Border
-    float borderAlpha = isOn ? 0.6f : 0.0f;
-    if (isMouseOverButton && !isOn)  borderAlpha = 0.3f;
-    else if (isMouseOverButton && isOn) borderAlpha = 0.85f;
-    g.setColour (isOn || isMouseOverButton ? accent.withAlpha (borderAlpha) : Colours_OSD::borderSubtle);
-    g.drawRoundedRectangle (bounds.reduced (0.5f), kCornerR, 1.0f);
+    paintToggleButtonBg (g, bounds, accent, isOn, isMouseOverButton, kCornerR);
 
     // Text — centred
     g.setColour (isOn ? accent
@@ -890,17 +882,19 @@ void FilterGraphComponent::paint (juce::Graphics& g)
         if (lfPtr) g.setFont (makeFont (lfPtr->jetbrainsRegular, 8.0f));
         else       g.setFont (juce::FontOptions (8.0f));
     }
-    g.setColour (Colours_OSD::textDim.withAlpha (alpha * 0.5f));
-    g.drawText ("50",  juce::roundToInt (freqToX (50.0f)) - 10,  juce::roundToInt (h) - 11, 20, 10, juce::Justification::centred);
-    g.drawText ("200", juce::roundToInt (freqToX (200.0f)) - 12, juce::roundToInt (h) - 11, 24, 10, juce::Justification::centred);
-    g.drawText ("500", juce::roundToInt (freqToX (500.0f)) - 12, juce::roundToInt (h) - 11, 24, 10, juce::Justification::centred);
-    g.drawText ("2k",  juce::roundToInt (freqToX (2000.0f)) - 10, juce::roundToInt (h) - 11, 20, 10, juce::Justification::centred);
-    g.drawText ("5k",  juce::roundToInt (freqToX (5000.0f)) - 10, juce::roundToInt (h) - 11, 20, 10, juce::Justification::centred);
-    // Primary labels (brighter)
-    g.setColour (Colours_OSD::textDim.withAlpha (alpha * 0.7f));
-    g.drawText ("100", juce::roundToInt (freqToX (100.0f)) - 12, juce::roundToInt (h) - 11, 24, 10, juce::Justification::centred);
-    g.drawText ("1k",  juce::roundToInt (freqToX (1000.0f)) - 12, juce::roundToInt (h) - 11, 24, 10, juce::Justification::centred);
-    g.drawText ("10k", juce::roundToInt (freqToX (10000.0f)) - 12, juce::roundToInt (h) - 11, 24, 10, juce::Justification::centred);
+    struct FreqLabel { const char* text; float freq; bool primary; };
+    static constexpr FreqLabel freqLabels[] = {
+        {"50", 50.0f, false}, {"200", 200.0f, false}, {"500", 500.0f, false},
+        {"2k", 2000.0f, false}, {"5k", 5000.0f, false},
+        {"100", 100.0f, true}, {"1k", 1000.0f, true}, {"10k", 10000.0f, true}
+    };
+    for (auto& fl : freqLabels)
+    {
+        g.setColour (Colours_OSD::textDim.withAlpha (alpha * (fl.primary ? 0.7f : 0.5f)));
+        int lw = (std::strlen (fl.text) >= 3) ? 24 : 20;
+        g.drawText (fl.text, juce::roundToInt (freqToX (fl.freq)) - lw / 2,
+                    juce::roundToInt (h) - 11, lw, 10, juce::Justification::centred);
+    }
 
     // --- Compute combined HP+LP magnitude response curve ---
     // Layout: passband baseline in upper portion, peaks above, rolloff extends well past bottom
