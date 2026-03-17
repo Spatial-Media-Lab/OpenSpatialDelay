@@ -177,6 +177,139 @@ void StyledButton::paintButton (juce::Graphics& g, bool isMouseOverButton, bool 
 }
 
 //==============================================================================
+// PresetSaveOverlay — in-plugin modal overlay for saving presets
+//==============================================================================
+PresetSaveOverlay::PresetSaveOverlay()
+{
+    setWantsKeyboardFocus (true);
+    setVisible (false);
+
+    // Name editor — DM Sans Regular 13px, recessed bg, cyan focus outline
+    nameEditor.setMultiLine (false);
+    nameEditor.setReturnKeyStartsNewLine (false);
+    nameEditor.setColour (juce::TextEditor::backgroundColourId, Colours_OSD::bgRecessed);
+    nameEditor.setColour (juce::TextEditor::textColourId, juce::Colours::white);
+    nameEditor.setColour (juce::TextEditor::outlineColourId, Colours_OSD::borderDim);
+    nameEditor.setColour (juce::TextEditor::focusedOutlineColourId, Colours_OSD::accentStellar);
+    nameEditor.setColour (juce::TextEditor::highlightColourId, Colours_OSD::accentStellar.withAlpha (0.35f));
+    nameEditor.setColour (juce::TextEditor::highlightedTextColourId, juce::Colours::white);
+    nameEditor.setJustification (juce::Justification::centred);
+    nameEditor.setTextToShowWhenEmpty ("Enter preset name...", Colours_OSD::textDim);
+    nameEditor.onReturnKey = [this]
+    {
+        auto name = nameEditor.getText().trim();
+        if (name.isNotEmpty() && onSave)
+        {
+            onSave (name);
+            dismiss();
+        }
+    };
+    addAndMakeVisible (nameEditor);
+
+    // Save button — filled cyan, dark text (primary action)
+    saveBtn.setColour (juce::TextButton::buttonColourId, Colours_OSD::accentStellar);
+    saveBtn.setColour (juce::TextButton::textColourOffId, juce::Colour (0xff0a0d12));
+    saveBtn.onClick = [this]
+    {
+        auto name = nameEditor.getText().trim();
+        if (name.isNotEmpty() && onSave)
+        {
+            onSave (name);
+            dismiss();
+        }
+    };
+    addAndMakeVisible (saveBtn);
+
+    // Cancel button — unfilled, dark red-tinted bg, red text (destructive/dismiss action)
+    // Uses a near-black red tint so drawButtonBackground hover/click states register
+    cancelBtn.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff120508));
+    cancelBtn.setColour (juce::TextButton::textColourOffId, juce::Colour (0xffed5e5e));  // red from object palette
+    cancelBtn.onClick = [this] { dismiss(); };
+    addAndMakeVisible (cancelBtn);
+}
+
+void PresetSaveOverlay::show (const juce::String& existingName)
+{
+    nameEditor.setText (existingName, false);
+    setVisible (true);
+    toFront (true);
+    nameEditor.grabKeyboardFocus();
+    // Select all text for easy overwrite
+    nameEditor.setHighlightedRegion ({ 0, nameEditor.getText().length() });
+}
+
+void PresetSaveOverlay::dismiss()
+{
+    setVisible (false);
+    nameEditor.clear();
+}
+
+juce::Rectangle<int> PresetSaveOverlay::getCardBounds() const
+{
+    auto area = getLocalBounds();
+    return { (area.getWidth() - cardW) / 2,
+             (area.getHeight() - cardH) / 2,
+             cardW, cardH };
+}
+
+void PresetSaveOverlay::paint (juce::Graphics& g)
+{
+    // Semi-transparent backdrop
+    g.setColour (Colours_OSD::bgVoid.withAlpha (0.75f));
+    g.fillRect (getLocalBounds());
+
+    // Card
+    auto card = getCardBounds().toFloat();
+    g.setColour (Colours_OSD::bgPanel);
+    g.fillRoundedRectangle (card, 6.0f);
+    g.setColour (Colours_OSD::borderSubtle);
+    g.drawRoundedRectangle (card.reduced (0.5f), 6.0f, 1.0f);
+
+    // Title — SAVE PRESET (section header style)
+    g.setColour (Colours_OSD::textDim);
+    auto titleFont = juce::Font (juce::FontOptions (13.0f).withStyle ("Bold"));
+    g.setFont (titleFont);
+    auto titleArea = card.withHeight (32.0f).translated (0.0f, 8.0f);
+    g.drawText ("SAVE PRESET", titleArea.toNearestInt(), juce::Justification::centred);
+}
+
+void PresetSaveOverlay::resized()
+{
+    auto card = getCardBounds();
+    int pad = 16;
+
+    // Name editor — centred in card, below title
+    int editorY = card.getY() + 44;
+    nameEditor.setBounds (card.getX() + pad, editorY,
+                          card.getWidth() - pad * 2, 26);
+
+    // Buttons — centred at bottom of card
+    int btnW = 80, btnH = 28, btnGap = 12;
+    int totalBtnW = btnW * 2 + btnGap;
+    int btnX = card.getX() + (card.getWidth() - totalBtnW) / 2;
+    int btnY = card.getBottom() - btnH - 16;
+    saveBtn.setBounds (btnX, btnY, btnW, btnH);
+    cancelBtn.setBounds (btnX + btnW + btnGap, btnY, btnW, btnH);
+}
+
+bool PresetSaveOverlay::keyPressed (const juce::KeyPress& key)
+{
+    if (key == juce::KeyPress::escapeKey)
+    {
+        dismiss();
+        return true;
+    }
+    return false;
+}
+
+void PresetSaveOverlay::mouseDown (const juce::MouseEvent& e)
+{
+    // Click outside card → dismiss
+    if (! getCardBounds().contains (e.getPosition()))
+        dismiss();
+}
+
+//==============================================================================
 // Ableton12Look — Observatory v6 LookAndFeel implementation
 //==============================================================================
 Ableton12Look::Ableton12Look()
@@ -325,6 +458,14 @@ void Ableton12Look::drawComboBox (juce::Graphics& g, int width, int height, bool
     g.fillPath (arrow);
 }
 
+void Ableton12Look::positionComboBoxText (juce::ComboBox& box, juce::Label& label)
+{
+    // Reserve only 20px for arrow (our triangle is 6px wide centered at width-12)
+    // instead of JUCE's default 30px — fixes "Figure-8" truncation
+    label.setBounds (1, 1, box.getWidth() - 20, box.getHeight() - 2);
+    label.setFont (getComboBoxFont (box));
+}
+
 void Ableton12Look::drawLabel (juce::Graphics& g, juce::Label& label)
 {
     // Override slider text-box labels to use JetBrains Mono 12px
@@ -338,7 +479,57 @@ void Ableton12Look::drawLabel (juce::Graphics& g, juce::Label& label)
                     label.getJustificationType(), true);
         return;
     }
-    LookAndFeel_V4::drawLabel (g, label);
+
+    // v0.9: Custom label rendering with sharp-rect outlines (matches editing state shape)
+    auto bounds = label.getLocalBounds().toFloat();
+    auto bg = label.findColour (juce::Label::backgroundColourId);
+    if (! bg.isTransparent())
+    {
+        g.setColour (bg);
+        g.fillRect (bounds);
+    }
+    auto outline = label.findColour (juce::Label::outlineColourId);
+    if (! outline.isTransparent())
+    {
+        g.setColour (outline);
+        g.drawRect (bounds.reduced (0.5f), 1.0f);
+    }
+    if (! label.isBeingEdited())
+    {
+        auto textArea = getLabelBorderSize (label).subtractedFrom (label.getLocalBounds());
+        g.setColour (label.findColour (juce::Label::textColourId));
+        g.setFont (label.getFont());
+        g.drawFittedText (label.getText(), textArea,
+                          label.getJustificationType(),
+                          juce::jmax (1, (int) ((float) textArea.getHeight() / label.getFont().getHeight())),
+                          label.getMinimumHorizontalScale());
+    }
+}
+
+// v0.9: Thin 1px outline for text editors — replaces JUCE's thick default
+// Uses focusedOutlineColourId when editor has focus (Label propagates outlineWhenEditingColourId here)
+void Ableton12Look::drawTextEditorOutline (juce::Graphics& g, int w, int h,
+                                            juce::TextEditor& editor)
+{
+    auto colour = editor.hasKeyboardFocus (true)
+                    ? editor.findColour (juce::TextEditor::focusedOutlineColourId)
+                    : editor.findColour (juce::TextEditor::outlineColourId);
+    if (colour.isTransparent())
+        return;
+    g.setColour (colour);
+
+    // Knob text editors (parent chain: TextEditor → Label → Slider) get rounded rect;
+    // OSC input fields and others get sharp rect
+    auto* parent = editor.getParentComponent();
+    bool isKnobEditor = parent != nullptr
+                        && dynamic_cast<juce::Slider*> (parent->getParentComponent()) != nullptr;
+
+    if (isKnobEditor)
+        g.drawRoundedRectangle (0.5f, 0.5f, static_cast<float> (w) - 1.0f,
+                                static_cast<float> (h) - 1.0f, 3.0f, 1.0f);
+    else
+        g.drawRect (0.5f, 0.5f, static_cast<float> (w) - 1.0f,
+                    static_cast<float> (h) - 1.0f, 1.0f);
 }
 
 //==============================================================================
@@ -766,7 +957,7 @@ static void styleSlider (juce::Slider& slider, juce::LookAndFeel& lf,
     slider.setSliderStyle (style);
     slider.setWantsKeyboardFocus (true);
     slider.setMouseClickGrabsKeyboardFocus (true);
-    slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 60, 12);
+    slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 48, 12);
     slider.setColour (juce::Slider::textBoxTextColourId, Colours_OSD::textSecondary);
     slider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     slider.setColour (juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
@@ -1331,9 +1522,18 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     oscPortLabel.setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
     oscPortLabel.setColour (juce::Label::backgroundWhenEditingColourId, Colours_OSD::bgWell);
     oscPortLabel.setColour (juce::Label::outlineWhenEditingColourId, Colours_OSD::accentStellar);
+    oscPortLabel.setColour (juce::TextEditor::highlightColourId, Colours_OSD::accentStellar.withAlpha (0.35f));
     oscPortLabel.setJustificationType (juce::Justification::centred);
     oscPortLabel.setColour (juce::Label::backgroundColourId, Colours_OSD::bgRecessed);
     oscPortLabel.setColour (juce::Label::outlineColourId, Colours_OSD::borderDim);  // matches ComboBox outline
+    oscPortLabel.onEditorShow = [this]()
+    {
+        if (auto* ed = oscPortLabel.getCurrentTextEditor())
+        {
+            ed->setJustification (juce::Justification::centred);
+            ed->setHighlightedRegion ({ 0, oscPortLabel.getText().length() });
+        }
+    };
     oscPortLabel.onTextChange = [this]
     {
         auto text = oscPortLabel.getText().trim();
@@ -1373,9 +1573,18 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     oscSendIPLabel.setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
     oscSendIPLabel.setColour (juce::Label::backgroundWhenEditingColourId, Colours_OSD::bgWell);
     oscSendIPLabel.setColour (juce::Label::outlineWhenEditingColourId, Colours_OSD::accentStellar);
+    oscSendIPLabel.setColour (juce::TextEditor::highlightColourId, Colours_OSD::accentStellar.withAlpha (0.35f));
     oscSendIPLabel.setColour (juce::Label::backgroundColourId, Colours_OSD::bgRecessed);
     oscSendIPLabel.setColour (juce::Label::outlineColourId, Colours_OSD::borderDim);
     oscSendIPLabel.setJustificationType (juce::Justification::centred);
+    oscSendIPLabel.onEditorShow = [this]()
+    {
+        if (auto* ed = oscSendIPLabel.getCurrentTextEditor())
+        {
+            ed->setJustification (juce::Justification::centred);
+            ed->setHighlightedRegion ({ 0, oscSendIPLabel.getText().length() });
+        }
+    };
     oscSendIPLabel.onTextChange = [this]
     {
         processorRef.setOscSendIP (oscSendIPLabel.getText().trim());
@@ -1389,9 +1598,18 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     oscSendPortLabel.setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
     oscSendPortLabel.setColour (juce::Label::backgroundWhenEditingColourId, Colours_OSD::bgWell);
     oscSendPortLabel.setColour (juce::Label::outlineWhenEditingColourId, Colours_OSD::accentStellar);
+    oscSendPortLabel.setColour (juce::TextEditor::highlightColourId, Colours_OSD::accentStellar.withAlpha (0.35f));
     oscSendPortLabel.setColour (juce::Label::backgroundColourId, Colours_OSD::bgRecessed);
     oscSendPortLabel.setColour (juce::Label::outlineColourId, Colours_OSD::borderDim);
     oscSendPortLabel.setJustificationType (juce::Justification::centred);
+    oscSendPortLabel.onEditorShow = [this]()
+    {
+        if (auto* ed = oscSendPortLabel.getCurrentTextEditor())
+        {
+            ed->setJustification (juce::Justification::centred);
+            ed->setHighlightedRegion ({ 0, oscSendPortLabel.getText().length() });
+        }
+    };
     oscSendPortLabel.onTextChange = [this]
     {
         int port = oscSendPortLabel.getText().trim().getIntValue();
@@ -1402,37 +1620,23 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     };
     addAndMakeVisible (oscSendPortLabel);
 
-    // --- v0.8: FLT toggle (TONE section header) — timer-driven ---------------
+    // --- v0.9: FLT toggle — directly controls filterEnabled parameter ---------
     fltToggle = std::make_unique<IndicatorToggle> ("FLT", Colours_OSD::accentViolet,
                                                     ableton12Look.jetbrainsMedium);
     fltToggle->setClickingTogglesState (false);  // timer drives visual state
     fltToggle->onClick = [this]
     {
-        auto* hpParam = processorRef.apvts.getParameter ("filterHP");
-        auto* lpParam = processorRef.apvts.getParameter ("filterLP");
-        if (hpParam != nullptr && lpParam != nullptr)
+        auto* fltParam = processorRef.apvts.getParameter ("filterEnabled");
+        if (fltParam != nullptr)
         {
-            float hpHz = processorRef.apvts.getRawParameterValue ("filterHP")->load();
-            float lpHz = processorRef.apvts.getRawParameterValue ("filterLP")->load();
-            bool isAtDefaults = (hpHz < 21.0f && lpHz > 19999.0f);
-            if (isAtDefaults)
-            {
-                hpParam->setValueNotifyingHost (hpParam->convertTo0to1 (200.0f));
-                lpParam->setValueNotifyingHost (lpParam->convertTo0to1 (8000.0f));
-            }
-            else
-            {
-                hpParam->setValueNotifyingHost (hpParam->convertTo0to1 (20.0f));
-                lpParam->setValueNotifyingHost (lpParam->convertTo0to1 (20000.0f));
-            }
+            float current = processorRef.apvts.getRawParameterValue ("filterEnabled")->load();
+            fltParam->setValueNotifyingHost (current < 0.5f ? 1.0f : 0.0f);
         }
     };
     addAndMakeVisible (*fltToggle);
-    // Set initial visual state from current parameter values
+    // Set initial visual state from filterEnabled parameter
     {
-        float hp = processorRef.apvts.getRawParameterValue ("filterHP")->load();
-        float lp = processorRef.apvts.getRawParameterValue ("filterLP")->load();
-        filterIsActive = (hp > 21.0f || lp < 19900.0f);
+        filterIsActive = processorRef.apvts.getRawParameterValue ("filterEnabled")->load() > 0.5f;
         fltToggle->setToggleState (filterIsActive, juce::dontSendNotification);
     }
 
@@ -1585,30 +1789,30 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     };
 
     stylePresetButton (presetSaveButton, "Save");
+    addChildComponent (presetSaveOverlay);  // initially hidden
     presetSaveButton.onClick = [this]
     {
-        auto* aw = new juce::AlertWindow ("Save Preset",
-                                           "Enter a name for this preset:",
-                                           juce::MessageBoxIconType::NoIcon);
-        aw->addTextEditor ("presetName", "", "Name:");
-        aw->addButton ("Save", 1, juce::KeyPress (juce::KeyPress::returnKey));
-        aw->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
-        aw->enterModalState (true, juce::ModalCallbackFunction::create (
-            [this, aw] (int result)
-            {
-                if (result == 1)
-                {
-                    auto name = aw->getTextEditorContents ("presetName").trim();
-                    if (name.isNotEmpty())
-                    {
-                        processorRef.saveUserPreset (name);
-                        refreshPresetBox();
-                        presetBox.setSelectedId (processorRef.getCurrentPresetIndex() + 1,
-                                                 juce::dontSendNotification);
-                    }
-                }
-                delete aw;
-            }), true);
+        // Pre-fill name if current preset is user-made (index >= NUM_FACTORY_PRESETS)
+        int currentIdx = processorRef.getCurrentPresetIndex();
+        bool isUserPreset = currentIdx >= 8;  // NUM_FACTORY_PRESETS = 8
+        juce::String existingName;
+        if (isUserPreset)
+        {
+            auto names = processorRef.getPresetNames();
+            if (currentIdx < names.size())
+                existingName = names[currentIdx];
+        }
+
+        presetSaveOverlay.onSave = [this] (const juce::String& name)
+        {
+            processorRef.saveUserPreset (name);
+            refreshPresetBox();
+            presetBox.setSelectedId (processorRef.getCurrentPresetIndex() + 1,
+                                     juce::dontSendNotification);
+        };
+
+        presetSaveOverlay.setBounds (getLocalBounds());
+        presetSaveOverlay.show (existingName);
     };
 
     // --- SML badge button (header branding link) ---
@@ -2003,26 +2207,20 @@ void OpenSpatialDelayEditor::timerCallback()
             presetBox.setSelectedId (expected, juce::dontSendNotification);
     }
 
-    // v0.7: Sync filter graph from parameters + auto-dim when at defaults
+    // v0.9: Sync filter graph from parameters — always show live values (WYSIWYG)
     {
         float hp  = processorRef.apvts.getRawParameterValue ("filterHP")->load();
         float lp  = processorRef.apvts.getRawParameterValue ("filterLP")->load();
         float hpq = processorRef.apvts.getRawParameterValue ("filterHPQ")->load();
         float lpq = processorRef.apvts.getRawParameterValue ("filterLPQ")->load();
 
-        bool filterActive = (hp > 21.0f || lp < 19900.0f);
-        filterGraph.setEnabled (filterActive);
-        filterIsActive = filterActive;
+        filterIsActive = processorRef.apvts.getRawParameterValue ("filterEnabled")->load() > 0.5f;
+        filterGraph.setEnabled (filterIsActive);
         if (fltToggle) fltToggle->setToggleState (filterIsActive, juce::dontSendNotification);
 
-        // Only update graph when active — when inactive, graph freezes at last active position
-        if (filterActive)
-        {
-            filterGraph.setFrequencies (hp, lp);
-            filterGraph.setQ (hpq, lpq);
-            lastActiveHP = hp;   lastActiveLP = lp;
-            lastActiveHPQ = hpq; lastActiveLPQ = lpq;
-        }
+        // Always update graph with live values — dimming handles on/off visual
+        filterGraph.setFrequencies (hp, lp);
+        filterGraph.setQ (hpq, lpq);
     }
 
     // v0.7: Sync dotted/triplet buttons from syncMode parameter
@@ -2237,13 +2435,12 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         }
     }
 
-    // Filter readout text below filter graph — dims when filter at defaults
+    // v0.9: Filter readout — always shows live values (WYSIWYG), dims when disabled
     {
-        // v0.8: Use frozen values when filter is inactive so readout doesn't jump
-        float hp  = filterIsActive ? processorRef.apvts.getRawParameterValue ("filterHP")->load()  : lastActiveHP;
-        float lp  = filterIsActive ? processorRef.apvts.getRawParameterValue ("filterLP")->load()  : lastActiveLP;
-        float hpq = filterIsActive ? processorRef.apvts.getRawParameterValue ("filterHPQ")->load() : lastActiveHPQ;
-        float lpq = filterIsActive ? processorRef.apvts.getRawParameterValue ("filterLPQ")->load() : lastActiveLPQ;
+        float hp  = processorRef.apvts.getRawParameterValue ("filterHP")->load();
+        float lp  = processorRef.apvts.getRawParameterValue ("filterLP")->load();
+        float hpq = processorRef.apvts.getRawParameterValue ("filterHPQ")->load();
+        float lpq = processorRef.apvts.getRawParameterValue ("filterLPQ")->load();
         auto hpStr = (hp >= 1000.0f) ? juce::String (hp / 1000.0f, 1) + "k"
                                      : juce::String (juce::roundToInt (hp));
         auto lpStr = (lp >= 1000.0f) ? juce::String (lp / 1000.0f, 1) + "k"

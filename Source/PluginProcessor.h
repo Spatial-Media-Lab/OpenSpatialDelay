@@ -728,8 +728,7 @@ private:
     // Tuning constants (named to avoid magic numbers in hot paths)
     static constexpr float kFeedbackInputHeadroom  = 0.98f;   // prevents feedback runaway at unity
     static constexpr float kMakeupGainCoeff        = 0.2f;    // self-oscillation loss compensation
-    static constexpr float kFilterLP_BypassThresh  = 19999.0f; // LP freq >= this → filter bypassed
-    static constexpr float kFilterHP_BypassThresh  = 21.0f;    // HP freq <= this → filter bypassed
+    // v0.9: Threshold bypass constants removed — filterEnabled param drives bypass directly
 
     double currentSampleRate = 44100.0;
 
@@ -759,6 +758,23 @@ private:
         int   crossfadeLength = 0;    // total crossfade length (samples)
     };
     VarispeedState varispeedState[MAX_OBJECTS + 1] = {};  // 12 objects + 1 feedback
+
+    // v0.9: WSOLA-lite per-tap pitch shifter — timing-preserving pitch shift
+    // Used only for per-tap additive pitch. Global cumulative pitch stays on varispeed.
+    struct WSOLAState {
+        static constexpr int kBufSize = 2048;       // ~42ms at 48kHz, power of 2
+        static constexpr int kBufMask = kBufSize - 1;
+        static constexpr int kGrainSize = 1024;     // ~21ms grain
+        static constexpr int kCrossfadeLen = 512;   // ~10ms crossfade (50% overlap)
+
+        float buffer[kBufSize] = {};
+        int   writePos = 0;
+        float readPhase = 0.0f;      // fractional read position in buffer
+        float fadingPhase = 0.0f;    // fading grain read position
+        int   crossfadeRemaining = 0;
+    };
+    WSOLAState wsolaState[MAX_OBJECTS] = {};  // 12 objects (no feedback — feedback uses varispeed only)
+    float wsolaProcess (int objectIndex, float inputSample, float perTapSemitones);
 
     // Block-rate cached conversion factor: ms → samples (set at top of processBlock)
     float blockMsToSamples = 0.0f;
@@ -802,16 +818,23 @@ private:
         return x;
     }
 
-    // Output Limiter — musical +2dB ceiling for speaker protection during self-oscillation
+    // Output Limiter — hard +2dB ceiling for speaker protection during self-oscillation
+    // Soft saturation curve for musical character, hard clamp enforces true ceiling.
     static float outputLimiter (float x)
     {
         if (! std::isfinite (x))
             return 0.0f;
         const float threshold = 1.2589f;  // +2 dB
         if (x > threshold)
-            return threshold + (x - threshold) / (1.0f + (x - threshold) * (x - threshold));
+        {
+            float soft = threshold + (x - threshold) / (1.0f + (x - threshold) * (x - threshold));
+            return juce::jmin (soft, threshold);  // v0.9: enforce hard ceiling at +2 dB
+        }
         if (x < -threshold)
-            return -threshold + (x + threshold) / (1.0f + (x + threshold) * (x + threshold));
+        {
+            float soft = -threshold + (x + threshold) / (1.0f + (x + threshold) * (x + threshold));
+            return juce::jmax (soft, -threshold);  // v0.9: enforce hard floor at -2 dB
+        }
         return x;
     }
 
@@ -863,6 +886,7 @@ private:
     std::atomic<float>* cachedParam_filterHP        = nullptr;
     std::atomic<float>* cachedParam_filterHPQ       = nullptr;
     std::atomic<float>* cachedParam_filterLPQ       = nullptr;
+    std::atomic<float>* cachedParam_filterEnabled   = nullptr;
     std::atomic<float>* cachedParam_hrtfProfile     = nullptr;
     std::atomic<float>* cachedParam_globalPitchShift = nullptr;
     std::atomic<float>* cachedParam_airAbsorption   = nullptr;
@@ -882,7 +906,7 @@ private:
     float cachedFeedbackHPFreq = -1.0f;
     float cachedFilterHPQ = -1.0f;
     float cachedFilterLPQ = -1.0f;
-    bool  filterBypassed = false;  // v0.7: true when HP/LP at defaults (skip filter in feedback)
+    bool  filterBypassed = true;   // v0.9: true when filterEnabled param is OFF (default)
 
     // v0.4: Doppler effect — per-object checkbox, global amount, velocity tracking
     float prevAzimuth[MAX_OBJECTS]   = {};   // radians, previous block

@@ -161,6 +161,8 @@ public:
                        int buttonX, int buttonY, int buttonW, int buttonH,
                        juce::ComboBox& box) override;
 
+    void positionComboBoxText (juce::ComboBox& box, juce::Label& label) override;
+
     juce::Font getComboBoxFont (juce::ComboBox&) override
     {
         return juce::Font (juce::FontOptions (dmSansRegular).withHeight (13.0f));
@@ -172,6 +174,10 @@ public:
     }
 
     void drawLabel (juce::Graphics& g, juce::Label& label) override;
+
+    // v0.9: Thin 1px outline for all text editors (knob values + OSC fields)
+    void drawTextEditorOutline (juce::Graphics& g, int width, int height,
+                                juce::TextEditor& editor) override;
 
     juce::Font getTextButtonFont (juce::TextButton&, int buttonHeight) override
     {
@@ -203,7 +209,21 @@ public:
             label->setFont (juce::Font (juce::FontOptions (11.0f)));
         label->setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
         label->setColour (juce::Label::backgroundWhenEditingColourId, juce::Colour (0xff0A0A14));
-        label->setColour (juce::TextEditor::highlightColourId, juce::Colour (0x407457d1));
+        // v0.9: Selection highlight matches knob accent color at 35% opacity
+        label->setColour (juce::TextEditor::highlightColourId,
+                          slider.findColour (juce::Slider::thumbColourId).withAlpha (0.35f));
+        // v0.9: Thin outline matching knob accent color when editing
+        label->setColour (juce::Label::outlineWhenEditingColourId,
+                          slider.findColour (juce::Slider::thumbColourId));
+        // v0.9: Center text and select-all when editor opens
+        label->onEditorShow = [label]()
+        {
+            if (auto* ed = label->getCurrentTextEditor())
+            {
+                ed->setJustification (juce::Justification::centred);
+                ed->setHighlightedRegion ({ 0, label->getText().length() });
+            }
+        };
         return label;
     }
 };
@@ -242,8 +262,8 @@ public:
     void setEnabled (bool enabled) { filterEnabled = enabled; repaint(); }
 
 private:
-    float hpFreq = 20.0f;      // Hz
-    float lpFreq = 20000.0f;   // Hz
+    float hpFreq = 50.0f;      // Hz
+    float lpFreq = 5000.0f;    // Hz
     float hpQ = 0.707f;        // HP resonance
     float lpQ = 0.707f;        // LP resonance
     bool  filterEnabled = true;
@@ -335,6 +355,34 @@ private:
 };
 
 //==============================================================================
+// PresetSaveOverlay — in-plugin modal overlay for saving presets
+//==============================================================================
+class PresetSaveOverlay : public juce::Component
+{
+public:
+    PresetSaveOverlay();
+
+    void show (const juce::String& existingName);  // empty = new preset
+    void dismiss();
+
+    std::function<void (const juce::String&)> onSave;  // callback with preset name
+
+    void paint (juce::Graphics& g) override;
+    void resized() override;
+    bool keyPressed (const juce::KeyPress& key) override;
+    void mouseDown (const juce::MouseEvent& e) override;  // backdrop click → dismiss
+
+private:
+    juce::TextEditor nameEditor;
+    juce::TextButton saveBtn { "Save" }, cancelBtn { "Cancel" };
+
+    static constexpr int cardW = 300, cardH = 150;
+    juce::Rectangle<int> getCardBounds() const;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PresetSaveOverlay)
+};
+
+//==============================================================================
 // Main plugin editor
 //==============================================================================
 class OpenSpatialDelayEditor : public juce::AudioProcessorEditor,
@@ -423,6 +471,7 @@ private:
     juce::ComboBox presetBox;
     juce::Label presetLabel;
     juce::TextButton presetPrevButton, presetNextButton, presetSaveButton;
+    PresetSaveOverlay presetSaveOverlay;
     void refreshPresetBox();
 
     // v0.7: Input format dropdown (header bar)
@@ -519,11 +568,8 @@ private:
     int delayHeaderY = 0, toneHeaderY = 0, mixHeaderY = 0, oscHeaderY = 0;
     int objectHeaderY = 0;
 
-    // v0.7: Filter active state (for dimming FLT tag + readout)
-    bool filterIsActive = true;
-    // v0.8: Frozen filter readout values for when filter is disabled
-    float lastActiveHP = 200.0f, lastActiveLP = 8000.0f;
-    float lastActiveHPQ = 0.707f, lastActiveLPQ = 0.707f;
+    // v0.9: Filter active state — driven by filterEnabled parameter
+    bool filterIsActive = false;  // default OFF (matches filterEnabled param default)
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OpenSpatialDelayEditor)
 };
