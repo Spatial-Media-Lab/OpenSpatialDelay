@@ -492,3 +492,60 @@ Frozen snapshot in `Archive/v0.8/`:
 
 ### Output
 - 22 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
+
+## v0.9 (2026-03-17) — Active Development
+**UI Polish + Bug Fixes + WSOLA Per-Tap Pitch + Preset Save Overlay**
+
+Quality release focusing on UI polish, recurring bug fixes, improved per-tap pitch
+shifting (WSOLA-lite), and replacing the system-level preset save dialog with an
+in-plugin modal overlay matching the Observatory v6 design system.
+
+### Bug Fixes
+- **Input gain leak (recurring):** Fixed `inputGain` applying to both dry and wet paths — now only applies to delay write (Stage 1). Root cause documented in `docs/bug-reports/RECURRING_INPUT_GAIN_LEAK.md`
+- **Filter defaults:** Changed HP default from 20Hz to 50Hz, LP default from 20kHz to 5kHz, resonance defaults to 0.71. Disabled filter visualization now matches enabled state (WYSIWYG)
+- **Filter toggle default:** Filter now defaults to OFF (was incorrectly defaulting to ON)
+
+### WSOLA-lite Per-Tap Pitch Shifting
+- New `WSOLAProcessor` struct: per-tap time-domain pitch shifting that preserves delay timing
+- Split architecture: varispeed for global pitch (warm character), WSOLA-lite for per-tap pitch (rhythm-preserving)
+- Eliminates the timing disruption that occurred with the previous dual-head crossfade approach for per-tap pitch
+- Each of 12 taps has an independent WSOLA processor instance
+
+### Preset Save Overlay
+- Replaced `juce::AlertWindow` (separate OS window) with `PresetSaveOverlay` custom component
+- In-plugin modal overlay: semi-transparent backdrop + centered card, cannot float to other screens
+- Observatory v6 design: `bgPanel` card, `borderSubtle` outline, 6px rounded corners
+- Smart name pre-fill: user presets pre-fill the name field, factory presets show empty field
+- Save button: filled cyan (`accentStellar`), Cancel button: unfilled red-tinted with red text
+- Keyboard: Return to save, Escape to cancel, backdrop click to dismiss
+- Both buttons have proper hover (+12% brightness) and click (+15% brightness) states
+
+### UI: Text Input Field Styling
+- Knob text editors: thin 1px rounded-rectangle outline in section accent color when editing
+- OSC input fields: thin 1px sharp-rectangle outline in cyan when editing
+- Text selection highlight: accent-matched per section (cyan for DELAY/OSC, rose for MOD, amber for MIX, violet for TONE)
+- Consistent text centering across all input fields
+
+### UI: Dropdown Fixes
+- Fixed text alignment regression: restored `getLabelBorderSize()` padding in custom `drawLabel` override (was drawing text edge-to-edge after sharp-rect outline change)
+- Added `positionComboBoxText` override: reserves 20px for arrow (not JUCE default 30px), fixing "Figure-8" truncation in trajectory dropdown
+- All dropdown text now has proper left padding matching v0.8 appearance
+
+### Output Limiter
+- Ceiling remains at +2dB rational approximation soft saturator
+- Fixed interaction with input gain to prevent exceeding limiter ceiling during self-oscillation
+
+### State Persistence
+- `pluginStateVersion = 13` (v0.8 was version 12)
+- Filter defaults updated: HP 50Hz, LP 5kHz, Res 0.71
+- Filter enabled default: OFF
+
+### Files
+Active source in `Source/`:
+- `PluginProcessor.h`
+- `PluginProcessor.cpp`
+- `PluginEditor.h`
+- `PluginEditor.cpp`
+
+### Output
+- 22 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
