@@ -245,14 +245,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.3f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
 
+    // v0.9: Defaults changed from LP=20000/HP=20 to LP=5000/HP=50. Version bumped to 9
+    // so DAWs discard stale saved state and use new defaults on fresh instances.
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("filterLP", 1), "Low-Pass Filter",
-        juce::NormalisableRange<float> (200.0f, 20000.0f, 1.0f, 0.3f), 20000.0f,
+        juce::ParameterID ("filterLP", 9), "Low-Pass Filter",
+        juce::NormalisableRange<float> (200.0f, 20000.0f, 1.0f, 0.3f), 5000.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtFreq)));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("filterHP", 1), "High-Pass Filter",
-        juce::NormalisableRange<float> (20.0f, 5000.0f, 1.0f, 0.3f), 20.0f,
+        juce::ParameterID ("filterHP", 9), "High-Pass Filter",
+        juce::NormalisableRange<float> (20.0f, 5000.0f, 1.0f, 0.3f), 50.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtFreq)));
 
     // v0.7: Separate HP and LP resonance (Q). Range 0.5 (gentle) to 8.0 (sharp peak). Default: 0.707 (Butterworth).
@@ -266,6 +268,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2); })));
+
+    // v0.9: Dedicated filter enabled toggle (default OFF — filter bypassed on fresh load)
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID ("filterEnabled", 9), "Filter Enabled",
+        juce::NormalisableRange<float> (0.0f, 1.0f, 1.0f), 0.0f));
 
     // v0.7: Global pitch shift in cents (±200 ct). Per-tap override in semitones is separate.
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -1058,6 +1065,7 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     cachedParam_filterHP        = apvts.getRawParameterValue ("filterHP");
     cachedParam_filterHPQ       = apvts.getRawParameterValue ("filterHPQ");
     cachedParam_filterLPQ       = apvts.getRawParameterValue ("filterLPQ");
+    cachedParam_filterEnabled   = apvts.getRawParameterValue ("filterEnabled");
     cachedParam_hrtfProfile     = apvts.getRawParameterValue ("hrtfProfile");
     cachedParam_globalPitchShift = apvts.getRawParameterValue ("pitchShift");
     cachedParam_airAbsorption   = apvts.getRawParameterValue ("airAbsorption");
@@ -1987,6 +1995,16 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
         vs.crossfadeLength = 0;
     }
 
+    // v0.9: Reset all WSOLA-lite per-tap pitch states
+    for (auto& ws : wsolaState)
+    {
+        std::fill (std::begin (ws.buffer), std::end (ws.buffer), 0.0f);
+        ws.writePos = 0;
+        ws.readPhase = 0.0f;
+        ws.fadingPhase = 0.0f;
+        ws.crossfadeRemaining = 0;
+    }
+
     // Pre-allocate input buffers
     monoInputBuffer.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
     inputBufferL.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
@@ -2236,6 +2254,83 @@ float OpenSpatialDelayProcessor::readVarispeed (float delaySamples,
 
     // Normal operation: single head reading at drifted position
     return readDL (delaySamples - vs.drift);
+}
+
+//==============================================================================
+// v0.9: WSOLA-Lite Per-Tap Pitch Shifter — Timing-Preserving
+// Reads from a small per-tap circular buffer at the pitch ratio rate.
+// When read-write drift exceeds grain size, Hann crossfade resets to nominal.
+// Global cumulative pitch + doppler stay on varispeed (tape character).
+// Per-tap pitch uses this path to avoid timing drift.
+//==============================================================================
+float OpenSpatialDelayProcessor::wsolaProcess (int objectIndex, float inputSample,
+                                                 float perTapSemitones)
+{
+    auto& ws = wsolaState[objectIndex];
+
+    // Write incoming sample into circular buffer
+    ws.buffer[ws.writePos & WSOLAState::kBufMask] = inputSample;
+    ws.writePos++;
+
+    const float ratio = std::pow (2.0f, perTapSemitones / 12.0f);
+
+    // Advance read phase by pitch ratio
+    ws.readPhase += ratio;
+
+    // Catmull-Rom interpolated read from WSOLA buffer
+    auto readBuf = [&](float phase) -> float {
+        float wrapped = std::fmod (phase, static_cast<float> (WSOLAState::kBufSize));
+        if (wrapped < 0.0f) wrapped += static_cast<float> (WSOLAState::kBufSize);
+
+        int   i1 = static_cast<int> (wrapped);
+        float f  = wrapped - static_cast<float> (i1);
+
+        int i0 = (i1 - 1) & WSOLAState::kBufMask;
+        int i2 = (i1 + 1) & WSOLAState::kBufMask;
+        int i3 = (i1 + 2) & WSOLAState::kBufMask;
+        i1 = i1 & WSOLAState::kBufMask;
+
+        float y0 = ws.buffer[i0], y1 = ws.buffer[i1];
+        float y2 = ws.buffer[i2], y3 = ws.buffer[i3];
+
+        return y1 + 0.5f * f * (y2 - y0 + f * (2.0f * y0 - 5.0f * y1 + 4.0f * y2 - y3
+                                                  + f * (3.0f * (y1 - y2) + y3 - y0)));
+    };
+
+    // During crossfade: blend fading grain with new primary grain
+    if (ws.crossfadeRemaining > 0)
+    {
+        float primary = readBuf (ws.readPhase);
+        float fading  = readBuf (ws.fadingPhase);
+        ws.fadingPhase += ratio;
+
+        float t = 1.0f - static_cast<float> (ws.crossfadeRemaining)
+                       / static_cast<float> (WSOLAState::kCrossfadeLen);
+        float halfPi = juce::MathConstants<float>::halfPi;
+        float gainNew = std::sin (t * halfPi);
+        float gainOld = std::cos (t * halfPi);
+
+        ws.crossfadeRemaining--;
+        return primary * gainNew + fading * gainOld;
+    }
+
+    // Check if read-write drift exceeds grain size → initiate crossfade
+    float drift = ws.readPhase - static_cast<float> (ws.writePos);
+    if (std::abs (drift) > static_cast<float> (WSOLAState::kGrainSize))
+    {
+        ws.fadingPhase = ws.readPhase;
+        // Reset read phase to just behind write position (nominal latency ~1 grain)
+        ws.readPhase = static_cast<float> (ws.writePos) - static_cast<float> (WSOLAState::kGrainSize);
+        ws.crossfadeRemaining = WSOLAState::kCrossfadeLen;
+
+        // First crossfade sample: fully on fading head
+        float fading = readBuf (ws.fadingPhase);
+        ws.fadingPhase += ratio;
+        ws.crossfadeRemaining--;
+        return fading;
+    }
+
+    return readBuf (ws.readPhase);
 }
 
 // #############################################################################
@@ -3240,18 +3335,22 @@ float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDe
     float objDelaySamples = static_cast<float> (objectIndex + 1) * baseDelaySamples;
     objDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), objDelaySamples);
 
-    // v0.8: Per-tap pitch is additive on top of cumulative global pitch.
-    // Global cumulative: tap k gets (k+1) × globalPitch. Per-tap offset adds on top.
-    // This ensures LFO modulation of global pitch affects all taps even with per-tap offsets.
+    // v0.9: Split pitch into global (varispeed, tape-speed) and per-tap (WSOLA-lite, timing-preserving).
+    // Global cumulative pitch + doppler → varispeed (preserves tape character, all taps drift together).
+    // Per-tap additive pitch → WSOLA-lite (preserves rhythmic timing, no drift between taps).
     float perTapPitch = cachedObj[objectIndex].pitchShift->load (std::memory_order_relaxed);
-    float objPitch = static_cast<float> (objectIndex + 1) * pitchSemitones
-                   + perTapPitch + dopplerSemitones[objectIndex];
+    float globalPitch = static_cast<float> (objectIndex + 1) * pitchSemitones
+                      + dopplerSemitones[objectIndex];
 
     // v0.8: Per-tap input channel routing
     int inputCh = static_cast<int> (cachedObj[objectIndex].inputChannel->load (std::memory_order_relaxed));
     DelayChannel ch = (inputCh == 1) ? DelayChannel::Left : (inputCh == 2) ? DelayChannel::Right : DelayChannel::Mono;
 
-    float objMono = readVarispeed (objDelaySamples, objPitch, objectIndex, ch);
+    float objMono = readVarispeed (objDelaySamples, globalPitch, objectIndex, ch);
+
+    // v0.9: Per-tap pitch via WSOLA-lite (timing-preserving) — only when non-zero
+    if (std::abs (perTapPitch) >= 0.001f)
+        objMono = wsolaProcess (objectIndex, objMono, perTapPitch);
     float result = airAbsorptionFilter[objectIndex].processSample (objMono);
 
     // v0.7: Per-tap output filter (same coefficients as feedback filter)
@@ -3314,7 +3413,8 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     float hpFreq          = cachedParam_filterHP->load();
     float filterHPQ       = cachedParam_filterHPQ->load();
     float filterLPQ       = cachedParam_filterLPQ->load();
-    filterBypassed  = (lpFreq >= kFilterLP_BypassThresh && hpFreq <= kFilterHP_BypassThresh);
+    // v0.9: Filter bypass driven by dedicated parameter (not threshold inference)
+    filterBypassed  = cachedParam_filterEnabled->load() < 0.5f;
     int   profileIndex    = static_cast<int> (cachedParam_hrtfProfile->load());
     // v0.7: Global pitch is in cents (±200), convert to semitones for DSP
     float pitchSemitones  = cachedParam_globalPitchShift->load() / 100.0f;
@@ -3825,7 +3925,7 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
         float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
         float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
         writeDelayLine (delayInputL, delayInputR);
-        float rawInput = monoInputBuffer[static_cast<size_t> (s)] * inGain;  // for dry mix
+        float rawInput = monoInputBuffer[static_cast<size_t> (s)];  // for dry mix (no inGain — INPUT only scales delay input)
 
         // === STAGE 2: READ & SPATIALIZE ===
         float wetL = 0.0f, wetR = 0.0f;
@@ -3947,7 +4047,7 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
         float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
         float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
         writeDelayLine (delayInputL, delayInputR);
-        float rawInput = monoInputBuffer[static_cast<size_t> (s)] * inGain;  // for dry mix
+        float rawInput = monoInputBuffer[static_cast<size_t> (s)];  // for dry mix (no inGain — INPUT only scales delay input)
 
         // === STAGE 2: READ & SPATIALIZE ===
         float wetL = 0.0f, wetR = 0.0f;
@@ -4065,7 +4165,7 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
         float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
         float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
         writeDelayLine (delayInputL, delayInputR);
-        float rawInput = monoInputBuffer[static_cast<size_t> (s)] * inGain;  // for dry mix
+        float rawInput = monoInputBuffer[static_cast<size_t> (s)];  // for dry mix (no inGain — INPUT only scales delay input)
 
         // === STAGE 2: READ & SH ENCODE (with NFC-HOA) ===
         float ambiAccum[MAX_AMBI_CHANNELS] = {};
@@ -4145,7 +4245,7 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
         float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
         float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
         writeDelayLine (delayInputL, delayInputR);
-        float rawInput = monoInputBuffer[static_cast<size_t> (s)] * inGain;  // for dry mix
+        float rawInput = monoInputBuffer[static_cast<size_t> (s)];  // for dry mix (no inGain — INPUT only scales delay input)
 
         // === STAGE 2: READ & SPATIALIZE ===
         float channelAccum[16] = {};
