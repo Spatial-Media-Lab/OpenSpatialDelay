@@ -1,0 +1,61 @@
+// =============================================================================
+// BACKUP: v0.8 Wobble Implementation (saved before v0.9 tape echo rewrite)
+// Restore these if the new multi-layer approach doesn't work out.
+// =============================================================================
+
+// --- PluginProcessor.h lines 766-770 ---
+    // v0.8: Wobble modulation (LFO synced to delay time)
+    float wobblePhase = 0.0f;
+    float blockWobbleAmount = 0.0f;  // read once per block from APVTS
+    float blockWobbleMorph = 0.0f;
+    inline float applyWobble (float baseDelaySamples, float currentDelayMs);
+
+// --- PluginProcessor.cpp prepareToPlay (~line 1976-1977) ---
+    // v0.8: Reset wobble modulation state
+    wobblePhase = 0.0f;
+
+// --- PluginProcessor.cpp lines 3203-3243 ---
+// --- DELAY-SPECIFIC: Wobble modulation (v0.8) --- per-plugin delay-time LFO
+// v0.8: Wobble waveform — morphs between 4 shapes based on morph parameter (0..100)
+static float computeWobbleWaveform (float phase, float morphPercent)
+{
+    float twoPi = juce::MathConstants<float>::twoPi;
+    float p = phase * twoPi;
+
+    // 4 base waveforms
+    float sine = std::sin (p);
+    float triangle = 2.0f * std::abs (2.0f * phase - 1.0f) - 1.0f;
+    float roundedSquare = std::tanh (4.0f * std::sin (p));
+    float irregular = std::sin (p)
+                    + 0.3f * std::sin (2.0f * p + 0.7f)
+                    + 0.15f * std::sin (3.0f * p + 1.3f)
+                    + 0.08f * std::sin (5.0f * p + 2.1f);
+    irregular *= 0.65f;  // normalize roughly to +/-1
+
+    // Crossfade between adjacent shapes (0->sine, 33->triangle, 66->roundedSq, 100->irregular)
+    float t = morphPercent / 100.0f * 3.0f;  // 0..3
+    int seg = juce::jlimit (0, 2, static_cast<int> (t));
+    float frac = t - static_cast<float> (seg);
+
+    float shapes[4] = { sine, triangle, roundedSquare, irregular };
+    return shapes[seg] * (1.0f - frac) + shapes[seg + 1] * frac;
+}
+
+// v0.8: Apply wobble modulation to base delay (per-sample, modifies wobblePhase)
+inline float OpenSpatialDelayProcessor::applyWobble (float baseDelaySamples, float currentDelayMs)
+{
+    if (blockWobbleAmount <= 0.0f)
+        return baseDelaySamples;
+
+    float lfoFreqHz = 1000.0f / std::max (1.0f, currentDelayMs);
+    wobblePhase += lfoFreqHz / static_cast<float> (currentSampleRate);
+    if (wobblePhase >= 1.0f)
+        wobblePhase -= std::floor (wobblePhase);
+
+    float waveform = computeWobbleWaveform (wobblePhase, blockWobbleMorph);
+    constexpr float maxDeviation = 0.006f;  // 0.6% of delay time at max amount
+    return baseDelaySamples * (1.0f + blockWobbleAmount * waveform * maxDeviation);
+}
+
+// --- Render path callsites (5 locations) ---
+// All used: baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);
