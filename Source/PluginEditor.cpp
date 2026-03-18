@@ -349,9 +349,9 @@ void PresetSaveOverlay::mouseDown (const juce::MouseEvent& e)
 }
 
 //==============================================================================
-// Ableton12Look — Observatory v6 LookAndFeel implementation
+// OSDLookAndFeel — Observatory v6 LookAndFeel implementation
 //==============================================================================
-Ableton12Look::Ableton12Look()
+OSDLookAndFeel::OSDLookAndFeel()
 {
     // Load embedded fonts
     dmSansRegular    = juce::Typeface::createSystemTypefaceFor (FontData::DM_SansRegular_ttf,    FontData::DM_SansRegular_ttfSize);
@@ -373,7 +373,7 @@ Ableton12Look::Ableton12Look()
     setColour (juce::ComboBox::arrowColourId,                  juce::Colour (0xff6d7080));
 }
 
-void Ableton12Look::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
+void OSDLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
                                        float sliderPos, const float rotaryStartAngle,
                                        const float rotaryEndAngle, juce::Slider& slider)
 {
@@ -450,7 +450,7 @@ void Ableton12Look::drawRotarySlider (juce::Graphics& g, int x, int y, int width
     }
 }
 
-void Ableton12Look::drawButtonBackground (juce::Graphics& g, juce::Button& button,
+void OSDLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& button,
                                            const juce::Colour& backgroundColour,
                                            bool isMouseOverButton, bool isButtonDown)
 {
@@ -497,7 +497,7 @@ void Ableton12Look::drawButtonBackground (juce::Graphics& g, juce::Button& butto
     g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
 }
 
-void Ableton12Look::drawButtonText (juce::Graphics& g, juce::TextButton& button,
+void OSDLookAndFeel::drawButtonText (juce::Graphics& g, juce::TextButton& button,
                                      bool isMouseOverButton, bool isButtonDown)
 {
     // Preset button — left-aligned text to match ComboBox label positioning
@@ -519,14 +519,14 @@ void Ableton12Look::drawButtonText (juce::Graphics& g, juce::TextButton& button,
 //==============================================================================
 // v0.9: Custom PopupMenu rendering — matches ComboBox dropdown appearance
 //==============================================================================
-void Ableton12Look::drawPopupMenuBackground (juce::Graphics& g, int width, int height)
+void OSDLookAndFeel::drawPopupMenuBackground (juce::Graphics& g, int width, int height)
 {
     g.fillAll (findColour (juce::PopupMenu::backgroundColourId));
     g.setColour (juce::Colour (0xff252930));  // borderDim
     g.drawRect (0, 0, width, height, 1);
 }
 
-void Ableton12Look::drawPopupMenuItem (juce::Graphics& g, const juce::Rectangle<int>& area,
+void OSDLookAndFeel::drawPopupMenuItem (juce::Graphics& g, const juce::Rectangle<int>& area,
                                         bool isSeparator, bool isActive, bool isHighlighted,
                                         bool isTicked, bool hasSubMenu,
                                         const juce::String& text, const juce::String& /*shortcutKeyText*/,
@@ -581,7 +581,7 @@ void Ableton12Look::drawPopupMenuItem (juce::Graphics& g, const juce::Rectangle<
     }
 }
 
-void Ableton12Look::getIdealPopupMenuItemSize (const juce::String& text, bool isSeparator,
+void OSDLookAndFeel::getIdealPopupMenuItemSize (const juce::String& text, bool isSeparator,
                                                 int /*standardMenuItemHeight*/,
                                                 int& idealWidth, int& idealHeight)
 {
@@ -599,7 +599,7 @@ void Ableton12Look::getIdealPopupMenuItemSize (const juce::String& text, bool is
     idealHeight = 24;  // match ComboBox item height
 }
 
-void Ableton12Look::drawComboBox (juce::Graphics& g, int width, int height, bool /*isButtonDown*/,
+void OSDLookAndFeel::drawComboBox (juce::Graphics& g, int width, int height, bool /*isButtonDown*/,
                                    int /*buttonX*/, int /*buttonY*/, int /*buttonW*/, int /*buttonH*/,
                                    juce::ComboBox& /*box*/)
 {
@@ -624,7 +624,7 @@ void Ableton12Look::drawComboBox (juce::Graphics& g, int width, int height, bool
     g.fillPath (arrow);
 }
 
-void Ableton12Look::positionComboBoxText (juce::ComboBox& box, juce::Label& label)
+void OSDLookAndFeel::positionComboBoxText (juce::ComboBox& box, juce::Label& label)
 {
     // Reserve only 20px for arrow (our triangle is 6px wide centered at width-12)
     // instead of JUCE's default 30px — fixes "Figure-8" truncation
@@ -632,7 +632,7 @@ void Ableton12Look::positionComboBoxText (juce::ComboBox& box, juce::Label& labe
     label.setFont (getComboBoxFont (box));
 }
 
-void Ableton12Look::drawLabel (juce::Graphics& g, juce::Label& label)
+void OSDLookAndFeel::drawLabel (juce::Graphics& g, juce::Label& label)
 {
     // Override slider text-box labels to use JetBrains Mono 12px
     // Only match labels whose parent is a Slider (the value readout text box)
@@ -674,7 +674,7 @@ void Ableton12Look::drawLabel (juce::Graphics& g, juce::Label& label)
 
 // v0.9: Thin 1px outline for text editors — replaces JUCE's thick default
 // Uses focusedOutlineColourId when editor has focus (Label propagates outlineWhenEditingColourId here)
-void Ableton12Look::drawTextEditorOutline (juce::Graphics& g, int w, int h,
+void OSDLookAndFeel::drawTextEditorOutline (juce::Graphics& g, int w, int h,
                                             juce::TextEditor& editor)
 {
     auto colour = editor.hasKeyboardFocus (true)
@@ -799,7 +799,7 @@ void SpatialMapComponent::setObjectState (int index, float azimuthDeg, float ele
 
 void SpatialMapComponent::paint (juce::Graphics& g)
 {
-    auto* lf = dynamic_cast<Ableton12Look*> (&getLookAndFeel());
+    auto* lf = dynamic_cast<OSDLookAndFeel*> (&getLookAndFeel());
     float radius = std::min (getWidth(), getHeight()) * 0.45f;
     float cx = getWidth()  * 0.5f;
     float cy = getHeight() * 0.5f;
@@ -936,6 +936,73 @@ void SpatialMapComponent::paint (juce::Graphics& g)
     g.drawText ("B",  juce::Rectangle<float> (cx - 30.0f, cy + radius + 4.0f,  60.0f, 16.0f), juce::Justification::centred);
     g.drawText ("L",  juce::roundToInt (cx - radius - 22), juce::roundToInt (cy - 8),  24, 16, juce::Justification::centred);
     g.drawText ("R",  juce::roundToInt (cx + radius + 2),  juce::roundToInt (cy - 8),  24, 16, juce::Justification::centred);
+
+    // =========================================================================
+    // v0.9 PROTOTYPE: Glow trail + origin markers for active trajectories
+    // Renders behind object dots. Only drawn for selected tap with active trajectory.
+    // =========================================================================
+    if (selectedObject >= 0 && selectedObject < MAX_OBJECTS
+        && objects[(size_t)selectedObject].enabled
+        && trajectoryStates[(size_t)selectedObject].shape != 0)
+    {
+        auto& ts = trajectoryStates[(size_t)selectedObject];
+        auto objCol = objectColours[selectedObject];
+
+        // --- Glow trail: sample trajectory path at ~120 phase points ---
+        constexpr int kPathSamples = 120;
+        struct PathPoint { juce::Point<float> px; float elDeg; float phase; };
+        PathPoint pathPoints[kPathSamples];
+
+        for (int s = 0; s < kPathSamples; ++s)
+        {
+            float samplePhase = (float) s / (float) kPathSamples;
+            auto result = OpenSpatialDelayProcessor::computeTrajectory (
+                ts.shape, samplePhase, ts.originAzDeg, ts.originElDeg, ts.originDist, ts.reverse);
+            pathPoints[s].px    = spatialToPixel (result.azDeg, result.dist);
+            pathPoints[s].elDeg = result.elDeg;
+            pathPoints[s].phase = samplePhase;
+        }
+
+        // Draw glow trail segments
+        for (int s = 0; s < kPathSamples; ++s)
+        {
+            int next = (s + 1) % kPathSamples;
+            auto& p0 = pathPoints[s];
+            auto& p1 = pathPoints[next];
+
+            // Skip segments that wrap across the map (large pixel jumps)
+            if (p0.px.getDistanceFrom (p1.px) > radius * 0.8f)
+                continue;
+
+            // Brightness: proximity to current animated dot position
+            // Phase distance (circular): closer to current phase = brighter
+            float phaseDist = std::abs (p0.phase - ts.phase);
+            if (phaseDist > 0.5f) phaseDist = 1.0f - phaseDist;
+            float proximity = 1.0f - (phaseDist * 4.0f);  // bright within ±0.25 phase
+            proximity = juce::jlimit (0.0f, 1.0f, proximity);
+            float glowAlpha = 0.08f + proximity * 0.45f;  // base 0.08, peak 0.53
+
+            // Elevation encoding: opacity + thickness
+            float avgEl = (p0.elDeg + p1.elDeg) * 0.5f;
+            float elNorm = (avgEl + 90.0f) / 180.0f;  // 0 = -90°, 0.5 = 0°, 1 = +90°
+            float elOpacity = 0.3f + elNorm * 0.7f;    // 0.3 (below) to 1.0 (above)
+            float thickness = 1.0f + elNorm * 4.5f;     // 1.0px (below) to 5.5px (above)
+
+            float finalAlpha = glowAlpha * elOpacity;
+            g.setColour (objCol.withAlpha (finalAlpha));
+            g.drawLine (p0.px.x, p0.px.y, p1.px.x, p1.px.y, thickness);
+        }
+
+        // --- Origin marker: crosshair at captured base position ---
+        auto originPx = spatialToPixel (ts.originAzDeg, ts.originDist);
+        originPx = { std::round (originPx.x), std::round (originPx.y) };
+        {
+            float armLen = 8.0f;
+            g.setColour (objCol.withAlpha (0.5f));
+            g.drawLine (originPx.x - armLen, originPx.y, originPx.x + armLen, originPx.y, 1.2f);
+            g.drawLine (originPx.x, originPx.y - armLen, originPx.x, originPx.y + armLen, 1.2f);
+        }
+    }
 
     for (int i = 0; i < MAX_OBJECTS; ++i)
     {
@@ -1129,7 +1196,7 @@ static void styleSlider (juce::Slider& slider, juce::LookAndFeel& lf,
     slider.setColour (juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
 }
 
-static void styleLabel (juce::Label& label, const juce::String& text, Ableton12Look* lf = nullptr)
+static void styleLabel (juce::Label& label, const juce::String& text, OSDLookAndFeel* lf = nullptr)
 {
     label.setText (text, juce::dontSendNotification);
     if (lf && lf->jetbrainsMedium)
@@ -1141,7 +1208,7 @@ static void styleLabel (juce::Label& label, const juce::String& text, Ableton12L
 }
 
 //==============================================================================
-// v0.7: FilterGraphComponent — Ableton Echo-style bandpass display
+// v0.7: FilterGraphComponent — Observatory v6 bandpass display
 //==============================================================================
 FilterGraphComponent::FilterGraphComponent() {}
 
@@ -1218,7 +1285,7 @@ void FilterGraphComponent::paint (juce::Graphics& g)
     g.setColour (Colours_OSD::borderDim);
     g.drawRoundedRectangle (bounds.reduced (0.5f), 4.0f, 1.0f);
 
-    // Grid lines at key frequencies (Ableton-style)
+    // Grid lines at key frequencies (Observatory v6)
     g.setColour (Colours_OSD::borderDim.withAlpha (alpha * 0.5f));
     for (float freq : { 50.0f, 200.0f, 500.0f, 2000.0f, 5000.0f })
     {
@@ -1233,9 +1300,9 @@ void FilterGraphComponent::paint (juce::Graphics& g)
         g.drawVerticalLine (juce::roundToInt (x), bounds.getY() + 2, bounds.getBottom() - 2);
     }
 
-    // Frequency labels — more markers like Ableton
+    // Frequency labels — extended frequency marker set
     {
-        auto* lfPtr = dynamic_cast<Ableton12Look*> (&getLookAndFeel());
+        auto* lfPtr = dynamic_cast<OSDLookAndFeel*> (&getLookAndFeel());
         if (lfPtr) g.setFont (makeFont (lfPtr->jetbrainsRegular, 8.0f));
         else       g.setFont (juce::FontOptions (8.0f));
     }
@@ -1382,7 +1449,7 @@ void FilterGraphComponent::mouseUp (const juce::MouseEvent&)
 OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     : AudioProcessorEditor (&p), processorRef (p)
 {
-    setLookAndFeel (&ableton12Look);
+    setLookAndFeel (&osdLookAndFeel);
     setSize (kWindowWidth, kWindowHeight);
 
     // --- Title (painted directly in paint(), no Label component needed) ------
@@ -1395,9 +1462,9 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     // --- Global knobs --------------------------------------------------------
     auto addKnob = [&](juce::Slider& s, juce::Label& l, const juce::String& name,
                         const juce::String& paramId, std::unique_ptr<SliderAttachment>& attach) {
-        styleSlider (s, ableton12Look);
+        styleSlider (s, osdLookAndFeel);
         addAndMakeVisible (s);
-        styleLabel (l, name, &ableton12Look);
+        styleLabel (l, name, &osdLookAndFeel);
         addAndMakeVisible (l);
         attach = std::make_unique<SliderAttachment> (processorRef.apvts, paramId, s);
     };
@@ -1428,15 +1495,15 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // --- v0.8: Wobble modulation knobs (MOD section) -------------------------
     {
-        styleSlider (wobbleAmountSlider, ableton12Look, juce::Slider::RotaryVerticalDrag);
+        styleSlider (wobbleAmountSlider, osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
         addAndMakeVisible (wobbleAmountSlider);
-        styleLabel (wobbleAmountLabel, "AMOUNT", &ableton12Look);
+        styleLabel (wobbleAmountLabel, "AMOUNT", &osdLookAndFeel);
         addAndMakeVisible (wobbleAmountLabel);
         wobbleAmountAttach = std::make_unique<SliderAttachment> (processorRef.apvts, "wobbleAmount", wobbleAmountSlider);
 
-        styleSlider (wobbleMorphSlider, ableton12Look, juce::Slider::RotaryVerticalDrag);
+        styleSlider (wobbleMorphSlider, osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
         addAndMakeVisible (wobbleMorphSlider);
-        styleLabel (wobbleMorphLabel, "MORPH", &ableton12Look);
+        styleLabel (wobbleMorphLabel, "MORPH", &osdLookAndFeel);
         addAndMakeVisible (wobbleMorphLabel);
         wobbleMorphAttach = std::make_unique<SliderAttachment> (processorRef.apvts, "wobbleMorph", wobbleMorphSlider);
 
@@ -1453,11 +1520,11 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     {
         for (int i = 0; i < items.size(); ++i)
             box.addItem (items[i], i + 1);
-        // (#9) Colors inherited from Ableton12Look for consistency
-        box.setLookAndFeel (&ableton12Look);
+        // (#9) Colors inherited from OSDLookAndFeel for consistency
+        box.setLookAndFeel (&osdLookAndFeel);
         addAndMakeVisible (box);
         if (&label != &delayTimeLabel) {
-            styleLabel (label, name, &ableton12Look);
+            styleLabel (label, name, &osdLookAndFeel);
             addAndMakeVisible (label);
         }
         attach = std::make_unique<ComboBoxAttachment> (processorRef.apvts, paramId, box);
@@ -1465,9 +1532,9 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // Algorithm combo — manually managed (no ComboBoxParameterAttachment)
     // Items dynamically populated based on output format (stereo vs surround)
-    algorithmBox.setLookAndFeel (&ableton12Look);
+    algorithmBox.setLookAndFeel (&osdLookAndFeel);
     addAndMakeVisible (algorithmBox);
-    styleLabel (algorithmLabel, "ALGORITHM", &ableton12Look);
+    styleLabel (algorithmLabel, "ALGORITHM", &osdLookAndFeel);
     addAndMakeVisible (algorithmLabel);
     algorithmBox.onChange = [this]
     {
@@ -1502,7 +1569,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // --- Header dropdown labels: left-aligned, JetBrains Mono Medium ----------
     {
-        auto headerLblFont = makeFont (ableton12Look.jetbrainsMedium, 9.5f, 0.1f);
+        auto headerLblFont = makeFont (osdLookAndFeel.jetbrainsMedium, 9.5f, 0.1f);
         auto headerLblColour = Colours_OSD::textDim;
 
         for (auto* lbl : { &algorithmLabel, &outputFormatLabel, &hrtfProfileLabel })
@@ -1515,7 +1582,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // --- Tempo sync button (#5/#6) -------------------------------------------
     tempoSyncButton = std::make_unique<StyledButton> ("SYNC", Colours_OSD::accentSync,
-                                                       ableton12Look.jetbrainsMedium);
+                                                       osdLookAndFeel.jetbrainsMedium);
     tempoSyncButton->setAlwaysActive (true);
     addAndMakeVisible (*tempoSyncButton);
     tempoSyncAttach = std::make_unique<ButtonAttachment> (processorRef.apvts, "tempoSync", *tempoSyncButton);
@@ -1544,13 +1611,13 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     // v0.7: Dotted/Triplet toggle buttons (mutually exclusive, radio-style)
     syncDottedButton = std::make_unique<StyledButton> (juce::String::fromUTF8 ("\xe2\x99\xaa."),
                                                         Colours_OSD::accentSync,
-                                                        ableton12Look.jetbrainsMedium);
+                                                        osdLookAndFeel.jetbrainsMedium);
     syncDottedButton->setClickingTogglesState (false);
     addAndMakeVisible (*syncDottedButton);
 
     syncTripletButton = std::make_unique<StyledButton> (juce::String::fromUTF8 ("\xe2\x99\xaa\xc2\xb3"),
                                                          Colours_OSD::accentSync,
-                                                         ableton12Look.jetbrainsMedium);
+                                                         osdLookAndFeel.jetbrainsMedium);
     syncTripletButton->setClickingTogglesState (false);
     addAndMakeVisible (*syncTripletButton);
 
@@ -1583,7 +1650,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         auto& btn = objectButtons[(size_t)i];
         btn.setButtonText (juce::String (i + 1));
         btn.setClickingTogglesState (false);
-        btn.setLookAndFeel (&ableton12Look);
+        btn.setLookAndFeel (&osdLookAndFeel);
         btn.onClick = [this, i] { selectObject (i); };
         addAndMakeVisible (btn);
     }
@@ -1591,63 +1658,70 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // --- Per-object controls -------------------------------------------------
     // (#3) Azimuth: rotary knob — use RotaryHorizontalVerticalDrag for natural direction
-    styleSlider (objAzimuthSlider, ableton12Look, juce::Slider::RotaryHorizontalVerticalDrag);
+    styleSlider (objAzimuthSlider, osdLookAndFeel, juce::Slider::RotaryHorizontalVerticalDrag);
     objAzimuthSlider.setRotaryParameters (juce::MathConstants<float>::pi, 3.0f * juce::MathConstants<float>::pi, false);
     objAzimuthSlider.setReversed (true);  // (#8) IEM StereoEncoder convention: clockwise knob = clockwise on map
     addAndMakeVisible (objAzimuthSlider);
-    styleLabel (objAzLabel, "AZIMUTH", &ableton12Look);
+    styleLabel (objAzLabel, "AZIMUTH", &osdLookAndFeel);
     addAndMakeVisible (objAzLabel);
 
     // v0.7: Elevation: rotary knob — 0° at left (9 o'clock), -90° at bottom, +90° at top
-    styleSlider (objElevationSlider, ableton12Look, juce::Slider::RotaryVerticalDrag);
+    styleSlider (objElevationSlider, osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
     objElevationSlider.setRotaryParameters (juce::MathConstants<float>::pi,
                                             juce::MathConstants<float>::twoPi,
                                             true);
     addAndMakeVisible (objElevationSlider);
-    styleLabel (objElLabel, "ELEVATION", &ableton12Look);
+    styleLabel (objElLabel, "ELEVATION", &osdLookAndFeel);
     addAndMakeVisible (objElLabel);
 
     // Distance: rotary knob
-    styleSlider (objDistanceSlider, ableton12Look, juce::Slider::RotaryVerticalDrag);
+    styleSlider (objDistanceSlider, osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
     addAndMakeVisible (objDistanceSlider);
-    styleLabel (objDistLabel, "DISTANCE", &ableton12Look);
+    styleLabel (objDistLabel, "DISTANCE", &osdLookAndFeel);
     addAndMakeVisible (objDistLabel);
 
     // --- Enabled toggle (IndicatorToggle — accent matches selected tap color) --
     objEnabledButton = std::make_unique<IndicatorToggle> ("ON", SpatialMapComponent::objectColours[0],
-                                                           ableton12Look.jetbrainsMedium);
+                                                           osdLookAndFeel.jetbrainsMedium);
     addAndMakeVisible (*objEnabledButton);
 
     // --- v0.4: Per-object Doppler amount knob --------------------------------
-    styleSlider (objDopplerSlider, ableton12Look, juce::Slider::RotaryVerticalDrag);
+    styleSlider (objDopplerSlider, osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
     addAndMakeVisible (objDopplerSlider);
-    styleLabel (objDopplerLabel, "DOPPLER", &ableton12Look);
+    styleLabel (objDopplerLabel, "DOPPLER", &osdLookAndFeel);
     addAndMakeVisible (objDopplerLabel);
     // Doppler color set per-tap in selectObject()
 
     // --- v0.6: Per-object trajectory controls (bottom panel, bound in selectObject) ---
-    objTrajectoryBox.setLookAndFeel (&ableton12Look);
-    objTrajectoryBox.addItem ("None",     1);
-    objTrajectoryBox.addItem ("Spiral",   2);
-    objTrajectoryBox.addItem ("Orbit",    3);
-    objTrajectoryBox.addItem ("Bounce",   4);
-    objTrajectoryBox.addItem ("Figure-8", 5);
-    objTrajectoryBox.addItem ("Random",   6);
+    objTrajectoryBox.setLookAndFeel (&osdLookAndFeel);
+    objTrajectoryBox.addItem ("None",      1);
+    objTrajectoryBox.addItem ("Bounce",    2);
+    objTrajectoryBox.addItem ("Cross",     3);
+    objTrajectoryBox.addItem ("Figure-8",  4);
+    objTrajectoryBox.addItem ("Heart",     5);
+    objTrajectoryBox.addItem ("Helix",     6);
+    objTrajectoryBox.addItem ("Infinity",  7);
+    objTrajectoryBox.addItem ("Line",      8);
+    objTrajectoryBox.addItem ("Orbit",     9);
+    objTrajectoryBox.addItem ("Random",   10);
+    objTrajectoryBox.addItem ("Spiral",   11);
+    objTrajectoryBox.addItem ("Square",   12);
+    objTrajectoryBox.addItem ("Triangle", 13);
     addAndMakeVisible (objTrajectoryBox);
-    styleLabel (objTrajectoryLabel, "TRAJECTORY", &ableton12Look);
+    styleLabel (objTrajectoryLabel, "TRAJECTORY", &osdLookAndFeel);
     addAndMakeVisible (objTrajectoryLabel);
     // Attachment created in selectObject()
 
     // v0.8: Trajectory direction arrow buttons (← →)
     objTrajectoryFwdButton = std::make_unique<StyledButton> (juce::String::charToString (0x2192),
                                                               SpatialMapComponent::objectColours[0],
-                                                              ableton12Look.jetbrainsMedium);
+                                                              osdLookAndFeel.jetbrainsMedium);
     objTrajectoryFwdButton->setClickingTogglesState (false);
     addAndMakeVisible (*objTrajectoryFwdButton);
 
     objTrajectoryRevButton = std::make_unique<StyledButton> (juce::String::charToString (0x2190),
                                                               SpatialMapComponent::objectColours[0],
-                                                              ableton12Look.jetbrainsMedium);
+                                                              osdLookAndFeel.jetbrainsMedium);
     objTrajectoryRevButton->setClickingTogglesState (false);
     addAndMakeVisible (*objTrajectoryRevButton);
 
@@ -1666,16 +1740,16 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         objTrajectoryFwdButton->setToggleState (false, juce::dontSendNotification);
     };
 
-    styleSlider (objTrajectorySpeedSlider, ableton12Look, juce::Slider::RotaryVerticalDrag);
+    styleSlider (objTrajectorySpeedSlider, osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
     addAndMakeVisible (objTrajectorySpeedSlider);
-    styleLabel (objTrajectorySpeedLabel, "SPEED", &ableton12Look);
+    styleLabel (objTrajectorySpeedLabel, "SPEED", &osdLookAndFeel);
     addAndMakeVisible (objTrajectorySpeedLabel);
     // Speed color set per-tap in selectObject()
     // Attachment created in selectObject()
 
     // --- v0.6: ADM-OSC Receive toggle (IndicatorToggle) ----------------------
     oscToggleButton = std::make_unique<IndicatorToggle> ("RECEIVE", Colours_OSD::accentGreen,
-                                                          ableton12Look.jetbrainsMedium);
+                                                          osdLookAndFeel.jetbrainsMedium);
     addAndMakeVisible (*oscToggleButton);
     oscToggleAttach = std::make_unique<ButtonAttachment> (processorRef.apvts, "admOscEnabled",
                                                           *oscToggleButton);
@@ -1683,7 +1757,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     // v0.6: Editable OSC port label (double-click to edit, Enter to commit)
     oscPortLabel.setText (juce::String (processorRef.getOscReceivePort()), juce::dontSendNotification);
     oscPortLabel.setEditable (false, true, false);  // single-click no, double-click yes, return-key commits
-    oscPortLabel.setFont (makeFont (ableton12Look.jetbrainsRegular, 11.0f));
+    oscPortLabel.setFont (makeFont (osdLookAndFeel.jetbrainsRegular, 11.0f));
     oscPortLabel.setColour (juce::Label::textColourId, Colours_OSD::textSecondary);
     oscPortLabel.setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
     oscPortLabel.setColour (juce::Label::backgroundWhenEditingColourId, Colours_OSD::bgWell);
@@ -1718,14 +1792,14 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // --- v0.4: Global Air Absorption toggle (IndicatorToggle) ----------------
     airAbsorptionButton = std::make_unique<IndicatorToggle> ("AIR", Colours_OSD::accentStellar,
-                                                              ableton12Look.jetbrainsMedium);
+                                                              osdLookAndFeel.jetbrainsMedium);
     addAndMakeVisible (*airAbsorptionButton);
     airAbsorptionAttach = std::make_unique<ButtonAttachment> (processorRef.apvts, "airAbsorption",
                                                               *airAbsorptionButton);
 
     // --- v0.7: ADM-OSC Send toggle (IndicatorToggle) -------------------------
     oscSendToggleButton = std::make_unique<IndicatorToggle> ("SEND", Colours_OSD::accentGreen,
-                                                              ableton12Look.jetbrainsMedium);
+                                                              osdLookAndFeel.jetbrainsMedium);
     oscSendToggleButton->onClick = [this]
     {
         processorRef.setOscSendEnabled (oscSendToggleButton->getToggleState());
@@ -1734,7 +1808,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     oscSendIPLabel.setText (processorRef.getOscSendIP(), juce::dontSendNotification);
     oscSendIPLabel.setEditable (false, true, false);
-    oscSendIPLabel.setFont (makeFont (ableton12Look.jetbrainsRegular, 11.0f));
+    oscSendIPLabel.setFont (makeFont (osdLookAndFeel.jetbrainsRegular, 11.0f));
     oscSendIPLabel.setColour (juce::Label::textColourId, Colours_OSD::textSecondary);
     oscSendIPLabel.setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
     oscSendIPLabel.setColour (juce::Label::backgroundWhenEditingColourId, Colours_OSD::bgWell);
@@ -1759,7 +1833,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     oscSendPortLabel.setText (juce::String (processorRef.getOscSendPort()), juce::dontSendNotification);
     oscSendPortLabel.setEditable (false, true, false);
-    oscSendPortLabel.setFont (makeFont (ableton12Look.jetbrainsRegular, 11.0f));
+    oscSendPortLabel.setFont (makeFont (osdLookAndFeel.jetbrainsRegular, 11.0f));
     oscSendPortLabel.setColour (juce::Label::textColourId, Colours_OSD::textSecondary);
     oscSendPortLabel.setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
     oscSendPortLabel.setColour (juce::Label::backgroundWhenEditingColourId, Colours_OSD::bgWell);
@@ -1788,7 +1862,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // --- v0.9: FLT toggle — directly controls filterEnabled parameter ---------
     fltToggle = std::make_unique<IndicatorToggle> ("FLT", Colours_OSD::accentViolet,
-                                                    ableton12Look.jetbrainsMedium);
+                                                    osdLookAndFeel.jetbrainsMedium);
     fltToggle->setClickingTogglesState (false);  // timer drives visual state
     fltToggle->onClick = [this]
     {
@@ -1808,7 +1882,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // --- v0.8: MOD toggle (MOD section header) — timer-driven ----------------
     modToggle = std::make_unique<IndicatorToggle> ("MOD", Colours_OSD::accentRose,
-                                                    ableton12Look.jetbrainsMedium);
+                                                    osdLookAndFeel.jetbrainsMedium);
     modToggle->setClickingTogglesState (false);  // timer drives visual state
     modToggle->onClick = [this]
     {
@@ -1847,9 +1921,9 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     };
 
     // --- v0.7: Per-object pitch shift knob (bottom panel) --------------------
-    styleSlider (objPitchShiftSlider, ableton12Look, juce::Slider::RotaryVerticalDrag);
+    styleSlider (objPitchShiftSlider, osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
     addAndMakeVisible (objPitchShiftSlider);
-    styleLabel (objPitchShiftLabel, "PITCH", &ableton12Look);
+    styleLabel (objPitchShiftLabel, "PITCH", &osdLookAndFeel);
     addAndMakeVisible (objPitchShiftLabel);
     // Per-object pitch color set per-tap in selectObject()
 
@@ -1864,7 +1938,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         // Cycling button — onClick advances to next item, wraps around
         objInputChannelButton = std::make_unique<StyledButton> ("L+R",
                                                                  SpatialMapComponent::objectColours[0],
-                                                                 ableton12Look.jetbrainsMedium);
+                                                                 osdLookAndFeel.jetbrainsMedium);
         objInputChannelButton->setClickingTogglesState (false);
         objInputChannelButton->setAlwaysActive (true);
         addAndMakeVisible (*objInputChannelButton);
@@ -1895,7 +1969,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     }
 
     // --- v0.7: Input format dropdown (header bar) ----------------------------
-    inputFormatBox.setLookAndFeel (&ableton12Look);
+    inputFormatBox.setLookAndFeel (&osdLookAndFeel);
     inputFormatBox.addItem ("Mono", 1);
     inputFormatBox.addItem ("Stereo", 2);
     addAndMakeVisible (inputFormatBox);
@@ -1903,7 +1977,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // Header dropdown labels: JetBrains Mono Medium 7.5px, wide kerning
     {
-        auto headerLblFont2 = makeFont (ableton12Look.jetbrainsMedium, 9.5f, 0.1f);
+        auto headerLblFont2 = makeFont (osdLookAndFeel.jetbrainsMedium, 9.5f, 0.1f);
         auto headerLblColour2 = Colours_OSD::textDim;
 
         presetLabel.setText ("PRESET", juce::dontSendNotification);
@@ -1920,7 +1994,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     }
 
     // --- v0.9: Preset browser — TextButton + PopupMenu (replaces ComboBox) ---
-    presetNameButton.setLookAndFeel (&ableton12Look);
+    presetNameButton.setLookAndFeel (&osdLookAndFeel);
     presetNameButton.setComponentID ("presetButton");
     presetNameButton.setColour (juce::TextButton::buttonColourId, Colours_OSD::bgRecessed);
     presetNameButton.setColour (juce::TextButton::textColourOffId, Colours_OSD::textSecondary);
@@ -1931,7 +2005,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     auto stylePresetButton = [&] (juce::TextButton& btn, const juce::String& text)
     {
         btn.setButtonText (text);
-        btn.setLookAndFeel (&ableton12Look);
+        btn.setLookAndFeel (&osdLookAndFeel);
         btn.setColour (juce::TextButton::buttonColourId, Colours_OSD::bgRecessed);
         btn.setColour (juce::TextButton::textColourOffId, Colours_OSD::textSecondary);
         addAndMakeVisible (btn);
@@ -1989,7 +2063,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // --- SML badge button (header branding link) ---
     smlButton = std::make_unique<StyledButton> ("SML", Colours_OSD::accentStellar,
-                                                  ableton12Look.jetbrainsMedium);
+                                                  osdLookAndFeel.jetbrainsMedium);
     smlButton->setClickingTogglesState (false);
     smlButton->onClick = [] { juce::URL ("https://spatialmedialab.org").launchInDefaultBrowser(); };
     smlButton->setAlwaysActive (true);
@@ -2052,7 +2126,7 @@ void OpenSpatialDelayEditor::showPresetMenu()
     }
     flushSubMenu();  // flush last category
 
-    mainMenu.setLookAndFeel (&ableton12Look);
+    mainMenu.setLookAndFeel (&osdLookAndFeel);
     mainMenu.showMenuAsync (
         juce::PopupMenu::Options()
             .withTargetComponent (&presetNameButton)
@@ -2228,6 +2302,8 @@ void OpenSpatialDelayEditor::updateMapFromParameters()
         spatialMap.setObjectState (i, state.azimuthDeg, state.elevationDeg, state.distance, state.enabled);
         // v0.6: Pass OSC override state to spatial map for indicator
         spatialMap.setOscOverride (i, processorRef.isOscOverrideActive (i));
+        // v0.9 PROTOTYPE: Pass trajectory state for origin marker + glow trail
+        spatialMap.setTrajectoryState (i, processorRef.getTrajectoryState (i));
     }
 }
 
@@ -2492,7 +2568,7 @@ void OpenSpatialDelayEditor::drawSectionHeader (juce::Graphics& g, int x, int y,
 {
     // Observatory v6: JetBrains Mono Bold, wide tracking
     g.setColour (Colours_OSD::textDim);
-    juce::Font headerFont = makeFont (ableton12Look.jetbrainsBold, 11.0f, 0.15f);
+    juce::Font headerFont = makeFont (osdLookAndFeel.jetbrainsBold, 11.0f, 0.15f);
     g.setFont (headerFont);
     g.drawText (text, x, y, w, 12, juce::Justification::centredLeft);
     juce::GlyphArrangement glyphs;
@@ -2547,14 +2623,14 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
     // Title — SML button self-paints via StyledButton::paintButton() + "OpenSpatialDelay" + version
     {
         int leftX = 10;  // prototype: padding 0 10px
-        int smlW = StyledButton::getPreferredWidth (ableton12Look.jetbrainsMedium, "SML");
+        int smlW = StyledButton::getPreferredWidth (osdLookAndFeel.jetbrainsMedium, "SML");
 
         // SML button self-paints via StyledButton::paintButton()
 
         // Plugin title — DM Sans Medium 14px
         int titleX = leftX + smlW + 6;
         g.setColour (Colours_OSD::textPrimary);
-        auto titleFont = makeFont (ableton12Look.dmSansMedium, 17.0f, 0.02f);
+        auto titleFont = makeFont (osdLookAndFeel.dmSansMedium, 17.0f, 0.02f);
         g.setFont (titleFont);
         juce::String titleText = "OpenSpatialDelay";
         juce::GlyphArrangement titleGlyphs;
@@ -2566,7 +2642,7 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         // "v0.8" dim version tag — JetBrains Mono 9px
         int versionX = titleX + (int) titleTextW + 4;
         g.setColour (Colours_OSD::textDim);
-        g.setFont (makeFont (ableton12Look.jetbrainsRegular, 11.0f));
+        g.setFont (makeFont (osdLookAndFeel.jetbrainsRegular, 11.0f));
         g.drawText ("v0.9", versionX, 0, 40, kHeaderHeight,
                     juce::Justification::centredLeft);
     }
@@ -2616,7 +2692,7 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
     {
         auto btnBounds = objInputChannelButton->getBounds();
         g.setColour (Colours_OSD::textDim);
-        g.setFont (makeFont (ableton12Look.jetbrainsMedium, 10.0f, 0.12f));
+        g.setFont (makeFont (osdLookAndFeel.jetbrainsMedium, 10.0f, 0.12f));
         g.drawText ("INPUT", btnBounds.getX(), btnBounds.getY() - 14, btnBounds.getWidth(), 12,
                     juce::Justification::centred);
     }
@@ -2633,7 +2709,7 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         auto fwdBounds = objTrajectoryFwdButton->getBounds();
         int dirLabelW = fwdBounds.getRight() - revBounds.getX();
         g.setColour (Colours_OSD::textDim);
-        g.setFont (makeFont (ableton12Look.jetbrainsMedium, 10.0f, 0.12f));
+        g.setFont (makeFont (osdLookAndFeel.jetbrainsMedium, 10.0f, 0.12f));
         g.drawText ("DIRECTION", revBounds.getX(), revBounds.getY() - 14, dirLabelW, 12,
                     juce::Justification::centred);
     }
@@ -2647,7 +2723,7 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         if (oscBounds.getWidth() > 0)
         {
             g.setColour (Colours_OSD::textDim);
-            g.setFont (makeFont (ableton12Look.jetbrainsMedium, 10.0f, 0.08f));
+            g.setFont (makeFont (osdLookAndFeel.jetbrainsMedium, 10.0f, 0.08f));
             g.drawText ("Port", (int)(oscBounds.getRight() + 4), (int)oscBounds.getY(),
                         28, (int)oscBounds.getHeight(), juce::Justification::centredLeft);
         }
@@ -2660,7 +2736,7 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         if (sendBounds.getWidth() > 0)
         {
             g.setColour (Colours_OSD::textDim);
-            g.setFont (makeFont (ableton12Look.jetbrainsMedium, 10.0f, 0.08f));
+            g.setFont (makeFont (osdLookAndFeel.jetbrainsMedium, 10.0f, 0.08f));
             g.drawText ("IP", (int)(sendBounds.getRight() + 4), (int)sendBounds.getY(),
                         14, (int)sendBounds.getHeight(), juce::Justification::centredLeft);
             auto ipBounds = oscSendIPLabel.getBounds().toFloat();
@@ -2682,7 +2758,7 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         auto filterBounds = filterGraph.getBounds();
         float readoutAlpha = filterIsActive ? 1.0f : 0.3f;
         g.setColour (Colours_OSD::textDim.withAlpha (readoutAlpha));
-        g.setFont (makeFont (ableton12Look.jetbrainsRegular, 11.0f, 0.04f));
+        g.setFont (makeFont (osdLookAndFeel.jetbrainsRegular, 11.0f, 0.04f));
         g.drawText ("HP " + hpStr + "  Res " + juce::String (hpq, 2)
                     + "    LP " + lpStr + "  Res " + juce::String (lpq, 2),
                     filterBounds.getX(), filterBounds.getBottom() + 2,
@@ -2742,7 +2818,7 @@ void OpenSpatialDelayEditor::resized()
     // Title is painted directly in paint() — no setBounds needed
     // SML badge button (header, left-aligned)
     {
-        int smlW = StyledButton::getPreferredWidth (ableton12Look.jetbrainsMedium, "SML");
+        int smlW = StyledButton::getPreferredWidth (osdLookAndFeel.jetbrainsMedium, "SML");
         int headerY = kHeaderHeight / 2;
         if (smlButton) smlButton->setBounds (10, headerY - StyledButton::kHeight / 2, smlW, StyledButton::kHeight);
     }
@@ -2842,7 +2918,7 @@ void OpenSpatialDelayEditor::resized()
     placeKnob (outputGainSlider, outputGainLabel, px1, curY);
 
     // Toggle pill sizes (IndicatorToggle::getPreferredWidth)
-    auto jbm = ableton12Look.jetbrainsMedium;
+    auto jbm = osdLookAndFeel.jetbrainsMedium;
     int airW = IndicatorToggle::getPreferredWidth (jbm, "AIR");
     int fltW = IndicatorToggle::getPreferredWidth (jbm, "FLT");
     int modW = IndicatorToggle::getPreferredWidth (jbm, "MOD");
@@ -2903,13 +2979,13 @@ void OpenSpatialDelayEditor::resized()
     int objKnobDiam = 46;  // slightly larger bottom-panel knobs
 
     // Compute trajectory column width — max of title and widest dropdown item
-    auto trajFont = makeFont (ableton12Look.jetbrainsMedium, 10.0f, 0.12f);
+    auto trajFont = makeFont (osdLookAndFeel.jetbrainsMedium, 10.0f, 0.12f);
     juce::GlyphArrangement trajGa;
     trajGa.addLineOfText (trajFont, "TRAJECTORY", 0.0f, 0.0f);
     int trajLabelW = juce::roundToInt (std::ceil (trajGa.getBoundingBox (0, -1, false).getWidth())) + 6;
 
     // Measure widest dropdown item (DM Sans Regular 13px + arrow/padding)
-    auto comboFont = juce::Font (juce::FontOptions (ableton12Look.dmSansRegular).withHeight (13.0f));
+    auto comboFont = juce::Font (juce::FontOptions (osdLookAndFeel.dmSansRegular).withHeight (13.0f));
     juce::GlyphArrangement itemGa;
     itemGa.addLineOfText (comboFont, "Figure-8", 0.0f, 0.0f);
     int itemTextW = juce::roundToInt (std::ceil (itemGa.getBoundingBox (0, -1, false).getWidth())) + 24;
@@ -2934,7 +3010,7 @@ void OpenSpatialDelayEditor::resized()
     auto placeObjKnob = [objKnobDiam, this](juce::Slider& slider, juce::Label& label,
                                              int x, int y, int colW) {
         label.setBounds (x, y, colW, 12);
-        label.setFont (makeFont (ableton12Look.jetbrainsMedium, 10.0f, 0.12f));
+        label.setFont (makeFont (osdLookAndFeel.jetbrainsMedium, 10.0f, 0.12f));
         slider.setBounds (x + (colW - objKnobDiam) / 2, y + 12, objKnobDiam, 58);
     };
 
@@ -3020,4 +3096,9 @@ void OpenSpatialDelayEditor::mouseMove (const juce::MouseEvent&)
 void OpenSpatialDelayEditor::mouseExit (const juce::MouseEvent&)
 {
     // SML badge hover handled by StyledButton instance internally
+}
+
+bool OpenSpatialDelayEditor::keyPressed (const juce::KeyPress&)
+{
+    return false;
 }

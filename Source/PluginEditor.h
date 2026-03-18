@@ -41,6 +41,7 @@ private:
     };
 
     std::array<ObjectInfo, MAX_OBJECTS> objects;
+    std::array<TrajectoryState, MAX_OBJECTS> trajectoryStates = {};  // v0.9: trajectory origin + state
     std::array<bool, MAX_OBJECTS> oscOverride = {};  // v0.6: per-object OSC override indicator
     int selectedObject = -1;
     int draggedObject  = -1;
@@ -65,6 +66,7 @@ private:
 
 public:
     static const juce::Colour objectColours[MAX_OBJECTS];
+    void setTrajectoryState (int index, const TrajectoryState& ts) { if (index >= 0 && index < MAX_OBJECTS) trajectoryStates[(size_t)index] = ts; }
     void advanceStarAnimation (float dt) { starTime += dt; }
     void setObjectActivityLevel (int index, float level) { if (index >= 0 && index < MAX_OBJECTS) activityLevel[(size_t)index] = level; }
     void advancePulsePhases (float dt)
@@ -133,14 +135,14 @@ private:
 //==============================================================================
 // Observatory v6 LookAndFeel — custom fonts, knobs, buttons, dropdowns
 //==============================================================================
-class Ableton12Look : public juce::LookAndFeel_V4
+class OSDLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
     // Custom typefaces loaded from embedded binary data
     juce::Typeface::Ptr dmSansRegular, dmSansMedium, dmSansSemiBold, dmSansBold;
     juce::Typeface::Ptr jetbrainsRegular, jetbrainsMedium, jetbrainsBold;
 
-    Ableton12Look();
+    OSDLookAndFeel();
 
     juce::Typeface::Ptr getTypefaceForFont (const juce::Font& f) override
     {
@@ -246,7 +248,7 @@ public:
 };
 
 //==============================================================================
-// v0.7: Ableton Echo-style filter graph with two XY-draggable dots
+// v0.7: Observatory v6 filter graph with two XY-draggable dots
 // HP dot: X=HP freq, Y=HP Q.  LP dot: X=LP freq, Y=LP Q.
 // Draws actual magnitude response curves with resonance peaks.
 //==============================================================================
@@ -419,6 +421,7 @@ public:
     void mouseUp (const juce::MouseEvent& e) override;
     void mouseMove (const juce::MouseEvent& e) override;
     void mouseExit (const juce::MouseEvent& e) override;
+    bool keyPressed (const juce::KeyPress& key) override;
 
 private:
     std::unique_ptr<StyledButton> smlButton;  // header branding link
@@ -433,7 +436,7 @@ private:
 
     void timerCallback() override;
 
-    // Helper for drawing Ableton-style corner selection box
+    // Helper for drawing Corner selection box
     void drawSelectionBox (juce::Graphics& g, juce::Component& label, juce::Component& slider);
     // Helper for drawing section headers
     void drawSectionHeader (juce::Graphics& g, int x, int y, int w, const juce::String& text);
@@ -443,7 +446,7 @@ private:
 
     OpenSpatialDelayProcessor& processorRef;
 
-    Ableton12Look ableton12Look;
+    OSDLookAndFeel osdLookAndFeel;
 
     // UI components
     SpatialMapComponent spatialMap;

@@ -87,6 +87,19 @@ struct ObjectState
 };
 
 //==============================================================================
+// Per-object trajectory state (for editor visualization)
+//==============================================================================
+struct TrajectoryState
+{
+    float originAzDeg  = 0.0f;   // Base/origin position (captured at shape change)
+    float originElDeg  = 0.0f;
+    float originDist   = 0.5f;
+    int   shape        = 0;      // 0 = None, 1+ = active trajectory
+    float phase        = 0.0f;   // 0..1 animation progress
+    bool  reverse      = false;
+};
+
+//==============================================================================
 // Binaural gain result for one source position
 //==============================================================================
 struct BinauralGains
@@ -502,6 +515,7 @@ public:
 
     // Access for the editor
     ObjectState getObjectState (int objectIndex) const;
+    TrajectoryState getTrajectoryState (int objectIndex) const;
 
     // v0.6: OSC state accessors for editor
     bool isOscConnected() const { return oscConnected; }
@@ -685,17 +699,26 @@ private:
     juce::String oscSendAddress[MAX_OBJECTS];
 
     float trajectoryPhase[MAX_OBJECTS] = {};            // 0..1 animation progress per object
-    float baseAzimuth[MAX_OBJECTS]   = {};              // Captured when trajectory starts
+    float baseAzimuth[MAX_OBJECTS]   = {};              // Legacy: captured origin (used by getTrajectoryState)
     float baseElevation[MAX_OBJECTS] = {};
     float baseDistance[MAX_OBJECTS]   = {};
     int   prevTrajectoryShape[MAX_OBJECTS] = {};        // Detect shape changes (None→active)
 
-    // Trajectory shape computation (pure functions)
+    // v0.9: Origin-point trajectory architecture — computed animated positions
+    // Timer callback writes here; processBlock reads here when trajectory is active
+    float trajectoryFinalAz[MAX_OBJECTS]   = {};        // Animated azimuth (origin + offset)
+    float trajectoryFinalEl[MAX_OBJECTS]   = {};        // Animated elevation
+    float trajectoryFinalDist[MAX_OBJECTS] = {};        // Animated distance
+    std::atomic<bool> trajectoryActive[MAX_OBJECTS] = {};  // True when shape != None
+
+public:
+    // Trajectory shape computation (pure functions) — public for editor path sampling
     // controlsAz/El/Dist flags indicate which axes the shape actively modifies
     struct TrajectoryResult { float azDeg, elDeg, dist; bool controlsAz, controlsEl, controlsDist; };
     static TrajectoryResult computeTrajectory (int shape, float phase,
                                                float baseAz, float baseEl, float baseDist,
                                                bool reverse = false);
+private:
 
     //--- DELAY-SPECIFIC: DSP state --------------------------------------------
     // Tuning constants (named to avoid magic numbers in hot paths)
