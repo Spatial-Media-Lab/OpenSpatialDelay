@@ -960,6 +960,8 @@ void OpenSpatialDelayProcessor::timerCallback()
             if (prevTrajectoryShape[t] == 0 || prevTrajectoryShape[t] != shape)
             {
                 trajectoryPhase[t] = 0.0f;
+                randomNoise[t].initialized = false;  // re-randomize on shape change
+                randomTime[t] = 0.0f;
                 // Capture base for getTrajectoryState() visualization (used by editor)
                 baseAzimuth[t]   = cachedObj[t].azimuth->load();
                 baseElevation[t] = cachedObj[t].elevation->load();
@@ -968,8 +970,8 @@ void OpenSpatialDelayProcessor::timerCallback()
             prevTrajectoryShape[t] = shape;
 
             // Advance phase for this object
-            // Spiral (shape 10) runs at half base speed for a more natural unwind
-            float effectiveSpeed = (shape == 10) ? speed * 0.5f : speed;
+            // Spiral (shape 10) and Random (shape 9) run at half base speed
+            float effectiveSpeed = (shape == 10 || shape == 9) ? speed * 0.5f : speed;
             trajectoryPhase[t] += effectiveSpeed * dt;
             if (trajectoryPhase[t] >= 1.0f)
                 trajectoryPhase[t] -= std::floor (trajectoryPhase[t]);
@@ -983,14 +985,64 @@ void OpenSpatialDelayProcessor::timerCallback()
             float originEl   = cachedObj[t].elevation->load();
             float originDist = cachedObj[t].distance->load();
 
-            auto result = computeTrajectory (shape, trajectoryPhase[t],
-                                             originAz, originEl, originDist,
-                                             reverse);
+            if (shape == 9)  // Random — multi-sine noise with randomized parameters (Issue #9)
+            {
+                auto& rn = randomNoise[t];
+                if (! rn.initialized)
+                {
+                    // Generate unique frequencies, phases, and amplitudes per instance
+                    auto randSign = [&]() { return randomRng.nextBool() ? 1.0f : -1.0f; };
+                    float azAmps[]   = { 50.0f, 27.0f, 19.0f, 11.0f };
+                    float elAmps[]   = { 30.0f, 16.0f, 12.0f, 8.0f };
+                    float distAmps[] = { 0.25f, 0.18f, 0.11f };
+                    for (int k = 0; k < 4; ++k)
+                    {
+                        rn.freqAz[k]  = 0.15f + randomRng.nextFloat() * 1.75f;
+                        rn.phaseAz[k] = randomRng.nextFloat() * juce::MathConstants<float>::twoPi;
+                        rn.ampAz[k]   = azAmps[k] * randSign();
+                        rn.freqEl[k]  = 0.15f + randomRng.nextFloat() * 1.75f;
+                        rn.phaseEl[k] = randomRng.nextFloat() * juce::MathConstants<float>::twoPi;
+                        rn.ampEl[k]   = elAmps[k] * randSign();
+                    }
+                    for (int k = 0; k < 3; ++k)
+                    {
+                        rn.freqDist[k]  = 0.15f + randomRng.nextFloat() * 1.25f;
+                        rn.phaseDist[k] = randomRng.nextFloat() * juce::MathConstants<float>::twoPi;
+                        rn.ampDist[k]   = distAmps[k] * randSign();
+                    }
+                    rn.initialized = true;
+                }
 
-            // Store animated position in internal arrays (NOT in APVTS)
-            trajectoryFinalAz[t]   = result.azDeg;
-            trajectoryFinalEl[t]   = result.elDeg;
-            trajectoryFinalDist[t] = result.dist;
+                // Use ever-increasing time (not wrapping phase) so pattern never repeats
+                randomTime[t] += effectiveSpeed * dt;
+                float p = randomTime[t] * juce::MathConstants<float>::twoPi;
+                float az = 0.0f, el = 0.0f, dist = 0.0f;
+                for (int k = 0; k < 4; ++k)
+                {
+                    az += rn.ampAz[k] * std::sin (p * rn.freqAz[k] + rn.phaseAz[k]);
+                    el += rn.ampEl[k] * std::sin (p * rn.freqEl[k] + rn.phaseEl[k]);
+                }
+                for (int k = 0; k < 3; ++k)
+                    dist += rn.ampDist[k] * std::sin (p * rn.freqDist[k] + rn.phaseDist[k]);
+
+                trajectoryFinalAz[t] = originAz + az;
+                trajectoryFinalEl[t] = juce::jlimit (-90.0f, 90.0f, originEl + el);
+                trajectoryFinalDist[t] = juce::jlimit (0.0f, 1.0f, originDist + dist);
+
+                while (trajectoryFinalAz[t] > 180.0f)  trajectoryFinalAz[t] -= 360.0f;
+                while (trajectoryFinalAz[t] < -180.0f) trajectoryFinalAz[t] += 360.0f;
+            }
+            else
+            {
+                auto result = computeTrajectory (shape, trajectoryPhase[t],
+                                                 originAz, originEl, originDist,
+                                                 reverse);
+
+                trajectoryFinalAz[t]   = result.azDeg;
+                trajectoryFinalEl[t]   = result.elDeg;
+                trajectoryFinalDist[t] = result.dist;
+            }
+
             trajectoryActive[t].store (true, std::memory_order_relaxed);
 
             // Update base for getTrajectoryState() visualization
@@ -3240,7 +3292,29 @@ TrajectoryState OpenSpatialDelayProcessor::getTrajectoryState (int objectIndex) 
     ts.phase       = trajectoryPhase[objectIndex];
     ts.reverse     = (cachedParam_trajectoryDirection[objectIndex] != nullptr
                       && cachedParam_trajectoryDirection[objectIndex]->load() > 0.5f);
+    ts.randomTime  = randomTime[objectIndex];
     return ts;
+}
+
+OpenSpatialDelayProcessor::RandomPosition
+OpenSpatialDelayProcessor::evaluateRandomNoise (int objectIndex, float time) const
+{
+    RandomPosition rp { 0.0f, 0.0f, 0.0f };
+    if (objectIndex < 0 || objectIndex >= MAX_OBJECTS || ! randomNoise[objectIndex].initialized)
+        return rp;
+
+    auto& rn = randomNoise[objectIndex];
+    float p = time * juce::MathConstants<float>::twoPi;
+
+    for (int k = 0; k < 4; ++k)
+    {
+        rp.azDeg += rn.ampAz[k] * std::sin (p * rn.freqAz[k] + rn.phaseAz[k]);
+        rp.elDeg += rn.ampEl[k] * std::sin (p * rn.freqEl[k] + rn.phaseEl[k]);
+    }
+    for (int k = 0; k < 3; ++k)
+        rp.dist += rn.ampDist[k] * std::sin (p * rn.freqDist[k] + rn.phaseDist[k]);
+
+    return rp;
 }
 
 // #############################################################################

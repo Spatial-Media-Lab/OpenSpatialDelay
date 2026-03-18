@@ -949,53 +949,98 @@ void SpatialMapComponent::paint (juce::Graphics& g)
         auto objCol = objectColours[selectedObject];
 
         // --- Glow trail: sample trajectory path at ~120 phase points ---
+        // Skip for Random (shape 9) — path is non-deterministic, can't be pre-sampled
+        bool drawTrail = (ts.shape != 9);
         constexpr int kPathSamples = 120;
         struct PathPoint { juce::Point<float> px; float elDeg; float phase; };
         PathPoint pathPoints[kPathSamples];
 
-        for (int s = 0; s < kPathSamples; ++s)
+        if (drawTrail)
         {
-            float samplePhase = (float) s / (float) kPathSamples;
-            auto result = OpenSpatialDelayProcessor::computeTrajectory (
-                ts.shape, samplePhase, ts.originAzDeg, ts.originElDeg, ts.originDist, ts.reverse);
-            pathPoints[s].px    = spatialToPixel (result.azDeg, result.dist);
-            pathPoints[s].elDeg = result.elDeg;
-            pathPoints[s].phase = samplePhase;
+            for (int s = 0; s < kPathSamples; ++s)
+            {
+                float samplePhase = (float) s / (float) kPathSamples;
+                auto result = OpenSpatialDelayProcessor::computeTrajectory (
+                    ts.shape, samplePhase, ts.originAzDeg, ts.originElDeg, ts.originDist, ts.reverse);
+                pathPoints[s].px    = spatialToPixel (result.azDeg, result.dist);
+                pathPoints[s].elDeg = result.elDeg;
+                pathPoints[s].phase = samplePhase;
+            }
+
+            // Draw glow trail segments
+            for (int s = 0; s < kPathSamples; ++s)
+            {
+                int next = (s + 1) % kPathSamples;
+                auto& p0 = pathPoints[s];
+                auto& p1 = pathPoints[next];
+
+                // Skip segments that wrap across the map (large pixel jumps)
+                if (p0.px.getDistanceFrom (p1.px) > radius * 0.8f)
+                    continue;
+
+                // Spiral: skip the wrap-back segment from end (outer edge) to start (center)
+                if (ts.shape == 10 && next == 0)
+                    continue;
+
+                // Brightness: proximity to current animated dot position
+                float phaseDist = std::abs (p0.phase - ts.phase);
+                if (phaseDist > 0.5f) phaseDist = 1.0f - phaseDist;
+                float proximity = 1.0f - (phaseDist * 4.0f);
+                proximity = juce::jlimit (0.0f, 1.0f, proximity);
+                float glowAlpha = 0.08f + proximity * 0.45f;
+
+                // Elevation encoding: opacity + thickness
+                float avgEl = (p0.elDeg + p1.elDeg) * 0.5f;
+                float elNorm = (avgEl + 90.0f) / 180.0f;
+                float elOpacity = 0.3f + elNorm * 0.7f;
+                float thickness = 1.0f + elNorm * 4.5f;
+
+                float finalAlpha = glowAlpha * elOpacity;
+                g.setColour (objCol.withAlpha (finalAlpha));
+                g.drawLine (p0.px.x, p0.px.y, p1.px.x, p1.px.y, thickness);
+            }
         }
-
-        // Draw glow trail segments
-        for (int s = 0; s < kPathSamples; ++s)
+        else if (ts.shape == 9 && processor != nullptr)
         {
-            int next = (s + 1) % kPathSamples;
-            auto& p0 = pathPoints[s];
-            auto& p1 = pathPoints[next];
+            // Random look-ahead trail: evaluate noise at future time values
+            constexpr int kLookaheadSamples = 120;
+            constexpr float kLookaheadSeconds = 2.0f;  // ~2s look-ahead (compact, like other shapes)
 
-            // Skip segments that wrap across the map (large pixel jumps)
-            if (p0.px.getDistanceFrom (p1.px) > radius * 0.8f)
-                continue;
+            juce::Point<float> prevPx;
+            float prevEl = 0.0f;
+            for (int s = 0; s <= kLookaheadSamples; ++s)
+            {
+                float futureOffset = (float) s / (float) kLookaheadSamples * kLookaheadSeconds;
+                float sampleTime = ts.randomTime + futureOffset;
+                auto rp = processor->evaluateRandomNoise (selectedObject, sampleTime);
+                float az   = ts.originAzDeg + rp.azDeg;
+                float el   = juce::jlimit (-90.0f, 90.0f, ts.originElDeg + rp.elDeg);
+                float dist = juce::jlimit (0.0f, 1.0f, ts.originDist + rp.dist);
+                while (az > 180.0f)  az -= 360.0f;
+                while (az < -180.0f) az += 360.0f;
 
-            // Spiral: skip the wrap-back segment from end (outer edge) to start (center)
-            // This prevents a visible line cutting across the spiral pattern
-            if (ts.shape == 10 && next == 0)
-                continue;
+                auto px = spatialToPixel (az, dist);
 
-            // Brightness: proximity to current animated dot position
-            // Phase distance (circular): closer to current phase = brighter
-            float phaseDist = std::abs (p0.phase - ts.phase);
-            if (phaseDist > 0.5f) phaseDist = 1.0f - phaseDist;
-            float proximity = 1.0f - (phaseDist * 4.0f);  // bright within ±0.25 phase
-            proximity = juce::jlimit (0.0f, 1.0f, proximity);
-            float glowAlpha = 0.08f + proximity * 0.45f;  // base 0.08, peak 0.53
+                if (s > 0)
+                {
+                    if (prevPx.getDistanceFrom (px) > radius * 0.8f)
+                    { prevPx = px; prevEl = el; continue; }
 
-            // Elevation encoding: opacity + thickness
-            float avgEl = (p0.elDeg + p1.elDeg) * 0.5f;
-            float elNorm = (avgEl + 90.0f) / 180.0f;  // 0 = -90°, 0.5 = 0°, 1 = +90°
-            float elOpacity = 0.3f + elNorm * 0.7f;    // 0.3 (below) to 1.0 (above)
-            float thickness = 1.0f + elNorm * 4.5f;     // 1.0px (below) to 5.5px (above)
+                    // Brightness fades with distance into the future
+                    float futureNorm = futureOffset / kLookaheadSeconds;
+                    float glowAlpha = 0.45f * (1.0f - futureNorm);  // bright now, dim far ahead
 
-            float finalAlpha = glowAlpha * elOpacity;
-            g.setColour (objCol.withAlpha (finalAlpha));
-            g.drawLine (p0.px.x, p0.px.y, p1.px.x, p1.px.y, thickness);
+                    float avgEl = (prevEl + el) * 0.5f;
+                    float elNorm = (avgEl + 90.0f) / 180.0f;
+                    float elOpacity = 0.3f + elNorm * 0.7f;
+                    float thickness = 1.0f + elNorm * 4.5f;
+
+                    g.setColour (objCol.withAlpha (glowAlpha * elOpacity));
+                    g.drawLine (prevPx.x, prevPx.y, px.x, px.y, thickness);
+                }
+                prevPx = px;
+                prevEl = el;
+            }
         }
 
         // --- Origin marker: crosshair at captured base position ---
@@ -1463,6 +1508,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     // --- Spatial map ---------------------------------------------------------
     addAndMakeVisible (spatialMap);
     spatialMap.addListener (this);
+    spatialMap.setProcessor (&processorRef);
 
     // --- Global knobs --------------------------------------------------------
     auto addKnob = [&](juce::Slider& s, juce::Label& l, const juce::String& name,
@@ -2130,6 +2176,20 @@ void OpenSpatialDelayEditor::showPresetMenu()
         else             hasUserInSub = true;
     }
     flushSubMenu();  // flush last category
+
+    // v0.9: Always show "User" category even if empty (Issue #2)
+    if (lastCategory != "User")
+    {
+        bool userFound = false;
+        for (const auto& p : presets)
+            if (p.category == "User") { userFound = true; break; }
+        if (! userFound)
+        {
+            juce::PopupMenu emptyUserMenu;
+            emptyUserMenu.addItem (-1, "(empty)", false);
+            mainMenu.addSubMenu ("User", emptyUserMenu);
+        }
+    }
 
     mainMenu.setLookAndFeel (&osdLookAndFeel);
     mainMenu.showMenuAsync (

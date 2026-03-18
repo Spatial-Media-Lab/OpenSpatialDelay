@@ -97,6 +97,7 @@ struct TrajectoryState
     int   shape        = 0;      // 0 = None, 1+ = active trajectory
     float phase        = 0.0f;   // 0..1 animation progress
     bool  reverse      = false;
+    float randomTime   = 0.0f;   // Random trajectory: current time accumulator
 };
 
 //==============================================================================
@@ -517,6 +518,10 @@ public:
     ObjectState getObjectState (int objectIndex) const;
     TrajectoryState getTrajectoryState (int objectIndex) const;
 
+    // v0.9: Evaluate Random trajectory noise at a given time (for look-ahead trail drawing)
+    struct RandomPosition { float azDeg, elDeg, dist; };
+    RandomPosition evaluateRandomNoise (int objectIndex, float time) const;
+
     // v0.6: OSC state accessors for editor
     bool isOscConnected() const { return oscConnected; }
     bool isOscOverrideActive (int objectIndex) const
@@ -710,6 +715,18 @@ private:
     float trajectoryFinalEl[MAX_OBJECTS]   = {};        // Animated elevation
     float trajectoryFinalDist[MAX_OBJECTS] = {};        // Animated distance
     std::atomic<bool> trajectoryActive[MAX_OBJECTS] = {};  // True when shape != None
+
+    // v0.9: Random trajectory noise system (Issue #9)
+    // Randomized multi-sine frequencies/phases per instance — smooth, all axes simultaneous
+    struct RandomNoiseState {
+        float freqAz[4]  = {}, phaseAz[4]  = {}, ampAz[4]  = {};
+        float freqEl[4]  = {}, phaseEl[4]  = {}, ampEl[4]  = {};
+        float freqDist[3]= {}, phaseDist[3]= {}, ampDist[3]= {};
+        bool initialized = false;
+    };
+    RandomNoiseState randomNoise[MAX_OBJECTS] = {};
+    float randomTime[MAX_OBJECTS] = {};  // ever-increasing time (never wraps) for non-repeating motion
+    juce::Random randomRng;  // seeded per-instance (timer thread only)
 
 public:
     // Trajectory shape computation (pure functions) — public for editor path sampling
