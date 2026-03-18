@@ -974,6 +974,11 @@ void SpatialMapComponent::paint (juce::Graphics& g)
             if (p0.px.getDistanceFrom (p1.px) > radius * 0.8f)
                 continue;
 
+            // Spiral: skip the wrap-back segment from end (outer edge) to start (center)
+            // This prevents a visible line cutting across the spiral pattern
+            if (ts.shape == 10 && next == 0)
+                continue;
+
             // Brightness: proximity to current animated dot position
             // Phase distance (circular): closer to current phase = brighter
             float phaseDist = std::abs (p0.phase - ts.phase);
