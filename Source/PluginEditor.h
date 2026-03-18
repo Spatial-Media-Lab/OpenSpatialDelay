@@ -19,6 +19,7 @@ public:
 
     SpatialMapComponent();
 
+    void setProcessor (OpenSpatialDelayProcessor* p) { processor = p; }
     void paint (juce::Graphics& g) override;
     void mouseDown (const juce::MouseEvent& e) override;
     void mouseDrag (const juce::MouseEvent& e) override;
@@ -45,6 +46,7 @@ private:
     std::array<bool, MAX_OBJECTS> oscOverride = {};  // v0.6: per-object OSC override indicator
     int selectedObject = -1;
     int draggedObject  = -1;
+    OpenSpatialDelayProcessor* processor = nullptr;  // for Random trail look-ahead
 
     juce::ListenerList<Listener> listeners;
 
