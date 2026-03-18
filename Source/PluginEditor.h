@@ -173,14 +173,31 @@ public:
         return juce::Font (juce::FontOptions (dmSansRegular).withHeight (13.0f));
     }
 
+    void drawButtonText (juce::Graphics& g, juce::TextButton& button,
+                         bool isMouseOverButton, bool isButtonDown) override;
+
+    // v0.9: Custom popup menu rendering to match ComboBox dropdown appearance
+    void drawPopupMenuBackground (juce::Graphics& g, int width, int height) override;
+    void drawPopupMenuItem (juce::Graphics& g, const juce::Rectangle<int>& area,
+                            bool isSeparator, bool isActive, bool isHighlighted,
+                            bool isTicked, bool hasSubMenu,
+                            const juce::String& text, const juce::String& shortcutKeyText,
+                            const juce::Drawable* icon, const juce::Colour* textColour) override;
+    void getIdealPopupMenuItemSize (const juce::String& text, bool isSeparator,
+                                    int standardMenuItemHeight, int& idealWidth,
+                                    int& idealHeight) override;
+
     void drawLabel (juce::Graphics& g, juce::Label& label) override;
 
     // v0.9: Thin 1px outline for all text editors (knob values + OSC fields)
     void drawTextEditorOutline (juce::Graphics& g, int width, int height,
                                 juce::TextEditor& editor) override;
 
-    juce::Font getTextButtonFont (juce::TextButton&, int buttonHeight) override
+    juce::Font getTextButtonFont (juce::TextButton& button, int buttonHeight) override
     {
+        // Preset button → DM Sans Regular 13px (match ComboBox font)
+        if (button.getComponentID() == "presetButton")
+            return juce::Font (juce::FontOptions (dmSansRegular).withHeight (13.0f));
         // Object selector buttons (22px) → JetBrains Mono Medium 12px
         // Other buttons → JetBrains Mono Medium 10px
         float h = (buttonHeight >= 22) ? 12.0f : 10.0f;
@@ -362,10 +379,12 @@ class PresetSaveOverlay : public juce::Component
 public:
     PresetSaveOverlay();
 
-    void show (const juce::String& existingName);  // empty = new preset
+    void show (const juce::String& existingName,
+               const juce::String& existingCategory = {});
     void dismiss();
 
-    std::function<void (const juce::String&)> onSave;  // callback with preset name
+    // v0.9: callback with preset name AND category
+    std::function<void (const juce::String&, const juce::String&)> onSave;
 
     void paint (juce::Graphics& g) override;
     void resized() override;
@@ -374,9 +393,10 @@ public:
 
 private:
     juce::TextEditor nameEditor;
+    juce::ComboBox categoryBox;  // v0.9: category picker
     juce::TextButton saveBtn { "Save" }, cancelBtn { "Cancel" };
 
-    static constexpr int cardW = 300, cardH = 150;
+    static constexpr int cardW = 300, cardH = 200;  // taller for category picker
     juce::Rectangle<int> getCardBounds() const;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PresetSaveOverlay)
@@ -467,12 +487,13 @@ private:
     juce::Slider objTrajectorySpeedSlider;
     juce::Label objTrajectorySpeedLabel;
 
-    // v0.6: Preset browser (header bar)
-    juce::ComboBox presetBox;
+    // v0.6: Preset browser (header bar) — v0.9: PopupMenu replaces ComboBox
+    juce::TextButton presetNameButton;  // shows current preset name, click opens popup
     juce::Label presetLabel;
     juce::TextButton presetPrevButton, presetNextButton, presetSaveButton;
     PresetSaveOverlay presetSaveOverlay;
-    void refreshPresetBox();
+    void showPresetMenu();
+    void updatePresetButtonText();
 
     // v0.7: Input format dropdown (header bar)
     juce::ComboBox inputFormatBox;

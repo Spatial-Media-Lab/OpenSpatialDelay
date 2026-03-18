@@ -6,6 +6,12 @@
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8090", "--directory", "docs/design-prototypes"],
       "port": 8090
+    },
+    {
+      "name": "manual-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8091", "--directory", "docs"],
+      "port": 8091
     }
   ]
 }

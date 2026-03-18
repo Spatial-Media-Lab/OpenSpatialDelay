@@ -29,3 +29,13 @@ if [ -d "$VST3_SRC" ]; then
         echo "  sudo chown -R $(whoami):staff $VST3_DIR"
     fi
 fi
+
+# Install factory presets to ~/Library/Audio/Presets/OpenSpatialDelay/
+PRESET_INSTALLER="${BUILD_DIR}/install_presets"
+PRESET_DIR="$HOME/Library/Audio/Presets/OpenSpatialDelay"
+if [ -x "$PRESET_INSTALLER" ]; then
+    "$PRESET_INSTALLER" "$PRESET_DIR"
+else
+    echo "WARNING: install_presets tool not found at $PRESET_INSTALLER"
+    echo "  Build it with: cmake --build build --target install_presets"
+fi
