@@ -969,7 +969,9 @@ void OpenSpatialDelayProcessor::timerCallback()
             prevTrajectoryShape[t] = shape;
 
             // Advance phase for this object
-            trajectoryPhase[t] += speed * dt;
+            // Spiral (shape 10) runs at half base speed for a more natural unwind
+            float effectiveSpeed = (shape == 10) ? speed * 0.5f : speed;
+            trajectoryPhase[t] += effectiveSpeed * dt;
             if (trajectoryPhase[t] >= 1.0f)
                 trajectoryPhase[t] -= std::floor (trajectoryPhase[t]);
 
@@ -4582,9 +4584,9 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
             break;
         }
 
-        case 10: // Spiral — Archimedean spiral: outward from origin, 3 full turns
+        case 10: // Spiral — Archimedean spiral: outward from origin, 1.75 turns
         {
-            constexpr float numTurns = 3.0f;
+            constexpr float numTurns = 1.75f;
             constexpr float maxRadius = 0.75f;
             r.azDeg = baseAz + 360.0f * numTurns * phase;
             r.elDeg = baseEl;  // horizontal plane only
