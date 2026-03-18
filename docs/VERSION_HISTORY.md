@@ -540,12 +540,30 @@ in-plugin modal overlay matching the Observatory v6 design system.
 - Filter defaults updated: HP 50Hz, LP 5kHz, Res 0.71
 - Filter enabled default: OFF
 
+### Preset System Overhaul (v0.9, 2026-03-18)
+- **60 factory presets** across 9 categories: Classic Delays, Spatial Movement, Ambient + Texture, Height + 3D, Surround Production, Wobble + Modulated, Creative + Experimental, Rhythmic, User
+- **PresetData extracted** to shared `PresetData.h`/`PresetData.cpp` for use by both plugin and build-time `install_presets` CLI tool
+- **Build-time preset installation:** `install_presets` CLI binary generates `.osdpreset` JSON files from C++ source. CMake `add_dependencies(OpenSpatialDelay_VST3 install_presets)` ensures correct build ordering. Factory presets always overwritten from source; user presets untouched.
+- **Industry-standard preset location:** `~/Library/Audio/Presets/OpenSpatialDelay/` (was `~/Library/Application Support/OpenSpatialDelay/Presets/`)
+- **User folder** created automatically for user-generated presets
+- **Filter resonance in presets:** `filterLPQ` and `filterHPQ` fields added to PresetData struct. Backward-compatible JSON parsing (defaults to 0.707f Butterworth if missing from old files).
+- **SMPTE channel ordering** for surround presets: 5.1 (L,R,C,Ls,Rs), 7.1 (L,R,C,Lss,Rss,Lrs,Rrs), 7.1.4 Atmos (adds Tfl,Tfr,Trl,Trr at +45° elevation)
+- **Per-tap pitch presets:** Ascending Staircase (+1/+2/+3st), Falling Cascade (-1 to -5st), Fifth Ghost (tap3 -5st)
+- **Bug fix:** `writeFactoryPresetsToDisk()` had `if (file.existsAsFile()) continue;` that prevented source changes from reaching disk. Rhythmic presets (new in v0.9) worked while older presets had stale data. Root cause: disk caching, not source values.
+
+### Preset Dropdown Styling Fix (v0.9, 2026-03-18)
+- **Root cause:** `showPresetMenu()` never called `setLookAndFeel()` on the PopupMenu, causing it to use the default system LookAndFeel instead of `Ableton12Look`
+- **Fix:** Added `mainMenu.setLookAndFeel(&ableton12Look)` before `showMenuAsync()`
+- Custom `drawPopupMenuItem()` override ensures consistent rendering: 24px item height, DM Sans Regular 13px, compact 4×6px submenu arrows matching ComboBox dropdown arrow size
+
 ### Files
 Active source in `Source/`:
 - `PluginProcessor.h`
 - `PluginProcessor.cpp`
 - `PluginEditor.h`
 - `PluginEditor.cpp`
+- `PresetData.h` (shared preset struct)
+- `PresetData.cpp` (60 factory presets, serialization, install function)
 
 ### Output
 - 22 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)

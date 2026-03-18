@@ -200,11 +200,20 @@ PresetSaveOverlay::PresetSaveOverlay()
         auto name = nameEditor.getText().trim();
         if (name.isNotEmpty() && onSave)
         {
-            onSave (name);
+            onSave (name, categoryBox.getText());
             dismiss();
         }
     };
     addAndMakeVisible (nameEditor);
+
+    // v0.9: Category picker — styled to match theme
+    categoryBox.setColour (juce::ComboBox::backgroundColourId, Colours_OSD::bgRecessed);
+    categoryBox.setColour (juce::ComboBox::textColourId, juce::Colours::white);
+    categoryBox.setColour (juce::ComboBox::outlineColourId, Colours_OSD::borderDim);
+    for (int i = 0; i < NUM_PRESET_CATEGORIES; ++i)
+        categoryBox.addItem (presetCategoryNames[i], i + 1);
+    categoryBox.setSelectedId (NUM_PRESET_CATEGORIES, juce::dontSendNotification);  // default: User
+    addAndMakeVisible (categoryBox);
 
     // Save button — filled cyan, dark text (primary action)
     saveBtn.setColour (juce::TextButton::buttonColourId, Colours_OSD::accentStellar);
@@ -214,7 +223,7 @@ PresetSaveOverlay::PresetSaveOverlay()
         auto name = nameEditor.getText().trim();
         if (name.isNotEmpty() && onSave)
         {
-            onSave (name);
+            onSave (name, categoryBox.getText());
             dismiss();
         }
     };
@@ -228,9 +237,24 @@ PresetSaveOverlay::PresetSaveOverlay()
     addAndMakeVisible (cancelBtn);
 }
 
-void PresetSaveOverlay::show (const juce::String& existingName)
+void PresetSaveOverlay::show (const juce::String& existingName,
+                              const juce::String& existingCategory)
 {
     nameEditor.setText (existingName, false);
+
+    // Set category box to matching category if provided
+    if (existingCategory.isNotEmpty())
+    {
+        for (int i = 0; i < categoryBox.getNumItems(); ++i)
+        {
+            if (categoryBox.getItemText (i) == existingCategory)
+            {
+                categoryBox.setSelectedItemIndex (i, juce::dontSendNotification);
+                break;
+            }
+        }
+    }
+
     setVisible (true);
     toFront (true);
     nameEditor.grabKeyboardFocus();
@@ -271,6 +295,16 @@ void PresetSaveOverlay::paint (juce::Graphics& g)
     g.setFont (titleFont);
     auto titleArea = card.withHeight (32.0f).translated (0.0f, 8.0f);
     g.drawText ("SAVE PRESET", titleArea.toNearestInt(), juce::Justification::centred);
+
+    // v0.9: Field labels — NAME / CATEGORY
+    auto labelFont = juce::Font (juce::FontOptions (10.0f).withStyle ("Bold"));
+    g.setFont (labelFont);
+    float pad = 16.0f;
+    float labelX = card.getX() + pad;
+    g.drawText ("NAME", juce::Rectangle<float> (labelX, card.getY() + 36.0f, 100.0f, 14.0f).toNearestInt(),
+                juce::Justification::centredLeft);
+    g.drawText ("CATEGORY", juce::Rectangle<float> (labelX, card.getY() + 86.0f, 100.0f, 14.0f).toNearestInt(),
+                juce::Justification::centredLeft);
 }
 
 void PresetSaveOverlay::resized()
@@ -278,10 +312,15 @@ void PresetSaveOverlay::resized()
     auto card = getCardBounds();
     int pad = 16;
 
-    // Name editor — centred in card, below title
-    int editorY = card.getY() + 44;
+    // Name editor — below NAME label
+    int editorY = card.getY() + 52;
     nameEditor.setBounds (card.getX() + pad, editorY,
                           card.getWidth() - pad * 2, 26);
+
+    // v0.9: Category picker — below CATEGORY label
+    int catY = card.getY() + 102;
+    categoryBox.setBounds (card.getX() + pad, catY,
+                           card.getWidth() - pad * 2, 26);
 
     // Buttons — centred at bottom of card
     int btnW = 80, btnH = 28, btnGap = 12;
@@ -323,9 +362,9 @@ Ableton12Look::Ableton12Look()
     jetbrainsMedium  = juce::Typeface::createSystemTypefaceFor (FontData::JetBrains_MonoMedium_ttf,  FontData::JetBrains_MonoMedium_ttfSize);
     jetbrainsBold    = juce::Typeface::createSystemTypefaceFor (FontData::JetBrains_MonoBold_ttf,    FontData::JetBrains_MonoBold_ttfSize);
 
-    // Observatory v6 popup/dropdown colors (matched to OKLCH rendering)
-    setColour (juce::PopupMenu::backgroundColourId,            juce::Colour (0xff06090f));
-    setColour (juce::PopupMenu::textColourId,                  juce::Colour (0xffe4e6ec));
+    // Popup menu colors — match ComboBox for visual consistency
+    setColour (juce::PopupMenu::backgroundColourId,            juce::Colour (0xff010205));
+    setColour (juce::PopupMenu::textColourId,                  juce::Colour (0xff9fa2b0));
     setColour (juce::PopupMenu::highlightedBackgroundColourId, juce::Colour (0xff7cc8f0));
     setColour (juce::PopupMenu::highlightedTextColourId,       juce::Colours::black);
     setColour (juce::ComboBox::backgroundColourId,             juce::Colour (0xff010205));
@@ -418,6 +457,31 @@ void Ableton12Look::drawButtonBackground (juce::Graphics& g, juce::Button& butto
     if (backgroundColour.isTransparent())
         return;
 
+    // v0.9: Preset button — match drawComboBox exactly for visual consistency
+    if (button.getComponentID() == "presetButton")
+    {
+        auto bounds = juce::Rectangle<float> (0, 0, (float) button.getWidth(), (float) button.getHeight());
+        auto baseColour = backgroundColour;
+        if (isButtonDown)            baseColour = baseColour.brighter (0.15f);
+        else if (isMouseOverButton)  baseColour = baseColour.brighter (0.12f);
+
+        g.setColour (baseColour);
+        g.fillRoundedRectangle (bounds, 4.0f);
+        g.setColour (Colours_OSD::borderSubtle);
+        g.drawRoundedRectangle (bounds.reduced (0.5f), 4.0f, 1.0f);
+
+        // Dropdown arrow — same geometry as drawComboBox
+        float arrowX = (float) button.getWidth() - 12.0f;
+        float arrowY = (float) button.getHeight() * 0.5f;
+        juce::Path arrow;
+        arrow.addTriangle (arrowX - 3.0f, arrowY - 1.5f,
+                           arrowX + 3.0f, arrowY - 1.5f,
+                           arrowX,        arrowY + 2.5f);
+        g.setColour (Colours_OSD::textDim);
+        g.fillPath (arrow);
+        return;
+    }
+
     auto bounds = button.getLocalBounds().toFloat().reduced (0.5f);
     auto baseColour = backgroundColour;
     if (isButtonDown)            baseColour = baseColour.brighter (0.15f);
@@ -431,6 +495,108 @@ void Ableton12Look::drawButtonBackground (juce::Graphics& g, juce::Button& butto
     auto borderCol = baseColour.brighter (borderBright).withAlpha (isMouseOverButton ? 0.8f : 0.6f);
     g.setColour (borderCol);
     g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
+}
+
+void Ableton12Look::drawButtonText (juce::Graphics& g, juce::TextButton& button,
+                                     bool isMouseOverButton, bool isButtonDown)
+{
+    // Preset button — left-aligned text to match ComboBox label positioning
+    if (button.getComponentID() == "presetButton")
+    {
+        g.setFont (getTextButtonFont (button, button.getHeight()));
+        g.setColour (button.findColour (juce::TextButton::textColourOffId));
+        // 6px left pad, reserve 20px for dropdown arrow (matches positionComboBoxText)
+        g.drawText (button.getButtonText(),
+                    6, 0, button.getWidth() - 20, button.getHeight(),
+                    juce::Justification::centredLeft, true);
+        return;
+    }
+
+    // All other TextButtons — default centered rendering
+    LookAndFeel_V4::drawButtonText (g, button, isMouseOverButton, isButtonDown);
+}
+
+//==============================================================================
+// v0.9: Custom PopupMenu rendering — matches ComboBox dropdown appearance
+//==============================================================================
+void Ableton12Look::drawPopupMenuBackground (juce::Graphics& g, int width, int height)
+{
+    g.fillAll (findColour (juce::PopupMenu::backgroundColourId));
+    g.setColour (juce::Colour (0xff252930));  // borderDim
+    g.drawRect (0, 0, width, height, 1);
+}
+
+void Ableton12Look::drawPopupMenuItem (juce::Graphics& g, const juce::Rectangle<int>& area,
+                                        bool isSeparator, bool isActive, bool isHighlighted,
+                                        bool isTicked, bool hasSubMenu,
+                                        const juce::String& text, const juce::String& /*shortcutKeyText*/,
+                                        const juce::Drawable* /*icon*/, const juce::Colour* textColour)
+{
+    if (isSeparator)
+    {
+        auto sepArea = area.reduced (8, 0);
+        g.setColour (juce::Colour (0xff252930));
+        g.fillRect (sepArea.getX(), area.getCentreY(), sepArea.getWidth(), 1);
+        return;
+    }
+
+    auto textBounds = area.reduced (8, 0);
+
+    if (isHighlighted && isActive)
+    {
+        g.setColour (findColour (juce::PopupMenu::highlightedBackgroundColourId));
+        g.fillRect (area);
+        g.setColour (findColour (juce::PopupMenu::highlightedTextColourId));
+    }
+    else
+    {
+        g.setColour (textColour != nullptr ? *textColour
+                     : (isActive ? findColour (juce::PopupMenu::textColourId)
+                                 : findColour (juce::PopupMenu::textColourId).withAlpha (0.4f)));
+    }
+
+    g.setFont (getPopupMenuFont());
+
+    // Tick mark for current preset
+    if (isTicked)
+    {
+        auto tickBounds = area.withWidth (20);
+        g.drawText (juce::String::charToString (0x2713), tickBounds,
+                    juce::Justification::centred);
+        textBounds = textBounds.withTrimmedLeft (14);
+    }
+
+    g.drawFittedText (text, textBounds, juce::Justification::centredLeft, 1);
+
+    // Submenu arrow — 6×4px triangle matching ComboBox dropdown arrow size
+    if (hasSubMenu)
+    {
+        float arrowX = (float) (area.getRight() - 12);
+        float arrowY = (float) area.getCentreY();
+        juce::Path arrow;
+        arrow.addTriangle (arrowX - 1.5f, arrowY - 3.0f,
+                           arrowX - 1.5f, arrowY + 3.0f,
+                           arrowX + 2.5f, arrowY);
+        g.fillPath (arrow);
+    }
+}
+
+void Ableton12Look::getIdealPopupMenuItemSize (const juce::String& text, bool isSeparator,
+                                                int /*standardMenuItemHeight*/,
+                                                int& idealWidth, int& idealHeight)
+{
+    if (isSeparator)
+    {
+        idealWidth = 50;
+        idealHeight = 8;
+        return;
+    }
+
+    auto font = getPopupMenuFont();
+    juce::GlyphArrangement ga;
+    ga.addLineOfText (font, text, 0.0f, 0.0f);
+    idealWidth = static_cast<int> (std::ceil (ga.getBoundingBox (0, -1, true).getWidth())) + 32;
+    idealHeight = 24;  // match ComboBox item height
 }
 
 void Ableton12Look::drawComboBox (juce::Graphics& g, int width, int height, bool /*isButtonDown*/,
@@ -1753,17 +1919,14 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         addAndMakeVisible (inputFormatLabel);
     }
 
-    // --- v0.6: Preset browser (header bar) ------------------------------------
-    presetBox.setLookAndFeel (&ableton12Look);
-    presetBox.setTextWhenNothingSelected ("Preset...");
-    addAndMakeVisible (presetBox);
-    refreshPresetBox();
-    presetBox.onChange = [this]
-    {
-        int sel = presetBox.getSelectedId();
-        if (sel > 0)
-            processorRef.loadPreset (sel - 1);  // ComboBox IDs are 1-based
-    };
+    // --- v0.9: Preset browser — TextButton + PopupMenu (replaces ComboBox) ---
+    presetNameButton.setLookAndFeel (&ableton12Look);
+    presetNameButton.setComponentID ("presetButton");
+    presetNameButton.setColour (juce::TextButton::buttonColourId, Colours_OSD::bgRecessed);
+    presetNameButton.setColour (juce::TextButton::textColourOffId, Colours_OSD::textSecondary);
+    presetNameButton.onClick = [this] { showPresetMenu(); };
+    addAndMakeVisible (presetNameButton);
+    updatePresetButtonText();
 
     auto stylePresetButton = [&] (juce::TextButton& btn, const juce::String& text)
     {
@@ -1778,41 +1941,50 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     presetPrevButton.onClick = [this]
     {
         processorRef.loadPreviousPreset();
-        presetBox.setSelectedId (processorRef.getCurrentPresetIndex() + 1, juce::dontSendNotification);
+        updatePresetButtonText();
     };
 
     stylePresetButton (presetNextButton, ">");
     presetNextButton.onClick = [this]
     {
         processorRef.loadNextPreset();
-        presetBox.setSelectedId (processorRef.getCurrentPresetIndex() + 1, juce::dontSendNotification);
+        updatePresetButtonText();
     };
 
     stylePresetButton (presetSaveButton, "Save");
     addChildComponent (presetSaveOverlay);  // initially hidden
     presetSaveButton.onClick = [this]
     {
-        // Pre-fill name if current preset is user-made (index >= NUM_FACTORY_PRESETS)
+        // Pre-fill name + category if current preset is user-made
         int currentIdx = processorRef.getCurrentPresetIndex();
-        bool isUserPreset = currentIdx >= 8;  // NUM_FACTORY_PRESETS = 8
-        juce::String existingName;
+        auto cats = processorRef.getCategorizedPresets();
+        bool isUserPreset = false;
+        juce::String existingName, existingCategory;
+        for (const auto& cp : cats)
+        {
+            if (cp.originalIndex == currentIdx && ! cp.isFactory)
+            { isUserPreset = true; break; }
+        }
         if (isUserPreset)
         {
             auto names = processorRef.getPresetNames();
             if (currentIdx < names.size())
                 existingName = names[currentIdx];
+            for (const auto& cp : cats)
+            {
+                if (cp.originalIndex == currentIdx)
+                { existingCategory = cp.category; break; }
+            }
         }
 
-        presetSaveOverlay.onSave = [this] (const juce::String& name)
+        presetSaveOverlay.onSave = [this] (const juce::String& name, const juce::String& category)
         {
-            processorRef.saveUserPreset (name);
-            refreshPresetBox();
-            presetBox.setSelectedId (processorRef.getCurrentPresetIndex() + 1,
-                                     juce::dontSendNotification);
+            processorRef.saveUserPreset (name, category);
+            updatePresetButtonText();
         };
 
         presetSaveOverlay.setBounds (getLocalBounds());
-        presetSaveOverlay.show (existingName);
+        presetSaveOverlay.show (existingName, existingCategory);
     };
 
     // --- SML badge button (header branding link) ---
@@ -1836,18 +2008,75 @@ OpenSpatialDelayEditor::~OpenSpatialDelayEditor()
 }
 
 //==============================================================================
-// Preset browser helpers
+// v0.9: Preset browser helpers (PopupMenu + category submenus)
 //==============================================================================
-void OpenSpatialDelayEditor::refreshPresetBox()
+void OpenSpatialDelayEditor::showPresetMenu()
 {
-    presetBox.clear (juce::dontSendNotification);
-    auto names = processorRef.getPresetNames();
-    for (int i = 0; i < names.size(); ++i)
-        presetBox.addItem (names[i], i + 1);  // ComboBox IDs are 1-based
+    auto presets = processorRef.getCategorizedPresets();
+    juce::PopupMenu mainMenu;
 
-    int current = processorRef.getCurrentPresetIndex();
-    if (current >= 0 && current < names.size())
-        presetBox.setSelectedId (current + 1, juce::dontSendNotification);
+    juce::String lastCategory;
+    juce::PopupMenu currentSubMenu;
+    bool hasFactoryInSub = false;
+    bool hasUserInSub = false;
+
+    auto flushSubMenu = [&]()
+    {
+        if (lastCategory.isNotEmpty() && (hasFactoryInSub || hasUserInSub))
+            mainMenu.addSubMenu (lastCategory, currentSubMenu);
+        currentSubMenu = juce::PopupMenu();
+        hasFactoryInSub = false;
+        hasUserInSub = false;
+    };
+
+    for (const auto& p : presets)
+    {
+        if (p.category != lastCategory)
+        {
+            flushSubMenu();
+            lastCategory = p.category;
+        }
+
+        // Separator between factory and user presets within a category
+        if (! p.isFactory && ! hasUserInSub && hasFactoryInSub)
+            currentSubMenu.addSeparator();
+
+        bool isCurrent = (p.originalIndex == processorRef.getCurrentPresetIndex());
+        currentSubMenu.addItem (p.originalIndex + 1,  // PopupMenu IDs are 1-based
+                                p.name,
+                                true,       // enabled
+                                isCurrent); // ticked if current
+
+        if (p.isFactory) hasFactoryInSub = true;
+        else             hasUserInSub = true;
+    }
+    flushSubMenu();  // flush last category
+
+    mainMenu.setLookAndFeel (&ableton12Look);
+    mainMenu.showMenuAsync (
+        juce::PopupMenu::Options()
+            .withTargetComponent (&presetNameButton)
+            .withMinimumWidth (160)
+            .withPreferredPopupDirection (
+                juce::PopupMenu::Options::PopupDirection::downwards),
+        [this] (int result)
+        {
+            if (result > 0)
+            {
+                processorRef.loadPreset (result - 1);
+                updatePresetButtonText();
+            }
+        });
+}
+
+void OpenSpatialDelayEditor::updatePresetButtonText()
+{
+    int idx = processorRef.getCurrentPresetIndex();
+    auto names = processorRef.getPresetNames();
+    if (idx >= 0 && idx < names.size())
+        presetNameButton.setButtonText (names[idx]);
+    else
+        presetNameButton.setButtonText ("Preset...");
 }
 
 //==============================================================================
@@ -2200,11 +2429,16 @@ void OpenSpatialDelayEditor::timerCallback()
         }
     }
 
-    // v0.6: Sync preset dropdown selection from processor
+    // v0.9: Sync preset name button text from processor
     {
-        int expected = processorRef.getCurrentPresetIndex() + 1;  // 1-based ComboBox ID
-        if (presetBox.getSelectedId() != expected)
-            presetBox.setSelectedId (expected, juce::dontSendNotification);
+        int idx = processorRef.getCurrentPresetIndex();
+        auto names = processorRef.getPresetNames();
+        if (idx >= 0 && idx < names.size())
+        {
+            juce::String expected = names[idx];
+            if (presetNameButton.getButtonText() != expected)
+                presetNameButton.setButtonText (expected);
+        }
     }
 
     // v0.9: Sync filter graph from parameters — always show live values (WYSIWYG)
@@ -2497,7 +2731,7 @@ void OpenSpatialDelayEditor::resized()
     // Title block: [10px pad][28px SML][6px][~155px title][4px][~35px v0.7] ≈ 238px
     int presetStartX = 240;
     presetLabel.setBounds (presetStartX, lblY, 120, lblH);
-    presetBox.setBounds (presetStartX, boxY, 120, boxH);
+    presetNameButton.setBounds (presetStartX, boxY, 120, boxH);
     int px = presetStartX + 120 + 2;
     presetPrevButton.setBounds (px, boxY, 22, boxH);
     px += 22;

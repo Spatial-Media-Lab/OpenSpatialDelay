@@ -1091,8 +1091,8 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
         oscSendAddress[i] = "/adm/obj/" + juce::String (i + 1) + "/aed";
     }
 
-    // v0.6: Load user presets from disk at startup
-    loadUserPresetsFromDisk();
+    // v0.9: Load presets from disk (factory presets installed at build time by install_presets tool)
+    loadAllPresetsFromDisk();
 }
 
 OpenSpatialDelayProcessor::~OpenSpatialDelayProcessor()
@@ -1173,162 +1173,31 @@ void OpenSpatialDelayProcessor::setOscSendIP (const juce::String& ip)
 // v0.6: Preset System — Factory presets, load/save, JSON serialization
 // #############################################################################
 
-//==============================================================================
-// Factory presets (8 presets, stored as static const)
-//==============================================================================
-const OpenSpatialDelayProcessor::PresetData
-    OpenSpatialDelayProcessor::factoryPresets[NUM_FACTORY_PRESETS] =
-{
-    // 0: Default — 4 taps in diagonal cross pattern
-    {
-        "Default",
-        500.0f, false, 4.0f, 0, 0.3f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
-        {
-            { true, -45.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 1: front-left
-            { true,  45.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 2: front-right
-            { true, -135.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 3: rear-left
-            { true,  135.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 4: rear-right
-            {}, {}, {}, {}, {}, {}, {}, {}
-        }
-    },
-    // 1: Stereo Ping-Pong — 2 taps at ±90°
-    {
-        "Stereo Ping-Pong",
-        350.0f, false, 4.0f, 0, 0.5f, 18000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
-        {
-            { true, -90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 1: hard left
-            { true,  90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 2: hard right
-            {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
-        }
-    },
-    // 2: Circle (Quad) — 4 taps in equidistant ring
-    {
-        "Circle (Quad)",
-        250.0f, false, 4.0f, 0, 0.4f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
-        {
-            { true,   0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 1: front
-            { true,  90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 2: right
-            { true, 180.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 3: rear
-            { true, -90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 4: left
-            {}, {}, {}, {}, {}, {}, {}, {}
-        }
-    },
-    // 3: Surround 5.1 — 5 taps at standard 5.1 positions
-    {
-        "Surround 5.1",
-        300.0f, false, 4.0f, 0, 0.35f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
-        {
-            { true,    0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // C
-            { true,  -30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // L
-            { true,   30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // R
-            { true, -110.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Ls
-            { true,  110.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Rs
-            {}, {}, {}, {}, {}, {}, {}
-        }
-    },
-    // 4: Surround 7.1 — 7 taps at standard 7.1 positions
-    {
-        "Surround 7.1",
-        250.0f, false, 4.0f, 0, 0.35f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
-        {
-            { true,    0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // C
-            { true,  -30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // L
-            { true,   30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // R
-            { true,  -90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Ls
-            { true,   90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Rs
-            { true, -135.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Lrs
-            { true,  135.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Rrs
-            {}, {}, {}, {}, {}
-        }
-    },
-    // 5: Atmos 7.1.4 — 11 taps (ear-level 7.1 + 4 height)
-    {
-        "Atmos 7.1.4",
-        200.0f, false, 4.0f, 0, 0.3f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
-        {
-            { true,    0.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // C
-            { true,  -30.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // L
-            { true,   30.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // R
-            { true,  -90.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Ls
-            { true,   90.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Rs
-            { true, -135.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Lrs
-            { true,  135.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Rrs
-            { true,  -45.0f, 45.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Ltf
-            { true,   45.0f, 45.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Rtf
-            { true, -135.0f, 45.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Ltr
-            { true,  135.0f, 45.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // Rtr
-            {}
-        }
-    },
-    // 6: Rising Spiral — 8 taps spiraling upward with orbit trajectory
-    {
-        "Rising Spiral",
-        200.0f, false, 4.0f, 0, 0.4f, 16000.0f, 40.0f, 2.0f, 0.5f, 0.0f, 0.0f,
-        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
-        {
-            { true,    0.0f,  -20.0f, 0.7f, 0.2f, 0.0f, 2 /*Orbit*/, 1.5f },
-            { true,   45.0f,  -10.0f, 0.6f, 0.2f, 0.0f, 2 /*Orbit*/, 1.8f },
-            { true,   90.0f,    0.0f, 0.5f, 0.2f, 0.0f, 2 /*Orbit*/, 2.0f },
-            { true,  135.0f,   10.0f, 0.5f, 0.2f, 0.0f, 2 /*Orbit*/, 2.2f },
-            { true,  180.0f,   20.0f, 0.4f, 0.2f, 0.0f, 2 /*Orbit*/, 2.5f },
-            { true, -135.0f,   30.0f, 0.4f, 0.2f, 0.0f, 2 /*Orbit*/, 2.8f },
-            { true,  -90.0f,   40.0f, 0.3f, 0.2f, 0.0f, 2 /*Orbit*/, 3.0f },
-            { true,  -45.0f,   50.0f, 0.3f, 0.2f, 0.0f, 2 /*Orbit*/, 3.2f },
-            {}, {}, {}, {}
-        }
-    },
-    // 7: Falling Cascade — 6 taps descending with pitch drop
-    {
-        "Falling Cascade",
-        350.0f, false, 4.0f, 0, 0.45f, 14000.0f, 30.0f, -1.0f, 0.5f, 0.0f, 0.0f,
-        false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
-        {
-            { true,  -30.0f,  40.0f, 0.3f, 0.1f, 0.0f, 0, 1.0f },   // High left
-            { true,   60.0f,  25.0f, 0.4f, 0.1f, 0.0f, 0, 1.0f },   // Mid-high right
-            { true, -120.0f,  10.0f, 0.5f, 0.1f, 0.0f, 0, 1.0f },   // Mid left-rear
-            { true,  150.0f,  -5.0f, 0.6f, 0.1f, 0.0f, 0, 1.0f },   // Low right-rear
-            { true,  -60.0f, -20.0f, 0.7f, 0.1f, 0.0f, 0, 1.0f },   // Lower left
-            { true,   90.0f, -35.0f, 0.8f, 0.1f, 0.0f, 0, 1.0f },   // Lowest right
-            {}, {}, {}, {}, {}, {}
-        }
-    }
-};
+// Factory presets moved to PresetData.cpp (v0.9)
+
 
 //==============================================================================
-// Preset API implementation
+// Preset API implementation — v0.9: all presets loaded from disk (allPresets)
 //==============================================================================
 int OpenSpatialDelayProcessor::getNumPresets() const
 {
-    return NUM_FACTORY_PRESETS + static_cast<int> (userPresets.size());
+    return static_cast<int> (allPresets.size());
 }
 
 juce::StringArray OpenSpatialDelayProcessor::getPresetNames() const
 {
     juce::StringArray names;
-    for (int i = 0; i < NUM_FACTORY_PRESETS; ++i)
-        names.add (factoryPresets[i].name);
-    for (const auto& up : userPresets)
-        names.add (up.name);
+    for (const auto& p : allPresets)
+        names.add (p.name);
     return names;
 }
 
 void OpenSpatialDelayProcessor::loadPreset (int index)
 {
-    const PresetData* preset = nullptr;
-
-    if (index >= 0 && index < NUM_FACTORY_PRESETS)
-        preset = &factoryPresets[index];
-    else if (index >= NUM_FACTORY_PRESETS
-             && (index - NUM_FACTORY_PRESETS) < static_cast<int> (userPresets.size()))
-        preset = &userPresets[static_cast<size_t> (index - NUM_FACTORY_PRESETS)];
-    else
+    if (index < 0 || index >= static_cast<int> (allPresets.size()))
         return;
+
+    const PresetData* preset = &allPresets[static_cast<size_t> (index)];
 
     // Helpers — use convertTo0to1() to handle skewed NormalisableRanges correctly
     auto setFloat = [&] (const juce::String& paramId, float value) {
@@ -1356,11 +1225,14 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
     setFloat  ("feedback",     preset->feedback);
     setFloat  ("filterLP",     preset->filterLP);
     setFloat  ("filterHP",     preset->filterHP);
+    setFloat  ("filterLPQ",    preset->filterLPQ);
+    setFloat  ("filterHPQ",    preset->filterHPQ);
     setFloat  ("pitchShift",   preset->pitchShift);
     setFloat  ("dryWet",       preset->dryWet);
     setFloat  ("inputGain",    preset->inputGain);
     setFloat  ("outputGain",   preset->outputGain);
     setBool   ("airAbsorption", preset->airAbsorption);
+    setBool   ("filterEnabled", preset->filterEnabled);
     setBool   ("wobbleEnabled", preset->wobbleEnabled);
     setFloat  ("wobbleAmount", preset->wobbleAmount);
     setFloat  ("wobbleMorph",  preset->wobbleMorph);
@@ -1391,19 +1263,33 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
 
 void OpenSpatialDelayProcessor::loadNextPreset()
 {
-    int total = getNumPresets();
-    if (total == 0) return;
-    loadPreset ((currentPresetIndex + 1) % total);
+    if (categorizedOrder.empty()) return;
+    // Find current position in category-ordered sequence
+    int pos = 0;
+    for (int i = 0; i < static_cast<int> (categorizedOrder.size()); ++i)
+    {
+        if (categorizedOrder[static_cast<size_t> (i)] == currentPresetIndex)
+        { pos = i; break; }
+    }
+    pos = (pos + 1) % static_cast<int> (categorizedOrder.size());
+    loadPreset (categorizedOrder[static_cast<size_t> (pos)]);
 }
 
 void OpenSpatialDelayProcessor::loadPreviousPreset()
 {
-    int total = getNumPresets();
-    if (total == 0) return;
-    loadPreset ((currentPresetIndex - 1 + total) % total);
+    if (categorizedOrder.empty()) return;
+    int pos = 0;
+    for (int i = 0; i < static_cast<int> (categorizedOrder.size()); ++i)
+    {
+        if (categorizedOrder[static_cast<size_t> (i)] == currentPresetIndex)
+        { pos = i; break; }
+    }
+    int sz = static_cast<int> (categorizedOrder.size());
+    pos = (pos - 1 + sz) % sz;
+    loadPreset (categorizedOrder[static_cast<size_t> (pos)]);
 }
 
-OpenSpatialDelayProcessor::PresetData OpenSpatialDelayProcessor::captureCurrentState() const
+PresetData OpenSpatialDelayProcessor::captureCurrentState() const
 {
     PresetData pd;
     pd.delayTime    = apvts.getRawParameterValue ("delayTime")->load();
@@ -1413,11 +1299,14 @@ OpenSpatialDelayProcessor::PresetData OpenSpatialDelayProcessor::captureCurrentS
     pd.feedback     = apvts.getRawParameterValue ("feedback")->load();
     pd.filterLP     = apvts.getRawParameterValue ("filterLP")->load();
     pd.filterHP     = apvts.getRawParameterValue ("filterHP")->load();
+    pd.filterLPQ    = apvts.getRawParameterValue ("filterLPQ")->load();
+    pd.filterHPQ    = apvts.getRawParameterValue ("filterHPQ")->load();
     pd.pitchShift   = apvts.getRawParameterValue ("pitchShift")->load();
     pd.dryWet       = apvts.getRawParameterValue ("dryWet")->load();
     pd.inputGain    = apvts.getRawParameterValue ("inputGain")->load();
     pd.outputGain   = apvts.getRawParameterValue ("outputGain")->load();
     pd.airAbsorption = apvts.getRawParameterValue ("airAbsorption")->load() > 0.5f;
+    pd.filterEnabled = apvts.getRawParameterValue ("filterEnabled")->load() > 0.5f;
     pd.wobbleEnabled = apvts.getRawParameterValue ("wobbleEnabled")->load() > 0.5f;
     pd.wobbleAmount  = apvts.getRawParameterValue ("wobbleAmount")->load();
     pd.wobbleMorph   = apvts.getRawParameterValue ("wobbleMorph")->load();
@@ -1443,152 +1332,64 @@ OpenSpatialDelayProcessor::PresetData OpenSpatialDelayProcessor::captureCurrentS
     return pd;
 }
 
+// JSON serialization / deserialization moved to PresetData.cpp (v0.9)
+
 //==============================================================================
-// JSON serialization / deserialization (using juce::JSON)
+// v0.9: Preset file I/O — all presets on disk as .osdpreset files
 //==============================================================================
-juce::String OpenSpatialDelayProcessor::serializePresetToJson (const PresetData& pd)
+juce::File OpenSpatialDelayProcessor::getPresetDirectory()
 {
-    auto* obj = new juce::DynamicObject();
-
-    obj->setProperty ("name",          pd.name);
-    obj->setProperty ("delayTime",     pd.delayTime);
-    obj->setProperty ("tempoSync",     pd.tempoSync);
-    obj->setProperty ("noteDivision",  pd.noteDivision);
-    obj->setProperty ("syncMode",      pd.syncMode);
-    obj->setProperty ("feedback",      pd.feedback);
-    obj->setProperty ("filterLP",      pd.filterLP);
-    obj->setProperty ("filterHP",      pd.filterHP);
-    obj->setProperty ("pitchShift",    pd.pitchShift);
-    obj->setProperty ("dryWet",        pd.dryWet);
-    obj->setProperty ("inputGain",     pd.inputGain);
-    obj->setProperty ("outputGain",    pd.outputGain);
-    obj->setProperty ("airAbsorption", pd.airAbsorption);
-    obj->setProperty ("wobbleEnabled", pd.wobbleEnabled);
-    obj->setProperty ("wobbleAmount",  pd.wobbleAmount);
-    obj->setProperty ("wobbleMorph",   pd.wobbleMorph);
-    obj->setProperty ("algorithm",     pd.algorithm);
-    obj->setProperty ("hrtfProfile",   pd.hrtfProfile);
-
-    juce::Array<juce::var> tapsArray;
-    for (int i = 0; i < MAX_OBJECTS; ++i)
-    {
-        auto* tapObj = new juce::DynamicObject();
-        const auto& tap = pd.taps[i];
-        tapObj->setProperty ("enabled",         tap.enabled);
-        tapObj->setProperty ("azimuthDeg",      tap.azimuthDeg);
-        tapObj->setProperty ("elevationDeg",    tap.elevationDeg);
-        tapObj->setProperty ("distance",        tap.distance);
-        tapObj->setProperty ("dopplerAmount",   tap.dopplerAmount);
-        tapObj->setProperty ("pitchShift",      tap.pitchShift);
-        tapObj->setProperty ("trajectoryShape", tap.trajectoryShape);
-        tapObj->setProperty ("trajectorySpeed", tap.trajectorySpeed);
-        tapObj->setProperty ("trajectoryDirection", tap.trajectoryDirection);
-        tapObj->setProperty ("inputChannel",        tap.inputChannel);
-        tapsArray.add (juce::var (tapObj));
-    }
-    obj->setProperty ("taps", tapsArray);
-
-    return juce::JSON::toString (juce::var (obj), false);
-}
-
-OpenSpatialDelayProcessor::PresetData
-    OpenSpatialDelayProcessor::parsePresetJson (const juce::String& json)
-{
-    PresetData pd;
-    auto parsed = juce::JSON::parse (json);
-    if (auto* obj = parsed.getDynamicObject())
-    {
-        pd.name          = obj->getProperty ("name").toString();
-        pd.delayTime     = static_cast<float> (obj->getProperty ("delayTime"));
-        pd.tempoSync     = static_cast<bool>  (obj->getProperty ("tempoSync"));
-        pd.noteDivision  = static_cast<float> (obj->getProperty ("noteDivision"));
-        pd.syncMode      = static_cast<int>   (obj->getProperty ("syncMode"));
-        pd.feedback      = static_cast<float> (obj->getProperty ("feedback"));
-        pd.filterLP      = static_cast<float> (obj->getProperty ("filterLP"));
-        pd.filterHP      = static_cast<float> (obj->getProperty ("filterHP"));
-        pd.pitchShift    = static_cast<float> (obj->getProperty ("pitchShift"));
-        pd.dryWet        = static_cast<float> (obj->getProperty ("dryWet"));
-        pd.inputGain     = static_cast<float> (obj->getProperty ("inputGain"));
-        pd.outputGain    = static_cast<float> (obj->getProperty ("outputGain"));
-        pd.airAbsorption = static_cast<bool>  (obj->getProperty ("airAbsorption"));
-        pd.wobbleEnabled = static_cast<bool>  (obj->getProperty ("wobbleEnabled"));
-        pd.wobbleAmount  = static_cast<float> (obj->getProperty ("wobbleAmount"));
-        pd.wobbleMorph   = static_cast<float> (obj->getProperty ("wobbleMorph"));
-        pd.algorithm     = static_cast<int>   (obj->getProperty ("algorithm"));
-        pd.hrtfProfile   = static_cast<int>   (obj->getProperty ("hrtfProfile"));
-
-        if (auto* tapsArr = obj->getProperty ("taps").getArray())
-        {
-            int numTaps = juce::jmin (static_cast<int> (tapsArr->size()), MAX_OBJECTS);
-            for (int i = 0; i < numTaps; ++i)
-            {
-                if (auto* tapObj = (*tapsArr)[i].getDynamicObject())
-                {
-                    auto& tap = pd.taps[i];
-                    tap.enabled         = static_cast<bool>  (tapObj->getProperty ("enabled"));
-                    tap.azimuthDeg      = static_cast<float> (tapObj->getProperty ("azimuthDeg"));
-                    tap.elevationDeg    = static_cast<float> (tapObj->getProperty ("elevationDeg"));
-                    tap.distance        = static_cast<float> (tapObj->getProperty ("distance"));
-                    tap.dopplerAmount   = static_cast<float> (tapObj->getProperty ("dopplerAmount"));
-                    tap.pitchShift      = static_cast<float> (tapObj->getProperty ("pitchShift"));
-                    tap.trajectoryShape = static_cast<int>   (tapObj->getProperty ("trajectoryShape"));
-                    tap.trajectorySpeed = static_cast<float> (tapObj->getProperty ("trajectorySpeed"));
-                    tap.trajectoryDirection = static_cast<int> (tapObj->getProperty ("trajectoryDirection"));
-                    tap.inputChannel        = static_cast<int> (tapObj->getProperty ("inputChannel"));
-                }
-            }
-        }
-    }
-    return pd;
-}
-
-//==============================================================================
-// User preset file I/O
-//==============================================================================
-juce::File OpenSpatialDelayProcessor::getUserPresetDirectory()
-{
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-               .getChildFile ("OpenSpatialDelay")
-               .getChildFile ("Presets");
+    return juce::File::getSpecialLocation (juce::File::userHomeDirectory)
+               .getChildFile ("Library")
+               .getChildFile ("Audio")
+               .getChildFile ("Presets")
+               .getChildFile ("OpenSpatialDelay");
 }
 
 void OpenSpatialDelayProcessor::saveUserPreset (const juce::String& name)
 {
-    auto pd  = captureCurrentState();
-    pd.name  = name;
-    auto json = serializePresetToJson (pd);
+    saveUserPreset (name, "User");
+}
 
-    auto dir  = getUserPresetDirectory();
+void OpenSpatialDelayProcessor::saveUserPreset (const juce::String& name, const juce::String& category)
+{
+    auto pd     = captureCurrentState();
+    pd.name     = name;
+    pd.category = category.isEmpty() ? juce::String ("User") : category;
+    pd.isFactory = false;
+    auto json   = serializePresetToJson (pd);
+
+    auto dir = getPresetDirectory().getChildFile (pd.category);
     dir.createDirectory();
 
-    auto file = dir.getChildFile (name + ".json");
+    auto file = dir.getChildFile (name + ".osdpreset");
     file.replaceWithText (json);
 
-    // Refresh user preset list and update index
-    loadUserPresetsFromDisk();
-    // Set index to the newly saved preset
-    for (int i = 0; i < static_cast<int> (userPresets.size()); ++i)
+    // Refresh all presets and update index
+    loadAllPresetsFromDisk();
+    for (int i = 0; i < static_cast<int> (allPresets.size()); ++i)
     {
-        if (userPresets[static_cast<size_t> (i)].name == name)
+        if (allPresets[static_cast<size_t> (i)].name == name
+            && allPresets[static_cast<size_t> (i)].category == pd.category)
         {
-            currentPresetIndex = NUM_FACTORY_PRESETS + i;
+            currentPresetIndex = i;
             break;
         }
     }
 }
 
-void OpenSpatialDelayProcessor::loadUserPresetsFromDisk()
+void OpenSpatialDelayProcessor::loadAllPresetsFromDisk()
 {
-    userPresets.clear();
+    allPresets.clear();
 
-    auto dir = getUserPresetDirectory();
+    auto dir = getPresetDirectory();
     if (! dir.isDirectory())
         return;
 
-    auto files = dir.findChildFiles (juce::File::findFiles, false, "*.json");
-    files.sort();
-
-    for (const auto& file : files)
+    // Pass 1: Root-level files (legacy .json presets)
+    auto rootFiles = dir.findChildFiles (juce::File::findFiles, false, "*.json");
+    rootFiles.sort();
+    for (const auto& file : rootFiles)
     {
         auto json = file.loadFileAsString();
         if (json.isNotEmpty())
@@ -1596,9 +1397,95 @@ void OpenSpatialDelayProcessor::loadUserPresetsFromDisk()
             auto pd = parsePresetJson (json);
             if (pd.name.isEmpty())
                 pd.name = file.getFileNameWithoutExtension();
-            userPresets.push_back (pd);
+            if (pd.category.isEmpty())
+                pd.category = "User";
+            allPresets.push_back (pd);
         }
     }
+
+    // Pass 2: Category subfolders — scan .osdpreset and .json
+    auto subdirs = dir.findChildFiles (juce::File::findDirectories, false);
+    subdirs.sort();
+    for (const auto& subdir : subdirs)
+    {
+        juce::String categoryName = subdir.getFileName();
+
+        // Scan both .osdpreset and .json
+        auto files = subdir.findChildFiles (juce::File::findFiles, false, "*.osdpreset");
+        auto jsonFiles = subdir.findChildFiles (juce::File::findFiles, false, "*.json");
+        files.addArray (jsonFiles);
+        files.sort();
+
+        for (const auto& file : files)
+        {
+            auto json = file.loadFileAsString();
+            if (json.isNotEmpty())
+            {
+                auto pd = parsePresetJson (json);
+                if (pd.name.isEmpty())
+                    pd.name = file.getFileNameWithoutExtension();
+                pd.category = categoryName;  // folder name = category
+                allPresets.push_back (pd);
+            }
+        }
+    }
+
+    rebuildCategorizedOrder();
+}
+
+//==============================================================================
+// v0.9: Categorized preset helpers
+//==============================================================================
+std::vector<OpenSpatialDelayProcessor::CategorizedPreset>
+    OpenSpatialDelayProcessor::getCategorizedPresets() const
+{
+    std::vector<CategorizedPreset> result;
+
+    // Iterate categories in defined order
+    for (int c = 0; c < NUM_PRESET_CATEGORIES; ++c)
+    {
+        juce::String cat = presetCategoryNames[c];
+
+        // All presets in this category (factory first, then user)
+        for (int i = 0; i < static_cast<int> (allPresets.size()); ++i)
+        {
+            if (allPresets[static_cast<size_t> (i)].category == cat
+                && allPresets[static_cast<size_t> (i)].isFactory)
+                result.push_back ({ cat, allPresets[static_cast<size_t> (i)].name, i, true });
+        }
+        for (int i = 0; i < static_cast<int> (allPresets.size()); ++i)
+        {
+            if (allPresets[static_cast<size_t> (i)].category == cat
+                && ! allPresets[static_cast<size_t> (i)].isFactory)
+                result.push_back ({ cat, allPresets[static_cast<size_t> (i)].name, i, false });
+        }
+    }
+
+    // Safety net: any presets with unrecognized categories
+    for (int i = 0; i < static_cast<int> (allPresets.size()); ++i)
+    {
+        bool found = false;
+        for (int c = 0; c < NUM_PRESET_CATEGORIES; ++c)
+        {
+            if (allPresets[static_cast<size_t> (i)].category == presetCategoryNames[c])
+            { found = true; break; }
+        }
+        if (! found)
+            result.push_back ({ allPresets[static_cast<size_t> (i)].category,
+                                allPresets[static_cast<size_t> (i)].name,
+                                i, allPresets[static_cast<size_t> (i)].isFactory });
+    }
+
+    return result;
+}
+
+void OpenSpatialDelayProcessor::rebuildCategorizedOrder()
+{
+    categorizedOrder.clear();
+    auto cats = getCategorizedPresets();
+    categorizedOrder.reserve (cats.size());
+    for (const auto& cp : cats)
+        categorizedOrder.push_back (cp.originalIndex);
 }
 
 //==============================================================================
@@ -3351,7 +3238,10 @@ float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDe
     // v0.9: Per-tap pitch via WSOLA-lite (timing-preserving) — only when non-zero
     if (std::abs (perTapPitch) >= 0.001f)
         objMono = wsolaProcess (objectIndex, objMono, perTapPitch);
-    float result = airAbsorptionFilter[objectIndex].processSample (objMono);
+    // v0.9: True bypass — skip filter entirely when AIR is off (saves 12 IIR evals/sample)
+    float result = airAbsorptionActive
+                 ? airAbsorptionFilter[objectIndex].processSample (objMono)
+                 : objMono;
 
     // v0.7: Per-tap output filter (same coefficients as feedback filter)
     // Ensures first cycle of taps is filtered, not just feedback repeats
@@ -3419,8 +3309,10 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // v0.7: Global pitch is in cents (±200), convert to semitones for DSP
     float pitchSemitones  = cachedParam_globalPitchShift->load() / 100.0f;
 
-    // v0.4: Air absorption parameter read
-    bool  useAirAbsorption = cachedParam_airAbsorption->load() > 0.5f;
+    // v0.4: Air absorption — true bypass with edge detection for immediate toggle response
+    airAbsorptionActive = cachedParam_airAbsorption->load() > 0.5f;
+    bool airStateChanged = (airAbsorptionActive != prevAirAbsorptionActive);
+    prevAirAbsorptionActive = airAbsorptionActive;
 
     // v0.8: Wobble modulation (block-rate parameter reads, gated by wobbleEnabled)
     {
@@ -3671,20 +3563,19 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             prevElevation[t] = elRad;
             prevDistance[t]   = dist;
 
-            // --- Air absorption filter coefficient update (only when distance changes) ---
-            if (useAirAbsorption && positionChanged)
+            // --- Air absorption filter coefficient update ---
+            // v0.9: Update on position change OR AIR toggle state change (true bypass fix).
+            // When AIR is OFF, readObjectSample() skips the filter entirely (zero CPU).
+            if (airAbsorptionActive && (positionChanged || airStateChanged))
             {
-                constexpr float absorbCoeff = 4.0f;   // Physically motivated absorption coefficient
-                float cutoff = 20000.0f * std::exp (-absorbCoeff * dist);
-                cutoff = juce::jlimit (200.0f, 20000.0f, cutoff);
+                // Quadratic distance mapping: gentle near (0–0.5 ≈ 0–5m), steep far (0.5–1.0 ≈ 5–20m)
+                // dist² compresses the near range and expands the far range perceptually.
+                float mappedDist = dist * dist;
+                constexpr float absorbCoeff = 3.1f;
+                float cutoff = 20000.0f * std::exp (-absorbCoeff * mappedDist);
+                cutoff = juce::jlimit (500.0f, 20000.0f, cutoff);
                 *airAbsorptionFilter[t].coefficients =
                     *juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, cutoff);
-            }
-            else if (! useAirAbsorption && positionChanged)
-            {
-                // Bypass: set cutoff to 20kHz (transparent) — only update when position changes
-                *airAbsorptionFilter[t].coefficients =
-                    *juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, 20000.0f);
             }
         }
     }

@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include <array>
 #include <vector>
+#include "PresetData.h"
 
 // libmysofa — SOFA file reader for HRTF data
 struct MYSOFA_EASY;  // Forward declaration (avoids including mysofa.h in header)
@@ -533,55 +534,27 @@ public:
     void setOscSendIP (const juce::String& ip);
 
     //--- v0.6: Preset system --------------------------------------------------
-    struct PresetData
-    {
-        juce::String name;
-        // Global params
-        float delayTime = 500.0f;
-        bool  tempoSync = false;
-        float noteDivision = 4.0f;
-        int   syncMode = 0;
-        float feedback = 0.3f;
-        float filterLP = 20000.0f;
-        float filterHP = 20.0f;
-        float pitchShift = 0.0f;
-        float dryWet = 0.5f;
-        float inputGain = 0.0f;
-        float outputGain = 0.0f;
-        bool  airAbsorption = false;
-        bool  wobbleEnabled = false; // v0.8: Wobble modulation enable toggle
-        float wobbleAmount = 0.0f;   // v0.8: Wobble modulation depth (0..100)
-        float wobbleMorph = 0.0f;    // v0.8: Wobble waveform morph (0..100)
-        int   algorithm = 4;       // VBAP
-        int   hrtfProfile = 0;
-        // Per-tap data
-        struct TapData
-        {
-            bool  enabled = false;
-            float azimuthDeg = 0.0f;
-            float elevationDeg = 0.0f;
-            float distance = 0.5f;
-            float dopplerAmount = 0.0f;
-            float pitchShift = 0.0f;      // v0.7: per-tap pitch override (semitones, 0=use global)
-            int   trajectoryShape = 0;
-            float trajectorySpeed = 1.0f;
-            int   trajectoryDirection = 0;  // v0.8: 0=Forward, 1=Reverse
-            int   inputChannel = 0;           // v0.8: 0=L+R, 1=L, 2=R
-        };
-        TapData taps[MAX_OBJECTS] = {};
-    };
+    // PresetData struct, factory presets, and category names are in PresetData.h/cpp
+    // (shared between plugin and build-time install_presets CLI tool)
 
-    static constexpr int NUM_FACTORY_PRESETS = 8;
-    static const PresetData factoryPresets[NUM_FACTORY_PRESETS];
+    struct CategorizedPreset
+    {
+        juce::String category;
+        juce::String name;
+        int originalIndex;   // index into allPresets
+        bool isFactory;
+    };
+    std::vector<CategorizedPreset> getCategorizedPresets() const;
 
     int  getNumPresets() const;
     int  getCurrentPresetIndex() const { return currentPresetIndex; }
     juce::StringArray getPresetNames() const;
     void loadPreset (int index);
     void saveUserPreset (const juce::String& name);
+    void saveUserPreset (const juce::String& name, const juce::String& category);
     void loadNextPreset();
     void loadPreviousPreset();
-    static juce::File getUserPresetDirectory();
+    static juce::File getPresetDirectory();
 
     static const std::array<BinauralProfile, 5> binauralProfiles;
 
@@ -856,6 +829,8 @@ private:
 
     // v0.4: Air absorption — global toggle, per-object LP filter driven by distance
     juce::dsp::IIR::Filter<float> airAbsorptionFilter[MAX_OBJECTS];
+    bool airAbsorptionActive = false;       // v0.9: block-rate true bypass (set in processBlock)
+    bool prevAirAbsorptionActive = false;   // v0.9: edge detection for AIR toggle state changes
 
     // v0.5: NFC-HOA — per-order shelf filters for near-field compensation (Ambisonics output only)
     // Applied internally in renderAmbisonicsOutput(), not exposed to user
@@ -919,13 +894,14 @@ private:
     std::atomic<float> tapActivityRMS[MAX_OBJECTS] = {};
     float tapPeakAccum[MAX_OBJECTS] = {};  // per-block peak accumulator (reset each block)
 
-    //--- v0.6: Preset system (private) -----------------------------------------
+    //--- v0.9: Preset system (private) — file-based, all presets on disk ------
     int currentPresetIndex = 0;
-    std::vector<PresetData> userPresets;
-    void loadUserPresetsFromDisk();
+    std::vector<PresetData> allPresets;  // v0.9: all presets (factory + user) loaded from disk
+    std::vector<int> categorizedOrder;   // v0.9: maps sequential position → index into allPresets
+    void loadAllPresetsFromDisk();       // v0.9: scan all .osdpreset + .json files from preset dir
+    void rebuildCategorizedOrder();
     PresetData captureCurrentState() const;
-    static PresetData parsePresetJson (const juce::String& json);
-    static juce::String serializePresetToJson (const PresetData& preset);
+    // serializePresetToJson() and parsePresetJson() are now free functions in PresetData.h
 
     //--------------------------------------------------------------------------
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OpenSpatialDelayProcessor)
