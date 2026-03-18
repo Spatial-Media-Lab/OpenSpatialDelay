@@ -351,10 +351,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout
 
         bool defaultEnabled = (i < 4);
         float defaultTime   = 100.0f * (i + 1);  // 100, 200, 300... ms
-        const float defaultAzArray[] = {-45.0f, 45.0f, -135.0f, 135.0f,
-                                         0.0f, 90.0f, -90.0f, 180.0f,
-                                         -30.0f, 30.0f, -60.0f, 60.0f};
-        float defaultAz = defaultAzArray[i];
+        // v0.9: Default azimuth is 0° (center front) so double-click resets to 0°.
+        // Initial spatial spread is applied in constructor after APVTS creation.
+        float defaultAz = 0.0f;
 
         params.push_back (std::make_unique<juce::AudioParameterBool> (
             id ("enabled"), name ("Enabled"), defaultEnabled));
@@ -1119,6 +1118,18 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
         oscSendAddress[i] = "/adm/obj/" + juce::String (i + 1) + "/aed";
     }
 
+    // v0.9: Set initial azimuth spread for first 12 taps (overridden by saved state/presets)
+    // Parameter default is 0° so double-click resets to center front.
+    {
+        static const float initAz[] = {-45.0f, 45.0f, -135.0f, 135.0f,
+                                         0.0f, 90.0f, -90.0f, 180.0f,
+                                        -30.0f, 30.0f, -60.0f, 60.0f};
+        for (int i = 0; i < MAX_OBJECTS; ++i)
+            if (trajParam_azimuth[i] != nullptr)
+                trajParam_azimuth[i]->setValueNotifyingHost (
+                    trajParam_azimuth[i]->convertTo0to1 (initAz[i]));
+    }
+
     // v0.9: Load presets from disk (factory presets installed at build time by install_presets tool)
     loadAllPresetsFromDisk();
 }
@@ -1413,6 +1424,9 @@ void OpenSpatialDelayProcessor::loadAllPresetsFromDisk()
     auto dir = getPresetDirectory();
     if (! dir.isDirectory())
         return;
+
+    // v0.9: Ensure User subfolder exists for user preset storage (Issue #2)
+    dir.getChildFile ("User").createDirectory();
 
     // Pass 1: Root-level files (legacy .json presets)
     auto rootFiles = dir.findChildFiles (juce::File::findFiles, false, "*.json");
