@@ -4452,8 +4452,9 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
             }
             else
             {
+                // Back lobe: CCW (opposite to front lobe's CW) — Issue #5 fix
                 float t = (phase - 0.5f) * 2.0f;
-                float theta = halfPi + twoPi * t;
+                float theta = halfPi - twoPi * t;
                 localX = loopR * std::cos (theta);
                 localY = -loopR + loopR * std::sin (theta);
             }
@@ -4475,13 +4476,29 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
             break;
         }
 
-        case 4: // Heart — cardioid curve (azimuth × distance), origin-relative
+        case 4: // Heart — parametric heart curve (Cartesian→polar), origin-relative
         {
             float p = phase * juce::MathConstants<float>::twoPi;
-            float cardioid = 0.5f * (1.0f + std::cos (p));  // 0..1
-            r.azDeg = baseAz + 120.0f * std::sin (p);
+            // Standard parametric heart: x = 16sin³(t), y = 13cos(t) - 5cos(2t) - 2cos(3t) - cos(4t)
+            float sinP = std::sin (p);
+            float hx = 16.0f * sinP * sinP * sinP;
+            float hy = 13.0f * std::cos (p) - 5.0f * std::cos (2.0f * p)
+                      - 2.0f * std::cos (3.0f * p) - std::cos (4.0f * p);
+            // Normalize to ~0.35 radius (heart spans roughly -16..16 x, -17..15 y)
+            constexpr float scale = 0.35f / 17.0f;
+            float localX = hx * scale;
+            float localY = hy * scale;  // point-down orientation (Y+ = front)
+            // Rotate by baseAz and offset by baseDist
+            float baseAzRad = juce::degreesToRadians (baseAz);
+            float baseCx = baseDist * std::sin (baseAzRad);
+            float baseCy = baseDist * std::cos (baseAzRad);
+            float cosA = std::cos (baseAzRad);
+            float sinA = std::sin (baseAzRad);
+            float mapX = baseCx + localX * cosA + localY * sinA;
+            float mapY = baseCy - localX * sinA + localY * cosA;
+            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
+            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
             r.elDeg = baseEl;
-            r.dist  = baseDist + 0.3f * (cardioid - 0.5f);  // oscillates ±0.15 around baseDist
             r.controlsAz = r.controlsDist = true;
             break;
         }
@@ -4497,20 +4514,34 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
             break;
         }
 
-        case 6: // Infinity — Lissajous on horizontal plane (azimuth × distance)
+        case 6: // Infinity — Bernoulli lemniscate (Cartesian→polar), origin-relative
         {
             float p = phase * juce::MathConstants<float>::twoPi;
-            r.azDeg = baseAz + 90.0f * std::sin (p);
+            // Lemniscate of Bernoulli: x = a*cos(t)/(1+sin²(t)), y = a*sin(t)*cos(t)/(1+sin²(t))
+            constexpr float a = 0.5f;
+            float sinP = std::sin (p);
+            float cosP = std::cos (p);
+            float denom = 1.0f + sinP * sinP;
+            float localX = a * cosP / denom;
+            float localY = a * sinP * cosP / denom;
+            // Rotate by baseAz and offset by baseDist
+            float baseAzRad = juce::degreesToRadians (baseAz);
+            float baseCx = baseDist * std::sin (baseAzRad);
+            float baseCy = baseDist * std::cos (baseAzRad);
+            float cosA = std::cos (baseAzRad);
+            float sinA = std::sin (baseAzRad);
+            float mapX = baseCx + localX * cosA + localY * sinA;
+            float mapY = baseCy - localX * sinA + localY * cosA;
+            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
+            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
             r.elDeg = baseEl;
-            r.dist  = juce::jlimit (0.0f, 1.0f,
-                                    baseDist + 0.35f * std::sin (p * 2.0f));
             r.controlsAz = r.controlsDist = true;
             break;
         }
 
         case 7: // Line — horizontal left-to-right sweep (Cartesian→polar)
         {
-            constexpr float amplitude = 0.35f;
+            constexpr float amplitude = 0.75f;
             float baseAzRad = juce::degreesToRadians (baseAz);
             float baseCx = baseDist * std::sin (baseAzRad);
             float baseCy = baseDist * std::cos (baseAzRad);
@@ -4551,12 +4582,16 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
             break;
         }
 
-        case 10: // Spiral — azimuth sweeps 360°, elevation oscillates ±45°, distance pulses around origin
-            r.azDeg = baseAz + 360.0f * phase;
-            r.elDeg = baseEl + 45.0f * std::sin (phase * juce::MathConstants<float>::twoPi);
-            r.dist  = baseDist + 0.35f * std::cos (phase * juce::MathConstants<float>::twoPi);
-            r.controlsAz = r.controlsEl = r.controlsDist = true;
+        case 10: // Spiral — Archimedean spiral: outward from origin, 3 full turns
+        {
+            constexpr float numTurns = 3.0f;
+            constexpr float maxRadius = 0.75f;
+            r.azDeg = baseAz + 360.0f * numTurns * phase;
+            r.elDeg = baseEl;  // horizontal plane only
+            r.dist  = baseDist + maxRadius * phase;  // linearly increasing radius
+            r.controlsAz = r.controlsDist = true;
             break;
+        }
 
         case 11: // Square — 4-corner rectangular path, origin-relative (Cartesian→polar)
         {

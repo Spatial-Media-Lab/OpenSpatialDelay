@@ -101,11 +101,13 @@ TEST_CASE("Infinity controls azimuth and distance", "[trajectory][characterizati
     CHECK(r.controlsDist);
 }
 
-TEST_CASE("Infinity distance is already origin-relative", "[trajectory][characterization]")
+TEST_CASE("Infinity is origin-relative (lemniscate)", "[trajectory][characterization]")
 {
-    // dist = baseDist + 0.35 * sin(2*twoPi*phase) at baseDist=0.5
-    auto r = CT::computeTrajectory(TrajShape::Infinity, 0.0f, 0.0f, 0.0f, 0.5f);
-    CHECK_THAT(r.dist, WithinAbs(0.5f, 0.01f));  // sin(0) = 0 → baseDist
+    // Lemniscate at phase 0: x = a*cos(0)/(1+0) = a, y = 0 → dist ≈ sqrt(baseDist² + a²)
+    // Just verify it varies with baseDist
+    auto r1 = CT::computeTrajectory(TrajShape::Infinity, 0.0f, 0.0f, 0.0f, 0.3f);
+    auto r2 = CT::computeTrajectory(TrajShape::Infinity, 0.0f, 0.0f, 0.0f, 0.7f);
+    CHECK(r2.dist > r1.dist);
 }
 
 TEST_CASE("Random controls all three axes", "[trajectory][characterization]")
@@ -184,7 +186,7 @@ TEST_CASE("Control flags are correct for all shapes", "[trajectory][characteriza
         { TrajShape::Line,     true,  false, true  },
         { TrajShape::Orbit,    true,  false, false },
         { TrajShape::Random,   true,  true,  true  },
-        { TrajShape::Spiral,   true,  true,  true  },
+        { TrajShape::Spiral,   true,  false, true  },
         { TrajShape::Square,   true,  true,  true  },
         { TrajShape::Triangle, true,  true,  true  },
     };
@@ -216,11 +218,11 @@ TEST_CASE("Spiral distance oscillates around baseDist", "[trajectory][origin-rel
     CHECK_THAT(diff, WithinAbs(0.4f, 0.15f));
 }
 
-TEST_CASE("Spiral at baseDist=0.5 phase=0.5 should be near 0.5 minus amplitude", "[trajectory][origin-relative]")
+TEST_CASE("Spiral at baseDist=0.2 phase=0.5 should be 0.2 + half of max radius", "[trajectory][origin-relative]")
 {
-    // phase 0.5: cos(pi) = -1 → should be baseDist - amplitude
-    auto r = CT::computeTrajectory(TrajShape::Spiral, 0.5f, 0.0f, 0.0f, 0.5f);
-    CHECK_THAT(r.dist, WithinAbs(0.5f - 0.35f, 0.1f));  // ~0.15
+    // Archimedean spiral: dist = baseDist + 0.75 * phase
+    auto r = CT::computeTrajectory(TrajShape::Spiral, 0.5f, 0.0f, 0.0f, 0.2f);
+    CHECK_THAT(r.dist, WithinAbs(0.2f + 0.75f * 0.5f, 0.05f));  // ~0.575
 }
 
 TEST_CASE("Heart distance oscillates around baseDist", "[trajectory][origin-relative]")
@@ -288,4 +290,91 @@ TEST_CASE("Triangle azimuth rotates with baseAz", "[trajectory][origin-relative]
     while (azDiff > 180.0f)  azDiff -= 360.0f;
     while (azDiff < -180.0f) azDiff += 360.0f;
     CHECK_THAT(azDiff, WithinAbs(90.0f, 5.0f));
+}
+
+// ============================================================================
+// GitHub Issue Tests — trajectory shape corrections
+// ============================================================================
+
+TEST_CASE("Issue #5: Figure-8 back lobe rotates opposite to front lobe", "[trajectory][issues]")
+{
+    // Sample sequential azimuth values in each lobe to verify rotation direction
+    // Front lobe: phase 0.0 → 0.25 should show increasing azimuth (CW on map)
+    auto f1 = CT::computeTrajectory(TrajShape::Figure8, 0.05f, 0.0f, 0.0f, 0.5f);
+    auto f2 = CT::computeTrajectory(TrajShape::Figure8, 0.20f, 0.0f, 0.0f, 0.5f);
+    float frontDelta = f2.azDeg - f1.azDeg;
+
+    // Back lobe: phase 0.55 → 0.70 should show azimuth going opposite direction
+    auto b1 = CT::computeTrajectory(TrajShape::Figure8, 0.55f, 0.0f, 0.0f, 0.5f);
+    auto b2 = CT::computeTrajectory(TrajShape::Figure8, 0.70f, 0.0f, 0.0f, 0.5f);
+    float backDelta = b2.azDeg - b1.azDeg;
+
+    // Rotation directions should be opposite (product of deltas should be negative)
+    CHECK(frontDelta * backDelta < 0.0f);
+}
+
+TEST_CASE("Issue #6: Heart trajectory has two upper lobes", "[trajectory][issues]")
+{
+    // A heart shape should have two local maxima in the front direction
+    // Sample at many points and count peaks in Y (positive = front)
+    int peaks = 0;
+    float prevDist = 0.0f;
+    bool rising = true;
+    for (int s = 1; s <= 100; ++s)
+    {
+        float phase = (float)s / 100.0f;
+        auto r = CT::computeTrajectory(TrajShape::Heart, phase, 0.0f, 0.0f, 0.0f);
+        // Convert to Cartesian Y (front direction) using azimuth and distance
+        float azRad = r.azDeg * 3.14159265f / 180.0f;
+        float y = r.dist * std::cos(azRad);
+        if (s > 1)
+        {
+            if (rising && y < prevDist) { peaks++; rising = false; }
+            if (!rising && y > prevDist) { rising = true; }
+        }
+        prevDist = y;
+    }
+    CHECK(peaks >= 2);  // two distinct bumps at the top
+}
+
+TEST_CASE("Issue #7: Infinity trajectory crosses through origin", "[trajectory][issues]")
+{
+    // A proper lemniscate crosses through the origin at the center
+    // At phase 0.25 or 0.75, distance should be near the origin point
+    auto mid1 = CT::computeTrajectory(TrajShape::Infinity, 0.25f, 0.0f, 0.0f, 0.0f);
+    auto mid2 = CT::computeTrajectory(TrajShape::Infinity, 0.75f, 0.0f, 0.0f, 0.0f);
+    // At crossing points, distance should be very small (near origin)
+    CHECK(mid1.dist < 0.15f);
+    CHECK(mid2.dist < 0.15f);
+}
+
+TEST_CASE("Issue #8: Spiral distance monotonically increases", "[trajectory][issues]")
+{
+    // Archimedean spiral: distance should increase from near 0 to near max over one cycle
+    float prevDist = -1.0f;
+    bool monotonic = true;
+    for (int s = 0; s <= 20; ++s)
+    {
+        float phase = (float)s / 20.0f;
+        auto r = CT::computeTrajectory(TrajShape::Spiral, phase, 0.0f, 0.0f, 0.0f);
+        if (r.dist < prevDist - 0.01f) monotonic = false;
+        prevDist = r.dist;
+    }
+    CHECK(monotonic);
+    // Should reach near the edge
+    auto end = CT::computeTrajectory(TrajShape::Spiral, 0.99f, 0.0f, 0.0f, 0.0f);
+    CHECK(end.dist > 0.5f);
+}
+
+TEST_CASE("Issue #10: Line trajectory reaches amplitude 0.75", "[trajectory][issues]")
+{
+    // Line should sweep ±0.75 from origin, reaching distance 0.75 at extremes
+    float maxDist = 0.0f;
+    for (int s = 0; s <= 100; ++s)
+    {
+        float phase = (float)s / 100.0f;
+        auto r = CT::computeTrajectory(TrajShape::Line, phase, 0.0f, 0.0f, 0.0f);
+        if (r.dist > maxDist) maxDist = r.dist;
+    }
+    CHECK(maxDist > 0.65f);  // should reach ~0.75
 }
