@@ -51,6 +51,13 @@ struct PresetData
 };
 
 //==============================================================================
+// v0.9: Trajectory string ID ↔ index mapping (for preset serialization)
+//==============================================================================
+int          trajectoryStringToIndex (const juce::String& id);
+juce::String trajectoryIndexToString (int index);
+int          trajectoryLegacyToNewIndex (int oldIndex);
+
+//==============================================================================
 // Free function declarations
 //==============================================================================
 juce::String serializePresetToJson (const PresetData& pd);

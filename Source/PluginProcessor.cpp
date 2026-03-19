@@ -390,10 +390,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout
                 [](float value, int) { return juce::String (juce::roundToInt (value)) + " st"; })));
 
         // v0.6: Per-object trajectory (shape + speed)
-        // v0.9: Expanded from 6 to 12 shapes, alphabetized (None at top)
+        // v0.9: Expanded from 6 to 14 shapes, alphabetized (None at top)
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("trajectoryShape"), name ("Trajectory Shape"),
-            juce::StringArray { "None", "Bounce", "Cross", "Figure-8", "Heart", "Helix",
+            juce::StringArray { "None", "Bounce", "Circle", "Cross", "Figure-8", "Heart", "Helix",
                                 "Infinity", "Line", "Orbit", "Random", "Spiral", "Square", "Triangle" }, 0));
 
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -970,22 +970,23 @@ void OpenSpatialDelayProcessor::timerCallback()
             prevTrajectoryShape[t] = shape;
 
             // Advance phase for this object
-            // Spiral (shape 10) and Random (shape 9) run at half base speed
-            float effectiveSpeed = (shape == 10 || shape == 9) ? speed * 0.5f : speed;
+            // Spiral (shape 11), Random (shape 10), and Square (shape 12) run at half base speed
+            float effectiveSpeed = (shape == 10 || shape == 11 || shape == 12) ? speed * 0.5f : speed;
             trajectoryPhase[t] += effectiveSpeed * dt;
             if (trajectoryPhase[t] >= 1.0f)
                 trajectoryPhase[t] -= std::floor (trajectoryPhase[t]);
 
             // v0.8: Read trajectory direction (0=Forward, 1=Reverse)
-            bool reverse = (cachedParam_trajectoryDirection[t] != nullptr
-                            && cachedParam_trajectoryDirection[t]->load() > 0.5f);
+            // Invert: natural phase progression is CCW on map; Forward should be CW
+            bool reverse = (cachedParam_trajectoryDirection[t] == nullptr
+                            || cachedParam_trajectoryDirection[t]->load() < 0.5f);
 
             // Read LIVE origin from APVTS knobs (not captured base)
             float originAz   = cachedObj[t].azimuth->load();
             float originEl   = cachedObj[t].elevation->load();
             float originDist = cachedObj[t].distance->load();
 
-            if (shape == 9)  // Random — multi-sine noise with randomized parameters (Issue #9)
+            if (shape == 10)  // Random — multi-sine noise with randomized parameters (Issue #9)
             {
                 auto& rn = randomNoise[t];
                 if (! rn.initialized)
@@ -994,7 +995,7 @@ void OpenSpatialDelayProcessor::timerCallback()
                     auto randSign = [&]() { return randomRng.nextBool() ? 1.0f : -1.0f; };
                     float azAmps[]   = { 50.0f, 27.0f, 19.0f, 11.0f };
                     float elAmps[]   = { 30.0f, 16.0f, 12.0f, 8.0f };
-                    float distAmps[] = { 0.25f, 0.18f, 0.11f };
+                    float distAmps[] = { 0.50f, 0.30f, 0.20f };
                     for (int k = 0; k < 4; ++k)
                     {
                         rn.freqAz[k]  = 0.15f + randomRng.nextFloat() * 1.75f;
@@ -1027,7 +1028,8 @@ void OpenSpatialDelayProcessor::timerCallback()
 
                 trajectoryFinalAz[t] = originAz + az;
                 trajectoryFinalEl[t] = juce::jlimit (-90.0f, 90.0f, originEl + el);
-                trajectoryFinalDist[t] = juce::jlimit (0.0f, 1.0f, originDist + dist);
+                float distScaleR = 1.0f - originDist;
+                trajectoryFinalDist[t] = juce::jlimit (0.0f, 1.0f, originDist + dist * distScaleR);
 
                 while (trajectoryFinalAz[t] > 180.0f)  trajectoryFinalAz[t] -= 360.0f;
                 while (trajectoryFinalAz[t] < -180.0f) trajectoryFinalAz[t] += 360.0f;
@@ -3290,8 +3292,8 @@ TrajectoryState OpenSpatialDelayProcessor::getTrajectoryState (int objectIndex) 
     ts.originDist  = baseDistance[objectIndex];
     ts.shape       = prevTrajectoryShape[objectIndex];
     ts.phase       = trajectoryPhase[objectIndex];
-    ts.reverse     = (cachedParam_trajectoryDirection[objectIndex] != nullptr
-                      && cachedParam_trajectoryDirection[objectIndex]->load() > 0.5f);
+    ts.reverse     = (cachedParam_trajectoryDirection[objectIndex] == nullptr
+                      || cachedParam_trajectoryDirection[objectIndex]->load() < 0.5f);
     ts.randomTime  = randomTime[objectIndex];
     return ts;
 }
@@ -4500,19 +4502,43 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
     r.controlsEl = false;
     r.controlsDist = false;
 
+    // Issue #3: distance amplitude scales inversely with origin distance
+    const float distScale = 1.0f - baseDist;
+
     switch (shape)
     {
         case 1: // Bounce — azimuth ping-pongs ±90°, elevation bounces ±30°
         {
             float tri = 1.0f - std::abs (2.0f * phase - 1.0f);
-            r.azDeg = baseAz + 90.0f * (2.0f * tri - 1.0f);
-            r.elDeg = baseEl + 30.0f * (2.0f * tri - 1.0f);
+            r.azDeg = baseAz - 90.0f * (2.0f * tri - 1.0f);
+            r.elDeg = baseEl - 30.0f * (2.0f * tri - 1.0f);
             r.dist  = baseDist;
             r.controlsAz = r.controlsEl = true;
             break;
         }
 
-        case 2: // Cross — plus-sign pattern, 4 cardinal sweeps (az ↔ el)
+        case 2: // Circle — circular path around origin (Cartesian→polar)
+        {
+            const float circleR = 1.0f * distScale;
+            float p = phase * juce::MathConstants<float>::twoPi;
+            float localX = circleR * std::sin (p);
+            float localY = circleR * std::cos (p);
+            // Rotate by baseAz and offset by baseDist
+            float baseAzRad = juce::degreesToRadians (baseAz);
+            float baseCx = baseDist * std::sin (baseAzRad);
+            float baseCy = baseDist * std::cos (baseAzRad);
+            float cosA = std::cos (baseAzRad);
+            float sinA = std::sin (baseAzRad);
+            float mapX = baseCx + localX * cosA + localY * sinA;
+            float mapY = baseCy - localX * sinA + localY * cosA;
+            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
+            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
+            r.elDeg = baseEl;
+            r.controlsAz = r.controlsDist = true;
+            break;
+        }
+
+        case 3: // Cross — plus-sign pattern, 4 cardinal sweeps (az ↔ el)
         {
             float p = phase * 4.0f;
             int segment = juce::jlimit (0, 3, static_cast<int> (p));
@@ -4527,23 +4553,24 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
             break;
         }
 
-        case 3: // Figure-8 — front CCW, back CW, origin-relative (Cartesian→polar)
+        case 4: // Figure-8 — front CCW, back CW, origin-relative (Cartesian→polar)
         {
-            constexpr float loopR = 0.375f;
+            const float loopR = 0.5f * distScale;
             constexpr float halfPi = juce::MathConstants<float>::halfPi;
             constexpr float twoPi  = juce::MathConstants<float>::twoPi;
+            // Invert phase for Figure-8 so Forward button = correct traversal direction (#13)
+            float fig8Phase = 1.0f - phase;
             float localX, localY;
-            if (phase < 0.5f)
+            if (fig8Phase < 0.5f)
             {
-                float t = phase * 2.0f;
+                float t = fig8Phase * 2.0f;
                 float theta = -halfPi + twoPi * t;
                 localX = loopR * std::cos (theta);
                 localY = loopR + loopR * std::sin (theta);
             }
             else
             {
-                // Back lobe: CCW (opposite to front lobe's CW) — Issue #5 fix
-                float t = (phase - 0.5f) * 2.0f;
+                float t = (fig8Phase - 0.5f) * 2.0f;
                 float theta = halfPi - twoPi * t;
                 localX = loopR * std::cos (theta);
                 localY = -loopR + loopR * std::sin (theta);
@@ -4566,7 +4593,7 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
             break;
         }
 
-        case 4: // Heart — parametric heart curve (Cartesian→polar), origin-relative
+        case 5: // Heart — parametric heart curve (Cartesian→polar), origin-relative
         {
             float p = phase * juce::MathConstants<float>::twoPi;
             // Standard parametric heart: x = 16sin³(t), y = 13cos(t) - 5cos(2t) - 2cos(3t) - cos(4t)
@@ -4575,7 +4602,7 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
             float hy = 13.0f * std::cos (p) - 5.0f * std::cos (2.0f * p)
                       - 2.0f * std::cos (3.0f * p) - std::cos (4.0f * p);
             // Normalize to ~0.35 radius (heart spans roughly -16..16 x, -17..15 y)
-            constexpr float scale = 0.35f / 17.0f;
+            const float scale = (1.0f / 17.0f) * distScale;
             float localX = hx * scale;
             float localY = hy * scale;  // point-down orientation (Y+ = front)
             // Rotate by baseAz and offset by baseDist
@@ -4593,22 +4620,22 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
             break;
         }
 
-        case 5: // Helix — orbit with cosine-eased elevation ramp (3D corkscrew)
+        case 6: // Helix — orbit with cosine-eased elevation ramp (3D corkscrew)
         {
-            r.azDeg = baseAz + 360.0f * phase;
+            r.azDeg = baseAz + 360.0f * phase;  // positive = CW on spatial map (with Forward→reverse phase inversion)
             // Cosine easing: slows at -90° and +90° peaks (ease in/out)
             float easedPhase = 0.5f * (1.0f - std::cos (phase * juce::MathConstants<float>::pi));
-            r.elDeg = -90.0f + 180.0f * easedPhase;
+            r.elDeg = 90.0f - 180.0f * easedPhase;  // inverted: bottom-to-top in Forward (#14)
             r.dist  = baseDist;
             r.controlsAz = r.controlsEl = true;
             break;
         }
 
-        case 6: // Infinity — Bernoulli lemniscate (Cartesian→polar), origin-relative
+        case 7: // Infinity — Bernoulli lemniscate (Cartesian→polar), origin-relative
         {
             float p = phase * juce::MathConstants<float>::twoPi;
             // Lemniscate of Bernoulli: x = a*cos(t)/(1+sin²(t)), y = a*sin(t)*cos(t)/(1+sin²(t))
-            constexpr float a = 0.5f;
+            const float a = 1.0f * distScale;
             float sinP = std::sin (p);
             float cosP = std::cos (p);
             float denom = 1.0f + sinP * sinP;
@@ -4629,16 +4656,20 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
             break;
         }
 
-        case 7: // Line — horizontal left-to-right sweep (Cartesian→polar)
+        case 8: // Line — sweep rotated by baseAz (Cartesian→polar)
         {
-            constexpr float amplitude = 0.75f;
+            const float amplitude = 1.0f * distScale;
             float baseAzRad = juce::degreesToRadians (baseAz);
             float baseCx = baseDist * std::sin (baseAzRad);
             float baseCy = baseDist * std::cos (baseAzRad);
-            // Sweep along X axis (left-right on spatial map), Y stays constant
+            // Local sweep along X axis, then rotate by baseAz
             float p = phase * juce::MathConstants<float>::twoPi;
-            float mapX = baseCx + amplitude * std::cos (p);
-            float mapY = baseCy;
+            float localX = amplitude * std::cos (p);
+            float localY = 0.0f;
+            float cosA = std::cos (baseAzRad);
+            float sinA = std::sin (baseAzRad);
+            float mapX = baseCx + localX * cosA + localY * sinA;
+            float mapY = baseCy - localX * sinA + localY * cosA;
             r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
             r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
             r.elDeg = baseEl;
@@ -4646,14 +4677,14 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
             break;
         }
 
-        case 8: // Orbit — circular orbit (azimuth only)
+        case 9: // Orbit — circular orbit (azimuth only)
             r.azDeg = baseAz + 360.0f * phase;
             r.elDeg = baseEl;
             r.dist  = baseDist;
             r.controlsAz = true;
             break;
 
-        case 9: // Random — multi-layer irrational-frequency oscillators (all axes, half-speed)
+        case 10: // Random — multi-layer irrational-frequency oscillators (all axes, half-speed)
         {
             float p = phase * juce::MathConstants<float>::twoPi;
             r.azDeg = baseAz + 50.0f * std::sin (p * 0.5f)
@@ -4665,29 +4696,42 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
                              + 12.0f * std::sin (p * 2.9299f + 0.3f)
                              +  8.0f * std::sin (p * 4.2699f + 5.7f);
             r.dist  = juce::jlimit (0.0f, 1.0f,
-                                    baseDist + 0.25f * std::sin (p * 0.8661f + 2.3f)
-                                             + 0.15f * std::sin (p * 1.9365f + 4.9f)
-                                             + 0.10f * std::sin (p * 3.1416f + 1.6f));
+                                    baseDist + 0.50f * distScale * std::sin (p * 0.8661f + 2.3f)
+                                             + 0.30f * distScale * std::sin (p * 1.9365f + 4.9f)
+                                             + 0.20f * distScale * std::sin (p * 3.1416f + 1.6f));
             r.controlsAz = r.controlsEl = r.controlsDist = true;
             break;
         }
 
-        case 10: // Spiral — Archimedean spiral: outward from origin, 1.75 turns
+        case 11: // Spiral — Archimedean spiral from origin outward (Cartesian→polar)
         {
             constexpr float numTurns = 1.75f;
-            constexpr float maxRadius = 0.75f;
-            r.azDeg = baseAz + 360.0f * numTurns * phase;
-            r.elDeg = baseEl;  // horizontal plane only
-            r.dist  = baseDist + maxRadius * phase;  // linearly increasing radius
+            const float maxRadius = 1.0f * distScale;
+            // Phase 0→1 spirals outward (origin→edge), positive theta = CW on spatial map
+            float theta = juce::MathConstants<float>::twoPi * numTurns * (1.0f - phase);
+            float rLocal = maxRadius * (1.0f - phase);  // inverted: origin→outward (#15)
+            float localX = rLocal * std::cos (theta);
+            float localY = rLocal * std::sin (theta);
+            // Rotate by baseAz and offset by baseDist
+            float baseAzRad = juce::degreesToRadians (baseAz);
+            float baseCx = baseDist * std::sin (baseAzRad);
+            float baseCy = baseDist * std::cos (baseAzRad);
+            float cosA = std::cos (baseAzRad);
+            float sinA = std::sin (baseAzRad);
+            float mapX = baseCx + localX * cosA + localY * sinA;
+            float mapY = baseCy - localX * sinA + localY * cosA;
+            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
+            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
+            r.elDeg = baseEl;
             r.controlsAz = r.controlsDist = true;
             break;
         }
 
-        case 11: // Square — 4-corner rectangular path, origin-relative (Cartesian→polar)
+        case 12: // Square — 4-corner rectangular path, origin-relative (Cartesian→polar)
         {
-            constexpr float halfSide = 0.25f; // scaled down for origin-relative use
-            static const float lcx[4] = { -halfSide,  halfSide,  halfSide, -halfSide };
-            static const float lcy[4] = {  halfSide,  halfSide, -halfSide, -halfSide };
+            const float halfSide = 0.7071f * distScale;
+            const float lcx[4] = { -halfSide,  halfSide,  halfSide, -halfSide };
+            const float lcy[4] = {  halfSide,  halfSide, -halfSide, -halfSide };
             float p = phase * 4.0f;
             int edge = juce::jlimit (0, 3, static_cast<int> (p));
             float t = p - static_cast<float> (edge);
@@ -4710,11 +4754,11 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
             break;
         }
 
-        case 12: // Triangle — equilateral triangle, origin-relative (Cartesian→polar)
+        case 13: // Triangle — equilateral triangle, origin-relative (Cartesian→polar)
         {
-            constexpr float circumR = 0.26f; // scaled down for origin-relative use
-            static const float lvx[3] = { 0.0f,  circumR * 0.8660254f, -circumR * 0.8660254f };
-            static const float lvy[3] = { circumR, -circumR * 0.5f, -circumR * 0.5f };
+            const float circumR = 1.0f * distScale;
+            const float lvx[3] = { 0.0f,  circumR * 0.8660254f, -circumR * 0.8660254f };
+            const float lvy[3] = { circumR, -circumR * 0.5f, -circumR * 0.5f };
             float p = phase * 3.0f;
             int side = juce::jlimit (0, 2, static_cast<int> (p));
             float t = p - static_cast<float> (side);
@@ -4767,7 +4811,7 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
 void OpenSpatialDelayProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
-    state.setProperty ("pluginStateVersion", 14, nullptr);  // v0.9 state format (14 = trajectory rework)
+    state.setProperty ("pluginStateVersion", 15, nullptr);  // v0.9 state format (15 = Circle shape + 14 trajectories)
     state.setProperty ("oscReceivePort", oscReceivePort, nullptr);  // v0.6: persist OSC port
     state.setProperty ("currentPresetIndex", currentPresetIndex, nullptr);  // v0.6: persist preset selection
     // v0.7: persist OSC Send settings
@@ -5075,22 +5119,22 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
                 int oldIndex = juce::roundToInt (normalizedOld * 5.0f);
                 oldIndex = juce::jlimit (0, 5, oldIndex);
                 int newIndex = trajectoryLegacyToNewIndex (oldIndex);
-                // Re-normalize using new item count (13 items → indices 0..12)
-                float normalizedNew = static_cast<float> (newIndex) / 12.0f;
+                // Re-normalize using new item count (14 items → indices 0..13)
+                float normalizedNew = static_cast<float> (newIndex) / 13.0f;
                 child.setProperty ("value", normalizedNew, nullptr);
             }
         }
 
-        tree.setProperty ("pluginStateVersion", 14, nullptr);
+        tree.setProperty ("pluginStateVersion", 15, nullptr);
     }
 
-    // v0.9: Migrate from intermediate 12-item to final 13-item trajectory ordering
+    // v0.9: Migrate from intermediate 12-item to final 14-item trajectory ordering
     // Old 12: ..., 3=Figure-8(old), ..., 6=Lissajous, ...
-    // New 13: ..., 3=Figure-8(new), ..., 6=Infinity(=old Figure-8), ..., 12=Triangle(=old Lissajous)
+    // New 14: ..., 4=Figure-8(new), ..., 7=Infinity(=old Figure-8), ..., 13=Triangle(=old Lissajous)
     if (savedVersion >= 13 && savedVersion < 14)
     {
         static const int v13ToV14Map[12] = {
-            0, 1, 2, 6, 4, 5, 12, 7, 8, 9, 10, 11
+            0, 1, 3, 7, 5, 6, 13, 8, 9, 10, 11, 12
         //  None Bounce Cross Inf  Heart Helix Tri Line Orbit Rand Spiral Square
         };
 
@@ -5108,13 +5152,42 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
                 int oldIndex = juce::roundToInt (normalizedOld * 11.0f);
                 oldIndex = juce::jlimit (0, 11, oldIndex);
                 int newIndex = v13ToV14Map[oldIndex];
-                // Re-normalize using new item count (13 items → indices 0..12)
-                float normalizedNew = static_cast<float> (newIndex) / 12.0f;
+                // Re-normalize using new item count (14 items → indices 0..13)
+                float normalizedNew = static_cast<float> (newIndex) / 13.0f;
                 child.setProperty ("value", normalizedNew, nullptr);
             }
         }
 
-        tree.setProperty ("pluginStateVersion", 14, nullptr);
+        tree.setProperty ("pluginStateVersion", 15, nullptr);
+    }
+
+    // v0.9: Migrate from 13-item to 14-item trajectory ordering (Circle inserted at index 2)
+    // Old 13: None=0, Bounce=1, Cross=2, Figure-8=3, Heart=4, Helix=5, Infinity=6, Line=7, Orbit=8, Random=9, Spiral=10, Square=11, Triangle=12
+    // New 14: None=0, Bounce=1, Circle=2, Cross=3, Figure-8=4, Heart=5, Helix=6, Infinity=7, Line=8, Orbit=9, Random=10, Spiral=11, Square=12, Triangle=13
+    if (savedVersion == 14)
+    {
+        for (int i = 0; i < tree.getNumChildren(); ++i)
+        {
+            auto child = tree.getChild (i);
+            if (! child.hasProperty ("id"))
+                continue;
+
+            auto paramId = child.getProperty ("id").toString();
+            if (paramId.containsIgnoreCase ("trajectoryShape"))
+            {
+                float normalizedOld = static_cast<float> (child.getProperty ("value", 0.0f));
+                // Denormalize using old item count (13 items → indices 0..12)
+                int oldIndex = juce::roundToInt (normalizedOld * 12.0f);
+                oldIndex = juce::jlimit (0, 12, oldIndex);
+                // Shift indices ≥ 2 up by 1 (Circle inserted at index 2)
+                int newIndex = (oldIndex >= 2) ? oldIndex + 1 : oldIndex;
+                // Re-normalize using new item count (14 items → indices 0..13)
+                float normalizedNew = static_cast<float> (newIndex) / 13.0f;
+                child.setProperty ("value", normalizedNew, nullptr);
+            }
+        }
+
+        tree.setProperty ("pluginStateVersion", 15, nullptr);
     }
 
     // v0.6: Restore OSC receive port (non-APVTS property)

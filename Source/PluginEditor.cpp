@@ -73,6 +73,31 @@ static juce::Font makeFont (juce::Typeface::Ptr tf, float height, float kerning 
     return juce::Font (juce::FontOptions (tf).withHeight (height).withKerningFactor (kerning));
 }
 
+// Helper: create SML molecular icon path at 250×250 SVG scale
+static juce::Path createSMLIconPath()
+{
+    juce::Path p;
+    // Lines (connecting stems) — drawn first so circles paint over endpoints
+    p.addLineSegment (juce::Line<float> (61.364f, 149.021f, 86.020f, 145.051f), 8.0f);
+    p.addLineSegment (juce::Line<float> (62.664f,  82.016f, 95.593f, 111.421f), 8.0f);
+    p.addLineSegment (juce::Line<float> (127.0f,    63.0f,  127.0f,  107.146f), 8.0f);
+    p.addLineSegment (juce::Line<float> (114.861f, 166.925f, 100.761f, 208.759f), 8.0f);
+    p.addLineSegment (juce::Line<float> (200.387f, 129.244f, 156.488f, 133.905f), 8.0f);
+    p.addLineSegment (juce::Line<float> (173.532f,  83.158f, 144.538f, 116.449f), 8.0f);
+    p.addLineSegment (juce::Line<float> (143.990f, 159.343f, 173.316f, 192.341f), 8.0f);
+    // Circles (nodes) — central hub + 7 satellites
+    auto addCircle = [&] (float cx, float cy, float r) { p.addEllipse (cx - r, cy - r, r * 2.0f, r * 2.0f); };
+    addCircle (124.5f, 137.865f, 43.703f);   // central hub
+    addCircle (216.5f, 126.5f,   23.5f);     // right
+    addCircle (127.0f,  41.5f,   27.0f);     // top (rx≈ry≈27 in SVG)
+    addCircle ( 35.5f, 151.5f,   26.5f);     // left
+    addCircle (181.5f, 196.5f,   23.5f);     // bottom-right
+    addCircle ( 98.5f, 213.5f,   20.5f);     // bottom
+    addCircle ( 55.0f,  75.0f,   16.0f);     // top-left (small)
+    addCircle (176.0f,  80.0f,   12.0f);     // top-right (small)
+    return p;
+}
+
 //==============================================================================
 // IndicatorToggle — reusable toggle pill with indicator dot
 //==============================================================================
@@ -169,11 +194,44 @@ void StyledButton::paintButton (juce::Graphics& g, bool isMouseOverButton, bool 
 
     paintToggleButtonBg (g, bounds, accent, isOn, isMouseOverButton, kCornerR);
 
-    // Text — centred
-    g.setColour (isOn ? accent
-                      : (isMouseOverButton ? Colours_OSD::textSecondary : Colours_OSD::textDim));
-    g.setFont (makeFont (typeface, kFontSize, kKerning));
-    g.drawText (label, bounds.toNearestInt(), juce::Justification::centred);
+    // Text (+ optional icon) — centred
+    float fontSize = getEffectiveFontSize();
+    auto textCol = isOn ? accent
+                        : (isMouseOverButton ? Colours_OSD::textSecondary : Colours_OSD::textDim);
+    g.setColour (textCol);
+    g.setFont (makeFont (typeface, fontSize, kKerning));
+
+    if (iconScale > 0.0f)
+    {
+        // Icon + text: compute combined width, centre both
+        auto pathBounds = iconPath.getBounds();
+        float iconH = (fixedIconHeight > 0.0f) ? fixedIconHeight : (bounds.getHeight() - 6.0f);
+        float s = iconH / pathBounds.getHeight();
+        float iconW = pathBounds.getWidth() * s;
+        constexpr float gap = 3.0f;
+
+        juce::GlyphArrangement gl;
+        auto font = makeFont (typeface, fontSize, kKerning);
+        gl.addLineOfText (font, label, 0.0f, 0.0f);
+        float textW = gl.getBoundingBox (0, gl.getNumGlyphs(), true).getWidth();
+        float totalW = iconW + gap + textW;
+        float startX = bounds.getCentreX() - totalW * 0.5f;
+
+        // Draw icon
+        g.fillPath (iconPath,
+                    juce::AffineTransform::translation (-pathBounds.getX(), -pathBounds.getY())
+                        .scaled (s)
+                        .translated (startX, bounds.getCentreY() - iconH * 0.5f));
+
+        // Draw text
+        auto textRect = juce::Rectangle<float> (startX + iconW + gap, bounds.getY(),
+                                                 textW + 2.0f, bounds.getHeight());
+        g.drawText (label, textRect.toNearestInt(), juce::Justification::centredLeft);
+    }
+    else
+    {
+        g.drawText (label, bounds.toNearestInt(), juce::Justification::centred);
+    }
 }
 
 //==============================================================================
@@ -361,6 +419,7 @@ OSDLookAndFeel::OSDLookAndFeel()
     jetbrainsRegular = juce::Typeface::createSystemTypefaceFor (FontData::JetBrains_MonoRegular_ttf, FontData::JetBrains_MonoRegular_ttfSize);
     jetbrainsMedium  = juce::Typeface::createSystemTypefaceFor (FontData::JetBrains_MonoMedium_ttf,  FontData::JetBrains_MonoMedium_ttfSize);
     jetbrainsBold    = juce::Typeface::createSystemTypefaceFor (FontData::JetBrains_MonoBold_ttf,    FontData::JetBrains_MonoBold_ttfSize);
+    robotoMedium     = juce::Typeface::createSystemTypefaceFor (FontData::RobotoMedium_ttf,          FontData::RobotoMedium_ttfSize);
 
     // Popup menu colors — match ComboBox for visual consistency
     setColour (juce::PopupMenu::backgroundColourId,            juce::Colour (0xff010205));
@@ -894,20 +953,29 @@ void SpatialMapComponent::paint (juce::Graphics& g)
         g.drawEllipse (cx - ringR, cy - ringR, ringR * 2.0f, ringR * 2.0f, 0.7f);
     }
 
-    // Ring distance labels at 30° angle (lower-right from center, matching prototype CSS)
-    // In screen coords: cos(30°)→right, sin(30°)→down
-    g.setColour (Colours_OSD::textSecondary.withAlpha (0.5f));
+    // Ring labels: distance values at 30° (lower-right), meter values at 210° (upper-left)
+    g.setColour (Colours_OSD::textEtched.withAlpha (0.45f));
     if (lf) g.setFont (makeFont (lf->jetbrainsRegular, 9.0f));
     else    g.setFont (juce::FontOptions (9.0f));
     for (int ri = 1; ri <= 4; ++ri)
     {
         float r = ri * 0.25f;
         float ringR = r * radius;
-        float labelAngle = juce::MathConstants<float>::pi / 6.0f;  // 30° in screen coords
-        float lx = cx + std::cos (labelAngle) * ringR + 3.0f;
-        float ly = cy + std::sin (labelAngle) * ringR + 2.0f;  // positive Y = downward
+
+        // Distance values at 30° (lower-right from center)
+        float lrAngle = juce::MathConstants<float>::pi / 6.0f;  // 30° in screen coords
+        float lx = cx + std::cos (lrAngle) * ringR + 5.0f;
+        float ly = cy + std::sin (lrAngle) * ringR + 4.0f;
         g.drawText (juce::String (r, 2), juce::roundToInt (lx), juce::roundToInt (ly), 28, 10,
                     juce::Justification::centredLeft);
+
+        // Meter values at 210° (upper-left from center)
+        float ulAngle = juce::MathConstants<float>::pi * 7.0f / 6.0f;  // 210° in screen coords
+        float mx = cx + std::cos (ulAngle) * ringR - 30.0f;
+        float my = cy + std::sin (ulAngle) * ringR - 12.0f;
+        int meters = juce::roundToInt (r * r * 20.0f);
+        g.drawText (juce::String (meters) + "m", juce::roundToInt (mx), juce::roundToInt (my), 28, 10,
+                    juce::Justification::centredRight);
     }
 
     // Center reticle (ring + dot + short cross arms)
@@ -948,10 +1016,11 @@ void SpatialMapComponent::paint (juce::Graphics& g)
         auto& ts = trajectoryStates[(size_t)selectedObject];
         auto objCol = objectColours[selectedObject];
 
-        // --- Glow trail: sample trajectory path at ~120 phase points ---
-        // Skip for Random (shape 9) — path is non-deterministic, can't be pre-sampled
-        bool drawTrail = (ts.shape != 9);
-        constexpr int kPathSamples = 120;
+        // --- Glow trail: sample trajectory path at ~240 phase points ---
+        // Higher sample count for smooth trails with large origin-relative shapes
+        // Skip for Random (shape 10) — path is non-deterministic, can't be pre-sampled
+        bool drawTrail = (ts.shape != 10);
+        constexpr int kPathSamples = 240;
         struct PathPoint { juce::Point<float> px; float elDeg; float phase; };
         PathPoint pathPoints[kPathSamples];
 
@@ -979,15 +1048,16 @@ void SpatialMapComponent::paint (juce::Graphics& g)
                     continue;
 
                 // Spiral: skip the wrap-back segment from end (outer edge) to start (center)
-                if (ts.shape == 10 && next == 0)
+                if (ts.shape == 11 && next == 0)
                     continue;
 
                 // Brightness: proximity to current animated dot position
+                // Tighter focus (×6) for concentrated glow near the moving dot
                 float phaseDist = std::abs (p0.phase - ts.phase);
                 if (phaseDist > 0.5f) phaseDist = 1.0f - phaseDist;
-                float proximity = 1.0f - (phaseDist * 4.0f);
+                float proximity = 1.0f - (phaseDist * 6.0f);
                 proximity = juce::jlimit (0.0f, 1.0f, proximity);
-                float glowAlpha = 0.08f + proximity * 0.45f;
+                float glowAlpha = 0.05f + proximity * 0.55f;
 
                 // Elevation encoding: opacity + thickness
                 float avgEl = (p0.elDeg + p1.elDeg) * 0.5f;
@@ -1000,7 +1070,7 @@ void SpatialMapComponent::paint (juce::Graphics& g)
                 g.drawLine (p0.px.x, p0.px.y, p1.px.x, p1.px.y, thickness);
             }
         }
-        else if (ts.shape == 9 && processor != nullptr)
+        else if (ts.shape == 10 && processor != nullptr)
         {
             // Random look-ahead trail: evaluate noise at future time values
             constexpr int kLookaheadSamples = 120;
@@ -1747,17 +1817,18 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     objTrajectoryBox.setLookAndFeel (&osdLookAndFeel);
     objTrajectoryBox.addItem ("None",      1);
     objTrajectoryBox.addItem ("Bounce",    2);
-    objTrajectoryBox.addItem ("Cross",     3);
-    objTrajectoryBox.addItem ("Figure-8",  4);
-    objTrajectoryBox.addItem ("Heart",     5);
-    objTrajectoryBox.addItem ("Helix",     6);
-    objTrajectoryBox.addItem ("Infinity",  7);
-    objTrajectoryBox.addItem ("Line",      8);
-    objTrajectoryBox.addItem ("Orbit",     9);
-    objTrajectoryBox.addItem ("Random",   10);
-    objTrajectoryBox.addItem ("Spiral",   11);
-    objTrajectoryBox.addItem ("Square",   12);
-    objTrajectoryBox.addItem ("Triangle", 13);
+    objTrajectoryBox.addItem ("Circle",    3);
+    objTrajectoryBox.addItem ("Cross",     4);
+    objTrajectoryBox.addItem ("Figure-8",  5);
+    objTrajectoryBox.addItem ("Heart",     6);
+    objTrajectoryBox.addItem ("Helix",     7);
+    objTrajectoryBox.addItem ("Infinity",  8);
+    objTrajectoryBox.addItem ("Line",      9);
+    objTrajectoryBox.addItem ("Orbit",    10);
+    objTrajectoryBox.addItem ("Random",   11);
+    objTrajectoryBox.addItem ("Spiral",   12);
+    objTrajectoryBox.addItem ("Square",   13);
+    objTrajectoryBox.addItem ("Triangle", 14);
     addAndMakeVisible (objTrajectoryBox);
     styleLabel (objTrajectoryLabel, "TRAJECTORY", &osdLookAndFeel);
     addAndMakeVisible (objTrajectoryLabel);
@@ -2114,10 +2185,13 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // --- SML badge button (header branding link) ---
     smlButton = std::make_unique<StyledButton> ("SML", Colours_OSD::accentStellar,
-                                                  osdLookAndFeel.jetbrainsMedium);
+                                                  osdLookAndFeel.robotoMedium);
     smlButton->setClickingTogglesState (false);
     smlButton->onClick = [] { juce::URL ("https://spatialmedialab.org").launchInDefaultBrowser(); };
     smlButton->setAlwaysActive (true);
+    smlButton->setIcon (createSMLIconPath(), 9.0f / 250.0f, 9.0f);  // scaled icon
+    smlButton->setFontSize (11.5f);
+    smlButton->setButtonHeight (17);
     addAndMakeVisible (*smlButton);
 
     selectObject (0);
@@ -2688,7 +2762,13 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
     // Title — SML button self-paints via StyledButton::paintButton() + "OpenSpatialDelay" + version
     {
         int leftX = 10;  // prototype: padding 0 10px
-        int smlW = StyledButton::getPreferredWidth (osdLookAndFeel.jetbrainsMedium, "SML");
+        // Compute SML button width from actual content (icon + gap + text at real font)
+        auto smlFont = makeFont (osdLookAndFeel.robotoMedium, 11.5f, 0.08f);
+        juce::GlyphArrangement smlGl;
+        smlGl.addLineOfText (smlFont, "SML", 0.0f, 0.0f);
+        float smlTextW = smlGl.getBoundingBox (0, smlGl.getNumGlyphs(), true).getWidth();
+        float smlVPad = (17.0f - 11.5f) * 0.5f;  // vertical padding ≈ 2.75px
+        int smlW = juce::roundToInt (9.0f + 3.0f + smlTextW + 2.0f * smlVPad);  // icon + gap + text + matched H pad
 
         // SML button self-paints via StyledButton::paintButton()
 
@@ -2883,9 +2963,16 @@ void OpenSpatialDelayEditor::resized()
     // Title is painted directly in paint() — no setBounds needed
     // SML badge button (header, left-aligned)
     {
-        int smlW = StyledButton::getPreferredWidth (osdLookAndFeel.jetbrainsMedium, "SML");
+        int smlH = smlButton ? smlButton->getEffectiveHeight() : StyledButton::kHeight;
+        // Compute SML button width from actual content (icon + gap + text at real font)
+        auto smlFont = makeFont (osdLookAndFeel.robotoMedium, 11.5f, 0.08f);
+        juce::GlyphArrangement smlGl;
+        smlGl.addLineOfText (smlFont, "SML", 0.0f, 0.0f);
+        float smlTextW = smlGl.getBoundingBox (0, smlGl.getNumGlyphs(), true).getWidth();
+        float smlVPad = (17.0f - 11.5f) * 0.5f;  // match vertical padding ≈ 2.75px
+        int smlW = juce::roundToInt (9.0f + 3.0f + smlTextW + 2.0f * smlVPad);  // icon + gap + text + matched H pad
         int headerY = kHeaderHeight / 2;
-        if (smlButton) smlButton->setBounds (10, headerY - StyledButton::kHeight / 2, smlW, StyledButton::kHeight);
+        if (smlButton) smlButton->setBounds (10, headerY - smlH / 2, smlW, smlH);
     }
 
     // === RIGHT PANEL (Observatory v6: padding 16px H, 6px V) ==================
