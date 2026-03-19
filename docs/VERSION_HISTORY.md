@@ -493,7 +493,7 @@ Frozen snapshot in `Archive/v0.8/`:
 ### Output
 - 22 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
 
-## v0.9 (2026-03-19) — Active Development
+## v0.9 (2026-03-19) — FROZEN
 **Trajectory System Rewrite + Preset Overhaul + WSOLA Per-Tap Pitch + SML Branding + 22 Issues Closed**
 
 Major release: complete trajectory system rewrite (13 shapes with origin-point architecture),
@@ -629,3 +629,11 @@ Active source in `Source/`:
 
 ### Output
 - 22 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
+
+---
+
+## v1.0 (2026-03-19) — Active Development
+**Real-World Testing Release**
+
+Starting point for real-world testing. Carries forward all v0.9 features.
+Plugin identity: `Os10` (PLUGIN_CODE).
