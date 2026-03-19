@@ -36,7 +36,7 @@ OpenSpatialDelay is the first plugin in the **Spatial Media Library** — an ope
 - 12 independent delay taps, each positioned anywhere in 3D space
 - 7 spatialization algorithms for surround rendering (VBAP, VBIP, MDAP, KNN, DBAP, Ambisonics, Direct Binaural)
 - 6 HRTF profiles from measured [SOFA](https://www.sofaconventions.org/) files for realistic headphone spatialization
-- 22 output formats — Binaural, Stereo (5 mic simulation modes), 13 Surround (Quad through 9.1.6 Atmos), 6 Ambisonics (1st through 6th order)
+- 21 output formats — Binaural, Stereo (5 mic simulation modes), 13 Surround (Quad through 9.1.6 Atmos), 6 Ambisonics (1st through 6th order)
 
 **Delay & Modulation**
 - Tempo-synced or free-running delay with cumulative pitch shifting across taps
