@@ -12,3 +12,15 @@ Archive/*/builds/
 
 # Screenshots (local review/bug-report only, not needed in repo)
 docs/screenshots/
+
+# IEM reference source (large, kept locally but not tracked)
+docs/references/IEM-PluginSuite-source/
+
+# Design prototypes (historical, keep v6 reference only)
+docs/design-prototypes/
+
+# Node.js (manual generation toolchain)
+docs/node_modules/
+
+# Generated manual drafts and preview
+docs/preview-manual.html
