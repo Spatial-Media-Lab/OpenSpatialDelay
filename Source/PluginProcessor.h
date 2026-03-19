@@ -869,6 +869,7 @@ private:
 
     // v0.4: Air absorption — global toggle, per-object LP filter driven by distance
     juce::dsp::IIR::Filter<float> airAbsorptionFilter[MAX_OBJECTS];
+    juce::dsp::IIR::Coefficients<float> airTransparentCoeffs; // v1.0: pre-computed 20kHz LP (avoids heap alloc in processBlock)
     bool airAbsorptionActive = false;       // v0.9: block-rate true bypass (set in processBlock)
     bool prevAirAbsorptionActive = false;   // v0.9: edge detection for AIR toggle state changes
 

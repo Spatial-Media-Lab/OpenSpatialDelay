@@ -414,7 +414,6 @@ OSDLookAndFeel::OSDLookAndFeel()
     // Load embedded fonts
     dmSansRegular    = juce::Typeface::createSystemTypefaceFor (FontData::DM_SansRegular_ttf,    FontData::DM_SansRegular_ttfSize);
     dmSansMedium     = juce::Typeface::createSystemTypefaceFor (FontData::DM_SansMedium_ttf,     FontData::DM_SansMedium_ttfSize);
-    dmSansSemiBold   = juce::Typeface::createSystemTypefaceFor (FontData::DM_SansSemiBold_ttf,   FontData::DM_SansSemiBold_ttfSize);
     dmSansBold       = juce::Typeface::createSystemTypefaceFor (FontData::DM_SansBold_ttf,       FontData::DM_SansBold_ttfSize);
     jetbrainsRegular = juce::Typeface::createSystemTypefaceFor (FontData::JetBrains_MonoRegular_ttf, FontData::JetBrains_MonoRegular_ttfSize);
     jetbrainsMedium  = juce::Typeface::createSystemTypefaceFor (FontData::JetBrains_MonoMedium_ttf,  FontData::JetBrains_MonoMedium_ttfSize);
@@ -1572,9 +1571,6 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     setLookAndFeel (&osdLookAndFeel);
     setSize (kWindowWidth, kWindowHeight);
 
-    // --- Title (painted directly in paint(), no Label component needed) ------
-    titleLabel.setVisible (false);
-
     // --- Spatial map ---------------------------------------------------------
     addAndMakeVisible (spatialMap);
     spatialMap.addListener (this);
@@ -1628,10 +1624,9 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         addAndMakeVisible (wobbleMorphLabel);
         wobbleMorphAttach = std::make_unique<SliderAttachment> (processorRef.apvts, "wobbleMorph", wobbleMorphSlider);
 
-        // MOD section — rose/pink accent
-        static const juce::Colour accentRose (0xffe467a6);  // oklch(70% 0.15 340) — rose for modulation
-        wobbleAmountSlider.setColour (juce::Slider::thumbColourId, accentRose);
-        wobbleMorphSlider.setColour (juce::Slider::thumbColourId, accentRose);
+        // MOD section — rose/pink accent (using Colours_OSD::accentRose)
+        wobbleAmountSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentRose);
+        wobbleMorphSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentRose);
     }
 
     // --- Dropdowns (#13: consistent font) ------------------------------------
@@ -3220,37 +3215,4 @@ void OpenSpatialDelayEditor::resized()
 }
 
 //==============================================================================
-// Mouse click handler for painted UI elements (SML badge, FLT tag)
-//==============================================================================
-void OpenSpatialDelayEditor::mouseDown (const juce::MouseEvent&)
-{
-    // SML badge click handled by StyledButton instance (onClick callback)
-    // FLT and MOD clicks handled by IndicatorToggle instances (onClick callbacks)
-}
 
-//==============================================================================
-// Mouse up handler — SML badge launches URL on release
-//==============================================================================
-void OpenSpatialDelayEditor::mouseUp (const juce::MouseEvent&)
-{
-    // SML badge click handled by StyledButton instance
-}
-
-//==============================================================================
-// Mouse move/exit for hover states (SML badge)
-//==============================================================================
-void OpenSpatialDelayEditor::mouseMove (const juce::MouseEvent&)
-{
-    // SML badge hover handled by StyledButton instance internally
-    // FLT and MOD hover handled by IndicatorToggle instances internally
-}
-
-void OpenSpatialDelayEditor::mouseExit (const juce::MouseEvent&)
-{
-    // SML badge hover handled by StyledButton instance internally
-}
-
-bool OpenSpatialDelayEditor::keyPressed (const juce::KeyPress&)
-{
-    return false;
-}

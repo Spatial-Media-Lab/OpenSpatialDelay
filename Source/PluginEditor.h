@@ -141,7 +141,7 @@ class OSDLookAndFeel : public juce::LookAndFeel_V4
 {
 public:
     // Custom typefaces loaded from embedded binary data
-    juce::Typeface::Ptr dmSansRegular, dmSansMedium, dmSansSemiBold, dmSansBold;
+    juce::Typeface::Ptr dmSansRegular, dmSansMedium, dmSansBold;
     juce::Typeface::Ptr jetbrainsRegular, jetbrainsMedium, jetbrainsBold;
     juce::Typeface::Ptr robotoMedium;
 
@@ -437,11 +437,6 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
-    void mouseDown (const juce::MouseEvent& e) override;
-    void mouseUp (const juce::MouseEvent& e) override;
-    void mouseMove (const juce::MouseEvent& e) override;
-    void mouseExit (const juce::MouseEvent& e) override;
-    bool keyPressed (const juce::KeyPress& key) override;
 
 private:
     std::unique_ptr<StyledButton> smlButton;  // header branding link
@@ -547,7 +542,6 @@ private:
     std::unique_ptr<IndicatorToggle> modToggle;
 
     // Labels
-    juce::Label titleLabel;
     juce::Label inputGainLabel, outputGainLabel;
     juce::Label delayTimeLabel, feedbackLabel;
     juce::Label pitchShiftLabel;

@@ -20,7 +20,7 @@ const char* const presetCategoryNames[NUM_PRESET_CATEGORIES] = {
 // v0.9: Trajectory string ID ↔ index mapping
 //==============================================================================
 static const char* const trajectoryStringIds[] = {
-    "none", "bounce", "circle", "cross", "figure8", "heart", "helix",
+    "none", "bounce", "circle", "cross", "figure_eight", "heart", "helix",
     "infinity", "line", "orbit", "random", "spiral", "square", "triangle"
 };
 static constexpr int NUM_TRAJECTORY_SHAPES = 14;
@@ -166,14 +166,14 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
         200.0f, false, 4.0f, 0, 0.4f, 16000.0f, 40.0f, 0.707f, 0.707f, 2.0f, 0.5f, 0.0f, 0.0f,
         false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
         {
-            { true,    0.0f,  -20.0f, 0.7f, 0.4f, 0.0f, 8 /*Orbit*/, 0.1876f },
-            { true,   45.0f,  -10.0f, 0.6f, 0.4f, 0.0f, 8 /*Orbit*/, 0.225f },
-            { true,   90.0f,    0.0f, 0.5f, 0.4f, 0.0f, 8 /*Orbit*/, 0.25f },
-            { true,  135.0f,   10.0f, 0.5f, 0.4f, 0.0f, 8 /*Orbit*/, 0.275f },
-            { true,  180.0f,   20.0f, 0.4f, 0.4f, 0.0f, 8 /*Orbit*/, 0.3126f },
-            { true, -135.0f,   30.0f, 0.4f, 0.4f, 0.0f, 8 /*Orbit*/, 0.35f },
-            { true,  -90.0f,   40.0f, 0.3f, 0.4f, 0.0f, 8 /*Orbit*/, 0.375f },
-            { true,  -45.0f,   50.0f, 0.3f, 0.4f, 0.0f, 8 /*Orbit*/, 0.4f },
+            { true,    0.0f,  -20.0f, 0.7f, 0.4f, 0.0f, 9 /*Orbit*/, 0.1876f },
+            { true,   45.0f,  -10.0f, 0.6f, 0.4f, 0.0f, 9 /*Orbit*/, 0.225f },
+            { true,   90.0f,    0.0f, 0.5f, 0.4f, 0.0f, 9 /*Orbit*/, 0.25f },
+            { true,  135.0f,   10.0f, 0.5f, 0.4f, 0.0f, 9 /*Orbit*/, 0.275f },
+            { true,  180.0f,   20.0f, 0.4f, 0.4f, 0.0f, 9 /*Orbit*/, 0.3126f },
+            { true, -135.0f,   30.0f, 0.4f, 0.4f, 0.0f, 9 /*Orbit*/, 0.35f },
+            { true,  -90.0f,   40.0f, 0.3f, 0.4f, 0.0f, 9 /*Orbit*/, 0.375f },
+            { true,  -45.0f,   50.0f, 0.3f, 0.4f, 0.0f, 9 /*Orbit*/, 0.4f },
             {}, {}, {}, {}
         }
     },
@@ -280,10 +280,10 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
         300.0f, false, 4.0f, 0, 0.4f, 16000.0f, 30.0f, 0.707f, 0.707f, 0.0f, 0.5f, 0.0f, 0.0f,
         false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
         {
-            { true,   0.0f, 0.0f, 0.4f, 0.75f, 0.0f, 8 /*Orbit*/, 0.3125f },
-            { true,  90.0f, 0.0f, 0.4f, 0.75f, 0.0f, 8 /*Orbit*/, 0.4688f },
-            { true, 180.0f, 0.0f, 0.4f, 0.75f, 0.0f, 8 /*Orbit*/, 0.625f },
-            { true, -90.0f, 0.0f, 0.4f, 0.75f, 0.0f, 8 /*Orbit*/, 0.7813f },
+            { true,   0.0f, 0.0f, 0.4f, 0.75f, 0.0f, 9 /*Orbit*/, 0.3125f },
+            { true,  90.0f, 0.0f, 0.4f, 0.75f, 0.0f, 9 /*Orbit*/, 0.4688f },
+            { true, 180.0f, 0.0f, 0.4f, 0.75f, 0.0f, 9 /*Orbit*/, 0.625f },
+            { true, -90.0f, 0.0f, 0.4f, 0.75f, 0.0f, 9 /*Orbit*/, 0.7813f },
             {}, {}, {}, {}, {}, {}, {}, {}
         }
     },
@@ -454,10 +454,10 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
         900.0f, false, 4.0f, 0, 0.55f, 8000.0f, 60.0f, 0.707f, 0.707f, 0.0f, 0.4f, 0.0f, 0.0f,
         true, true, true, 25.0f, 70.0f /*flutter-heavy*/, 4 /*VBAP*/, 0,
         {
-            { true, -40.0f,  15.0f, 0.5f, 0.33f, 0.0f, 8 /*Orbit*/, 0.0752f },
-            { true,  80.0f,   5.0f, 0.6f, 0.33f, 0.0f, 8 /*Orbit*/, 0.1f },
-            { true, -150.0f, 10.0f, 0.7f, 0.33f, 0.0f, 8 /*Orbit*/, 0.1252f },
-            { true,  160.0f, 20.0f, 0.4f, 0.33f, 0.0f, 8 /*Orbit*/, 0.15f },
+            { true, -40.0f,  15.0f, 0.5f, 0.33f, 0.0f, 9 /*Orbit*/, 0.0752f },
+            { true,  80.0f,   5.0f, 0.6f, 0.33f, 0.0f, 9 /*Orbit*/, 0.1f },
+            { true, -150.0f, 10.0f, 0.7f, 0.33f, 0.0f, 9 /*Orbit*/, 0.1252f },
+            { true,  160.0f, 20.0f, 0.4f, 0.33f, 0.0f, 9 /*Orbit*/, 0.15f },
             {}, {}, {}, {}, {}, {}, {}, {}
         }
     },
@@ -560,10 +560,10 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
         300.0f, false, 4.0f, 0, 0.4f, 16000.0f, 30.0f, 0.707f, 0.707f, 0.0f, 0.5f, 0.0f, 0.0f,
         false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
         {
-            { true,  -45.0f, 0.0f, 0.5f, 0.5f, 0.0f, 8 /*Orbit*/, 0.4f },
-            { true,   45.0f, 0.0f, 0.5f, 0.5f, 0.0f, 8 /*Orbit*/, 0.4f },
-            { true, -135.0f, 0.0f, 0.5f, 0.5f, 0.0f, 8 /*Orbit*/, 0.4f },
-            { true,  135.0f, 0.0f, 0.5f, 0.5f, 0.0f, 8 /*Orbit*/, 0.4f },
+            { true,  -45.0f, 0.0f, 0.5f, 0.5f, 0.0f, 9 /*Orbit*/, 0.4f },
+            { true,   45.0f, 0.0f, 0.5f, 0.5f, 0.0f, 9 /*Orbit*/, 0.4f },
+            { true, -135.0f, 0.0f, 0.5f, 0.5f, 0.0f, 9 /*Orbit*/, 0.4f },
+            { true,  135.0f, 0.0f, 0.5f, 0.5f, 0.0f, 9 /*Orbit*/, 0.4f },
             {}, {}, {}, {}, {}, {}, {}, {}
         }
     },
@@ -692,12 +692,12 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
         250.0f, false, 4.0f, 0, 0.45f, 14000.0f, 40.0f, 0.707f, 0.707f, -3.0f, 0.5f, 0.0f, 0.0f,
         true, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
         {
-            { true,    0.0f,  0.0f, 0.4f, 0.4f, 0.0f, 8 /*Orbit*/, 0.1876f, 1 /*Rev*/ },
-            { true,   60.0f, 10.0f, 0.5f, 0.4f, 0.0f, 8 /*Orbit*/, 0.25f, 1 /*Rev*/ },
-            { true,  120.0f, 20.0f, 0.4f, 0.4f, 0.0f, 8 /*Orbit*/, 0.3126f, 1 /*Rev*/ },
-            { true,  180.0f, 30.0f, 0.5f, 0.4f, 0.0f, 8 /*Orbit*/, 0.375f, 1 /*Rev*/ },
-            { true, -120.0f, 20.0f, 0.4f, 0.4f, 0.0f, 8 /*Orbit*/, 0.4376f, 1 /*Rev*/ },
-            { true,  -60.0f, 10.0f, 0.5f, 0.4f, 0.0f, 8 /*Orbit*/, 0.5f, 1 /*Rev*/ },
+            { true,    0.0f,  0.0f, 0.4f, 0.4f, 0.0f, 9 /*Orbit*/, 0.1876f, 1 /*Rev*/ },
+            { true,   60.0f, 10.0f, 0.5f, 0.4f, 0.0f, 9 /*Orbit*/, 0.25f, 1 /*Rev*/ },
+            { true,  120.0f, 20.0f, 0.4f, 0.4f, 0.0f, 9 /*Orbit*/, 0.3126f, 1 /*Rev*/ },
+            { true,  180.0f, 30.0f, 0.5f, 0.4f, 0.0f, 9 /*Orbit*/, 0.375f, 1 /*Rev*/ },
+            { true, -120.0f, 20.0f, 0.4f, 0.4f, 0.0f, 9 /*Orbit*/, 0.4376f, 1 /*Rev*/ },
+            { true,  -60.0f, 10.0f, 0.5f, 0.4f, 0.0f, 9 /*Orbit*/, 0.5f, 1 /*Rev*/ },
             {}, {}, {}, {}, {}, {}
         }
     },
@@ -735,12 +735,12 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
         200.0f, false, 4.0f, 0, 0.4f, 20000.0f, 20.0f, 0.707f, 0.707f, 0.0f, 0.5f, 0.0f, 0.0f,
         false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
         {
-            { true,    0.0f,  0.0f, 0.3f, 1.0f, 0.0f, 8 /*Orbit*/, 0.2813f },
-            { true,   60.0f, 15.0f, 0.4f, 1.0f, 0.0f, 8 /*Orbit*/, 0.422f },
-            { true,  120.0f,  0.0f, 0.5f, 1.0f, 0.0f, 8 /*Orbit*/, 0.5625f, 1 /*Rev*/ },
-            { true,  180.0f,-15.0f, 0.4f, 1.0f, 0.0f, 8 /*Orbit*/, 0.7032f },
-            { true, -120.0f, 10.0f, 0.3f, 1.0f, 0.0f, 8 /*Orbit*/, 0.8438f, 1 /*Rev*/ },
-            { true,  -60.0f,  0.0f, 0.5f, 1.0f, 0.0f, 8 /*Orbit*/, 0.9845f },
+            { true,    0.0f,  0.0f, 0.3f, 1.0f, 0.0f, 9 /*Orbit*/, 0.2813f },
+            { true,   60.0f, 15.0f, 0.4f, 1.0f, 0.0f, 9 /*Orbit*/, 0.422f },
+            { true,  120.0f,  0.0f, 0.5f, 1.0f, 0.0f, 9 /*Orbit*/, 0.5625f, 1 /*Rev*/ },
+            { true,  180.0f,-15.0f, 0.4f, 1.0f, 0.0f, 9 /*Orbit*/, 0.7032f },
+            { true, -120.0f, 10.0f, 0.3f, 1.0f, 0.0f, 9 /*Orbit*/, 0.8438f, 1 /*Rev*/ },
+            { true,  -60.0f,  0.0f, 0.5f, 1.0f, 0.0f, 9 /*Orbit*/, 0.9845f },
             {}, {}, {}, {}, {}, {}
         }
     },
