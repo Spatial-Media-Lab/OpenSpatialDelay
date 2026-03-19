@@ -13,7 +13,7 @@ rendered to binaural stereo via ITD+ILD head model.
 - Tempo sync with note divisions (Notes, Triplet, Dotted, 16th)
 - Cumulative pitch shifting per object
 - Mono feedback with LP/HP filters and soft clipping
-- Ableton 12-inspired dark UI with 2D spatial map
+- Observatory v6 dark UI with 2D spatial map
 - ROYGBIV HSB gradient object colors
 
 ### Files
@@ -391,7 +391,7 @@ effect fix for orbit trajectories, and continued UI polish.
 ### Output Limiter
 - Musical +2dB ceiling (`outputLimiter()`) prevents DAW speaker protection muting during self-oscillation with high filter resonance
 - Rational approximation soft saturator: linear passthrough below threshold, soft saturation above
-- Modeled after Ableton Echo's output protection approach
+- Soft saturator output protection approach
 - Applied in all 5 rendering paths: Direct Binaural HRTF, Simple Binaural Woodworth, Stereo Variants, Ambisonics Output, Discrete Surround
 
 ### Doppler Effect Fix
@@ -493,12 +493,13 @@ Frozen snapshot in `Archive/v0.8/`:
 ### Output
 - 22 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
 
-## v0.9 (2026-03-17) — Active Development
-**UI Polish + Bug Fixes + WSOLA Per-Tap Pitch + Preset Save Overlay**
+## v0.9 (2026-03-19) — Active Development
+**Trajectory System Rewrite + Preset Overhaul + WSOLA Per-Tap Pitch + SML Branding + 22 Issues Closed**
 
-Quality release focusing on UI polish, recurring bug fixes, improved per-tap pitch
-shifting (WSOLA-lite), and replacing the system-level preset save dialog with an
-in-plugin modal overlay matching the Observatory v6 design system.
+Major release: complete trajectory system rewrite (13 shapes with origin-point architecture),
+60-preset factory suite with build-time installer, WSOLA-lite per-tap pitch shifting,
+Spatial Media Lab branding, spatial map distance labels, and 22 GitHub issues resolved.
+Also includes UI polish, recurring bug fixes, and preset save overlay.
 
 ### Bug Fixes
 - **Input gain leak (recurring):** Fixed `inputGain` applying to both dry and wet paths — now only applies to delay write (Stage 1). Root cause documented in `docs/bug-reports/RECURRING_INPUT_GAIN_LEAK.md`
@@ -552,18 +553,79 @@ in-plugin modal overlay matching the Observatory v6 design system.
 - **Bug fix:** `writeFactoryPresetsToDisk()` had `if (file.existsAsFile()) continue;` that prevented source changes from reaching disk. Rhythmic presets (new in v0.9) worked while older presets had stale data. Root cause: disk caching, not source values.
 
 ### Preset Dropdown Styling Fix (v0.9, 2026-03-18)
-- **Root cause:** `showPresetMenu()` never called `setLookAndFeel()` on the PopupMenu, causing it to use the default system LookAndFeel instead of `Ableton12Look`
-- **Fix:** Added `mainMenu.setLookAndFeel(&ableton12Look)` before `showMenuAsync()`
+- **Root cause:** `showPresetMenu()` never called `setLookAndFeel()` on the PopupMenu, causing it to use the default system LookAndFeel instead of `OSDLookAndFeel`
+- **Fix:** Added `mainMenu.setLookAndFeel(&osdLookAndFeel)` before `showMenuAsync()`
 - Custom `drawPopupMenuItem()` override ensures consistent rendering: 24px item height, DM Sans Regular 13px, compact 4×6px submenu arrows matching ComboBox dropdown arrow size
+
+### AIR Absorption True Bypass + Perceptual Curve (v0.9, 2026-03-18)
+- **Bug fix:** Position-change gating prevented AIR toggle from taking immediate effect on static taps. Loading a preset with AIR enabled showed no effect; turning AIR off left the effect active.
+- **True bypass:** `readObjectSample()` now skips the filter entirely when AIR is off (zero CPU cost vs previous always-running 20kHz passthrough)
+- **Edge detection:** `airStateChanged` flag detects toggle transitions, forcing coefficient update even on static taps
+- **Perceptual distance curve:** Replaced linear `dist` with quadratic `dist²` mapping (coeff=3.1). 0.5 ≈ 5m (8.6kHz, natural warmth), 1.0 ≈ 20m (900Hz, very dark). Minimum cutoff 500Hz.
+
+### Trajectory System Rewrite (v0.9, 2026-03-18/19)
+- **13 shapes:** None, Bounce, Cross, Figure-8, Heart, Helix, Infinity, Line, Orbit, Random, Spiral, Square, Triangle
+- **Origin-point architecture:** Knobs = live origin position, trajectory computes animated position stored in internal `trajectoryFinalAz/El/Dist[]` arrays. `processBlock` reads from arrays when `trajectoryActive[]` is true. Knobs never overwritten — user can reposition running trajectories.
+- **Cartesian shapes** (Figure-8, Square, Triangle) rotate by baseAz and offset by baseDist
+- **Spiral/Heart** use origin-relative distance scaling
+- **Random:** Multi-sine noise with randomized frequencies/phases/signs per instance, non-wrapping time accumulator (never repeats). Runs at half base speed.
+- **Direction control:** Forward/Reverse per object via `object{N}_trajectoryDirection`
+- **OSC integration:** OSC Receive sets origin when trajectory active; OSC Send broadcasts animated position
+
+### Trajectory Visualization (v0.9, 2026-03-18/19)
+- Glow trail on spatial map for selected tap — brightens near animated dot, dims away
+- Elevation encoded as opacity (0.3–1.0) + line thickness (1.0–5.5px)
+- Crosshair origin marker at knob position when trajectory active
+- Spiral skips wrap-back segment for clean visual
+- Random uses 2s look-ahead trail via `evaluateRandomNoise()`
+- **Known regression:** Glow trail visual quality degraded during trajectory rewrite; deferred to future version. See `docs/bug-reports/GLOW_TRAIL_REGRESSION.md`.
+
+### Test Infrastructure (v0.9, 2026-03-18)
+- Catch2 v3.7.1 via CMake FetchContent
+- 33 unit tests, 102 assertions
+- Covers all 13 trajectory shapes, origin-relative behavior, control flags, wrapping, clamping, reverse mode
+- Run: `cmake --build build --target OpenSpatialDelayTests && ./build/OpenSpatialDelayTests`
+
+### SML Branding (v0.9, 2026-03-19)
+- SML badge button in header bar linking to spatialmedialab.org
+- Custom SVG icon (spatial node graph) at 9px
+- Roboto Medium 11.5f font, button height 17px matching title visual weight
+- Width computed from actual content (icon + gap + text + matched horizontal padding)
+
+### Spatial Map: Distance Labels (v0.9, 2026-03-19)
+- Meter distance labels (1m, 2m, 5m, 10m, 20m) drawn on distance rings
+- Styled with `textDim` color, JetBrains Mono 9px
+
+### GitHub Issues Resolved (22 total, all closed)
+- **#1:** Azimuth knob double-click reset to default instead of 0°
+- **#2:** User Presets folder missing after build
+- **#3:** Trajectories scale inversely with distance from origin
+- **#4:** Distance labels added to spatial map rings
+- **#5–#8:** Figure-8, Heart, Infinity, Spiral shape corrections
+- **#9:** Random trajectory made truly random (was deterministic)
+- **#10:** Line trajectory amplitude corrected (0.75 both sides)
+- **#11:** Trajectory path visualization realtime redraw
+- **#12:** SML button icon added
+- **#13:** Figure-8 direction fix
+- **#14:** Helix clockwise direction fix
+- **#15:** Spiral outward direction fix
+- **#16:** Square trajectory speed halved
+- **#17:** SML button text/icon scaling to match title height
+- **#18:** Circle shape request (closed — Orbit covers this)
+- **#19:** Glow trail visual quality regression (deferred)
+- **#20:** Line trajectory azimuth rotation
+- **#21:** Spiral clockwise direction
+- **#22:** Bounce left-to-right default direction
 
 ### Files
 Active source in `Source/`:
-- `PluginProcessor.h`
-- `PluginProcessor.cpp`
-- `PluginEditor.h`
-- `PluginEditor.cpp`
-- `PresetData.h` (shared preset struct)
-- `PresetData.cpp` (60 factory presets, serialization, install function)
+- `PluginProcessor.h` (~33 KB)
+- `PluginProcessor.cpp` (~175 KB)
+- `PluginEditor.h` (~14 KB)
+- `PluginEditor.cpp` (~45 KB)
+- `PresetData.h` (shared preset struct, ~2 KB)
+- `PresetData.cpp` (60 factory presets, serialization, install function, ~40 KB)
+- `Tests/TrajectoryTests.cpp` (Catch2 test suite, 33 tests)
 
 ### Output
 - 22 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)

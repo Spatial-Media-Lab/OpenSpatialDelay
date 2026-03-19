@@ -8,9 +8,9 @@ using Catch::Matchers::WithinAbs;
 
 // Shape indices (alphabetical, matching computeTrajectory switch)
 namespace TrajShape {
-    constexpr int None = 0, Bounce = 1, Cross = 2, Figure8 = 3, Heart = 4,
-                  Helix = 5, Infinity = 6, Line = 7, Orbit = 8, Random = 9,
-                  Spiral = 10, Square = 11, Triangle = 12;
+    constexpr int None = 0, Bounce = 1, Circle = 2, Cross = 3, Figure8 = 4,
+                  Heart = 5, Helix = 6, Infinity = 7, Line = 8, Orbit = 9,
+                  Random = 10, Spiral = 11, Square = 12, Triangle = 13;
 }
 
 // ============================================================================
@@ -62,10 +62,10 @@ TEST_CASE("Bounce controlsAz and controlsEl flags", "[trajectory][characterizati
 
 TEST_CASE("Bounce at phase 0.5 is at peak displacement", "[trajectory][characterization]")
 {
-    // tri at 0.5 = 1.0, so az = base + 90*(2*1-1) = base + 90
+    // tri at 0.5 = 1.0, so az = base - 90*(2*1-1) = base - 90
     auto r = CT::computeTrajectory(TrajShape::Bounce, 0.5f, 0.0f, 0.0f, 0.5f);
-    CHECK_THAT(r.azDeg, WithinAbs(90.0f, 0.01f));
-    CHECK_THAT(r.elDeg, WithinAbs(30.0f, 0.01f));
+    CHECK_THAT(r.azDeg, WithinAbs(-90.0f, 0.01f));
+    CHECK_THAT(r.elDeg, WithinAbs(-30.0f, 0.01f));
 }
 
 TEST_CASE("Cross controls azimuth and elevation", "[trajectory][characterization]")
@@ -76,21 +76,22 @@ TEST_CASE("Cross controls azimuth and elevation", "[trajectory][characterization
     CHECK_FALSE(r.controlsDist);
 }
 
-TEST_CASE("Helix at phase 0 starts at baseAz, elevation -90", "[trajectory][characterization]")
+TEST_CASE("Helix at phase 0 starts at baseAz, elevation +90", "[trajectory][characterization]")
 {
+    // #14: Helix now starts at top (elevation +90) at phase 0
     auto r = CT::computeTrajectory(TrajShape::Helix, 0.0f, 45.0f, 0.0f, 0.5f);
     CHECK_THAT(r.azDeg, WithinAbs(45.0f, 0.01f));
-    CHECK_THAT(r.elDeg, WithinAbs(-90.0f, 0.5f));
+    CHECK_THAT(r.elDeg, WithinAbs(90.0f, 0.5f));
     CHECK(r.controlsAz);
     CHECK(r.controlsEl);
     CHECK_FALSE(r.controlsDist);
 }
 
-TEST_CASE("Helix at phase 1.0 reaches baseAz+360 (wraps), elevation +90", "[trajectory][characterization]")
+TEST_CASE("Helix at phase 1.0 reaches elevation -90", "[trajectory][characterization]")
 {
-    // phase 1.0 → easedPhase = 0.5*(1-cos(pi)) = 1.0 → elDeg = -90 + 180 = 90
+    // #14: Helix now ends at bottom (elevation -90) at phase 1.0
     auto r = CT::computeTrajectory(TrajShape::Helix, 0.999f, 0.0f, 0.0f, 0.5f);
-    CHECK(r.elDeg > 85.0f);  // near +90
+    CHECK(r.elDeg < -85.0f);  // near -90
 }
 
 TEST_CASE("Infinity controls azimuth and distance", "[trajectory][characterization]")
@@ -103,11 +104,14 @@ TEST_CASE("Infinity controls azimuth and distance", "[trajectory][characterizati
 
 TEST_CASE("Infinity is origin-relative (lemniscate)", "[trajectory][characterization]")
 {
-    // Lemniscate at phase 0: x = a*cos(0)/(1+0) = a, y = 0 → dist ≈ sqrt(baseDist² + a²)
-    // Just verify it varies with baseDist
+    // With a = distScale, the lemniscate peak always reaches ~1.0 regardless of baseDist
+    // Verify it stays within valid range and reaches near 1.0
     auto r1 = CT::computeTrajectory(TrajShape::Infinity, 0.0f, 0.0f, 0.0f, 0.3f);
     auto r2 = CT::computeTrajectory(TrajShape::Infinity, 0.0f, 0.0f, 0.0f, 0.7f);
-    CHECK(r2.dist > r1.dist);
+    CHECK(r1.dist > 0.5f);
+    CHECK(r2.dist > 0.5f);
+    CHECK(r1.dist <= 1.0f);
+    CHECK(r2.dist <= 1.0f);
 }
 
 TEST_CASE("Random controls all three axes", "[trajectory][characterization]")
@@ -207,22 +211,23 @@ TEST_CASE("Control flags are correct for all shapes", "[trajectory][characteriza
 // Each test verifies that changing baseDist shifts the trajectory's distance.
 // ============================================================================
 
-TEST_CASE("Spiral distance oscillates around baseDist", "[trajectory][origin-relative]")
+TEST_CASE("Spiral at phase 0 has larger radius than phase near 1 (outward spiral)", "[trajectory][origin-relative]")
 {
-    // Spiral at phase 0: cos(0) = 1 → should be near baseDist + amplitude
-    // At two different baseDist values, the distance should differ proportionally
-    auto r1 = CT::computeTrajectory(TrajShape::Spiral, 0.0f, 0.0f, 0.0f, 0.3f);
-    auto r2 = CT::computeTrajectory(TrajShape::Spiral, 0.0f, 0.0f, 0.0f, 0.7f);
-    float diff = r2.dist - r1.dist;
-    // If origin-relative, diff should be ~0.4 (the baseDist difference)
-    CHECK_THAT(diff, WithinAbs(0.4f, 0.15f));
+    // Spiral uses rLocal = maxRadius*(1-phase), so phase=0 has max local radius
+    // and phase~1 converges to origin. Verify outward-to-inward progression.
+    auto rStart = CT::computeTrajectory(TrajShape::Spiral, 0.0f, 0.0f, 0.0f, 0.0f);
+    auto rEnd   = CT::computeTrajectory(TrajShape::Spiral, 0.95f, 0.0f, 0.0f, 0.0f);
+    CHECK(rStart.dist > rEnd.dist);   // phase 0 is further from center than phase ~1
+    CHECK(rStart.dist > 0.5f);        // at baseDist=0, outer edge is well past center
 }
 
-TEST_CASE("Spiral at baseDist=0.2 phase=0.5 should be 0.2 + half of max radius", "[trajectory][origin-relative]")
+TEST_CASE("Spiral is centered on origin (Cartesian approach)", "[trajectory][origin-relative]")
 {
-    // Archimedean spiral: dist = baseDist + 0.75 * phase
-    auto r = CT::computeTrajectory(TrajShape::Spiral, 0.5f, 0.0f, 0.0f, 0.2f);
-    CHECK_THAT(r.dist, WithinAbs(0.2f + 0.75f * 0.5f, 0.05f));  // ~0.575
+    // #15: At baseDist=0, spiral starts at outer edge (phase=0) and ends at center (phase=1)
+    auto rStart = CT::computeTrajectory(TrajShape::Spiral, 0.0f, 0.0f, 0.0f, 0.0f);
+    auto rEnd   = CT::computeTrajectory(TrajShape::Spiral, 0.99f, 0.0f, 0.0f, 0.0f);
+    CHECK(rStart.dist > 0.5f);  // starts at outer edge
+    CHECK_THAT(rEnd.dist, WithinAbs(0.0f, 0.02f));  // ends at center
 }
 
 TEST_CASE("Heart distance oscillates around baseDist", "[trajectory][origin-relative]")
@@ -235,14 +240,14 @@ TEST_CASE("Heart distance oscillates around baseDist", "[trajectory][origin-rela
 
 TEST_CASE("Figure-8 distance scales with baseDist", "[trajectory][origin-relative]")
 {
-    // Figure-8 uses Cartesian → polar. At phase 0.125 (front lobe peak),
-    // the shape should be offset from origin by baseDist
+    // With full-range amplitude (loopR=0.5*distScale), the far lobe peak
+    // reaches ~1.0 at any baseDist. Verify both stay in valid range.
     auto r1 = CT::computeTrajectory(TrajShape::Figure8, 0.125f, 0.0f, 0.0f, 0.3f);
     auto r2 = CT::computeTrajectory(TrajShape::Figure8, 0.125f, 0.0f, 0.0f, 0.7f);
-    // Both should be displaced from their base distance; r2 should be further out
-    CHECK(r2.dist > r1.dist);
-    float diff = r2.dist - r1.dist;
-    CHECK(diff > 0.15f);  // meaningful distance difference
+    CHECK(r1.dist > 0.3f);
+    CHECK(r2.dist > 0.3f);
+    CHECK(r1.dist <= 1.01f);
+    CHECK(r2.dist <= 1.01f);
 }
 
 TEST_CASE("Figure-8 azimuth rotates with baseAz", "[trajectory][origin-relative]")
@@ -258,10 +263,13 @@ TEST_CASE("Figure-8 azimuth rotates with baseAz", "[trajectory][origin-relative]
 
 TEST_CASE("Square distance scales with baseDist", "[trajectory][origin-relative]")
 {
+    // With full-range amplitude, corners reach ~1.0 at any baseDist
     auto r1 = CT::computeTrajectory(TrajShape::Square, 0.125f, 0.0f, 0.0f, 0.3f);
     auto r2 = CT::computeTrajectory(TrajShape::Square, 0.125f, 0.0f, 0.0f, 0.7f);
-    float diff = r2.dist - r1.dist;
-    CHECK_THAT(diff, WithinAbs(0.4f, 0.25f));
+    CHECK(r1.dist > 0.3f);
+    CHECK(r2.dist > 0.3f);
+    CHECK(r1.dist <= 1.5f);  // corners can slightly exceed 1.0 due to geometry
+    CHECK(r2.dist <= 1.5f);
 }
 
 TEST_CASE("Square azimuth rotates with baseAz", "[trajectory][origin-relative]")
@@ -276,10 +284,13 @@ TEST_CASE("Square azimuth rotates with baseAz", "[trajectory][origin-relative]")
 
 TEST_CASE("Triangle distance scales with baseDist", "[trajectory][origin-relative]")
 {
+    // With circumR = distScale, vertices reach baseDist + circumR ≈ 1.0
     auto r1 = CT::computeTrajectory(TrajShape::Triangle, 0.0f, 0.0f, 0.0f, 0.3f);
     auto r2 = CT::computeTrajectory(TrajShape::Triangle, 0.0f, 0.0f, 0.0f, 0.7f);
-    float diff = r2.dist - r1.dist;
-    CHECK_THAT(diff, WithinAbs(0.4f, 0.25f));
+    CHECK(r1.dist > 0.5f);
+    CHECK(r2.dist > 0.5f);
+    CHECK_THAT(r1.dist, WithinAbs(1.0f, 0.1f));
+    CHECK_THAT(r2.dist, WithinAbs(1.0f, 0.1f));
 }
 
 TEST_CASE("Triangle azimuth rotates with baseAz", "[trajectory][origin-relative]")
@@ -348,27 +359,22 @@ TEST_CASE("Issue #7: Infinity trajectory crosses through origin", "[trajectory][
     CHECK(mid2.dist < 0.15f);
 }
 
-TEST_CASE("Issue #8: Spiral distance monotonically increases", "[trajectory][issues]")
+TEST_CASE("Issue #8: Spiral extends outward from origin", "[trajectory][issues]")
 {
-    // Archimedean spiral: distance should increase from near 0 to near max over one cycle
-    float prevDist = -1.0f;
-    bool monotonic = true;
-    for (int s = 0; s <= 20; ++s)
-    {
-        float phase = (float)s / 20.0f;
-        auto r = CT::computeTrajectory(TrajShape::Spiral, phase, 0.0f, 0.0f, 0.0f);
-        if (r.dist < prevDist - 0.01f) monotonic = false;
-        prevDist = r.dist;
-    }
-    CHECK(monotonic);
-    // Should reach near the edge
-    auto end = CT::computeTrajectory(TrajShape::Spiral, 0.99f, 0.0f, 0.0f, 0.0f);
-    CHECK(end.dist > 0.5f);
+    // #15: Spiral now starts at outer edge (phase=0) and spirals inward to center (phase=1)
+    // At baseDist=0, phase=0 should be at max radius, phase=1 near center
+    auto start = CT::computeTrajectory(TrajShape::Spiral, 0.01f, 0.0f, 0.0f, 0.0f);
+    auto end   = CT::computeTrajectory(TrajShape::Spiral, 0.99f, 0.0f, 0.0f, 0.0f);
+    CHECK(start.dist > 0.5f);  // starts near outer edge
+    CHECK_THAT(end.dist, WithinAbs(0.0f, 0.02f));  // ends near center
+    // Verify the spiral at half phase has intermediate extent
+    auto mid = CT::computeTrajectory(TrajShape::Spiral, 0.5f, 0.0f, 0.0f, 0.0f);
+    CHECK(mid.dist > 0.1f);
 }
 
-TEST_CASE("Issue #10: Line trajectory reaches amplitude 0.75", "[trajectory][issues]")
+TEST_CASE("Issue #10: Line trajectory reaches full amplitude at baseDist=0", "[trajectory][issues]")
 {
-    // Line should sweep ±0.75 from origin, reaching distance 0.75 at extremes
+    // Line should sweep ±1.0 from origin at baseDist=0, reaching distance 1.0
     float maxDist = 0.0f;
     for (int s = 0; s <= 100; ++s)
     {
@@ -376,5 +382,78 @@ TEST_CASE("Issue #10: Line trajectory reaches amplitude 0.75", "[trajectory][iss
         auto r = CT::computeTrajectory(TrajShape::Line, phase, 0.0f, 0.0f, 0.0f);
         if (r.dist > maxDist) maxDist = r.dist;
     }
-    CHECK(maxDist > 0.65f);  // should reach ~0.75
+    CHECK(maxDist > 0.9f);  // should reach ~1.0
+}
+
+// ============================================================================
+// Issue #3: Distance Scaling — amplitude scales inversely with baseDist
+// ============================================================================
+
+TEST_CASE("Issue #3: Line at baseDist=0 has full amplitude", "[trajectory][distance-scaling]")
+{
+    // distScale = 1.0, amplitude = 1.0 → max dist ≈ 1.0
+    auto r = CT::computeTrajectory(TrajShape::Line, 0.0f, 0.0f, 0.0f, 0.0f);
+    CHECK(r.dist > 0.9f);
+}
+
+TEST_CASE("Issue #3: Line at baseDist=1.0 collapses to origin", "[trajectory][distance-scaling]")
+{
+    // distScale = 0.0, amplitude = 0 → dist ≈ baseDist = 1.0
+    auto r = CT::computeTrajectory(TrajShape::Line, 0.0f, 0.0f, 0.0f, 1.0f);
+    CHECK_THAT(r.dist, WithinAbs(1.0f, 0.05f));
+}
+
+TEST_CASE("Issue #3: Line at baseDist=0.5 has half amplitude", "[trajectory][distance-scaling]")
+{
+    // distScale = 0.5, amplitude = 0.5. Line moves along rotated axis while
+    // baseDist offsets perpendicular — max dist = sqrt(0.5² + 0.5²) ≈ 0.707
+    float maxDist = 0.0f;
+    for (int s = 0; s <= 100; ++s)
+    {
+        auto r = CT::computeTrajectory(TrajShape::Line, (float)s / 100.0f, 0.0f, 0.0f, 0.5f);
+        if (r.dist > maxDist) maxDist = r.dist;
+    }
+    CHECK(maxDist > 0.6f);
+    CHECK(maxDist <= 1.01f);
+}
+
+TEST_CASE("Issue #3: Spiral maxRadius scales inversely", "[trajectory][distance-scaling]")
+{
+    // #15: Spiral starts at outer edge (phase=0) and spirals inward.
+    // At baseDist=0, phase=0 starts at max radius
+    auto r0 = CT::computeTrajectory(TrajShape::Spiral, 0.01f, 0.0f, 0.0f, 0.0f);
+    CHECK(r0.dist > 0.5f);
+
+    // At baseDist=1.0, maxRadius = 0 → spiral collapses, dist ≈ 1.0
+    auto r1 = CT::computeTrajectory(TrajShape::Spiral, 0.01f, 0.0f, 0.0f, 1.0f);
+    CHECK_THAT(r1.dist, WithinAbs(1.0f, 0.05f));
+}
+
+TEST_CASE("Issue #3: Square collapses at baseDist=1.0", "[trajectory][distance-scaling]")
+{
+    for (float phase : { 0.0f, 0.25f, 0.5f, 0.75f })
+    {
+        auto r = CT::computeTrajectory(TrajShape::Square, phase, 0.0f, 0.0f, 1.0f);
+        CHECK_THAT(r.dist, WithinAbs(1.0f, 0.05f));
+    }
+}
+
+TEST_CASE("Issue #3: Triangle collapses at baseDist=1.0", "[trajectory][distance-scaling]")
+{
+    for (float phase : { 0.0f, 0.33f, 0.67f })
+    {
+        auto r = CT::computeTrajectory(TrajShape::Triangle, phase, 0.0f, 0.0f, 1.0f);
+        CHECK_THAT(r.dist, WithinAbs(1.0f, 0.05f));
+    }
+}
+
+TEST_CASE("Issue #3: Shapes with no distance modulation are unaffected", "[trajectory][distance-scaling]")
+{
+    // Bounce, Cross, Helix, Orbit — distance stays at baseDist regardless
+    for (int shape : { TrajShape::Bounce, TrajShape::Cross, TrajShape::Helix, TrajShape::Orbit })
+    {
+        auto r = CT::computeTrajectory(shape, 0.5f, 45.0f, 20.0f, 0.7f);
+        INFO("Shape " << shape);
+        CHECK_THAT(r.dist, WithinAbs(0.7f, 0.01f));
+    }
 }

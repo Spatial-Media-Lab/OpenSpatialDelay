@@ -61,7 +61,7 @@ juce_add_binary_data(HRTFData
 )
 
 # =============================================================================
-# Font BinaryData — DM Sans + JetBrains Mono embedded as binary resources
+# Font BinaryData — DM Sans + JetBrains Mono + Roboto embedded as binary resources
 # =============================================================================
 juce_add_binary_data(FontData
     HEADER_NAME "FontData.h"
@@ -74,6 +74,7 @@ juce_add_binary_data(FontData
         fonts/JetBrains_Mono-Regular.ttf
         fonts/JetBrains_Mono-Medium.ttf
         fonts/JetBrains_Mono-Bold.ttf
+        fonts/Roboto-Medium.ttf
 )
 
 # =============================================================================

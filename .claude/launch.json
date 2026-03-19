@@ -2,16 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "manual-preview",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8095", "--directory", "docs"],
+      "port": 8095
+    },
+    {
       "name": "prototype",
       "runtimeExecutable": "python3",
       "runtimeArgs": ["-m", "http.server", "8090", "--directory", "docs/design-prototypes"],
       "port": 8090
-    },
-    {
-      "name": "manual-preview",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8091", "--directory", "docs"],
-      "port": 8091
     }
   ]
 }
