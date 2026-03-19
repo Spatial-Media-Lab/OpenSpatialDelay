@@ -2052,12 +2052,13 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     *lfeFilter.coefficients = *juce::dsp::IIR::Coefficients<float>::makeLowPass (sampleRate, 120.0f);
 
     // v0.4: Prepare air absorption filters (per-object LP, distance-driven cutoff)
+    // v1.0: Pre-compute transparent coefficients to avoid heap allocation in processBlock
+    airTransparentCoeffs = *juce::dsp::IIR::Coefficients<float>::makeLowPass (sampleRate, 20000.0f);
     for (int i = 0; i < MAX_OBJECTS; ++i)
     {
         airAbsorptionFilter[i].prepare (spec);
         airAbsorptionFilter[i].reset();
-        *airAbsorptionFilter[i].coefficients =
-            *juce::dsp::IIR::Coefficients<float>::makeLowPass (sampleRate, 20000.0f);
+        *airAbsorptionFilter[i].coefficients = airTransparentCoeffs;
     }
 
     // v0.5: Prepare NFC-HOA filters (per-object, per-SH-order, Ambisonics output only)
@@ -3623,9 +3624,8 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             if (! objects[t].enabled)
             {
                 dopplerSemitones[t] = 0.0f;
-                // Set air absorption filter to transparent when object is disabled
-                *airAbsorptionFilter[t].coefficients =
-                    *juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, 20000.0f);
+                // v1.0: Use pre-computed transparent coefficients (no heap allocation)
+                *airAbsorptionFilter[t].coefficients = airTransparentCoeffs;
                 continue;
             }
 
@@ -3813,8 +3813,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     }
     else if (isAmbiOutput)
     {
-        const int fmtIdx2 = static_cast<int> (layoutState.format);
-        const int ambiOrder = outputFormatRegistry[static_cast<size_t> (fmtIdx2)].ambiOrder;
+        const int ambiOrder = outputFormatRegistry[static_cast<size_t> (fmtEnumIdx)].ambiOrder;
         renderAmbisonicsOutput (buffer, numSamples, objects, objDistGain, pitchSemitones, ambiOrder);
     }
     else
