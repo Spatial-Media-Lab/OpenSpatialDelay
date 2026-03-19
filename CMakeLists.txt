@@ -282,3 +282,79 @@ if(BUILD_OSD_TESTS)
     include(Catch)
     catch_discover_tests(OpenSpatialDelayTests)
 endif()
+
+# =============================================================================
+# Screenshot tool — standalone CLI that captures the plugin UI as a PNG
+# Requires full GUI + audio stack (creates processor + editor off-screen)
+# =============================================================================
+add_executable(screenshot_tool
+    tools/screenshot_tool.cpp
+    Source/PluginProcessor.cpp
+    Source/PluginEditor.cpp
+    Source/PresetData.cpp
+)
+
+target_link_libraries(screenshot_tool
+    PRIVATE
+        juce::juce_audio_utils
+        juce::juce_dsp
+        juce::juce_osc
+        HRTFData
+        FontData
+        mysofa-static
+        ZLIB::ZLIB
+)
+
+target_compile_definitions(screenshot_tool PRIVATE
+    JUCE_STANDALONE_APPLICATION=1
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0
+    JUCE_SHARED_CODE=1
+    JucePlugin_Name="OpenSpatialDelay v1.0"
+    JucePlugin_IsSynth=0
+    JucePlugin_WantsMidiInput=0
+    JucePlugin_ProducesMidiOutput=0
+    JucePlugin_IsMidiEffect=0
+    JucePlugin_ManufacturerCode=0x536d6c69
+    JucePlugin_PluginCode=0x4f733130
+    JucePlugin_Manufacturer="SpatialMediaLibrary"
+    JucePlugin_Version=1.0.0
+    JucePlugin_VersionString="1.0.0"
+    JucePlugin_VersionCode=0x10000
+    JucePlugin_Desc="OpenSpatialDelay v1.0"
+    JucePlugin_EditorRequiresKeyboardFocus=0
+    JucePlugin_Build_VST3=0
+    JucePlugin_Build_AU=0
+    JucePlugin_Build_AUv3=0
+    JucePlugin_Build_AAX=0
+    JucePlugin_Build_Standalone=0
+    JucePlugin_Build_Unity=0
+    JucePlugin_Build_VST=0
+    JucePlugin_Build_LV2=0
+    JucePlugin_VSTUniqueID=JucePlugin_PluginCode
+    JucePlugin_VSTCategory=kPlugCategEffect
+    JucePlugin_Vst3Category="Fx"
+    JucePlugin_AUMainType=0x61756678
+    JucePlugin_AUSubType=JucePlugin_PluginCode
+    JucePlugin_AUExportPrefix=OSDScreenshotAU
+    JucePlugin_AUExportPrefixQuoted="OSDScreenshotAU"
+    JucePlugin_AUManufacturerCode=JucePlugin_ManufacturerCode
+    JucePlugin_CFBundleIdentifier=com.SpatialMediaLibrary.OpenSpatialDelay
+    JucePlugin_AAXIdentifier=com.SpatialMediaLibrary.OpenSpatialDelay
+    JucePlugin_AAXManufacturerCode=JucePlugin_ManufacturerCode
+    JucePlugin_AAXProductId=JucePlugin_PluginCode
+    JucePlugin_AAXCategory=0
+    JucePlugin_AAXDisableBypass=0
+    JucePlugin_AAXDisableMultiMono=0
+    JucePlugin_VSTNumMidiInputs=16
+    JucePlugin_VSTNumMidiOutputs=16
+    JucePlugin_Enable_ARA=0
+    JucePlugin_ManufacturerWebsite=""
+    JucePlugin_ManufacturerEmail=""
+)
+
+# Include paths: libmysofa headers + JUCE-generated JuceHeader.h
+target_include_directories(screenshot_tool PRIVATE
+    ${libmysofa_SOURCE_DIR}/src/hrtf
+    ${CMAKE_BINARY_DIR}/OpenSpatialDelay_artefacts/JuceLibraryCode
+)
