@@ -1,6 +1,6 @@
 # Output Formats
 
-OpenSpatialDelay supports 21 output formats organized into four categories: Binaural, Stereo, Surround, and Ambisonics. The active format is selected from the dropdown in the header bar.
+OpenSpatialDelay supports 22 output formats organized into four categories: Binaural, Stereo, Surround, and Ambisonics. The active format is selected from the dropdown in the header bar.
 
 ## Five Rendering Paths
 
@@ -74,6 +74,7 @@ Surround formats output discrete speaker signals. The plugin computes per-speake
 | 7.1.4 Atmos | 12 | Yes | Yes | Full Dolby Atmos home cinema |
 | 7.1.6 Atmos | 14 | Yes | Yes | Extended Atmos with 6 height speakers |
 | 9.1.6 Atmos | 16 | Yes | Yes | Maximum Atmos configuration |
+| SpatialMediaLab 13.1 | 14 | Yes | Yes | SpatialMediaLab multi-use room -- 8 ear-level + 4 height + 1 zenith |
 
 ### Spatialization Algorithms
 
@@ -121,6 +122,7 @@ Higher orders provide sharper spatial imaging but require more channels. 3rd ord
 | Work in VR / 360 video | 1st Order Ambi | (disabled) | Widely supported FOA format |
 | Non-standard speaker layout | Any surround | DBAP | Works with any geometry |
 | Research / art installation | Octaphonic | KNN or DBAP | 8 equidistant speakers |
+| SML multi-use room | SpatialMediaLab 13.1 | VBAP | Custom 13-speaker layout derived from IEM AllRADecoder |
 
 ## Changing Formats
 

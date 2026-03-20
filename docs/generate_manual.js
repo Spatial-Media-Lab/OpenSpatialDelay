@@ -82,6 +82,12 @@ function loadImage(filename) {
 
 const signalFlowImg = loadImage("signal-flow.png");
 const logoImg = loadImage("sml-logo.png");
+const screenshotFullImg = loadImage("screenshot.png");
+const screenshotAnnotatedImg = loadImage("screenshot_annotated.png");
+const screenshotHeaderImg = loadImage("screenshot_header.png");
+const screenshotSpatialImg = loadImage("screenshot_spatial_map.png");
+const screenshotElevationImg = loadImage("screenshot_elevation_map.png");
+const screenshotBottomImg = loadImage("screenshot_bottom_panel.png");
 
 // ============================================================================
 // SECTION NUMBERING
@@ -268,8 +274,24 @@ function calloutPara(children) {
 }
 
 // ============================================================================
-// HELPER: PLACEHOLDER IMAGE BOX
+// HELPER: EMBEDDED SCREENSHOT (or placeholder fallback)
 // ============================================================================
+
+function screenshotImage(imgData, widthPts, heightPts, altTitle, altDescription) {
+  if (imgData) {
+    return new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 80, after: 120 },
+      children: [new ImageRun({
+        type: "png",
+        data: imgData,
+        transformation: { width: widthPts, height: heightPts },
+        altText: { title: altTitle, description: altDescription, name: altTitle.toLowerCase().replace(/\s+/g, "-") },
+      })],
+    });
+  }
+  return placeholderBox(altDescription, heightPts);
+}
 
 function placeholderBox(description, heightPts = 200) {
   const spacingLines = Math.max(1, Math.floor(heightPts / 14));
@@ -361,19 +383,18 @@ function dataTable(headers, rows, opts = {}) {
 
 function buildCover() {
   const children = [
-    spacer(60),
-    spacer(60),
+    spacer(40),
   ];
 
   // Logo
   if (logoImg) {
     children.push(new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { after: 400 },
+      spacing: { after: 200 },
       children: [new ImageRun({
         type: "png",
         data: logoImg,
-        transformation: { width: 220, height: 111 },
+        transformation: { width: 180, height: 91 },
         altText: { title: "Spatial Media Lab Logo", description: "Logo for Spatial Media Lab", name: "sml-logo" },
       })],
     }));
@@ -395,7 +416,7 @@ function buildCover() {
   // Version
   children.push(new Paragraph({
     alignment: AlignmentType.CENTER,
-    spacing: { after: 300 },
+    spacing: { after: 140 },
     children: [new TextRun({ text: "v1.0  User Manual", font: FONT_BODY, size: 32, color: C.subheading })],
   }));
 
@@ -409,32 +430,13 @@ function buildCover() {
     })],
   }));
 
-  // App screenshot placeholder
-  children.push(spacer(20));
-  children.push(new Paragraph({
-    alignment: AlignmentType.CENTER,
-    spacing: { after: 40 },
-    border: {
-      top: { style: BorderStyle.SINGLE, size: 1, color: C.border },
-      bottom: { style: BorderStyle.SINGLE, size: 1, color: C.border },
-      left: { style: BorderStyle.SINGLE, size: 1, color: C.border },
-      right: { style: BorderStyle.SINGLE, size: 1, color: C.border },
-    },
-    children: [
-      new TextRun({ text: "", font: FONT_BODY, size: 20 }),
-    ],
-  }));
-  // Placeholder box with centered text
-  children.push(new Paragraph({
-    alignment: AlignmentType.CENTER,
-    spacing: { before: 600, after: 600 },
-    children: [
-      new TextRun({ text: "[ App Screenshot \u2014 To Be Added ]", font: FONT_BODY, size: 22, color: C.dimText, italics: true }),
-    ],
-  }));
+  // App screenshot
+  children.push(screenshotImage(screenshotFullImg, 420, 297,
+    "OpenSpatialDelay Interface",
+    "Full plugin UI showing spatial map, controls, and tap selector"));
 
   // Footer info
-  children.push(spacer(40));
+  children.push(spacer(20));
   children.push(new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { after: 60 },
@@ -572,19 +574,16 @@ function buildQuickStart() {
 
   // UI Overview
   items.push(heading2("Interface Overview", "interface-overview"));
-  items.push(placeholderBox("Full Plugin UI \u2014 820\u00d7580 window showing all four regions", 180));
+  items.push(screenshotImage(screenshotAnnotatedImg, 480, 340,
+    "Plugin Interface Overview",
+    "Full Plugin UI \u2014 820\u00d7580 window with four labeled regions"));
   items.push(spacer(8));
-  items.push(bodyPara([
-    bodyText("The interface has four regions: "),
-    boldText("A) Spatial Map "),
-    bodyText("(left) \u2014 top-down view of 3D space where you position delay taps. "),
-    boldText("B) Right Panel "),
-    bodyText("(right) \u2014 global controls for delay, tone, modulation, and mix. "),
-    boldText("C) Bottom Panel "),
-    bodyText("(bottom) \u2014 per-tap controls for the selected object. "),
-    boldText("D) Header Bar "),
-    bodyText("(top) \u2014 presets, output format, and algorithm selection."),
-  ]));
+  items.push(bodyPara([bodyText("The interface has four regions:")]));
+  items.push(bodyPara([boldText("A) Header Bar "), bodyText("(top) \u2014 presets, output format, and algorithm selection.")]));
+  items.push(bodyPara([boldText("B) Spatial Map "), bodyText("(left) \u2014 top-down view of 3D space where you position delay taps.")]));
+  items.push(bodyPara([boldText("C) Bottom Panel "), bodyText("(bottom-left) \u2014 per-tap controls for the selected object.")]));
+  items.push(bodyPara([boldText("D) Right Panel "), bodyText("(right) \u2014 global controls for delay, tone, modulation, and mix.")]));
+
 
   // Signal flow
   items.push(heading2("Signal Flow", "signal-flow"));
@@ -699,8 +698,8 @@ function buildWhatIs() {
     bodyText("\u2014 each positioned anywhere in 3D space, with its own trajectory animation, pitch shift, Doppler amount, and input channel selection."),
   ]));
   items.push(bodyPara([
-    boldText("21 output formats "),
-    bodyText("\u2014 from binaural headphones to 9.1.6 Dolby Atmos to 6th-order Ambisonics."),
+    boldText("22 output formats "),
+    bodyText("\u2014 from binaural headphones to 9.1.6 Dolby Atmos, SpatialMediaLab 13.1, and 6th-order Ambisonics."),
   ]));
   items.push(bodyPara([
     boldText("7 spatialization algorithms "),
@@ -724,7 +723,9 @@ function buildSpatialMap() {
 
   items.push(bodyPara("The spatial map is the large visualization on the left side of the plugin window. It shows a top-down view of 3D space with the listener at the center. Each colored dot represents a delay tap positioned in space."));
 
-  items.push(placeholderBox("Spatial Map Close-Up \u2014 showing taps positioned around the listener with distance rings and compass labels", 220));
+  items.push(screenshotImage(screenshotSpatialImg, 380, 280,
+    "Spatial Map",
+    "Spatial Map Close-Up \u2014 showing taps positioned around the listener with distance rings and compass labels"));
   items.push(spacer(8));
 
   // Coordinate system
@@ -785,7 +786,9 @@ function buildSpatialMap() {
   items.push(bodyPara("At 0\u00b0 elevation (ear level), dots are at their default size and full opacity."));
 
   items.push(spacer(8));
-  items.push(placeholderBox("Spatial Map with multiple taps at various positions, showing elevation transparency and color coding", 160));
+  items.push(screenshotImage(screenshotElevationImg, 380, 280,
+    "Elevation Visualization",
+    "Spatial Map with multiple taps at various positions, showing elevation transparency and color coding"));
 
   return items;
 }
@@ -800,7 +803,7 @@ function buildOutputFormats() {
 
   items.push(bodyPara([
     bodyText("OpenSpatialDelay supports "),
-    boldText("21 output formats"),
+    boldText("22 output formats"),
     bodyText(" organized into four categories. The plugin automatically selects the correct rendering path based on the format you choose in the header dropdown."),
   ]));
 
@@ -854,7 +857,7 @@ function buildOutputFormats() {
   // Surround formats
   items.push(heading2("Surround Formats", "surround-formats"));
   items.push(bodyPara([
-    bodyText("13 discrete surround formats, from Quadraphonic to 9.1.6 Atmos. Formats with an LFE channel (marked with .1) derive it as a mono sum of all tap outputs through a 120 Hz low-pass filter at \u221210 dB. Choose a "),
+    bodyText("14 discrete surround formats, from Quadraphonic to 9.1.6 Atmos and SpatialMediaLab 13.1. Formats with an LFE channel (marked with .1) derive it as a mono sum of all tap outputs through a 120 Hz low-pass filter at \u221210 dB. Choose a "),
     internalLink("spatialization algorithm", "algorithms"),
     bodyText(" from the Algorithm dropdown."),
   ]));
@@ -871,10 +874,11 @@ function buildOutputFormats() {
       ["5.1.2", "8", "Yes", "2 top"],
       ["7.0.2", "9", "No", "2 top"],
       ["7.1.2 Atmos", "10", "Yes", "2 top"],
-      ["7.0.4", "11", "No", "4 top"],
+      ["5.1.4 Atmos", "10", "Yes", "4 top"],
       ["7.1.4 Atmos", "12", "Yes", "4 top"],
       ["7.1.6 Atmos", "14", "Yes", "6 top"],
       ["9.1.6 Atmos", "16", "Yes", "6 top + wide speakers"],
+      ["SpatialMediaLab 13.1", "14", "Yes", "8 ear-level + 4 height + 1 zenith"],
     ],
     { colWidths: [2400, 1400, 1000, 4226] }
   ));
@@ -967,7 +971,9 @@ function buildControlsReference() {
 
   // Header bar
   items.push(heading2("Header Bar", "header-bar"));
-  items.push(placeholderBox("Header Bar \u2014 showing title, preset navigation, OSC toggle, Output Format, Algorithm/HRTF dropdown", 60));
+  items.push(screenshotImage(screenshotHeaderImg, 480, 30,
+    "Header Bar",
+    "Header Bar \u2014 showing title, preset navigation, OSC toggle, Output Format, Algorithm/HRTF dropdown"));
   items.push(spacer(4));
   items.push(bodyPara([
     bodyText("The header bar contains: plugin title and version (left), "),
@@ -996,7 +1002,7 @@ function buildControlsReference() {
     [
       ["TIME", "1\u20132000 ms", "500 ms", "Base delay time. Tap k reads at k \u00d7 TIME."],
       ["SYNC", "On / Off", "Off", "Locks delay time to DAW tempo"],
-      ["NOTE", "1/4, 1/8, 1/16", "1/4", "Note division (when SYNC is on)"],
+      ["NOTE", "1/32 \u2013 2/1", "1/4", "Note division (when SYNC is on)"],
       ["MODE", "Notes, Dotted, Triplet", "Notes", "Sync modifier (when SYNC is on)"],
       ["FEEDBACK", "0\u2013100%", "30%", "Amount of delay output fed back to input"],
     ],
@@ -1088,7 +1094,9 @@ function buildControlsReference() {
 
   // Bottom panel - Per-tap
   items.push(heading2("Per-Tap Controls (Bottom Panel)", "per-tap-controls"));
-  items.push(placeholderBox("Bottom Panel \u2014 showing tap selector buttons (1\u201312) and per-tap controls", 80));
+  items.push(screenshotImage(screenshotBottomImg, 480, 70,
+    "Bottom Panel",
+    "Bottom Panel \u2014 showing tap selector buttons (1\u201312) and per-tap controls"));
   items.push(spacer(4));
   items.push(bodyPara("Select a tap by clicking its numbered button (1\u201312). The controls below update to show that tap's settings:"));
 
@@ -1103,7 +1111,7 @@ function buildControlsReference() {
       ["PITCH", "\u221224 to +24 st", "0 st", "Per-tap pitch offset (adds to global pitch)"],
       ["INPUT", "L+R / L / R", "L+R", "Which stereo input channel feeds this tap"],
       ["TRAJ", "13 shapes", "None", "Trajectory animation shape"],
-      ["SPEED", "0.1\u201310.0\u00d7", "1.0\u00d7", "Trajectory animation speed"],
+      ["SPEED", "0.00\u20135.00 Hz", "0.30 Hz", "Trajectory animation speed"],
       ["DIR", "Fwd / Rev", "Fwd", "Trajectory direction (forward or reverse)"],
     ],
     { colWidths: [1500, 2200, 1400, 3926] }
@@ -1151,7 +1159,7 @@ function buildTrajectories() {
 
   items.push(bodyPara([
     boldText("Speed "),
-    bodyText("controls the animation rate (0.1\u201310.0\u00d7 the base frequency). "),
+    bodyText("controls the animation rate (0.00\u20135.00 Hz). "),
     boldText("Direction "),
     bodyText("can be Forward or Reverse. Each tap animates independently \u2014 mix different shapes and speeds for complex spatial motion."),
   ]));

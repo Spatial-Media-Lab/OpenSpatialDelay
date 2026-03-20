@@ -17,9 +17,8 @@
 
 ---
 
-<!-- TODO: Replace with actual screenshot -->
 <p align="center">
-  <img src="docs/assets/screenshot.png" alt="OpenSpatialDelay interface" width="720">
+  <img src="docs/assets/screenshot.png" alt="OpenSpatialDelay interface — spatial map with four delay taps positioned in 3D space" width="720">
 </p>
 
 ## What is it?
@@ -36,7 +35,7 @@ OpenSpatialDelay is the first plugin in the **Spatial Media Library** — an ope
 - 12 independent delay taps, each positioned anywhere in 3D space
 - 7 spatialization algorithms for surround rendering (VBAP, VBIP, MDAP, KNN, DBAP, Ambisonics, Direct Binaural)
 - 6 HRTF profiles from measured [SOFA](https://www.sofaconventions.org/) files for realistic headphone spatialization
-- 21 output formats — Binaural, Stereo (5 mic simulation modes), 13 Surround (Quad through 9.1.6 Atmos), 6 Ambisonics (1st through 6th order)
+- 22 output formats — Binaural, Stereo (5 mic simulation modes), 14 Surround (Quad through 9.1.6 Atmos + SpatialMediaLab 13.1), 6 Ambisonics (1st through 6th order)
 
 **Delay & Modulation**
 - Tempo-synced or free-running delay with cumulative pitch shifting across taps
@@ -104,8 +103,8 @@ See the [User Manual](docs/OpenSpatialDelay_Manual_v1.0.pdf) for the full guide.
 
 ## Documentation
 
-- [User Manual (PDF)](docs/OpenSpatialDelay_Manual_v1.0.pdf) — full guide with signal flow, controls reference, presets, and glossary
-- [Specification](Project/SPECIFICATION.md) — technical specification and roadmap
+- [Quick Start Guide (PDF)](docs/OpenSpatialDelay_Manual_v1.0.pdf) — install, load, and start using the plugin
+- [Full Documentation](https://wiki.spatialmedialab.org) — complete reference on the Spatial Media Lab wiki
 - [Version History](docs/VERSION_HISTORY.md) — changelog across all versions
 
 ## Contributing
