@@ -872,7 +872,6 @@ function buildOutputFormats() {
       ["7.1 Surround", "8", "Yes", "None"],
       ["Octaphonic", "8", "No", "None (ring at 45\u00b0 intervals)"],
       ["5.1.2", "8", "Yes", "2 top"],
-      ["7.0.2", "9", "No", "2 top"],
       ["7.1.2 Atmos", "10", "Yes", "2 top"],
       ["5.1.4 Atmos", "10", "Yes", "4 top"],
       ["7.1.4 Atmos", "12", "Yes", "4 top"],

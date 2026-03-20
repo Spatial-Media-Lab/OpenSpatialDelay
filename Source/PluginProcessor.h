@@ -436,8 +436,9 @@ public:
         // Surround (ascending channel count)
         Quad, Surround5_0, Surround5_1, Surround7_0,
         Surround5_1_2, Surround7_1, Octaphonic,
-        Surround7_0_2, Surround5_1_4, Surround7_1_2,
+        Surround5_1_4, Surround7_1_2,
         Surround7_1_4, Surround7_1_6, Surround9_1_6,
+        SurroundSML13_1,  // SML Multi-Use Room (13 speakers + LFE)
         // Ambisonics output (AmbiX ACN/SN3D)
         AmbisonicsFOA, AmbisonicsSOA, AmbisonicsHOA,
         Ambisonics4OA, Ambisonics5OA, Ambisonics6OA
@@ -567,6 +568,7 @@ public:
 
     int  getNumPresets() const;
     int  getCurrentPresetIndex() const { return currentPresetIndex; }
+    void setCurrentPresetIndex (int idx) { currentPresetIndex = idx; }
     juce::StringArray getPresetNames() const;
     void loadPreset (int index);
     void saveUserPreset (const juce::String& name);
@@ -592,32 +594,29 @@ private:
     float  readDelayLineL    (float delaySamples) const;
     float  readDelayLineR    (float delaySamples) const;
     float  readDelayLineMono (float delaySamples) const;
-    float  readVarispeed (float delaySamples, float semitones, int phaseIndex, DelayChannel ch = DelayChannel::Mono);
     float getTempoSyncedDelayMs (int noteDivisionIndex) const;
 
     //--- DELAY-SPECIFIC: Render path methods (v0.5 refactor) ------------------
-    /** Read one tap sample: delay + pitch shift + air absorption. */
-    float readObjectSample (int objectIndex, float baseDelaySamples, float pitchSemitones);
+    /** Read one tap sample: delay + per-tap pitch shift + air absorption. */
+    float readObjectSample (int objectIndex, float baseDelaySamples);
     /** Process feedback: read from end of chain, filter, soft-clip, NaN guard. */
     void  processFeedbackSample (float currentLoopMult, float baseDelaySamples,
-                                 float pitchSemitones, float fb);
+                                 float fb);
 
     void renderDirectBinauralHRTF (juce::AudioBuffer<float>& buffer, int numSamples,
-                                   const ObjectState* objects, const float* objDistGain,
-                                   float pitchSemitones);
+                                   const ObjectState* objects, const float* objDistGain);
     void renderSimpleBinauralWoodworth (juce::AudioBuffer<float>& buffer, int numSamples,
-                                       const ObjectState* objects, const BinauralGains* objGains,
-                                       float pitchSemitones);
+                                       const ObjectState* objects, const BinauralGains* objGains);
     void renderAmbisonicsOutput (juce::AudioBuffer<float>& buffer, int numSamples,
                                 const ObjectState* objects, const float* objDistGain,
-                                float pitchSemitones, int ambiOrder);
+                                int ambiOrder);
     void renderStereoVariant (juce::AudioBuffer<float>& buffer, int numSamples,
                              const ObjectState* objects, const float* objDistGain,
-                             float pitchSemitones, int stereoMode);
+                             int stereoMode);
     void renderDiscreteSurround (juce::AudioBuffer<float>& buffer, int numSamples,
                                 const ObjectState* objects,
                                 const float (*objChannelGains)[16],
-                                const float* objDistGain, float pitchSemitones,
+                                const float* objDistGain,
                                 const SpeakerLayout& surLayout);
 
     //--- SPATIAL FRAMEWORK: Modular 3D Audio Core ----------------------------
@@ -663,6 +662,11 @@ private:
     //--- SPATIAL MEDIA LIBRARY: ADM-OSC Receive --------------------------------
     void oscMessageReceived (const juce::OSCMessage& message) override;
     void handleOSCPosition (int objectIndex, float azDeg, float elDeg, float dist);
+    void handleOSCParam (const juce::String& paramID, float denormValue);
+public:
+    // v1.0: Public test entry point — forwards to oscMessageReceived
+    void testProcessOSCMessage (const juce::OSCMessage& msg) { oscMessageReceived (msg); }
+private:
 
     juce::OSCReceiver oscReceiver;
     int  oscReceivePort = 4002;                         // Default ADM-OSC receive port
@@ -681,6 +685,27 @@ private:
     float oscSendPrevEl[MAX_OBJECTS]   = {};
     float oscSendPrevDist[MAX_OBJECTS] = {};
 
+    // v1.0: Per-object non-position send tracking (change-gated)
+    float oscSendPrevDoppler[MAX_OBJECTS]    = {};
+    float oscSendPrevObjPitch[MAX_OBJECTS]   = {};
+    float oscSendPrevEnabled[MAX_OBJECTS]    = {};
+    float oscSendPrevTrajShape[MAX_OBJECTS]  = {};
+    float oscSendPrevTrajSpeed[MAX_OBJECTS]  = {};
+    float oscSendPrevTrajDir[MAX_OBJECTS]    = {};
+    float oscSendPrevInput[MAX_OBJECTS]      = {};
+
+    // v1.0: Global param send tracking (change-gated)
+    struct OscSendPrevGlobal {
+        float delayTime = -1.0f, feedback = -1.0f, filterLP = -1.0f, filterHP = -1.0f;
+        float filterLPQ = -1.0f, filterHPQ = -1.0f, dryWet = -1.0f;
+        float inputGain = -999.0f, outputGain = -999.0f;
+        float tempoSync = -1.0f, noteDivision = -1.0f, syncMode = -1.0f;
+        float filterEnabled = -1.0f, algorithm = -1.0f, hrtfProfile = -1.0f;
+        float outputFormat = -1.0f, airAbsorption = -1.0f;
+        float wobbleEnabled = -1.0f, wobbleAmount = -1.0f, wobbleMorph = -1.0f;
+    };
+    OscSendPrevGlobal oscSendPrevGlobal;
+
     // Per-object OSC override: when active, OSC controls position (trajectory paused)
     std::atomic<bool> oscOverrideActive[MAX_OBJECTS] = {};
     double oscLastReceiveTime[MAX_OBJECTS] = {};        // juce::Time::getMillisecondCounterHiRes()
@@ -697,8 +722,6 @@ private:
 
     // Cached RangedAudioParameter* for trajectory setValueNotifyingHost (avoids string lookups in timer)
     juce::RangedAudioParameter* trajParam_azimuth[MAX_OBJECTS]   = {};
-    juce::RangedAudioParameter* trajParam_elevation[MAX_OBJECTS] = {};
-    juce::RangedAudioParameter* trajParam_distance[MAX_OBJECTS]  = {};
 
     // Pre-built OSC address strings for ADM-OSC Send (avoids per-tick string allocation)
     juce::String oscSendAddress[MAX_OBJECTS];
@@ -762,18 +785,7 @@ private:
     juce::dsp::IIR::Filter<float> tapLPFilter[MAX_OBJECTS];
     juce::dsp::IIR::Filter<float> tapHPFilter[MAX_OBJECTS];
 
-    // Varispeed pitch shift state — tape-speed dual-head with short crossfade
-    // Used for global cumulative pitch and feedback pitch (smooth, artifact-free)
-    struct VarispeedState {
-        float drift = 0.0f;          // accumulated read position drift (samples)
-        float fadingDrift = 0.0f;    // drift of the fading-out head during crossfade
-        int   crossfadeRemaining = 0; // samples left in crossfade (0 = not crossfading)
-        int   crossfadeLength = 0;    // total crossfade length (samples)
-    };
-    VarispeedState varispeedState[MAX_OBJECTS + 1] = {};  // 12 objects + 1 feedback
-
     // v0.9: WSOLA-lite per-tap pitch shifter — timing-preserving pitch shift
-    // Used only for per-tap additive pitch. Global cumulative pitch stays on varispeed.
     struct WSOLAState {
         static constexpr int kBufSize = 2048;       // ~42ms at 48kHz, power of 2
         static constexpr int kBufMask = kBufSize - 1;
@@ -786,17 +798,17 @@ private:
         float fadingPhase = 0.0f;    // fading grain read position
         int   crossfadeRemaining = 0;
     };
-    WSOLAState wsolaState[MAX_OBJECTS] = {};  // 12 objects (no feedback — feedback uses varispeed only)
+    WSOLAState wsolaState[MAX_OBJECTS] = {};  // 12 objects (feedback uses direct delay read, no pitch shift)
     float wsolaProcess (int objectIndex, float inputSample, float perTapSemitones);
 
     // Block-rate cached conversion factor: ms → samples (set at top of processBlock)
     float blockMsToSamples = 0.0f;
 
-    // v0.9: Wobble modulation — multi-layer tape wow/flutter emulation
-    float wobblePhases[4] = {};
+    // v0.8/v1.0: Wobble modulation — tape wow/flutter emulation
+    float wobblePhase = 0.0f;
     float blockWobbleAmount = 0.0f;  // read once per block from APVTS
     float blockWobbleMorph = 0.0f;
-    inline float applyWobble (float baseDelaySamples);
+    inline float applyWobble (float baseDelaySamples, float currentDelayMs);
 
     // Smoothing for delay time to create "Repitch" effect
     juce::LinearSmoothedValue<float> smoothedDelayTime;
@@ -904,7 +916,6 @@ private:
     std::atomic<float>* cachedParam_filterLPQ       = nullptr;
     std::atomic<float>* cachedParam_filterEnabled   = nullptr;
     std::atomic<float>* cachedParam_hrtfProfile     = nullptr;
-    std::atomic<float>* cachedParam_globalPitchShift = nullptr;
     std::atomic<float>* cachedParam_airAbsorption   = nullptr;
     std::atomic<float>* cachedParam_wobbleEnabled   = nullptr;
     std::atomic<float>* cachedParam_wobbleAmount    = nullptr;

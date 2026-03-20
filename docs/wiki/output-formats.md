@@ -68,7 +68,6 @@ Surround formats output discrete speaker signals. The plugin computes per-speake
 | 5.1.2 Atmos | 8 | Yes | Yes | Entry-level Atmos with 2 height speakers |
 | 7.1 Surround | 8 | Yes | No | Standard high-channel surround |
 | Octaphonic | 8 | No | No | 8 equidistant speakers (ring), art/research |
-| 7.0.2 | 9 | No | Yes | Extended surround with 2 height speakers |
 | 5.1.4 Atmos | 10 | Yes | Yes | Atmos with 4 height speakers |
 | 7.1.2 Atmos | 10 | Yes | Yes | Atmos with 2 height speakers on 7.1 bed |
 | 7.1.4 Atmos | 12 | Yes | Yes | Full Dolby Atmos home cinema |

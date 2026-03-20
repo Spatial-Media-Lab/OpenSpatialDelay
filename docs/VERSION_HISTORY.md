@@ -213,7 +213,7 @@ trajectory/ADM-OSC parameter stubs for v0.6+.
 - 22 output formats ordered by category, then ascending channel count:
   - Binaural (1): Binaural (default)
   - Stereo (1): Stereo (5 sub-modes via algorithm parameter)
-  - Surround (13): Quad, 5.0, 5.1, 7.0, 5.1.2, 7.1, Oct, 7.0.2, 5.1.4, 7.1.2, 7.1.4, 7.1.6, 9.1.6
+  - Surround (12): Quad, 5.0, 5.1, 7.0, 5.1.2, 7.1, Oct, 5.1.4, 7.1.2, 7.1.4, 7.1.6, 9.1.6
   - Ambisonics (6): FOA, SOA, HOA, 4OA, 5OA, 6OA
 - `OutputFormatInfo` struct gains `isStereoVariant` field
 - Parameter migration in `setStateInformation` maps v0.4 indices (17 formats) → v0.5 indices (21 formats)
@@ -643,6 +643,8 @@ Plugin identity: `Os10` (PLUGIN_CODE).
 - **Wobble modulation reverted to v0.8 design:** Single-oscillator with morphable waveform (sine→triangle→rounded square→irregular). LFO rate tied to delay time for natural pitch coupling.
 - **Quad layout corrected:** Speakers now at symmetric 90° spacing (±45°/±135°) instead of 30°/110°.
 - **Default preset selection:** Fresh instances start on "Default" preset by name (not alphabetical first).
+- **Full OSC control (Issue #32):** All parameters controllable via OSC using hybrid namespace. ADM-OSC `/adm/obj/N/` for position (standard interop). Custom `/osd/obj/N/` for per-tap params (enabled, doppler, pitch, trajectory, speed, direction, input) + position aliases. `/osd/global/` for all global params (delayTime, feedback, filters, dryWet, algorithm, etc.). Send broadcasts all changed values with change-gating. `handleOSCParam()` generic helper for APVTS parameter setting from denormalized OSC values.
+- **Dead code cleanup:** Removed unused `trajParam_elevation`/`trajParam_distance` member variables, unused `CMAKE_POLICY_VERSION_MINIMUM` CMake variable. Clarified discarded smoothing calls in binaural render path.
 
 ### Bug Fixes
 - **Issue #24 (7.1/7.1.4 rear speakers):** Investigated with diagnostic instrumentation — confirmed plugin computes correct gains. Root cause was Reaper project routing configuration. Closed.
@@ -652,7 +654,7 @@ Plugin identity: `Os10` (PLUGIN_CODE).
 ### Infrastructure
 - **22 output formats** — added SpatialMediaLab 13.1 (was 21 in v0.9)
 - **14-channel discrete bus** added to `isBusesLayoutSupported()` for SML 13.1 / 7.1.6
-- **94 Catch2 tests, 1110 assertions** — expanded surround output test suite with 8 new elevation/height isolation tests covering all height formats, all algorithms, elevation sweep monotonicity, and integration processBlock verification
+- **134 Catch2 tests, 1167 assertions** — expanded surround output test suite with 8 new elevation/height isolation tests + 40 new OSC receive tests covering ADM-OSC position, /osd/ aliases, per-object params, global params, and edge cases
 - **State migration v15→v16:** Handles outputFormat parameter shift for SML 13.1 insertion
 - **Diagnostic cleanup:** Removed all #24 diagnostic instrumentation from production code
 
