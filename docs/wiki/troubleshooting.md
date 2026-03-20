@@ -43,6 +43,7 @@ Common issues and their solutions. If your issue is not listed here, please [ope
 | Binaural sounds wrong | HRTF profile mismatch | Try different HRTF profiles -- spatial perception varies between individuals. Start with "Studio Reference" or "Immersive". |
 | Binaural localization poor | Listening on speakers, not headphones | Binaural output is designed exclusively for headphone monitoring. On speakers, it will sound phasey and unfocused. Use Stereo or Surround for speaker playback. |
 | Surround channels silent | Track channel count too low | Ensure your DAW track has enough output channels. A 7.1.4 format needs 12 channels. Check your DAW's track routing. |
+| SML 13.1 channels silent | Track not configured for 14 discrete channels | In Reaper, set track channel count to 14 via the routing dialog. SpatialMediaLab 13.1 requires 14 discrete channels (13 speakers + 1 LFE on channel 14). |
 | Algorithm dropdown disabled | Binaural or Ambisonics format selected | The algorithm selector is only active for Surround formats. Binaural uses HRTF convolution directly. Ambisonics uses spherical harmonic encoding. |
 | Taps appear to jump when trajectory starts | Normal behavior | When enabling a trajectory, the tap moves from its knob position to the first point on the trajectory path. The knob position becomes the origin. |
 

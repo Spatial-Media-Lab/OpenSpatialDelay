@@ -369,7 +369,7 @@ Frozen snapshot in `Archive/v0.6/`:
 - `CMakeLists_v0.6.txt`
 
 ### Output
-- 22 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
+- 21 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
 
 ---
 
@@ -426,7 +426,7 @@ Frozen snapshot in `Archive/v0.7/`:
 - `CMakeLists_v0.7.txt`
 
 ### Output
-- 22 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
+- 21 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
 
 ---
 
@@ -491,7 +491,7 @@ Frozen snapshot in `Archive/v0.8/`:
 - `CMakeLists_v0.8.txt`
 
 ### Output
-- 22 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
+- 21 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
 
 ## v0.9 (2026-03-19) — FROZEN
 **Trajectory System Rewrite + Preset Overhaul + WSOLA Per-Tap Pitch + SML Branding + 22 Issues Closed**
@@ -628,7 +628,7 @@ Active source in `Source/`:
 - `Tests/TrajectoryTests.cpp` (Catch2 test suite, 33 tests)
 
 ### Output
-- 22 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
+- 21 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
 
 ---
 
@@ -637,3 +637,35 @@ Active source in `Source/`:
 
 Starting point for real-world testing. Carries forward all v0.9 features.
 Plugin identity: `Os10` (PLUGIN_CODE).
+
+### New Features
+- **SpatialMediaLab 13.1 output format:** Custom 13-speaker room layout (8 ear-level + 4 height + 1 zenith + LFE). Derived from IEM AllRADecoder config. 14-channel discrete bus support added.
+- **Wobble modulation reverted to v0.8 design:** Single-oscillator with morphable waveform (sine→triangle→rounded square→irregular). LFO rate tied to delay time for natural pitch coupling.
+- **Quad layout corrected:** Speakers now at symmetric 90° spacing (±45°/±135°) instead of 30°/110°.
+- **Default preset selection:** Fresh instances start on "Default" preset by name (not alphabetical first).
+
+### Bug Fixes
+- **Issue #24 (7.1/7.1.4 rear speakers):** Investigated with diagnostic instrumentation — confirmed plugin computes correct gains. Root cause was Reaper project routing configuration. Closed.
+- **Height speaker elevation routing guard:** Added defensive guard preventing 2D VBAP fallback on 3D layouts with height speakers. If VBAP triplets are ever empty at runtime on a height layout, uses 3D nearest-speaker fallback instead of 2D azimuth-only panning (which would incorrectly route signal to height speakers). Guards applied to VBAP, VBIP, and MDAP (4 dispatch points). Diagnostic `jassert` in `activateLayout()` catches height layouts with empty triplets in debug builds. Issue #23 (SML 13.1) closed.
+- **Global pitch zeroed in 9 presets:** Removed stale non-zero pitchShift values from factory presets.
+
+### Infrastructure
+- **22 output formats** — added SpatialMediaLab 13.1 (was 21 in v0.9)
+- **14-channel discrete bus** added to `isBusesLayoutSupported()` for SML 13.1 / 7.1.6
+- **94 Catch2 tests, 1110 assertions** — expanded surround output test suite with 8 new elevation/height isolation tests covering all height formats, all algorithms, elevation sweep monotonicity, and integration processBlock verification
+- **State migration v15→v16:** Handles outputFormat parameter shift for SML 13.1 insertion
+- **Diagnostic cleanup:** Removed all #24 diagnostic instrumentation from production code
+
+### Files
+Active source in `Source/`:
+- `PluginProcessor.h` (~33 KB)
+- `PluginProcessor.cpp` (~175 KB)
+- `PluginEditor.h` (~14 KB)
+- `PluginEditor.cpp` (~45 KB)
+- `PresetData.h` (shared preset struct, ~2 KB)
+- `PresetData.cpp` (60 factory presets, serialization, install function, ~40 KB)
+- `Tests/TrajectoryTests.cpp` (Catch2 trajectory tests)
+- `Tests/SurroundOutputTests.cpp` (Catch2 surround output tests)
+
+### Output
+- 22 output formats (1 binaural + 1 stereo + 14 surround + 6 Ambisonics)

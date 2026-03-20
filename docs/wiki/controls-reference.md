@@ -16,7 +16,7 @@ The header bar spans the top of the plugin and contains navigation, routing, and
 | Prev/Next Arrows | Buttons | Step through presets sequentially. |
 | Save | Button | Opens the preset save overlay to save the current settings. |
 | OSC RECV | Toggle | Enables ADM-OSC receive. See [ADM-OSC Integration](adm-osc.md). |
-| Output Format | Dropdown | Selects one of 21 output formats. See [Output Formats](output-formats.md). |
+| Output Format | Dropdown | Selects one of 22 output formats. See [Output Formats](output-formats.md). |
 | Algorithm / HRTF Profile | Dropdown | Context-dependent: shows spatialization algorithm for surround formats, HRTF profile for Binaural, stereo mode for Stereo. Hidden when not applicable. |
 | SML Badge | Button | Links to spatialmedialab.org. |
 

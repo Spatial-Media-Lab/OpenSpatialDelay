@@ -36,7 +36,7 @@ The current manual (`docs/OpenSpatialDelay_Manual_v1.0.docx/pdf`) was drafted du
 | Section | Status |
 |---------|--------|
 | HRTF Profiles (6) | Unchanged |
-| Output Formats (21) | Unchanged |
+| Output Formats (22) | Updated -- added SML 13.1, removed phantom 7.0.4, added missing 5.1.4 |
 | ADM-OSC Receive/Send | Unchanged |
 | Spatialization Algorithms (7) | Unchanged |
 | Keyboard Shortcuts | Unchanged |

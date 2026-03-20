@@ -109,6 +109,9 @@ A network protocol for real-time communication of multimedia parameters. Uses UD
 **Resonance (Q)**
 A parameter of a filter that controls the sharpness of the response at the cutoff frequency. Low Q (0.5-0.71) = smooth rolloff. High Q (2.0-8.0) = a peak at the cutoff, creating a ringing or whistling quality. Q of 0.707 is the Butterworth (maximally flat) response.
 
+**SpatialMediaLab 13.1**
+A custom 13-speaker room layout designed by Spatial Media Lab, featuring 8 ear-level speakers, 4 height speakers, 1 zenith speaker, and an LFE channel (14 total discrete channels). Derived from the IEM AllRADecoder configuration. Supported as a discrete surround output format in OpenSpatialDelay.
+
 **SN3D (Schmidt Semi-Normalized)**
 A normalization scheme for spherical harmonics used in the AmbiX Ambisonics convention. SN3D ensures that all harmonic components have similar energy levels regardless of order. OpenSpatialDelay uses SN3D in its Ambisonics output.
 

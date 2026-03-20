@@ -9,7 +9,7 @@ OpenSpatialDelay is the first plugin in the **Spatial Media Library**, an open-s
 ## Key Features
 
 - **12 independent delay taps** positioned anywhere in 3D space
-- **21 output formats** -- Binaural, Stereo, Surround (Quad through 9.1.6), and Ambisonics (1st through 6th order)
+- **22 output formats** -- Binaural, Stereo, Surround (Quad through 9.1.6), and Ambisonics (1st through 6th order)
 - **6 HRTF profiles** from measured SOFA files for realistic headphone spatialization
 - **7 spatialization algorithms** for surround rendering (VBAP, VBIP, MDAP, KNN, DBAP, Ambisonics, Direct Binaural)
 - **13 trajectory shapes** per tap for automated spatial movement
@@ -32,7 +32,7 @@ OpenSpatialDelay is the first plugin in the **Spatial Media Library**, an open-s
 |------|-------------|
 | [Getting Started](getting-started.md) | Installation, loading in your DAW, first sound in 2 minutes |
 | [Spatial Map](spatial-map.md) | The spatial map visualization and interaction |
-| [Output Formats](output-formats.md) | All 21 output formats, rendering paths, and algorithm selection |
+| [Output Formats](output-formats.md) | All 22 output formats, rendering paths, and algorithm selection |
 | [Controls Reference](controls-reference.md) | Complete parameter reference organized by UI section |
 | [Trajectories](trajectories.md) | All 13 trajectory shapes, speed, direction, and visualization |
 | [Presets](presets.md) | Factory presets, saving, loading, and file format |
