@@ -308,7 +308,8 @@ public:
     /** Prepare the convolver for a given max block size and IR length. */
     void prepare (int maxBlockSize, int irLength);
 
-    /** Set or update the impulse response. Pre-computes FFT of IR. */
+    /** Set or update the impulse response. Pre-computes FFT of IR.
+        v1.0: On IR change, enables one-block crossfade from old to new IR. */
     void setIR (const float* ir, int length);
 
     /** Process one block: convolve input with IR, write to output.
@@ -332,6 +333,14 @@ private:
     std::vector<float> fftWorkBuf;       // FFT work buffer
     std::vector<float> overlapBuf;       // Overlap-save tail buffer
     int inputAccumPos = 0;               // Current position in input accumulator
+
+    // v1.0: Dual-convolver crossfade — when IR changes, old IR runs one more
+    // block while new IR ramps in, producing a smooth transition with no
+    // phase discontinuity clicks or amplitude dropout.
+    std::vector<float> prevIrFreqDomain; // Previous IR in frequency domain
+    std::vector<float> prevFftWorkBuf;   // Work buffer for old IR convolution
+    std::vector<float> prevOverlapBuf;   // Overlap tail from old IR
+    int crossfadeRemaining = 0;          // Samples remaining in crossfade (0 = inactive)
 };
 
 //==============================================================================
@@ -425,8 +434,8 @@ public:
         return 6;
     }
 
-    // v0.5: Output formats — Binaural first, then Stereo, Surround, Ambisonics
-    // 1 Binaural + 1 Stereo + 13 Surround + 6 Ambisonics = 21 total
+    // Output formats — Binaural, Stereo, Surround, Octaphonic, Atmos, SML, Ambisonics
+    // 1 Binaural + 1 Stereo + 14 Surround + 6 Ambisonics = 22 total
     // Stereo mode (Equal Power, VBAP, XY, MS, Blumlein) selected via algorithm parameter
     enum class OutputFormat {
         // Binaural (HRTF head model) — default
@@ -434,10 +443,12 @@ public:
         // Stereo (mode selected by algorithm param indices 6-10)
         Stereo,
         // Surround (ascending channel count)
-        Quad, Surround5_0, Surround5_1, Surround7_0,
-        Surround5_1_2, Surround7_1, Octaphonic,
-        Surround5_1_4, Surround7_1_2,
-        Surround7_1_4, Surround7_1_6, Surround9_1_6,
+        Quad, Surround5_0, Surround5_1, Surround7_0, Surround7_1,
+        // Octaphonic
+        Octaphonic,
+        // Atmos / Immersive (ascending channel count)
+        Surround5_1_2, Surround5_1_4, Surround7_1_2,
+        Surround7_1_4, Surround7_1_6, Surround9_1_4, Surround9_1_6,
         SurroundSML13_1,  // SML Multi-Use Room (13 speakers + LFE)
         // Ambisonics output (AmbiX ACN/SN3D)
         AmbisonicsFOA, AmbisonicsSOA, AmbisonicsHOA,
@@ -458,7 +469,7 @@ public:
         int  ambiOrder;             // 0 for non-ambi, 1-6 for Ambisonics output
         bool isStereoVariant;       // true for Stereo (single entry, mode via algorithm param)
     };
-    static constexpr int NUM_OUTPUT_FORMATS = 21;
+    static constexpr int NUM_OUTPUT_FORMATS = 22;
     static const std::array<OutputFormatInfo, NUM_OUTPUT_FORMATS> outputFormatRegistry;
 
     // Double-buffered layout state for lock-free audio thread reads
@@ -534,6 +545,15 @@ public:
     // v0.6: OSC port configuration (editable from editor)
     int getOscReceivePort() const { return oscReceivePort; }
     void setOscReceivePort (int port);
+
+    // v1.0: Global tap drawer state (persisted for editor)
+    bool getGlobalDrawerOpen() const { return globalDrawerOpen; }
+    void setGlobalDrawerOpen (bool open) { globalDrawerOpen = open; }
+
+    // v1.0: Global tap offset values (for OSC ↔ editor sync)
+    static constexpr int kNumGlobalTapOffsets = 6;
+    std::atomic<float> globalTapOffset[kNumGlobalTapOffsets] = {};  // AZ, EL, DIST, DOPPLER, PITCH, SPEED
+    std::atomic<bool>  globalTapOffsetChanged { false };
 
     // v0.7: OSC Send accessors for editor
     bool isOscSendConnected() const { return oscSendConnected; }
@@ -670,6 +690,7 @@ private:
 
     juce::OSCReceiver oscReceiver;
     int  oscReceivePort = 4002;                         // Default ADM-OSC receive port
+    bool globalDrawerOpen = false;                      // v1.0: global tap drawer visibility
     bool oscConnected = false;                          // Current connection state
     bool prevAdmOscEnabled = false;                     // Edge-detect for enable/disable transitions
     std::atomic<float>* cachedParam_admOscEnabled = nullptr;
@@ -703,6 +724,8 @@ private:
         float filterEnabled = -1.0f, algorithm = -1.0f, hrtfProfile = -1.0f;
         float outputFormat = -1.0f, airAbsorption = -1.0f;
         float wobbleEnabled = -1.0f, wobbleAmount = -1.0f, wobbleMorph = -1.0f;
+        float tapAzimuth = -999.0f, tapElevation = -999.0f, tapDistance = -999.0f;
+        float tapDoppler = -999.0f, tapPitch = -999.0f, tapSpeed = -999.0f;
     };
     OscSendPrevGlobal oscSendPrevGlobal;
 
@@ -882,6 +905,7 @@ private:
     // v0.4: Air absorption — global toggle, per-object LP filter driven by distance
     juce::dsp::IIR::Filter<float> airAbsorptionFilter[MAX_OBJECTS];
     juce::dsp::IIR::Coefficients<float> airTransparentCoeffs; // v1.0: pre-computed 20kHz LP (avoids heap alloc in processBlock)
+    float smoothedAirCutoff[MAX_OBJECTS] = {};  // v1.0: smoothed air absorption cutoff to prevent IIR coefficient transients
     bool airAbsorptionActive = false;       // v0.9: block-rate true bypass (set in processBlock)
     bool prevAirAbsorptionActive = false;   // v0.9: edge detection for AIR toggle state changes
 
@@ -935,6 +959,14 @@ private:
     float cachedFilterLPQ = -1.0f;
     bool  filterBypassed = true;   // v0.9: true when filterEnabled param is OFF (default)
 
+    // v1.0: Previous-block gains for per-sample interpolation (prevent clicks on rapid position changes)
+    float prevStereoGainL[MAX_OBJECTS] = {};
+    float prevStereoGainR[MAX_OBJECTS] = {};
+    BinauralGains prevBinauralGains[MAX_OBJECTS] = {};
+    float prevChannelGains[MAX_OBJECTS][16] = {};
+    float prevSHCoeffs[MAX_OBJECTS][MAX_AMBI_CHANNELS] = {};
+    float prevDistGain[MAX_OBJECTS] = {};
+
     // v0.4: Doppler effect — per-object checkbox, global amount, velocity tracking
     float prevAzimuth[MAX_OBJECTS]   = {};   // radians, previous block
     float prevElevation[MAX_OBJECTS] = {};   // radians, previous block
@@ -948,9 +980,9 @@ private:
 
     //--- v0.9: Preset system (private) — file-based, all presets on disk ------
     int currentPresetIndex = 0;
-    std::vector<PresetData> allPresets;  // v0.9: all presets (factory + user) loaded from disk
+    std::vector<PresetData> allPresets;  // v1.0: factory from compiled array + user from disk
     std::vector<int> categorizedOrder;   // v0.9: maps sequential position → index into allPresets
-    void loadAllPresetsFromDisk();       // v0.9: scan all .osdpreset + .json files from preset dir
+    void loadAllPresets();               // v1.0: load factory from compiled-in array + user from disk
     void rebuildCategorizedOrder();
     PresetData captureCurrentState() const;
     // serializePresetToJson() and parsePresetJson() are now free functions in PresetData.h
