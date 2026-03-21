@@ -55,13 +55,16 @@ const std::array<OpenSpatialDelayProcessor::OutputFormatInfo,
     { OutputFormat::Surround5_0,    "5.0 Surround",     "5.0",    5, false, false, false, 0, false },
     { OutputFormat::Surround5_1,    "5.1 Surround",     "5.1",    6, true,  false, false, 0, false },
     { OutputFormat::Surround7_0,    "7.0 Surround",     "7.0",    7, false, false, false, 0, false },
-    { OutputFormat::Surround5_1_2,  "5.1.2 Atmos",      "5.1.2",  8, true,  true,  false, 0, false },
     { OutputFormat::Surround7_1,    "7.1 Surround",     "7.1",    8, true,  false, false, 0, false },
+    // --- Octaphonic ---
     { OutputFormat::Octaphonic,     "Octaphonic",       "Oct",    8, false, false, false, 0, false },
+    // --- Atmos / Immersive (ascending channel count) ---
+    { OutputFormat::Surround5_1_2,  "5.1.2 Atmos",      "5.1.2",  8, true,  true,  false, 0, false },
     { OutputFormat::Surround5_1_4,  "5.1.4 Atmos",      "5.1.4", 10, true,  true,  false, 0, false },
     { OutputFormat::Surround7_1_2,  "7.1.2 Atmos",      "7.1.2", 10, true,  true,  false, 0, false },
     { OutputFormat::Surround7_1_4,  "7.1.4 Atmos",      "7.1.4", 12, true,  true,  false, 0, false },
     { OutputFormat::Surround7_1_6,  "7.1.6 Atmos",      "7.1.6", 14, true,  true,  false, 0, false },
+    { OutputFormat::Surround9_1_4,  "9.1.4 Atmos",      "9.1.4", 14, true,  true,  false, 0, false },
     { OutputFormat::Surround9_1_6,  "9.1.6 Atmos",      "9.1.6", 16, true,  true,  false, 0, false },
     // --- SML (Spatial Media Lab custom room) ---
     { OutputFormat::SurroundSML13_1,"SpatialMediaLab 13.1", "SML", 14, true,  true,  false, 0, false },
@@ -120,7 +123,7 @@ const std::array<VirtualSpeaker, OpenSpatialDelayProcessor::NUM_VIRTUAL_SPEAKERS
 struct SpeakerDef { float azDeg; float elDeg; int chIdx; };
 struct LayoutDef { int numSpeakers; int lfeIdx; int totalChs; SpeakerDef speakers[16]; };
 
-enum LayoutID { Quad, S5_0, S5_1, S7_0, S7_1, S5_1_2, S5_1_4, S7_1_2, S7_1_4, S7_1_6, S9_1_6, Octaphonic, SML13_1, NUM_LAYOUT_DEFS };
+enum LayoutID { Quad, S5_0, S5_1, S7_0, S7_1, S5_1_2, S5_1_4, S7_1_2, S7_1_4, S7_1_6, S9_1_4, S9_1_6, Octaphonic, SML13_1, NUM_LAYOUT_DEFS };
 
 static const LayoutDef layoutDefs[NUM_LAYOUT_DEFS] = {
     // Quad (4.0) — symmetric 90° spacing
@@ -143,6 +146,8 @@ static const LayoutDef layoutDefs[NUM_LAYOUT_DEFS] = {
     { 11, 3, 12, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,4}, {-90,0,5}, { 135,0,6}, {-135,0,7}, { 45,45,8}, {-45,45,9}, { 135,45,10}, {-135,45,11}} },
     // 7.1.6 (LFE=ch3)
     { 13, 3, 14, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,4}, {-90,0,5}, { 135,0,6}, {-135,0,7}, { 45,45,8}, {-45,45,9}, { 135,45,10}, {-135,45,11}, { 90,45,12}, {-90,45,13}} },
+    // 9.1.4 (LFE=ch3)
+    { 13, 3, 14, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,4}, {-90,0,5}, { 135,0,6}, {-135,0,7}, { 60,0,8}, {-60,0,9}, { 45,45,10}, {-45,45,11}, { 135,45,12}, {-135,45,13}} },
     // 9.1.6 (LFE=ch3)
     { 15, 3, 16, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,4}, {-90,0,5}, { 135,0,6}, {-135,0,7}, { 60,0,8}, {-60,0,9}, { 45,45,10}, {-45,45,11}, { 90,45,12}, {-90,45,13}, { 135,45,14}, {-135,45,15}} },
     // Octaphonic (8.0, no LFE) — "Center" configuration, 45° intervals
@@ -543,12 +548,26 @@ void PartitionedConvolver::prepare (int maxBlockSize, int irLength_)
     fftWorkBuf.resize (static_cast<size_t> (fftSize * 2), 0.0f);
     overlapBuf.resize (static_cast<size_t> (fftSize), 0.0f);
 
+    // v1.0: Dual-convolver crossfade buffers
+    prevIrFreqDomain.resize (static_cast<size_t> (fftSize * 2), 0.0f);
+    prevFftWorkBuf.resize (static_cast<size_t> (fftSize * 2), 0.0f);
+    prevOverlapBuf.resize (static_cast<size_t> (fftSize), 0.0f);
+
     reset();
 }
 
 void PartitionedConvolver::setIR (const float* ir, int length)
 {
     if (fftSize == 0) return;
+
+    // v1.0: Save current IR + overlap as "previous" for crossfade
+    // Only crossfade if we already have a valid IR loaded (irLen > 0)
+    if (irLen > 0)
+    {
+        std::copy (irFreqDomain.begin(), irFreqDomain.end(), prevIrFreqDomain.begin());
+        std::copy (overlapBuf.begin(), overlapBuf.end(), prevOverlapBuf.begin());
+        crossfadeRemaining = blockSize;
+    }
 
     // Zero-pad IR to fftSize and compute FFT
     std::fill (irFreqDomain.begin(), irFreqDomain.end(), 0.0f);
@@ -557,6 +576,12 @@ void PartitionedConvolver::setIR (const float* ir, int length)
 
     fft.performRealOnlyForwardTransform (irFreqDomain.data(), true);
     irLen = length;
+
+    // v1.0: Do NOT clear overlapBuf here — the crossfade handles the transition.
+    // The old overlap is shared between old and new outputs during crossfade,
+    // providing energy continuity. Clearing it would cause the new output to
+    // start "cold" (missing tail energy), creating an audible dip at the
+    // crossfade endpoint.
 }
 
 void PartitionedConvolver::process (const float* in, float* out, int numSamples)
@@ -599,8 +624,23 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
             // Forward FFT of input
             fft.performRealOnlyForwardTransform (fftWorkBuf.data(), true);
 
-            // Complex multiply with pre-computed IR spectrum
-            // juce::dsp::FFT stores as [re, im, re, im, ...]
+            // v1.0: If crossfading, also convolve with previous IR
+            bool doCrossfade = (crossfadeRemaining > 0);
+            if (doCrossfade)
+            {
+                // Convolve same input with OLD IR into prevFftWorkBuf
+                std::copy (fftWorkBuf.begin(), fftWorkBuf.end(), prevFftWorkBuf.begin());
+                for (int i = 0; i < fftSize * 2; i += 2)
+                {
+                    float re1 = prevFftWorkBuf[static_cast<size_t> (i)],     im1 = prevFftWorkBuf[static_cast<size_t> (i + 1)];
+                    float re2 = prevIrFreqDomain[static_cast<size_t> (i)],   im2 = prevIrFreqDomain[static_cast<size_t> (i + 1)];
+                    prevFftWorkBuf[static_cast<size_t> (i)]     = re1 * re2 - im1 * im2;
+                    prevFftWorkBuf[static_cast<size_t> (i + 1)] = re1 * im2 + im1 * re2;
+                }
+                fft.performRealOnlyInverseTransform (prevFftWorkBuf.data());
+            }
+
+            // Complex multiply with NEW IR spectrum
             for (int i = 0; i < fftSize * 2; i += 2)
             {
                 float re1 = fftWorkBuf[static_cast<size_t> (i)],     im1 = fftWorkBuf[static_cast<size_t> (i + 1)];
@@ -616,10 +656,39 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
             int outStart = samplesProcessed - blockSize;  // Where in the output buffer to write
             int outSamples = std::min (blockSize, numSamples - outStart);
 
-            for (int i = 0; i < outSamples; ++i)
+            if (doCrossfade)
             {
-                out[outStart + i] = fftWorkBuf[static_cast<size_t> (i)]
-                                  + overlapBuf[static_cast<size_t> (i)];
+                // v1.0: Crossfade between old IR output and new IR output
+                float invFade = 1.0f / static_cast<float> (crossfadeRemaining);
+                for (int i = 0; i < outSamples; ++i)
+                {
+                    float fadeNew = static_cast<float> (i + (blockSize - crossfadeRemaining)) * invFade;
+                    fadeNew = std::min (fadeNew, 1.0f);
+                    float fadeOld = 1.0f - fadeNew;
+
+                    float newOut = fftWorkBuf[static_cast<size_t> (i)]
+                                 + overlapBuf[static_cast<size_t> (i)];
+                    float oldOut = prevFftWorkBuf[static_cast<size_t> (i)]
+                                 + prevOverlapBuf[static_cast<size_t> (i)];
+                    out[outStart + i] = oldOut * fadeOld + newOut * fadeNew;
+                }
+
+                // Save old overlap for potential continued crossfade
+                int overlapLen = fftSize - blockSize;
+                for (int i = 0; i < overlapLen; ++i)
+                    prevOverlapBuf[static_cast<size_t> (i)] = prevFftWorkBuf[static_cast<size_t> (blockSize + i)];
+                for (int i = overlapLen; i < fftSize; ++i)
+                    prevOverlapBuf[static_cast<size_t> (i)] = 0.0f;
+
+                crossfadeRemaining = 0;  // Crossfade completes in one block
+            }
+            else
+            {
+                for (int i = 0; i < outSamples; ++i)
+                {
+                    out[outStart + i] = fftWorkBuf[static_cast<size_t> (i)]
+                                      + overlapBuf[static_cast<size_t> (i)];
+                }
             }
 
             // Save overlap: samples [blockSize .. fftSize-1] for next block
@@ -641,6 +710,9 @@ void PartitionedConvolver::reset()
     std::fill (inputAccum.begin(), inputAccum.end(), 0.0f);
     std::fill (overlapBuf.begin(), overlapBuf.end(), 0.0f);
     std::fill (fftWorkBuf.begin(), fftWorkBuf.end(), 0.0f);
+    std::fill (prevOverlapBuf.begin(), prevOverlapBuf.end(), 0.0f);
+    std::fill (prevFftWorkBuf.begin(), prevFftWorkBuf.end(), 0.0f);
+    crossfadeRemaining = 0;
     inputAccumPos = 0;
 }
 
@@ -1192,6 +1264,14 @@ void OpenSpatialDelayProcessor::timerCallback()
                     oscSender.send (m);
                 }
             }
+
+            // v1.0: Global tap offset knobs (UI-only, change-gated)
+            static const char* tapOffsetProps[] = { "tapazimuth", "tapelevation", "tapdistance",
+                                                    "tapdoppler", "tappitch",     "tapspeed" };
+            float* tapOffsetPrevs[] = { &pg.tapAzimuth, &pg.tapElevation, &pg.tapDistance,
+                                        &pg.tapDoppler, &pg.tapPitch,     &pg.tapSpeed };
+            for (int i = 0; i < kNumGlobalTapOffsets; ++i)
+                sendGlobal (tapOffsetProps[i], globalTapOffset[i].load (std::memory_order_relaxed), *tapOffsetPrevs[i]);
         }
     }
 
@@ -1279,15 +1359,15 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
                     trajParam_azimuth[i]->convertTo0to1 (initAz[i]));
     }
 
-    // v0.9: Load presets from disk (factory presets installed at build time by install_presets tool)
-    loadAllPresetsFromDisk();
+    // v1.0: Load factory presets from compiled-in array + user presets from disk
+    loadAllPresets();
 
-    // v1.0: Default preset selection — find "Default" by name so fresh instances
+    // v1.0: Default preset selection — find "Quad Ping-Pong" by name so fresh instances
     // start on it regardless of alphabetical category ordering.
     // State restoration (setStateInformation) overwrites this for saved sessions.
     for (int i = 0; i < static_cast<int> (allPresets.size()); ++i)
     {
-        if (allPresets[static_cast<size_t> (i)].name == "Default")
+        if (allPresets[static_cast<size_t> (i)].name == "Quad Ping-Pong")
         {
             currentPresetIndex = i;
             break;
@@ -1564,7 +1644,7 @@ void OpenSpatialDelayProcessor::saveUserPreset (const juce::String& name, const 
     file.replaceWithText (json);
 
     // Refresh all presets and update index
-    loadAllPresetsFromDisk();
+    loadAllPresets();
     for (int i = 0; i < static_cast<int> (allPresets.size()); ++i)
     {
         if (allPresets[static_cast<size_t> (i)].name == name
@@ -1576,44 +1656,25 @@ void OpenSpatialDelayProcessor::saveUserPreset (const juce::String& name, const 
     }
 }
 
-void OpenSpatialDelayProcessor::loadAllPresetsFromDisk()
+void OpenSpatialDelayProcessor::loadAllPresets()
 {
     allPresets.clear();
 
-    auto dir = getPresetDirectory();
-    if (! dir.isDirectory())
-        return;
-
-    // v0.9: Ensure User subfolder exists for user preset storage (Issue #2)
-    dir.getChildFile ("User").createDirectory();
-
-    // Pass 1: Root-level files (legacy .json presets)
-    auto rootFiles = dir.findChildFiles (juce::File::findFiles, false, "*.json");
-    rootFiles.sort();
-    for (const auto& file : rootFiles)
+    // v1.0: Load factory presets from compiled-in array (no disk I/O)
+    for (int i = 0; i < NUM_FACTORY_PRESETS; ++i)
     {
-        auto json = file.loadFileAsString();
-        if (json.isNotEmpty())
-        {
-            auto pd = parsePresetJson (json);
-            if (pd.name.isEmpty())
-                pd.name = file.getFileNameWithoutExtension();
-            if (pd.category.isEmpty())
-                pd.category = "User";
-            allPresets.push_back (pd);
-        }
+        PresetData pd = factoryPresets[i];
+        pd.isFactory = true;
+        allPresets.push_back (pd);
     }
 
-    // Pass 2: Category subfolders — scan .osdpreset and .json
-    auto subdirs = dir.findChildFiles (juce::File::findDirectories, false);
-    subdirs.sort();
-    for (const auto& subdir : subdirs)
+    // Load user presets from disk (User/ folder + subfolders as subcategories)
+    auto userDir = getPresetDirectory().getChildFile ("User");
+    if (userDir.isDirectory())
     {
-        juce::String categoryName = subdir.getFileName();
-
-        // Scan both .osdpreset and .json
-        auto files = subdir.findChildFiles (juce::File::findFiles, false, "*.osdpreset");
-        auto jsonFiles = subdir.findChildFiles (juce::File::findFiles, false, "*.json");
+        // Root-level user presets → category "User"
+        auto files = userDir.findChildFiles (juce::File::findFiles, false, "*.osdpreset");
+        auto jsonFiles = userDir.findChildFiles (juce::File::findFiles, false, "*.json");
         files.addArray (jsonFiles);
         files.sort();
 
@@ -1625,8 +1686,35 @@ void OpenSpatialDelayProcessor::loadAllPresetsFromDisk()
                 auto pd = parsePresetJson (json);
                 if (pd.name.isEmpty())
                     pd.name = file.getFileNameWithoutExtension();
-                pd.category = categoryName;  // folder name = category
+                pd.category = "User";
+                pd.isFactory = false;
                 allPresets.push_back (pd);
+            }
+        }
+
+        // User subfolders → category "User / SubfolderName"
+        auto subdirs = userDir.findChildFiles (juce::File::findDirectories, false);
+        subdirs.sort();
+        for (const auto& subdir : subdirs)
+        {
+            juce::String subCat = "User / " + subdir.getFileName();
+            auto subFiles = subdir.findChildFiles (juce::File::findFiles, false, "*.osdpreset");
+            auto subJsonFiles = subdir.findChildFiles (juce::File::findFiles, false, "*.json");
+            subFiles.addArray (subJsonFiles);
+            subFiles.sort();
+
+            for (const auto& file : subFiles)
+            {
+                auto json = file.loadFileAsString();
+                if (json.isNotEmpty())
+                {
+                    auto pd = parsePresetJson (json);
+                    if (pd.name.isEmpty())
+                        pd.name = file.getFileNameWithoutExtension();
+                    pd.category = subCat;
+                    pd.isFactory = false;
+                    allPresets.push_back (pd);
+                }
             }
         }
     }
@@ -1951,6 +2039,7 @@ void OpenSpatialDelayProcessor::activateLayout (OutputFormat format)
         case OutputFormat::Surround7_1_2: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S7_1_2]);     break;
         case OutputFormat::Surround7_1_4: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S7_1_4]);     break;
         case OutputFormat::Surround7_1_6: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S7_1_6]);     break;
+        case OutputFormat::Surround9_1_4: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S9_1_4]);     break;
         case OutputFormat::Surround9_1_6: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S9_1_6]);     break;
         case OutputFormat::SurroundSML13_1: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::SML13_1]); break;
         case OutputFormat::Octaphonic:    buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::Octaphonic]); break;
@@ -2171,6 +2260,7 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
         airAbsorptionFilter[i].prepare (spec);
         airAbsorptionFilter[i].reset();
         *airAbsorptionFilter[i].coefficients = airTransparentCoeffs;
+        smoothedAirCutoff[i] = 20000.0f;
     }
 
     // v0.5: Prepare NFC-HOA filters (per-object, per-SH-order, Ambisonics output only)
@@ -3768,6 +3858,10 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                     float distToEarPrev = std::sqrt (dxP * dxP + py * py + pz * pz);
                     float rawRadialVelocity = (distToEarCur - distToEarPrev) / blockDuration;
 
+                    // v1.0: Clamp velocity to prevent extreme pitch transients from rapid azimuth sweeps
+                    // 50 m/s produces ~1.7 semitones of Doppler — more than enough for creative effect
+                    rawRadialVelocity = juce::jlimit (-50.0f, 50.0f, rawRadialVelocity);
+
                     // Exponential moving average smoothing to avoid clicks
                     smoothedRadialVelocity[t] = emaAlpha * rawRadialVelocity
                                               + (1.0f - emaAlpha) * smoothedRadialVelocity[t];
@@ -3831,10 +3925,17 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                 // dist² compresses the near range and expands the far range perceptually.
                 float mappedDist = dist * dist;
                 constexpr float absorbCoeff = 3.1f;
-                float cutoff = 20000.0f * std::exp (-absorbCoeff * mappedDist);
-                cutoff = juce::jlimit (500.0f, 20000.0f, cutoff);
+                float targetCutoff = 20000.0f * std::exp (-absorbCoeff * mappedDist);
+                targetCutoff = juce::jlimit (500.0f, 20000.0f, targetCutoff);
+
+                // v1.0: EMA-smooth the cutoff to prevent IIR coefficient transients
+                // on rapid distance changes. Alpha 0.3 ≈ 3-block settling time.
+                constexpr float airSmoothAlpha = 0.3f;
+                smoothedAirCutoff[t] = smoothedAirCutoff[t]
+                                     + airSmoothAlpha * (targetCutoff - smoothedAirCutoff[t]);
+
                 *airAbsorptionFilter[t].coefficients =
-                    *juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, cutoff);
+                    *juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, smoothedAirCutoff[t]);
             }
         }
     }
@@ -3976,9 +4077,14 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
     float dwStart      = smoothedDryWet.getCurrentValue();
     float outGainStart = smoothedOutputGain.getCurrentValue();
 
+    // v1.0: Per-sample distGain interpolation to prevent clicks on rapid position changes
+    float hrtfInvN = (numSamples > 1) ? 1.0f / static_cast<float> (numSamples - 1) : 1.0f;
+
     // === PASS 1: Per-sample delay engine → per-source accumulation ===
     for (int s = 0; s < numSamples; ++s)
     {
+        float frac = static_cast<float> (s) * hrtfInvN;
+
         float currentDelayMs = smoothedDelayTime.getNextValue();
         float baseDelaySamples = currentDelayMs * blockMsToSamples;
         baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);
@@ -3998,16 +4104,21 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
         writeDelayLine (delayInputL, delayInputR);
         // rawInput not needed here — PASS 3 reads monoInputBuffer directly
 
-        // STAGE 2: READ & ACCUMULATE (per-source mono × distance gain)
+        // STAGE 2: READ & ACCUMULATE (per-source mono × interpolated distance gain)
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
             if (! objects[t].enabled) continue;
-            sourceAccumBufPtrs[t][s] = readObjectSample (t, baseDelaySamples) * objDistGain[t];
+            float dist = prevDistGain[t] + frac * (objDistGain[t] - prevDistGain[t]);
+            sourceAccumBufPtrs[t][s] = readObjectSample (t, baseDelaySamples) * dist;
         }
 
         // STAGE 3: FEEDBACK (mono, pre-spatial)
         processFeedbackSample (currentLoopMult, baseDelaySamples, fb);
     }
+
+    // Store current distGain as previous for next block
+    for (int t = 0; t < MAX_OBJECTS; ++t)
+        prevDistGain[t] = objDistGain[t];
 
     // === PASS 2: Per-block per-source HRTF convolution → wet L/R ===
     bool sourceEnabled[MAX_OBJECTS];
@@ -4055,8 +4166,13 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
     auto* outL = buffer.getWritePointer (0);
     auto* outR = buffer.getWritePointer (1);
 
+    // v1.0: Per-sample gain interpolation to prevent clicks on rapid position changes
+    float invN = (numSamples > 1) ? 1.0f / static_cast<float> (numSamples - 1) : 1.0f;
+
     for (int s = 0; s < numSamples; ++s)
     {
+        float frac = static_cast<float> (s) * invN;
+
         float currentDelayMs = smoothedDelayTime.getNextValue();
         float baseDelaySamples = currentDelayMs * blockMsToSamples;
         baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);
@@ -4083,9 +4199,11 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
             if (! objects[t].enabled) continue;
             float objMono = readObjectSample (t, baseDelaySamples);
 
-            // Woodworth binaural gains (pre-computed at block start)
-            wetL += objMono * objGains[t].leftGain;
-            wetR += objMono * objGains[t].rightGain;
+            // Interpolate between previous and current block gains
+            float gL = prevBinauralGains[t].leftGain  + frac * (objGains[t].leftGain  - prevBinauralGains[t].leftGain);
+            float gR = prevBinauralGains[t].rightGain + frac * (objGains[t].rightGain - prevBinauralGains[t].rightGain);
+            wetL += objMono * gL;
+            wetR += objMono * gR;
         }
 
         // === STAGE 3: FEEDBACK ===
@@ -4095,6 +4213,10 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
         outL[s] = outputLimiter ((rawInput * (1.0f - dw) + wetL * dw) * outGain);
         outR[s] = outputLimiter ((rawInput * (1.0f - dw) + wetR * dw) * outGain);
     }
+
+    // Store current gains as previous for next block
+    for (int t = 0; t < MAX_OBJECTS; ++t)
+        prevBinauralGains[t] = objGains[t];
 
     // Zero remaining channels when binaural is selected on a multi-channel bus
     for (int ch = 2; ch < buffer.getNumChannels(); ++ch)
@@ -4176,9 +4298,14 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
         }
     }
 
+    // v1.0: Per-sample gain interpolation to prevent clicks on rapid position changes
+    float invN = (numSamples > 1) ? 1.0f / static_cast<float> (numSamples - 1) : 1.0f;
+
     // Per-sample processing (same engine as Woodworth, with stereo gains instead of binaural)
     for (int s = 0; s < numSamples; ++s)
     {
+        float frac = static_cast<float> (s) * invN;
+
         float currentDelayMs = smoothedDelayTime.getNextValue();
         float baseDelaySamples = currentDelayMs * blockMsToSamples;
         baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);
@@ -4205,8 +4332,11 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
             if (! objects[t].enabled) continue;
             float objMono = readObjectSample (t, baseDelaySamples);
 
-            wetL += objMono * objGainL[t];
-            wetR += objMono * objGainR[t];
+            // Interpolate between previous and current block gains
+            float gL = prevStereoGainL[t] + frac * (objGainL[t] - prevStereoGainL[t]);
+            float gR = prevStereoGainR[t] + frac * (objGainR[t] - prevStereoGainR[t]);
+            wetL += objMono * gL;
+            wetR += objMono * gR;
         }
 
         // === STAGE 3: FEEDBACK ===
@@ -4215,6 +4345,13 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
         // === STAGE 4: OUTPUT MIX ===
         outL[s] = outputLimiter ((rawInput * (1.0f - dw) + wetL * dw) * outGain);
         outR[s] = outputLimiter ((rawInput * (1.0f - dw) + wetR * dw) * outGain);
+    }
+
+    // Store current gains as previous for next block
+    for (int t = 0; t < MAX_OBJECTS; ++t)
+    {
+        prevStereoGainL[t] = objGainL[t];
+        prevStereoGainR[t] = objGainR[t];
     }
 
     // Zero remaining channels when stereo is selected on a multi-channel bus
@@ -4295,8 +4432,13 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
     for (int ch = 0; ch < numOutCh && ch < MAX_AMBI_CHANNELS; ++ch)
         outChannels[ch] = buffer.getWritePointer (ch);
 
+    // v1.0: Per-sample SH coefficient interpolation to prevent clicks on rapid position changes
+    float invN = (numSamples > 1) ? 1.0f / static_cast<float> (numSamples - 1) : 1.0f;
+
     for (int s = 0; s < numSamples; ++s)
     {
+        float frac = static_cast<float> (s) * invN;
+
         float currentDelayMs = smoothedDelayTime.getNextValue();
         float baseDelaySamples = currentDelayMs * blockMsToSamples;
         baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);
@@ -4322,20 +4464,26 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
         {
             if (! objects[t].enabled) continue;
             float objMono = readObjectSample (t, baseDelaySamples);
-            float dist = objDistGain[t];
+
+            // Interpolate distance gain between previous and current block
+            float dist = prevDistGain[t] + frac * (objDistGain[t] - prevDistGain[t]);
             float scaledMono = objMono * dist;
 
-            // Order 0 (W channel): no NFC needed
-            ambiAccum[0] += scaledMono * objSHCoeffs[t][0];
+            // Order 0 (W channel): no NFC needed — interpolate SH coeff
+            float sh0 = prevSHCoeffs[t][0] + frac * (objSHCoeffs[t][0] - prevSHCoeffs[t][0]);
+            ambiAccum[0] += scaledMono * sh0;
 
-            // Orders 1+: apply NFC-HOA per-order shelf filter
+            // Orders 1+: apply NFC-HOA per-order shelf filter — interpolate SH coeffs
             for (int ord = 0; ord < ambiOrder && ord < MAX_AMBI_ORDER; ++ord)
             {
                 float nfcMono = nfcFilters[t][ord].processSample (scaledMono);
                 int startACN = (ord + 1) * (ord + 1);
                 int endACN = (ord + 2) * (ord + 2);
                 for (int c = startACN; c < endACN && c < numAmbiCh; ++c)
-                    ambiAccum[c] += nfcMono * objSHCoeffs[t][c];
+                {
+                    float shc = prevSHCoeffs[t][c] + frac * (objSHCoeffs[t][c] - prevSHCoeffs[t][c]);
+                    ambiAccum[c] += nfcMono * shc;
+                }
             }
         }
 
@@ -4353,6 +4501,14 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
         // Dry: omnidirectional (W channel = ACN 0 only)
         if (outChannels[0] != nullptr)
             outChannels[0][s] = outputLimiter (outChannels[0][s] + rawInput * (1.0f - dw) * outGain);
+    }
+
+    // Store current SH coefficients and distance gains as previous for next block
+    for (int t = 0; t < MAX_OBJECTS; ++t)
+    {
+        for (int c = 0; c < numAmbiCh; ++c)
+            prevSHCoeffs[t][c] = objSHCoeffs[t][c];
+        prevDistGain[t] = objDistGain[t];
     }
 }
 
@@ -4375,8 +4531,13 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
     for (int ch = 0; ch < numOutCh && ch < 16; ++ch)
         outChannels[ch] = buffer.getWritePointer (ch);
 
+    // v1.0: Per-sample gain interpolation to prevent clicks on rapid position changes
+    float invN = (numSamples > 1) ? 1.0f / static_cast<float> (numSamples - 1) : 1.0f;
+
     for (int s = 0; s < numSamples; ++s)
     {
+        float frac = static_cast<float> (s) * invN;
+
         float currentDelayMs = smoothedDelayTime.getNextValue();
         float baseDelaySamples = currentDelayMs * blockMsToSamples;
         baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);
@@ -4403,10 +4564,15 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
         {
             if (! objects[t].enabled) continue;
             float objMono = readObjectSample (t, baseDelaySamples);
-            float dist = objDistGain[t];
+
+            // Interpolate distance gain and channel gains between previous and current block
+            float dist = prevDistGain[t] + frac * (objDistGain[t] - prevDistGain[t]);
 
             for (int sp = 0; sp < numSpeakers; ++sp)
-                channelAccum[sp] += objMono * dist * objChannelGains[t][sp];
+            {
+                float g = prevChannelGains[t][sp] + frac * (objChannelGains[t][sp] - prevChannelGains[t][sp]);
+                channelAccum[sp] += objMono * dist * g;
+            }
 
             wetMono += objMono * dist;
         }
@@ -4434,6 +4600,14 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
             float lfeSig = outputLimiter (lfeFilter.processSample (wetMono) * 0.316f * dw * outGain);  // −10 dB ≈ 0.316
             outChannels[lfeIdx][s] = lfeSig;
         }
+    }
+
+    // Store current gains as previous for next block
+    for (int t = 0; t < MAX_OBJECTS; ++t)
+    {
+        for (int sp = 0; sp < numSpeakers; ++sp)
+            prevChannelGains[t][sp] = objChannelGains[t][sp];
+        prevDistGain[t] = objDistGain[t];
     }
 }
 
@@ -4608,6 +4782,13 @@ void OpenSpatialDelayProcessor::oscMessageReceived (const juce::OSCMessage& mess
         else if (property == "/wobble")        handleOSCParam ("wobbleEnabled", val);
         else if (property == "/wobbleamount")  handleOSCParam ("wobbleAmount", val);
         else if (property == "/wobblemorph")   handleOSCParam ("wobbleMorph", val);
+        // v1.0: Global tap offset knobs (UI-only, not APVTS — stored in atomics)
+        else if (property == "/tapazimuth")    { globalTapOffset[0].store (juce::jlimit (-180.0f, 180.0f, val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
+        else if (property == "/tapelevation")  { globalTapOffset[1].store (juce::jlimit (-90.0f,  90.0f,  val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
+        else if (property == "/tapdistance")   { globalTapOffset[2].store (juce::jlimit (-1.0f,   1.0f,   val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
+        else if (property == "/tapdoppler")    { globalTapOffset[3].store (juce::jlimit (-100.0f, 100.0f, val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
+        else if (property == "/tappitch")      { globalTapOffset[4].store (juce::jlimit (-24.0f,  24.0f,  val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
+        else if (property == "/tapspeed")      { globalTapOffset[5].store (juce::jlimit (-5.0f,   5.0f,   val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
     }
 }
 
@@ -4985,8 +5166,9 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
 void OpenSpatialDelayProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
-    state.setProperty ("pluginStateVersion", 17, nullptr);  // v1.0 state format (17 = 7.0.2 removed)
+    state.setProperty ("pluginStateVersion", 19, nullptr);  // v1.0 state format (19 = 9.1.4 added)
     state.setProperty ("oscReceivePort", oscReceivePort, nullptr);  // v0.6: persist OSC port
+    state.setProperty ("globalDrawerOpen", globalDrawerOpen, nullptr);  // v1.0: persist drawer state
     state.setProperty ("currentPresetIndex", currentPresetIndex, nullptr);  // v0.6: persist preset selection
     // v0.7: persist OSC Send settings
     state.setProperty ("oscSendEnabled", oscSendEnabled, nullptr);
@@ -5423,8 +5605,65 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
         tree.setProperty ("pluginStateVersion", 17, nullptr);
     }
 
+    // v1.0: Reorder outputFormat — 5.1.2/7.1/Oct rotated to 7.1/Oct/5.1.2
+    // Old index 6 (5.1.2) → new 8, old 7 (7.1) → new 6, old 8 (Oct) → new 7
+    if (savedVersion < 18)
+    {
+        for (int i = 0; i < tree.getNumChildren(); ++i)
+        {
+            auto child = tree.getChild (i);
+            if (! child.hasProperty ("id"))
+                continue;
+
+            if (child.getProperty ("id").toString() == "outputFormat")
+            {
+                float normalizedOld = static_cast<float> (child.getProperty ("value", 0.0f));
+                int oldIndex = juce::roundToInt (normalizedOld * 20.0f);  // 21 items (0..20)
+                oldIndex = juce::jlimit (0, 20, oldIndex);
+                int newIndex = oldIndex;
+                if (oldIndex == 6)       newIndex = 8;   // 5.1.2 → Atmos group
+                else if (oldIndex == 7)  newIndex = 6;   // 7.1 → Surround group
+                else if (oldIndex == 8)  newIndex = 7;   // Oct → after Surround
+                float normalizedNew = static_cast<float> (newIndex) / 20.0f;
+                child.setProperty ("value", normalizedNew, nullptr);
+                break;
+            }
+        }
+
+        tree.setProperty ("pluginStateVersion", 18, nullptr);
+    }
+
+    // v1.0: Migrate outputFormat from 21-item to 22-item (9.1.4 inserted at index 13)
+    // Old indices 0-12 stay the same. Old indices 13-20 (9.1.6, SML, Ambisonics) shift to 14-21.
+    if (savedVersion < 19)
+    {
+        for (int i = 0; i < tree.getNumChildren(); ++i)
+        {
+            auto child = tree.getChild (i);
+            if (! child.hasProperty ("id"))
+                continue;
+
+            if (child.getProperty ("id").toString() == "outputFormat")
+            {
+                float normalizedOld = static_cast<float> (child.getProperty ("value", 0.0f));
+                // Denormalize using old item count (21 items → indices 0..20)
+                int oldIndex = juce::roundToInt (normalizedOld * 20.0f);
+                oldIndex = juce::jlimit (0, 20, oldIndex);
+                // Shift indices >= 13 up by 1
+                int newIndex = (oldIndex >= 13) ? oldIndex + 1 : oldIndex;
+                // Re-normalize using new item count (22 items → indices 0..21)
+                float normalizedNew = static_cast<float> (newIndex) / 21.0f;
+                child.setProperty ("value", normalizedNew, nullptr);
+                break;
+            }
+        }
+
+        tree.setProperty ("pluginStateVersion", 19, nullptr);
+    }
+
     // v0.6: Restore OSC receive port (non-APVTS property)
     oscReceivePort = static_cast<int> (tree.getProperty ("oscReceivePort", 4002));
+    globalDrawerOpen = static_cast<bool> (tree.getProperty ("globalDrawerOpen", false));
 
     // v0.6: Restore preset index (non-APVTS property)
     currentPresetIndex = static_cast<int> (tree.getProperty ("currentPresetIndex", 0));
