@@ -26,8 +26,25 @@ jobs:
         run: cmake --build build --config Release
 
       - name: Upload Windows VST3
+        id: upload
         uses: actions/upload-artifact@v4
         with:
           name: OpenSpatialDelay-Windows-VST3
           path: build/OpenSpatialDelay_artefacts/Release/VST3/
           retention-days: 90
+
+      # ---------------------------------------------------------------
+      # SignPath code signing (free for open-source projects)
+      # Uncomment after applying at: https://signpath.io/solutions/open-source-community
+      # Requires SIGNPATH_API_TOKEN secret and SignPath project/policy configured.
+      # ---------------------------------------------------------------
+      # - name: Sign with SignPath
+      #   uses: signpath/github-action-submit-signing-request@v1
+      #   with:
+      #     api-token: '${{ secrets.SIGNPATH_API_TOKEN }}'
+      #     organization-id: '<your-org-id>'
+      #     project-slug: 'open-spatial-delay'
+      #     signing-policy-slug: 'release-signing'
+      #     artifact-configuration-slug: 'vst3'
+      #     github-artifact-id: '${{ steps.upload.outputs.artifact-id }}'
+      #     wait-for-completion: true
