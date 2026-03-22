@@ -12,3 +12,8 @@ Archive/*/builds/
 
 # Screenshots (local review/bug-report only, not needed in repo)
 docs/screenshots/
+
+# npm (used by docs/generate-manual.js)
+node_modules/
+package-lock.json
+package.json

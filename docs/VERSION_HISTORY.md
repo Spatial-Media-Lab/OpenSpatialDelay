@@ -280,3 +280,110 @@ Frozen snapshot in `Archive/v0.5/`:
 
 ### Output
 - 22 output formats (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
+
+---
+
+## v0.6 (2026-03-13)
+**ADM-OSC Receive, Trajectory Animation, Elevation Visualization, Preset System**
+
+Major feature release activating the ADM-OSC receiver and trajectory animation stubs from v0.5,
+adding IEM-standard elevation visualization to the spatial map, and introducing a full preset
+system with 8 factory presets and user-saveable JSON presets.
+
+### ADM-OSC Receive
+- `juce::OSCReceiver` with `MessageLoopCallback` listener on port 4002 (editable, range 1024-65535)
+- `/adm/obj/N/` namespace (N = 1-12, 1-based ADM-OSC object IDs mapped to 0-based internal indices)
+- 8 message types:
+  - `/azim` (float, degrees)
+  - `/elev` (float, degrees)
+  - `/dist` (float, 0-1)
+  - `/aed` (3 floats: azimuth degrees, elevation degrees, distance 0-1)
+  - `/xyz` (3 floats: Cartesian x, y, z)
+  - `/x` (float, individual Cartesian axis — accumulated with cached `/y`, `/z`)
+  - `/y` (float, individual Cartesian axis — accumulated with cached `/x`, `/z`)
+  - `/z` (float, individual Cartesian axis — accumulated with cached `/x`, `/y`)
+- Cartesian-to-Polar conversion per ITU-R BS.2127-0:
+  `az = atan2(-x, y)`, `el = atan2(z, sqrt(x^2 + y^2))`, `dist = clamp(sqrt(x^2 + y^2 + z^2), 0, 1)`
+- Per-object OSC override flag: receiving any OSC message sets `oscOverrideActive[obj]`, which pauses
+  trajectory animation for that object; 500 ms timeout after last receive releases the override
+  and resumes trajectory
+- `admOscEnabled` global parameter controls receiver (edge-detected: OFF-to-ON connects, ON-to-OFF
+  disconnects and clears all overrides)
+
+### Trajectory Animation
+- 6 shapes: None, Spiral, Orbit, Bounce, Figure-8, Random
+- Per-object `trajectoryShape` (`AudioParameterChoice`, 6 choices) and
+  `trajectorySpeed` (`AudioParameterFloat`, 0.0-10.0, default 1.0)
+- Phase accumulation at ~60 Hz timer rate: `phase += speed * dt` (dt = 1/60), wraps at 1.0
+- Base position (azimuth, elevation, distance) captured when shape transitions from None to active
+  or when shape changes
+- Shape details (from `computeTrajectory()`):
+  - **Spiral:** 360-degree azimuth sweep, +/-45-degree elevation sine, distance pulse 0.3-1.0
+    (`dist = 0.3 + 0.7 * (0.5 + 0.5 * cos(phase * 2pi))`)
+  - **Orbit:** 360-degree azimuth sweep at constant base elevation and distance
+  - **Bounce:** triangle wave +/-90-degree azimuth, +/-30-degree elevation, constant distance
+  - **Figure-8:** Lissajous 1:2 ratio, +/-90-degree azimuth, +/-45-degree elevation, constant distance
+  - **Random:** irrational-frequency sine sums (e, pi, sqrt(2), sqrt(3), sqrt(5) as frequency
+    multipliers) — pseudo-random but deterministic and smooth
+- Output azimuth wrapped to -180..+180, elevation clamped to -90..+90, distance clamped to 0..1
+
+### Elevation Visualization (IEM-Standard)
+- Dot size encodes elevation: `baseDiam + 3 * sin(elevRad)` — above horizon = larger, below = smaller
+- Base diameter: 18 px selected, 14 px unselected
+- Hemisphere-dependent opacity: 1.0 above ear level, 0.3 below
+- Selection halo alpha: 0.3 above, 0.15 below
+- Dot outline always drawn at full colour (visible regardless of hemisphere)
+- Elevation degree label shown for selected object when |elevation| > 1-degree
+  (positioned above dot if positive, below if negative)
+- Number label colour adapts to dot brightness: black text above horizon, object colour below
+- No stems — matches IEM StereoEncoder / Nuendo / Pro Tools industry standard
+
+### Preset System
+- 8 factory presets:
+  1. Default — 4 taps in diagonal cross pattern
+  2. Stereo Ping-Pong — 2 taps at +/-90-degree
+  3. Circle (Quad) — 4 taps in equidistant ring
+  4. Surround 5.1 — 5 taps at standard 5.1 positions
+  5. Surround 7.1 — 7 taps at standard 7.1 positions
+  6. Atmos 7.1.4 — 11 taps (ear-level 7.1 + 4 height at 45-degree elevation)
+  7. Rising Spiral — 8 taps spiraling upward with Orbit trajectory (speeds 1.5-3.2)
+  8. Falling Cascade — 6 taps descending with pitch drop (-1 st)
+- User presets: individual JSON files in `~/Library/Application Support/OpenSpatialDelay/Presets/`
+- Preset data captures all global + per-tap parameters (delayTime, tempoSync, noteDivision,
+  syncMode, feedback, filterLP, filterHP, pitchShift, dryWet, inputGain, outputGain,
+  airAbsorption, algorithm, hrtfProfile, and per-tap enabled/azimuth/elevation/distance/
+  dopplerAmount/trajectoryShape/trajectorySpeed)
+- Presets do NOT store: `outputFormat`, `admOscEnabled`, `oscReceivePort`
+- JSON serialization via `juce::JSON` (DynamicObject tree with "taps" array)
+- User presets loaded from disk at startup, sorted alphabetically
+
+### Preset Browser (UI)
+- Header bar: ComboBox listing all factory + user presets
+- Prev/Next buttons (`<` / `>`) for sequential preset stepping (wraps around)
+- Save button opens AlertWindow with text editor for preset name input
+- ComboBox auto-refreshes after save
+
+### Per-Object Parameters (New in v0.6)
+- `object{N}_trajectoryShape` (Choice: None / Spiral / Orbit / Bounce / Figure-8 / Random)
+- `object{N}_trajectorySpeed` (Float 0.0-10.0, default 1.0)
+- Parameter IDs established in v0.5 stubs, now fully active
+
+### UI Updates
+- Header bar: Preset browser (ComboBox + Prev/Next buttons + Save button)
+- Header bar: OSC toggle button (green when active) + editable port label (double-click to edit,
+  valid range 1024-65535, reverts on invalid input)
+- Spatial map: OSC override indicator ("OSC" label in cyan on actively-controlled objects,
+  collision-aware positioning relative to elevation label)
+- Per-object panel: Trajectory Shape dropdown + Speed slider
+
+### State Format
+- `pluginStateVersion = 10`
+- Persists `oscReceivePort` and `currentPresetIndex` in state XML alongside APVTS tree
+- v0.4-to-v0.5 output format migration preserved in `setStateInformation`
+
+### Files
+- v0.6 is current HEAD (no archived snapshot yet)
+- `scripts/adm_osc_test.py` — ADM-OSC test tool for sending OSC messages to the plugin
+
+### Output
+- 21 output formats (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
