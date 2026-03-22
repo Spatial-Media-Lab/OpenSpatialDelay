@@ -1651,6 +1651,19 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
         setChoice (prefix + "inputChannel",        tap.inputChannel);
     }
 
+    // Reset Doppler tracking to prevent transient pitch artifact on preset change.
+    // Without this, the first processBlock sees a fake "velocity" between old and new
+    // positions, producing a spurious Doppler pitch shift.
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+    {
+        const auto& tap = preset->taps[i];
+        prevAzimuth[i]   = juce::degreesToRadians (tap.azimuthDeg);
+        prevElevation[i] = juce::degreesToRadians (tap.elevationDeg);
+        prevDistance[i]   = tap.distance;
+        dopplerSemitones[i] = 0.0f;
+        smoothedRadialVelocity[i] = 0.0f;
+    }
+
     currentPresetIndex = index;
 }
 

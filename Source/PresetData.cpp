@@ -1253,6 +1253,3 @@ PresetData parsePresetJson (const juce::String& json)
     return pd;
 }
 
-// v1.0: installFactoryPresets() removed — factory presets are now loaded
-// directly from the compiled-in factoryPresets[] array at runtime.
-// No disk-based factory preset installation needed.
