@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OpenSpatialDelay — Speaker Layout Reference</title>
+<style>
+  :root {
+    --bg: #0A0A14;
+    --bg-card: #12121E;
+    --bg-header: #1A1A2E;
+    --cyan: #00D4FF;
+    --purple: #8B5CF6;
+    --amber: #F5C542;
+    --text: #E8E8EE;
+    --text-dim: #8888AA;
+    --border: #2A2A3E;
+    --lfe: #FF6B6B;
+    --height: #A78BFA;
+    --ear: #00D4FF;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.5;
+    padding: 40px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  h1 {
+    color: var(--cyan);
+    font-size: 28px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .subtitle {
+    color: var(--text-dim);
+    font-size: 14px;
+    margin-bottom: 32px;
+  }
+
+  .convention-note {
+    background: var(--bg-header);
+    border-left: 3px solid var(--amber);
+    padding: 12px 16px;
+    margin-bottom: 32px;
+    font-size: 13px;
+    border-radius: 0 6px 6px 0;
+  }
+
+  .convention-note strong { color: var(--amber); }
+
+  h2 {
+    color: var(--cyan);
+    font-size: 20px;
+    font-weight: 600;
+    margin-top: 40px;
+    margin-bottom: 16px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  h3 {
+    color: var(--purple);
+    font-size: 16px;
+    font-weight: 600;
+    margin-top: 28px;
+    margin-bottom: 4px;
+  }
+
+  .format-meta {
+    color: var(--text-dim);
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+
+  .format-meta .lfe-tag {
+    background: rgba(255, 107, 107, 0.15);
+    color: var(--lfe);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .format-meta .height-tag {
+    background: rgba(167, 139, 250, 0.15);
+    color: var(--height);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  /* ── Overview Table ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  table.overview { margin-bottom: 0; }
+
+  th {
+    background: var(--bg-header);
+    color: var(--cyan);
+    font-weight: 600;
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  td {
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  tr:hover td { background: rgba(0, 212, 255, 0.03); }
+
+  .ch-count {
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    color: var(--amber);
+    font-weight: 600;
+  }
+
+  .lfe-cell { color: var(--lfe); }
+  .height-cell { color: var(--height); }
+  .dim-cell { color: var(--text-dim); }
+
+  /* ── Speaker Layout Tables ── */
+  table.layout {
+    max-width: 600px;
+  }
+
+  table.layout th {
+    font-size: 11px;
+  }
+
+  table.layout td.speaker-name {
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  table.layout td.azimuth {
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  }
+
+  table.layout td.elevation {
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  }
+
+  table.layout td.channel {
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    color: var(--amber);
+  }
+
+  table.layout tr.lfe-row td {
+    color: var(--lfe);
+    font-style: italic;
+  }
+
+  table.layout tr.lfe-row td.speaker-name {
+    color: var(--lfe);
+  }
+
+  table.layout tr.height-row td.elevation {
+    color: var(--height);
+  }
+
+  /* ── Category dividers ── */
+  .category-divider {
+    margin-top: 48px;
+    margin-bottom: 8px;
+    padding: 10px 16px;
+    background: var(--bg-header);
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--cyan);
+    letter-spacing: 0.5px;
+  }
+
+  .category-divider .cat-count {
+    color: var(--text-dim);
+    font-weight: 400;
+    font-size: 13px;
+    margin-left: 8px;
+  }
+
+  /* ── Legend ── */
+  .legend {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+    font-size: 13px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .legend-dot.ear { background: var(--ear); }
+  .legend-dot.height { background: var(--height); }
+  .legend-dot.lfe { background: var(--lfe); }
+  .legend-dot.amber { background: var(--amber); }
+
+  /* ── Ambisonics note ── */
+  .ambi-note {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .ambi-note code {
+    background: var(--bg-header);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    color: var(--amber);
+  }
+
+  footer {
+    margin-top: 48px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<h1>OpenSpatialDelay — Speaker Layout Reference</h1>
+<p class="subtitle">Complete reference for all 22 output formats &middot; Spatial Media Library v1.0</p>
+
+<div class="convention-note">
+  <strong>Convention:</strong> Positive azimuth = LEFT (ADM / IEM convention, per ITU-R BS.2127-0).
+  Channels are <strong>1-based</strong> for human readability.
+</div>
+
+<div class="legend">
+  <div class="legend-item"><span class="legend-dot ear"></span> Ear-level (0&deg;)</div>
+  <div class="legend-item"><span class="legend-dot height"></span> Height (+45&deg; / +90&deg;)</div>
+  <div class="legend-item"><span class="legend-dot lfe"></span> LFE (subwoofer)</div>
+  <div class="legend-item"><span class="legend-dot amber"></span> Channel number</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<h2>Format Overview (22 Formats)</h2>
+<!-- ═══════════════════════════════════════════════════════ -->
+
+<table class="overview">
+<thead>
+  <tr>
+    <th>#</th>
+    <th>Format</th>
+    <th>Channels</th>
+    <th>Speakers</th>
+    <th>LFE</th>
+    <th>Height</th>
+    <th>Category</th>
+  </tr>
+</thead>
+<tbody>
+  <tr><td>1</td><td>Binaural</td><td class="ch-count">2</td><td class="dim-cell">n/a</td><td class="dim-cell">--</td><td class="dim-cell">--</td><td>Binaural</td></tr>
+  <tr><td>2</td><td>Stereo</td><td class="ch-count">2</td><td class="dim-cell">n/a</td><td class="dim-cell">--</td><td class="dim-cell">--</td><td>Stereo</td></tr>
+  <tr><td>3</td><td>Quadraphonic (4.0)</td><td class="ch-count">4</td><td>4</td><td class="dim-cell">--</td><td class="dim-cell">--</td><td>Surround</td></tr>
+  <tr><td>4</td><td>5.0 Surround</td><td class="ch-count">5</td><td>5</td><td class="dim-cell">--</td><td class="dim-cell">--</td><td>Surround</td></tr>
+  <tr><td>5</td><td>5.1 Surround</td><td class="ch-count">6</td><td>5</td><td class="lfe-cell">Ch 4</td><td class="dim-cell">--</td><td>Surround</td></tr>
+  <tr><td>6</td><td>7.0 Surround</td><td class="ch-count">7</td><td>7</td><td class="dim-cell">--</td><td class="dim-cell">--</td><td>Surround</td></tr>
+  <tr><td>7</td><td>7.1 Surround</td><td class="ch-count">8</td><td>7</td><td class="lfe-cell">Ch 4</td><td class="dim-cell">--</td><td>Surround</td></tr>
+  <tr><td>8</td><td>Octaphonic (8.0)</td><td class="ch-count">8</td><td>8</td><td class="dim-cell">--</td><td class="dim-cell">--</td><td>Special</td></tr>
+  <tr><td>9</td><td>5.1.2 Atmos</td><td class="ch-count">8</td><td>7</td><td class="lfe-cell">Ch 4</td><td class="height-cell">2 height</td><td>Immersive</td></tr>
+  <tr><td>10</td><td>5.1.4 Atmos</td><td class="ch-count">10</td><td>9</td><td class="lfe-cell">Ch 4</td><td class="height-cell">4 height</td><td>Immersive</td></tr>
+  <tr><td>11</td><td>7.1.2 Atmos</td><td class="ch-count">10</td><td>9</td><td class="lfe-cell">Ch 4</td><td class="height-cell">2 height</td><td>Immersive</td></tr>
+  <tr><td>12</td><td>7.1.4 Atmos</td><td class="ch-count">12</td><td>11</td><td class="lfe-cell">Ch 4</td><td class="height-cell">4 height</td><td>Immersive</td></tr>
+  <tr><td>13</td><td>7.1.6 Atmos</td><td class="ch-count">14</td><td>13</td><td class="lfe-cell">Ch 4</td><td class="height-cell">6 height</td><td>Immersive</td></tr>
+  <tr><td>14</td><td>9.1.4 Atmos</td><td class="ch-count">14</td><td>13</td><td class="lfe-cell">Ch 4</td><td class="height-cell">4 height</td><td>Immersive</td></tr>
+  <tr><td>15</td><td>9.1.6 Atmos</td><td class="ch-count">16</td><td>15</td><td class="lfe-cell">Ch 4</td><td class="height-cell">6 height</td><td>Immersive</td></tr>
+  <tr><td>16</td><td>SML 13.1</td><td class="ch-count">14</td><td>13</td><td class="lfe-cell">Ch 14</td><td class="height-cell">5 height</td><td>Special</td></tr>
+  <tr><td>17</td><td>1st Order Ambisonics (FOA)</td><td class="ch-count">4</td><td class="dim-cell">n/a</td><td class="dim-cell">--</td><td class="dim-cell">--</td><td>Ambisonics</td></tr>
+  <tr><td>18</td><td>2nd Order Ambisonics (SOA)</td><td class="ch-count">9</td><td class="dim-cell">n/a</td><td class="dim-cell">--</td><td class="dim-cell">--</td><td>Ambisonics</td></tr>
+  <tr><td>19</td><td>3rd Order Ambisonics (HOA)</td><td class="ch-count">16</td><td class="dim-cell">n/a</td><td class="dim-cell">--</td><td class="dim-cell">--</td><td>Ambisonics</td></tr>
+  <tr><td>20</td><td>4th Order Ambisonics (4OA)</td><td class="ch-count">25</td><td class="dim-cell">n/a</td><td class="dim-cell">--</td><td class="dim-cell">--</td><td>Ambisonics</td></tr>
+  <tr><td>21</td><td>5th Order Ambisonics (5OA)</td><td class="ch-count">36</td><td class="dim-cell">n/a</td><td class="dim-cell">--</td><td class="dim-cell">--</td><td>Ambisonics</td></tr>
+  <tr><td>22</td><td>6th Order Ambisonics (6OA)</td><td class="ch-count">49</td><td class="dim-cell">n/a</td><td class="dim-cell">--</td><td class="dim-cell">--</td><td>Ambisonics</td></tr>
+</tbody>
+</table>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="category-divider">Ear-Level Only<span class="cat-count">&mdash; no height speakers, no LFE</span></div>
+<!-- ═══════════════════════════════════════════════════════ -->
+
+<h3>Quadraphonic (4.0)</h3>
+<p class="format-meta">4 channels &middot; 4 speakers &middot; all ear-level</p>
+<table class="layout">
+<thead><tr><th>Speaker</th><th>Azimuth (+L)</th><th>Elevation</th><th>Channel</th></tr></thead>
+<tbody>
+  <tr><td class="speaker-name">FL</td><td class="azimuth">+45&deg;</td><td class="elevation">0&deg;</td><td class="channel">1</td></tr>
+  <tr><td class="speaker-name">FR</td><td class="azimuth">-45&deg;</td><td class="elevation">0&deg;</td><td class="channel">2</td></tr>
+  <tr><td class="speaker-name">RL</td><td class="azimuth">+135&deg;</td><td class="elevation">0&deg;</td><td class="channel">3</td></tr>
+  <tr><td class="speaker-name">RR</td><td class="azimuth">-135&deg;</td><td class="elevation">0&deg;</td><td class="channel">4</td></tr>
+</tbody>
+</table>
+
+<h3>5.0 Surround</h3>
+<p class="format-meta">5 channels &middot; 5 speakers &middot; all ear-level</p>
+<table class="layout">
+<thead><tr><th>Speaker</th><th>Azimuth (+L)</th><th>Elevation</th><th>Channel</th></tr></thead>
+<tbody>
+  <tr><td class="speaker-name">L</td><td class="azimuth">+30&deg;</td><td class="elevation">0&deg;</td><td class="channel">1</td></tr>
+  <tr><td class="speaker-name">R</td><td class="azimuth">-30&deg;</td><td class="elevation">0&deg;</td><td class="channel">2</td></tr>
+  <tr><td class="speaker-name">C</td><td class="azimuth">0&deg;</td><td class="elevation">0&deg;</td><td class="channel">3</td></tr>
+  <tr><td class="speaker-name">Ls</td><td class="azimuth">+110&deg;</td><td class="elevation">0&deg;</td><td class="channel">4</td></tr>
+  <tr><td class="speaker-name">Rs</td><td class="azimuth">-110&deg;</td><td class="elevation">0&deg;</td><td class="channel">5</td></tr>
+</tbody>
+</table>
+
+<h3>7.0 Surround</h3>
+<p class="format-meta">7 channels &middot; 7 speakers &middot; all ear-level</p>
+<table class="layout">
+<thead><tr><th>Speaker</th><th>Azimuth (+L)</th><th>Elevation</th><th>Channel</th></tr></thead>
+<tbody>
+  <tr><td class="speaker-name">L</td><td class="azimuth">+30&deg;</td><td class="elevation">0&deg;</td><td class="channel">1</td></tr>
+  <tr><td class="speaker-name">R</td><td class="azimuth">-30&deg;</td><td class="elevation">0&deg;</td><td class="channel">2</td></tr>
+  <tr><td class="speaker-name">C</td><td class="azimuth">0&deg;</td><td class="elevation">0&deg;</td><td class="channel">3</td></tr>
+  <tr><td class="speaker-name">Ls</td><td class="azimuth">+90&deg;</td><td class="elevation">0&deg;</td><td class="channel">4</td></tr>
+  <tr><td class="speaker-name">Rs</td><td class="azimuth">-90&deg;</td><td class="elevation">0&deg;</td><td class="channel">5</td></tr>
+  <tr><td class="speaker-name">Lrs</td><td class="azimuth">+135&deg;</td><td class="elevation">0&deg;</td><td class="channel">6</td></tr>
+  <tr><td class="speaker-name">Rrs</td><td class="azimuth">-135&deg;</td><td class="elevation">0&deg;</td><td class="channel">7</td></tr>
+</tbody>
+</table>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="category-divider">With LFE (Ear-Level)<span class="cat-count">&mdash; LFE subwoofer channel, no height</span></div>
+<!-- ═══════════════════════════════════════════════════════ -->
+
+<h3>5.1 Surround</h3>
+<p class="format-meta">6 channels &middot; 5 speakers + <span class="lfe-tag">LFE Ch 4</span></p>
+<table class="layout">
+<thead><tr><th>Speaker</th><th>Azimuth (+L)</th><th>Elevation</th><th>Channel</th></tr></thead>
+<tbody>
+  <tr><td class="speaker-name">L</td><td class="azimuth">+30&deg;</td><td class="elevation">0&deg;</td><td class="channel">1</td></tr>
+  <tr><td class="speaker-name">R</td><td class="azimuth">-30&deg;</td><td class="elevation">0&deg;</td><td class="channel">2</td></tr>
+  <tr><td class="speaker-name">C</td><td class="azimuth">0&deg;</td><td class="elevation">0&deg;</td><td class="channel">3</td></tr>
+  <tr class="lfe-row"><td class="speaker-name">LFE</td><td class="azimuth">&mdash;</td><td class="elevation">&mdash;</td><td class="channel">4</td></tr>
+  <tr><td class="speaker-name">Ls</td><td class="azimuth">+110&deg;</td><td class="elevation">0&deg;</td><td class="channel">5</td></tr>
+  <tr><td class="speaker-name">Rs</td><td class="azimuth">-110&deg;</td><td class="elevation">0&deg;</td><td class="channel">6</td></tr>
+</tbody>
+</table>
+
+<h3>7.1 Surround</h3>
+<p class="format-meta">8 channels &middot; 7 speakers + <span class="lfe-tag">LFE Ch 4</span></p>
+<table class="layout">
+<thead><tr><th>Speaker</th><th>Azimuth (+L)</th><th>Elevation</th><th>Channel</th></tr></thead>
+<tbody>
+  <tr><td class="speaker-name">L</td><td class="azimuth">+30&deg;</td><td class="elevation">0&deg;</td><td class="channel">1</td></tr>
+  <tr><td class="speaker-name">R</td><td class="azimuth">-30&deg;</td><td class="elevation">0&deg;</td><td class="channel">2</td></tr>
+  <tr><td class="speaker-name">C</td><td class="azimuth">0&deg;</td><td class="elevation">0&deg;</td><td class="channel">3</td></tr>
+  <tr class="lfe-row"><td class="speaker-name">LFE</td><td class="azimuth">&mdash;</td><td class="elevation">&mdash;</td><td class="channel">4</td></tr>
+  <tr><td class="speaker-name">Ls</td><td class="azimuth">+90&deg;</td><td class="elevation">0&deg;</td><td class="channel">5</td></tr>
+  <tr><td class="speaker-name">Rs</td><td class="azimuth">-90&deg;</td><td class="elevation">0&deg;</td><td class="channel">6</td></tr>
+  <tr><td class="speaker-name">Lrs</td><td class="azimuth">+135&deg;</td><td class="elevation">0&deg;</td><td class="channel">7</td></tr>
+  <tr><td class="speaker-name">Rrs</td><td class="azimuth">-135&deg;</td><td class="elevation">0&deg;</td><td class="channel">8</td></tr>
+</tbody>
+</table>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="category-divider">Immersive (With Height)<span class="cat-count">&mdash; height speakers at +45&deg; elevation</span></div>
+<!-- ═══════════════════════════════════════════════════════ -->
+
+<h3>5.1.2 Atmos</h3>
+<p class="format-meta">8 channels &middot; 5 ear + 2 height + <span class="lfe-tag">LFE Ch 4</span> &middot; <span class="height-tag">2 height</span></p>
+<table class="layout">
+<thead><tr><th>Speaker</th><th>Azimuth (+L)</th><th>Elevation</th><th>Channel</th></tr></thead>
+<tbody>
+  <tr><td class="speaker-name">L</td><td class="azimuth">+30&deg;</td><td class="elevation">0&deg;</td><td class="channel">1</td></tr>
+  <tr><td class="speaker-name">R</td><td class="azimuth">-30&deg;</td><td class="elevation">0&deg;</td><td class="channel">2</td></tr>
+  <tr><td class="speaker-name">C</td><td class="azimuth">0&deg;</td><td class="elevation">0&deg;</td><td class="channel">3</td></tr>
+  <tr class="lfe-row"><td class="speaker-name">LFE</td><td class="azimuth">&mdash;</td><td class="elevation">&mdash;</td><td class="channel">4</td></tr>
+  <tr><td class="speaker-name">Ls</td><td class="azimuth">+110&deg;</td><td class="elevation">0&deg;</td><td class="channel">5</td></tr>
+  <tr><td class="speaker-name">Rs</td><td class="azimuth">-110&deg;</td><td class="elevation">0&deg;</td><td class="channel">6</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tsl</td><td class="azimuth">+90&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">7</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tsr</td><td class="azimuth">-90&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">8</td></tr>
+</tbody>
+</table>
+
+<h3>5.1.4 Atmos</h3>
+<p class="format-meta">10 channels &middot; 5 ear + 4 height + <span class="lfe-tag">LFE Ch 4</span> &middot; <span class="height-tag">4 height</span></p>
+<table class="layout">
+<thead><tr><th>Speaker</th><th>Azimuth (+L)</th><th>Elevation</th><th>Channel</th></tr></thead>
+<tbody>
+  <tr><td class="speaker-name">L</td><td class="azimuth">+30&deg;</td><td class="elevation">0&deg;</td><td class="channel">1</td></tr>
+  <tr><td class="speaker-name">R</td><td class="azimuth">-30&deg;</td><td class="elevation">0&deg;</td><td class="channel">2</td></tr>
+  <tr><td class="speaker-name">C</td><td class="azimuth">0&deg;</td><td class="elevation">0&deg;</td><td class="channel">3</td></tr>
+  <tr class="lfe-row"><td class="speaker-name">LFE</td><td class="azimuth">&mdash;</td><td class="elevation">&mdash;</td><td class="channel">4</td></tr>
+  <tr><td class="speaker-name">Ls</td><td class="azimuth">+110&deg;</td><td class="elevation">0&deg;</td><td class="channel">5</td></tr>
+  <tr><td class="speaker-name">Rs</td><td class="azimuth">-110&deg;</td><td class="elevation">0&deg;</td><td class="channel">6</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tfl</td><td class="azimuth">+45&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">7</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tfr</td><td class="azimuth">-45&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">8</td></tr>
+  <tr class="height-row"><td class="speaker-name">Trl</td><td class="azimuth">+135&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">9</td></tr>
+  <tr class="height-row"><td class="speaker-name">Trr</td><td class="azimuth">-135&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">10</td></tr>
+</tbody>
+</table>
+
+<h3>7.1.2 Atmos</h3>
+<p class="format-meta">10 channels &middot; 7 ear + 2 height + <span class="lfe-tag">LFE Ch 4</span> &middot; <span class="height-tag">2 height</span></p>
+<table class="layout">
+<thead><tr><th>Speaker</th><th>Azimuth (+L)</th><th>Elevation</th><th>Channel</th></tr></thead>
+<tbody>
+  <tr><td class="speaker-name">L</td><td class="azimuth">+30&deg;</td><td class="elevation">0&deg;</td><td class="channel">1</td></tr>
+  <tr><td class="speaker-name">R</td><td class="azimuth">-30&deg;</td><td class="elevation">0&deg;</td><td class="channel">2</td></tr>
+  <tr><td class="speaker-name">C</td><td class="azimuth">0&deg;</td><td class="elevation">0&deg;</td><td class="channel">3</td></tr>
+  <tr class="lfe-row"><td class="speaker-name">LFE</td><td class="azimuth">&mdash;</td><td class="elevation">&mdash;</td><td class="channel">4</td></tr>
+  <tr><td class="speaker-name">Ls</td><td class="azimuth">+90&deg;</td><td class="elevation">0&deg;</td><td class="channel">5</td></tr>
+  <tr><td class="speaker-name">Rs</td><td class="azimuth">-90&deg;</td><td class="elevation">0&deg;</td><td class="channel">6</td></tr>
+  <tr><td class="speaker-name">Lrs</td><td class="azimuth">+135&deg;</td><td class="elevation">0&deg;</td><td class="channel">7</td></tr>
+  <tr><td class="speaker-name">Rrs</td><td class="azimuth">-135&deg;</td><td class="elevation">0&deg;</td><td class="channel">8</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tsl</td><td class="azimuth">+90&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">9</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tsr</td><td class="azimuth">-90&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">10</td></tr>
+</tbody>
+</table>
+
+<h3>7.1.4 Atmos</h3>
+<p class="format-meta">12 channels &middot; 7 ear + 4 height + <span class="lfe-tag">LFE Ch 4</span> &middot; <span class="height-tag">4 height</span></p>
+<table class="layout">
+<thead><tr><th>Speaker</th><th>Azimuth (+L)</th><th>Elevation</th><th>Channel</th></tr></thead>
+<tbody>
+  <tr><td class="speaker-name">L</td><td class="azimuth">+30&deg;</td><td class="elevation">0&deg;</td><td class="channel">1</td></tr>
+  <tr><td class="speaker-name">R</td><td class="azimuth">-30&deg;</td><td class="elevation">0&deg;</td><td class="channel">2</td></tr>
+  <tr><td class="speaker-name">C</td><td class="azimuth">0&deg;</td><td class="elevation">0&deg;</td><td class="channel">3</td></tr>
+  <tr class="lfe-row"><td class="speaker-name">LFE</td><td class="azimuth">&mdash;</td><td class="elevation">&mdash;</td><td class="channel">4</td></tr>
+  <tr><td class="speaker-name">Ls</td><td class="azimuth">+90&deg;</td><td class="elevation">0&deg;</td><td class="channel">5</td></tr>
+  <tr><td class="speaker-name">Rs</td><td class="azimuth">-90&deg;</td><td class="elevation">0&deg;</td><td class="channel">6</td></tr>
+  <tr><td class="speaker-name">Lrs</td><td class="azimuth">+135&deg;</td><td class="elevation">0&deg;</td><td class="channel">7</td></tr>
+  <tr><td class="speaker-name">Rrs</td><td class="azimuth">-135&deg;</td><td class="elevation">0&deg;</td><td class="channel">8</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tfl</td><td class="azimuth">+45&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">9</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tfr</td><td class="azimuth">-45&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">10</td></tr>
+  <tr class="height-row"><td class="speaker-name">Trl</td><td class="azimuth">+135&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">11</td></tr>
+  <tr class="height-row"><td class="speaker-name">Trr</td><td class="azimuth">-135&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">12</td></tr>
+</tbody>
+</table>
+
+<h3>7.1.6 Atmos</h3>
+<p class="format-meta">14 channels &middot; 7 ear + 6 height + <span class="lfe-tag">LFE Ch 4</span> &middot; <span class="height-tag">6 height</span></p>
+<table class="layout">
+<thead><tr><th>Speaker</th><th>Azimuth (+L)</th><th>Elevation</th><th>Channel</th></tr></thead>
+<tbody>
+  <tr><td class="speaker-name">L</td><td class="azimuth">+30&deg;</td><td class="elevation">0&deg;</td><td class="channel">1</td></tr>
+  <tr><td class="speaker-name">R</td><td class="azimuth">-30&deg;</td><td class="elevation">0&deg;</td><td class="channel">2</td></tr>
+  <tr><td class="speaker-name">C</td><td class="azimuth">0&deg;</td><td class="elevation">0&deg;</td><td class="channel">3</td></tr>
+  <tr class="lfe-row"><td class="speaker-name">LFE</td><td class="azimuth">&mdash;</td><td class="elevation">&mdash;</td><td class="channel">4</td></tr>
+  <tr><td class="speaker-name">Ls</td><td class="azimuth">+90&deg;</td><td class="elevation">0&deg;</td><td class="channel">5</td></tr>
+  <tr><td class="speaker-name">Rs</td><td class="azimuth">-90&deg;</td><td class="elevation">0&deg;</td><td class="channel">6</td></tr>
+  <tr><td class="speaker-name">Lrs</td><td class="azimuth">+135&deg;</td><td class="elevation">0&deg;</td><td class="channel">7</td></tr>
+  <tr><td class="speaker-name">Rrs</td><td class="azimuth">-135&deg;</td><td class="elevation">0&deg;</td><td class="channel">8</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tfl</td><td class="azimuth">+45&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">9</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tfr</td><td class="azimuth">-45&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">10</td></tr>
+  <tr class="height-row"><td class="speaker-name">Trl</td><td class="azimuth">+135&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">11</td></tr>
+  <tr class="height-row"><td class="speaker-name">Trr</td><td class="azimuth">-135&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">12</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tsl</td><td class="azimuth">+90&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">13</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tsr</td><td class="azimuth">-90&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">14</td></tr>
+</tbody>
+</table>
+
+<h3>9.1.4 Atmos</h3>
+<p class="format-meta">14 channels &middot; 9 ear + 4 height + <span class="lfe-tag">LFE Ch 4</span> &middot; <span class="height-tag">4 height</span></p>
+<table class="layout">
+<thead><tr><th>Speaker</th><th>Azimuth (+L)</th><th>Elevation</th><th>Channel</th></tr></thead>
+<tbody>
+  <tr><td class="speaker-name">L</td><td class="azimuth">+30&deg;</td><td class="elevation">0&deg;</td><td class="channel">1</td></tr>
+  <tr><td class="speaker-name">R</td><td class="azimuth">-30&deg;</td><td class="elevation">0&deg;</td><td class="channel">2</td></tr>
+  <tr><td class="speaker-name">C</td><td class="azimuth">0&deg;</td><td class="elevation">0&deg;</td><td class="channel">3</td></tr>
+  <tr class="lfe-row"><td class="speaker-name">LFE</td><td class="azimuth">&mdash;</td><td class="elevation">&mdash;</td><td class="channel">4</td></tr>
+  <tr><td class="speaker-name">Lss</td><td class="azimuth">+90&deg;</td><td class="elevation">0&deg;</td><td class="channel">5</td></tr>
+  <tr><td class="speaker-name">Rss</td><td class="azimuth">-90&deg;</td><td class="elevation">0&deg;</td><td class="channel">6</td></tr>
+  <tr><td class="speaker-name">Lrs</td><td class="azimuth">+135&deg;</td><td class="elevation">0&deg;</td><td class="channel">7</td></tr>
+  <tr><td class="speaker-name">Rrs</td><td class="azimuth">-135&deg;</td><td class="elevation">0&deg;</td><td class="channel">8</td></tr>
+  <tr><td class="speaker-name">Lw</td><td class="azimuth">+60&deg;</td><td class="elevation">0&deg;</td><td class="channel">9</td></tr>
+  <tr><td class="speaker-name">Rw</td><td class="azimuth">-60&deg;</td><td class="elevation">0&deg;</td><td class="channel">10</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tfl</td><td class="azimuth">+45&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">11</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tfr</td><td class="azimuth">-45&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">12</td></tr>
+  <tr class="height-row"><td class="speaker-name">Trl</td><td class="azimuth">+135&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">13</td></tr>
+  <tr class="height-row"><td class="speaker-name">Trr</td><td class="azimuth">-135&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">14</td></tr>
+</tbody>
+</table>
+
+<h3>9.1.6 Atmos</h3>
+<p class="format-meta">16 channels &middot; 9 ear + 6 height + <span class="lfe-tag">LFE Ch 4</span> &middot; <span class="height-tag">6 height</span></p>
+<table class="layout">
+<thead><tr><th>Speaker</th><th>Azimuth (+L)</th><th>Elevation</th><th>Channel</th></tr></thead>
+<tbody>
+  <tr><td class="speaker-name">L</td><td class="azimuth">+30&deg;</td><td class="elevation">0&deg;</td><td class="channel">1</td></tr>
+  <tr><td class="speaker-name">R</td><td class="azimuth">-30&deg;</td><td class="elevation">0&deg;</td><td class="channel">2</td></tr>
+  <tr><td class="speaker-name">C</td><td class="azimuth">0&deg;</td><td class="elevation">0&deg;</td><td class="channel">3</td></tr>
+  <tr class="lfe-row"><td class="speaker-name">LFE</td><td class="azimuth">&mdash;</td><td class="elevation">&mdash;</td><td class="channel">4</td></tr>
+  <tr><td class="speaker-name">Ls</td><td class="azimuth">+90&deg;</td><td class="elevation">0&deg;</td><td class="channel">5</td></tr>
+  <tr><td class="speaker-name">Rs</td><td class="azimuth">-90&deg;</td><td class="elevation">0&deg;</td><td class="channel">6</td></tr>
+  <tr><td class="speaker-name">Lrs</td><td class="azimuth">+135&deg;</td><td class="elevation">0&deg;</td><td class="channel">7</td></tr>
+  <tr><td class="speaker-name">Rrs</td><td class="azimuth">-135&deg;</td><td class="elevation">0&deg;</td><td class="channel">8</td></tr>
+  <tr><td class="speaker-name">Lw</td><td class="azimuth">+60&deg;</td><td class="elevation">0&deg;</td><td class="channel">9</td></tr>
+  <tr><td class="speaker-name">Rw</td><td class="azimuth">-60&deg;</td><td class="elevation">0&deg;</td><td class="channel">10</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tfl</td><td class="azimuth">+45&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">11</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tfr</td><td class="azimuth">-45&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">12</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tsl</td><td class="azimuth">+90&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">13</td></tr>
+  <tr class="height-row"><td class="speaker-name">Tsr</td><td class="azimuth">-90&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">14</td></tr>
+  <tr class="height-row"><td class="speaker-name">Trl</td><td class="azimuth">+135&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">15</td></tr>
+  <tr class="height-row"><td class="speaker-name">Trr</td><td class="azimuth">-135&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">16</td></tr>
+</tbody>
+</table>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<div class="category-divider">Special Layouts<span class="cat-count">&mdash; non-standard configurations</span></div>
+<!-- ═══════════════════════════════════════════════════════ -->
+
+<h3>Octaphonic (8.0)</h3>
+<p class="format-meta">8 channels &middot; 8 speakers &middot; 45&deg; intervals &middot; no LFE</p>
+<table class="layout">
+<thead><tr><th>Speaker</th><th>Azimuth (+L)</th><th>Elevation</th><th>Channel</th></tr></thead>
+<tbody>
+  <tr><td class="speaker-name">C</td><td class="azimuth">0&deg;</td><td class="elevation">0&deg;</td><td class="channel">1</td></tr>
+  <tr><td class="speaker-name">FR</td><td class="azimuth">-45&deg;</td><td class="elevation">0&deg;</td><td class="channel">2</td></tr>
+  <tr><td class="speaker-name">R</td><td class="azimuth">-90&deg;</td><td class="elevation">0&deg;</td><td class="channel">3</td></tr>
+  <tr><td class="speaker-name">RR</td><td class="azimuth">-135&deg;</td><td class="elevation">0&deg;</td><td class="channel">4</td></tr>
+  <tr><td class="speaker-name">RC</td><td class="azimuth">&plusmn;180&deg;</td><td class="elevation">0&deg;</td><td class="channel">5</td></tr>
+  <tr><td class="speaker-name">RL</td><td class="azimuth">+135&deg;</td><td class="elevation">0&deg;</td><td class="channel">6</td></tr>
+  <tr><td class="speaker-name">L</td><td class="azimuth">+90&deg;</td><td class="elevation">0&deg;</td><td class="channel">7</td></tr>
+  <tr><td class="speaker-name">FL</td><td class="azimuth">+45&deg;</td><td class="elevation">0&deg;</td><td class="channel">8</td></tr>
+</tbody>
+</table>
+
+<h3>SML 13.1</h3>
+<p class="format-meta">14 channels &middot; 8 ear + 4 height + 1 top + <span class="lfe-tag">LFE Ch 14</span> &middot; <span class="height-tag">5 height</span></p>
+<table class="layout">
+<thead><tr><th>Speaker</th><th>Azimuth (+L)</th><th>Elevation</th><th>Channel</th></tr></thead>
+<tbody>
+  <tr><td class="speaker-name">FC</td><td class="azimuth">0&deg;</td><td class="elevation">0&deg;</td><td class="channel">1</td></tr>
+  <tr><td class="speaker-name">FR</td><td class="azimuth">-45&deg;</td><td class="elevation">0&deg;</td><td class="channel">2</td></tr>
+  <tr><td class="speaker-name">R</td><td class="azimuth">-90&deg;</td><td class="elevation">0&deg;</td><td class="channel">3</td></tr>
+  <tr><td class="speaker-name">RR</td><td class="azimuth">-135&deg;</td><td class="elevation">0&deg;</td><td class="channel">4</td></tr>
+  <tr><td class="speaker-name">RC</td><td class="azimuth">&plusmn;180&deg;</td><td class="elevation">0&deg;</td><td class="channel">5</td></tr>
+  <tr><td class="speaker-name">RL</td><td class="azimuth">+135&deg;</td><td class="elevation">0&deg;</td><td class="channel">6</td></tr>
+  <tr><td class="speaker-name">L</td><td class="azimuth">+90&deg;</td><td class="elevation">0&deg;</td><td class="channel">7</td></tr>
+  <tr><td class="speaker-name">FL</td><td class="azimuth">+45&deg;</td><td class="elevation">0&deg;</td><td class="channel">8</td></tr>
+  <tr class="height-row"><td class="speaker-name">UFR</td><td class="azimuth">-45&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">9</td></tr>
+  <tr class="height-row"><td class="speaker-name">URR</td><td class="azimuth">-135&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">10</td></tr>
+  <tr class="height-row"><td class="speaker-name">URL</td><td class="azimuth">+135&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">11</td></tr>
+  <tr class="height-row"><td class="speaker-name">UFL</td><td class="azimuth">+45&deg;</td><td class="elevation height-cell">+45&deg;</td><td class="channel">12</td></tr>
+  <tr class="height-row"><td class="speaker-name">T</td><td class="azimuth">0&deg;</td><td class="elevation height-cell">+90&deg;</td><td class="channel">13</td></tr>
+  <tr class="lfe-row"><td class="speaker-name">LFE</td><td class="azimuth">&mdash;</td><td class="elevation">&mdash;</td><td class="channel">14</td></tr>
+</tbody>
+</table>
+
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<h2>Ambisonics Formats</h2>
+<!-- ═══════════════════════════════════════════════════════ -->
+
+<div class="ambi-note">
+  Ambisonics formats use Spherical Harmonic (SH) encoding, not discrete speaker positions.
+  Channel count follows <code>(order+1)&sup2;</code>. ACN channel ordering, SN3D normalization.
+  Decoding to physical speakers is handled downstream by the renderer.
+  <br><br>
+  <table>
+  <thead><tr><th>Format</th><th>Order</th><th>Channels</th><th>Formula</th></tr></thead>
+  <tbody>
+    <tr><td>FOA (1st Order)</td><td class="ch-count">1</td><td class="ch-count">4</td><td><code>(1+1)&sup2; = 4</code></td></tr>
+    <tr><td>SOA (2nd Order)</td><td class="ch-count">2</td><td class="ch-count">9</td><td><code>(2+1)&sup2; = 9</code></td></tr>
+    <tr><td>HOA (3rd Order)</td><td class="ch-count">3</td><td class="ch-count">16</td><td><code>(3+1)&sup2; = 16</code></td></tr>
+    <tr><td>4OA (4th Order)</td><td class="ch-count">4</td><td class="ch-count">25</td><td><code>(4+1)&sup2; = 25</code></td></tr>
+    <tr><td>5OA (5th Order)</td><td class="ch-count">5</td><td class="ch-count">36</td><td><code>(5+1)&sup2; = 36</code></td></tr>
+    <tr><td>6OA (6th Order)</td><td class="ch-count">6</td><td class="ch-count">49</td><td><code>(6+1)&sup2; = 49</code></td></tr>
+  </tbody>
+  </table>
+</div>
+
+<footer>
+  OpenSpatialDelay v1.0 &middot; Spatial Media Library &middot; Generated 2026-03-19
+</footer>
+
+</body>
+</html>
