@@ -394,34 +394,104 @@ private:
 };
 
 //==============================================================================
-// PresetSaveOverlay — in-plugin modal overlay for saving presets
+// PresetSaveOverlay — native popup window for saving presets
+// Uses addToDesktop() to bypass host keyboard interception (Issue #35)
 //==============================================================================
 class PresetSaveOverlay : public juce::Component
 {
 public:
     PresetSaveOverlay();
 
-    void show (const juce::String& existingName,
-               const juce::String& existingCategory = {});
+    void show (const juce::String& existingName, juce::Component* parentEditor);
     void dismiss();
 
-    // v0.9: callback with preset name AND category
-    std::function<void (const juce::String&, const juce::String&)> onSave;
+    // v1.0: callback with preset name only (always saves to User/)
+    std::function<void (const juce::String&)> onSave;
 
     void paint (juce::Graphics& g) override;
     void resized() override;
     bool keyPressed (const juce::KeyPress& key) override;
-    void mouseDown (const juce::MouseEvent& e) override;  // backdrop click → dismiss
+    void inputAttemptWhenModal() override;  // click outside native window → dismiss
 
 private:
     juce::TextEditor nameEditor;
-    juce::ComboBox categoryBox;  // v0.9: category picker
     juce::TextButton saveBtn { "Save" }, cancelBtn { "Cancel" };
 
-    static constexpr int cardW = 300, cardH = 200;  // taller for category picker
-    juce::Rectangle<int> getCardBounds() const;
+    static constexpr int cardW = 260, cardH = 130;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PresetSaveOverlay)
+};
+
+//==============================================================================
+// Global Tap Drawer — collapsible left-edge mini-drawer with 6 offset knobs
+// Applies additive delta to all enabled taps (IEM MultiEncoder pattern)
+//==============================================================================
+class GlobalTapDrawerComponent : public juce::Component, private juce::Timer
+{
+public:
+    GlobalTapDrawerComponent (OSDLookAndFeel& lookAndFeel);
+
+    void paint (juce::Graphics& g) override;
+    void resized() override;
+    void mouseDown (const juce::MouseEvent& e) override;
+
+    bool isOpen() const { return open; }
+    void setOpen (bool shouldBeOpen, bool animate = false);
+    void resetToCenter();
+
+    /** Get current knob value (for OSC sync delta computation). */
+    float getKnobValue (int knobIdx) const;
+    /** Set knob value without triggering onGlobalDelta callback (for OSC receive sync). */
+    void setKnobValueSilent (int knobIdx, float value);
+
+    /** Current animated width — use for layout in the parent editor. */
+    int getCurrentWidth() const { return currentWidth; }
+
+    // Callback: (knobIndex, delta) — fired when a global knob is turned
+    std::function<void (int knobIndex, float delta)> onGlobalDelta;
+    // Callback: fired when drawer toggles open/close (called on each animation frame)
+    std::function<void()> onToggle;
+
+    static constexpr int kClosedWidth = 14;
+    static constexpr int kOpenWidth   = 78;
+    static constexpr int kHandleWidth = 16;
+    static constexpr int kPanelWidth  = kOpenWidth - kHandleWidth;  // 62px knob area
+
+    enum KnobID { kAzimuth = 0, kElevation, kDistance, kDoppler, kPitch, kSpeed, kNumKnobs };
+
+private:
+    bool open = false;
+    bool suppressCallbacks = false;
+    bool handleHover = false;
+    OSDLookAndFeel& lookAndFeel;
+
+    // Animation state
+    int currentWidth = kClosedWidth;
+    int targetWidth  = kClosedWidth;
+    void timerCallback() override;
+
+    // Knob panel — a child component that holds all knobs.
+    // The drawer clips this panel by setting its bounds to only the visible portion,
+    // so knobs slide in/out naturally during animation.
+    struct KnobPanel : public juce::Component
+    {
+        void paint (juce::Graphics& g) override;
+    } knobPanel;
+
+    ReverseSlider azSlider;  // clockwise knob = clockwise on map (IEM convention)
+    juce::Slider elSlider, distSlider, dopplerSlider, pitchSlider, speedSlider;
+    juce::Label azLabel, elLabel, distLabel, dopplerLabel, pitchLabel, speedLabel;
+    float prevValues[kNumKnobs] = {};
+
+    void setupKnob (juce::Slider& s, juce::Label& l, const juce::String& name,
+                    float min, float max, float step, int knobIdx);
+    void layoutKnobs();
+
+    void mouseEnter (const juce::MouseEvent& e) override;
+    void mouseExit (const juce::MouseEvent& e) override;
+    void mouseMove (const juce::MouseEvent& e) override;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (GlobalTapDrawerComponent)
 };
 
 //==============================================================================
@@ -437,6 +507,14 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
+
+    /** Sync all UI state from processor parameters (for screenshot tool).
+        Normally the 30Hz timer handles this, but headless capture needs
+        a single manual call before rendering. */
+    void syncForScreenshot();
+
+    /** Open/close global drawer and set knob values (for screenshot tool). */
+    void configureGlobalDrawer (bool open, const float* knobValues = nullptr, int numKnobs = 0);
 
 private:
     std::unique_ptr<StyledButton> smlButton;  // header branding link
@@ -465,11 +543,13 @@ private:
 
     // UI components
     SpatialMapComponent spatialMap;
+    GlobalTapDrawerComponent globalTapDrawer;  // v1.0: collapsible global offset knobs
+    void applyGlobalTapDelta (int knobIndex, float delta);  // v1.0: IEM-style delta application
+    void syncGlobalTapOffsetsFromOSC();                     // v1.0: processor → editor OSC sync
 
     // Global controls — ordered by signal flow
     juce::Slider inputGainSlider, outputGainSlider;
     juce::Slider delayTimeSlider, noteDivisionSlider, feedbackSlider;
-    juce::Slider pitchShiftSlider;
     juce::Slider filterHPSlider, filterLPSlider;
     juce::Slider dryWetSlider;
     juce::ComboBox algorithmBox, hrtfProfileBox, syncModeBox;
@@ -544,7 +624,6 @@ private:
     // Labels
     juce::Label inputGainLabel, outputGainLabel;
     juce::Label delayTimeLabel, feedbackLabel;
-    juce::Label pitchShiftLabel;
     juce::Label filterHPLabel, filterLPLabel;
     juce::Label dryWetLabel;
     juce::Label algorithmLabel, hrtfProfileLabel;
@@ -557,7 +636,6 @@ private:
 
     std::unique_ptr<SliderAttachment> inputGainAttach, outputGainAttach;
     std::unique_ptr<SliderAttachment> delayTimeAttach, noteDivisionAttach, feedbackAttach;
-    std::unique_ptr<SliderAttachment> pitchShiftAttach;
     std::unique_ptr<SliderAttachment> filterHPAttach, filterLPAttach;
     std::unique_ptr<SliderAttachment> dryWetAttach;
     std::unique_ptr<ComboBoxAttachment> hrtfProfileAttach, syncModeAttach, outputFormatAttach;

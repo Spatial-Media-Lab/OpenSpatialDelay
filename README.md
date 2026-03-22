@@ -47,13 +47,14 @@ OpenSpatialDelay is the first plugin in the **Spatial Media Library** — an ope
 **Animation & Control**
 - 13 trajectory shapes per tap — Orbit, Figure-8, Spiral, Heart, Helix, Bounce, and more
 - Forward/reverse trajectory direction
-- [ADM-OSC](https://adm-osc.music.columbia.edu/) receive and send for external position control (e.g., from a spatial audio workstation)
+- [ADM-OSC](https://adm-osc.music.columbia.edu/) receive and send for external position control, plus full OSC control of all parameters via custom `/osd/` namespace
 - Doppler effect with distance-based air absorption
 
 **Workflow**
-- 60 factory presets across 9 categories
+- 70 factory presets across 9 categories
 - User preset save/load with custom categories
 - Spatial map with real-time trajectory visualization
+- Global tap controls — 6 offset knobs that adjust all enabled taps simultaneously, preserving spatial arrangements
 
 ## Installation
 

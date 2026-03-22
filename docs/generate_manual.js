@@ -876,6 +876,7 @@ function buildOutputFormats() {
       ["5.1.4 Atmos", "10", "Yes", "4 top"],
       ["7.1.4 Atmos", "12", "Yes", "4 top"],
       ["7.1.6 Atmos", "14", "Yes", "6 top"],
+      ["9.1.4 Atmos", "14", "Yes", "4 top + wide speakers"],
       ["9.1.6 Atmos", "16", "Yes", "6 top + wide speakers"],
       ["SpatialMediaLab 13.1", "14", "Yes", "8 ear-level + 4 height + 1 zenith"],
     ],

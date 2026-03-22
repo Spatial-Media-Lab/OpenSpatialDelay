@@ -213,7 +213,7 @@ trajectory/ADM-OSC parameter stubs for v0.6+.
 - 22 output formats ordered by category, then ascending channel count:
   - Binaural (1): Binaural (default)
   - Stereo (1): Stereo (5 sub-modes via algorithm parameter)
-  - Surround (12): Quad, 5.0, 5.1, 7.0, 5.1.2, 7.1, Oct, 5.1.4, 7.1.2, 7.1.4, 7.1.6, 9.1.6
+  - Surround (13): Quad, 5.0, 5.1, 7.0, 7.1, Oct, 5.1.2, 5.1.4, 7.1.2, 7.1.4, 7.1.6, 9.1.4, 9.1.6
   - Ambisonics (6): FOA, SOA, HOA, 4OA, 5OA, 6OA
 - `OutputFormatInfo` struct gains `isStereoVariant` field
 - Parameter migration in `setStateInformation` maps v0.4 indices (17 formats) → v0.5 indices (21 formats)
@@ -645,6 +645,8 @@ Plugin identity: `Os10` (PLUGIN_CODE).
 - **Default preset selection:** Fresh instances start on "Default" preset by name (not alphabetical first).
 - **Full OSC control (Issue #32):** All parameters controllable via OSC using hybrid namespace. ADM-OSC `/adm/obj/N/` for position (standard interop). Custom `/osd/obj/N/` for per-tap params (enabled, doppler, pitch, trajectory, speed, direction, input) + position aliases. `/osd/global/` for all global params (delayTime, feedback, filters, dryWet, algorithm, etc.). Send broadcasts all changed values with change-gating. `handleOSCParam()` generic helper for APVTS parameter setting from denormalized OSC values.
 - **Dead code cleanup:** Removed unused `trajParam_elevation`/`trajParam_distance` member variables, unused `CMAKE_POLICY_VERSION_MINIMUM` CMake variable. Clarified discarded smoothing calls in binaural render path.
+- **Music notation sync icons (Issue #26):** Replaced Unicode text labels (`♪.` / `♪³`) on dotted/triplet sync mode buttons with proper music notation SVG icons — dotted eighth note and beamed eighth note triplet. Added icon-only rendering path to `StyledButton::paintButton()`. Icons tinted by existing accent color logic (gold when active, dim when inactive).
+- **Global tap controls (Issue #25):** Collapsible mini-drawer on left edge of spatial map with 6 global offset knobs (AZIM, ELEV, DIST, DOPPLER, PITCH, SPEED). Turning a global knob offsets every enabled tap's matching parameter by the same delta, preserving the spatial arrangement (IEM MultiEncoder-style). Azimuth wraps at ±180°, all others clamp. Value readouts with unit suffixes (°, st, Hz). Silver/ice accent color. Drawer open/close state persisted in DAW session via ValueTree. Preset load resets all offsets to 0. OSC control via 6 new `/osd/global/tap*` addresses (receive with clamping + change-gated send at 30Hz). UI-only knobs — not APVTS parameters, not DAW-automatable. 7 new Catch2 tests (12 assertions).
 
 ### Bug Fixes
 - **Issue #24 (7.1/7.1.4 rear speakers):** Investigated with diagnostic instrumentation — confirmed plugin computes correct gains. Root cause was Reaper project routing configuration. Closed.
@@ -654,7 +656,7 @@ Plugin identity: `Os10` (PLUGIN_CODE).
 ### Infrastructure
 - **22 output formats** — added SpatialMediaLab 13.1 (was 21 in v0.9)
 - **14-channel discrete bus** added to `isBusesLayoutSupported()` for SML 13.1 / 7.1.6
-- **134 Catch2 tests, 1167 assertions** — expanded surround output test suite with 8 new elevation/height isolation tests + 40 new OSC receive tests covering ADM-OSC position, /osd/ aliases, per-object params, global params, and edge cases
+- **141 Catch2 tests, 1204 assertions** — expanded surround output test suite with 8 new elevation/height isolation tests + 47 OSC receive tests covering ADM-OSC position, /osd/ aliases, per-object params, global params, global tap offsets, and edge cases
 - **State migration v15→v16:** Handles outputFormat parameter shift for SML 13.1 insertion
 - **Diagnostic cleanup:** Removed all #24 diagnostic instrumentation from production code
 
@@ -668,6 +670,7 @@ Active source in `Source/`:
 - `PresetData.cpp` (60 factory presets, serialization, install function, ~40 KB)
 - `Tests/TrajectoryTests.cpp` (Catch2 trajectory tests)
 - `Tests/SurroundOutputTests.cpp` (Catch2 surround output tests)
+- `Tests/OscTests.cpp` (Catch2 OSC receive tests)
 
 ### Output
 - 22 output formats (1 binaural + 1 stereo + 14 surround + 6 Ambisonics)

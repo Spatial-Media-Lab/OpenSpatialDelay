@@ -82,6 +82,10 @@ When a tap has an active trajectory, the map shows:
 - A **crosshair marker** at the tap's origin point (the knob position), showing where the trajectory is anchored
 - The **animated dot** showing the tap's current position as it moves along the trajectory path
 
+### Global Tap Drawer
+
+The left edge of the spatial map features a collapsible drawer with 6 global offset knobs (AZIM, ELEV, DIST, DOPPLER, PITCH, SPEED). Click the **GLOBAL** handle to open or close it. The drawer overlays the spatial map with a semi-transparent background. See [Controls Reference -- Global Tap Controls](controls-reference.md#global-tap-controls-spatial-map-drawer) for full details.
+
 ### Star Field
 
 The spatial map background features a subtle star field with twinkling dots, providing visual depth without distracting from the tap positions. This is purely decorative and does not represent any audio parameter.

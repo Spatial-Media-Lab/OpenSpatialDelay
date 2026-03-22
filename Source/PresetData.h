@@ -21,7 +21,6 @@ struct PresetData
     float filterHP = 20.0f;
     float filterLPQ = 0.707f;    // v0.9: LP resonance (Q), default Butterworth
     float filterHPQ = 0.707f;    // v0.9: HP resonance (Q), default Butterworth
-    float pitchShift = 0.0f;
     float dryWet = 0.5f;
     float inputGain = 0.0f;
     float outputGain = 0.0f;
@@ -40,7 +39,7 @@ struct PresetData
         float elevationDeg = 0.0f;
         float distance = 0.5f;
         float dopplerAmount = 0.0f;
-        float pitchShift = 0.0f;      // v0.7: per-tap pitch override (semitones, 0=use global)
+        float pitchShift = 0.0f;      // per-tap pitch shift (semitones, 0=no shift)
         int   trajectoryShape = 0;
         float trajectorySpeed = 1.0f;
         int   trajectoryDirection = 0;  // v0.8: 0=Forward, 1=Reverse
@@ -62,7 +61,6 @@ int          trajectoryLegacyToNewIndex (int oldIndex);
 //==============================================================================
 juce::String serializePresetToJson (const PresetData& pd);
 PresetData   parsePresetJson (const juce::String& json);
-void         installFactoryPresets (const juce::File& targetDir);
 
 //==============================================================================
 // Extern declarations for factory preset data

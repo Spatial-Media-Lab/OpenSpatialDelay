@@ -81,7 +81,6 @@ static void applyPresetToProcessor (OpenSpatialDelayProcessor& processor,
     setFloat  ("filterHP",      preset.filterHP);
     setFloat  ("filterLPQ",     preset.filterLPQ);
     setFloat  ("filterHPQ",     preset.filterHPQ);
-    setFloat  ("pitchShift",    preset.pitchShift);
     setFloat  ("dryWet",        preset.dryWet);
     setFloat  ("inputGain",     preset.inputGain);
     setFloat  ("outputGain",    preset.outputGain);
@@ -218,10 +217,23 @@ int main (int argc, char* argv[])
             int idx = findPresetByName (presetArg);
             if (idx >= 0)
             {
-                applyPresetToProcessor (processor, factoryPresets[static_cast<size_t> (idx)]);
+                const auto& preset = factoryPresets[static_cast<size_t> (idx)];
+                applyPresetToProcessor (processor, preset);
+
+                // Find the matching index in the processor's allPresets (loaded from disk)
+                // since allPresets is sorted differently from factoryPresets[]
+                auto names = processor.getPresetNames();
+                for (int n = 0; n < names.size(); ++n)
+                {
+                    if (names[n] == preset.name)
+                    {
+                        processor.setCurrentPresetIndex (n);
+                        break;
+                    }
+                }
+
                 std::cout << "Loaded factory preset: "
-                          << factoryPresets[static_cast<size_t> (idx)].name.toStdString()
-                          << std::endl;
+                          << preset.name.toStdString() << std::endl;
             }
             else
             {
@@ -233,6 +245,10 @@ int main (int argc, char* argv[])
             }
         }
     }
+
+    // ── Enable OSC Receive for visual completeness in screenshots ──────
+    if (auto* p = processor.apvts.getParameter ("admOscEnabled"))
+        p->setValueNotifyingHost (1.0f);
 
     // ── Create editor ────────────────────────────────────────────────────
     auto* editorRaw = processor.createEditor();
@@ -246,6 +262,13 @@ int main (int argc, char* argv[])
 
     // Set bounds to the plugin's designed window size
     editor->setBounds (0, 0, 820, 580);
+
+    // ── Sync editor state from processor parameters ─────────────────────
+    // The editor normally reads tap positions via a 30Hz timer callback.
+    // Since no timer fires during screenshot capture, we manually trigger
+    // the parameter-to-UI sync so the spatial map shows tap positions.
+    if (auto* osdEditor = dynamic_cast<OpenSpatialDelayEditor*> (editor.get()))
+        osdEditor->syncForScreenshot();
 
     // ── Render to image ──────────────────────────────────────────────────
     auto image = editor->createComponentSnapshot (

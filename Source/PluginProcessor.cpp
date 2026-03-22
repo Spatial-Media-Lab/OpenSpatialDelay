@@ -854,8 +854,8 @@ void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elR
     if (sourceIndex < 0 || sourceIndex >= MAX_SOURCES || storedIRLength <= 0)
         return;
 
-    // ~1° threshold — skip update if position hasn't changed significantly
-    constexpr float THRESHOLD = 0.017f;  // ~1 degree in radians
+    // ~2° threshold — skip update if position hasn't changed significantly
+    constexpr float THRESHOLD = 0.035f;  // ~2 degrees in radians — balances HRIR update frequency vs CPU (non-restarting crossfade handles rapid updates)
     if (sourceConvReady[sourceIndex]
         && std::abs (azRad - cachedSourceAz[sourceIndex]) < THRESHOLD
         && std::abs (elRad - cachedSourceEl[sourceIndex]) < THRESHOLD)
@@ -3680,6 +3680,9 @@ float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDe
     // v0.9: Per-tap pitch via WSOLA-lite (timing-preserving)
     float perTapPitch = cachedObj[objectIndex].pitchShift->load (std::memory_order_relaxed);
 
+    // v1.0: Combine per-tap pitch with Doppler pitch shift (restored via WSOLA)
+    float combinedPitch = perTapPitch + dopplerSemitones[objectIndex];
+
     // v0.8: Per-tap input channel routing
     int inputCh = static_cast<int> (cachedObj[objectIndex].inputChannel->load (std::memory_order_relaxed));
     DelayChannel ch = (inputCh == 1) ? DelayChannel::Left : (inputCh == 2) ? DelayChannel::Right : DelayChannel::Mono;
@@ -3689,9 +3692,9 @@ float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDe
     if (ch == DelayChannel::Left)       objMono = readDelayLineL (objDelaySamples);
     else if (ch == DelayChannel::Right) objMono = readDelayLineR (objDelaySamples);
 
-    // v0.9: Per-tap pitch via WSOLA-lite (timing-preserving) — only when non-zero
-    if (std::abs (perTapPitch) >= 0.001f)
-        objMono = wsolaProcess (objectIndex, objMono, perTapPitch);
+    // v0.9: Per-tap pitch via WSOLA-lite — applies user pitch + Doppler combined
+    if (std::abs (combinedPitch) >= 0.001f)
+        objMono = wsolaProcess (objectIndex, objMono, combinedPitch);
     // v0.9: True bypass — skip filter entirely when AIR is off (saves 12 IIR evals/sample)
     float result = airAbsorptionActive
                  ? airAbsorptionFilter[objectIndex].processSample (objMono)
@@ -3922,7 +3925,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     {
         float blockDuration = static_cast<float> (numSamples) / static_cast<float> (currentSampleRate);
         constexpr float speedOfSound = 343.0f;   // m/s at 20°C
-        constexpr float emaAlpha = 0.2f;          // Smoothing factor for velocity
+        constexpr float emaAlpha = 0.35f;         // Smoothing factor for velocity (0.35 = ~40ms settling @ 256/48k — responsive without single-block noise)
         constexpr float maxDopplerSemitones = 12.0f;
 
         for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -4044,7 +4047,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
                 // v1.0: EMA-smooth the cutoff to prevent IIR coefficient transients
                 // on rapid distance changes. Alpha 0.3 ≈ 3-block settling time.
-                constexpr float airSmoothAlpha = 0.3f;
+                constexpr float airSmoothAlpha = 0.2f;  // EMA smoothing for IIR cutoff — 0.2 gives ~80ms settling, aligns with Doppler tracking speed
                 smoothedAirCutoff[t] = smoothedAirCutoff[t]
                                      + airSmoothAlpha * (targetCutoff - smoothedAirCutoff[t]);
 
