@@ -1661,8 +1661,37 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
         prevElevation[i] = juce::degreesToRadians (tap.elevationDeg);
         prevDistance[i]   = tap.distance;
         dopplerSemitones[i] = 0.0f;
+        smoothedDopplerSemitones[i] = 0.0f;
         smoothedRadialVelocity[i] = 0.0f;
     }
+
+    // v1.0: Reset WSOLA state to prevent stale grain artifacts on preset change
+    for (auto& ws : wsolaState)
+    {
+        std::fill (std::begin (ws.buffer), std::end (ws.buffer), 0.0f);
+        ws.writePos = 0;
+        ws.readPhase = 0.0f;
+        ws.fadingPhase = 0.0f;
+        ws.crossfadeRemaining = 0;
+    }
+
+    // v1.0: Reset filter state to prevent coefficient-state mismatch transient
+    for (int t = 0; t < MAX_OBJECTS; ++t)
+    {
+        tapLPFilter[t].reset();
+        tapHPFilter[t].reset();
+        airAbsorptionFilter[t].reset();
+    }
+    feedbackLPFilter.reset();
+    feedbackHPFilter.reset();
+
+    // v1.0: Reset smoothed filter frequencies to prevent stale ramps
+    smoothedLPFreq = preset->filterLP;
+    smoothedHPFreq = preset->filterHP;
+    smoothedFilterLPQ = preset->filterLPQ;
+    smoothedFilterHPQ = preset->filterHPQ;
+    cachedFeedbackLPFreq = -1.0f;  // Force coefficient recalculation
+    cachedFeedbackHPFreq = -1.0f;
 
     currentPresetIndex = index;
 }
@@ -2303,7 +2332,8 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
 
     // v0.8: Reset wobble modulation state
     wobblePhase = 0.0f;
-    blockWobbleAmount = 0.0f;
+    smoothedWobbleAmount.reset (sampleRate, 0.05);  // 50ms ramp
+    smoothedWobbleAmount.setCurrentAndTargetValue (0.0f);
     blockWobbleMorph = 0.0f;
 
     // v0.9: Reset all WSOLA-lite per-tap pitch states
@@ -2315,6 +2345,14 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
         ws.fadingPhase = 0.0f;
         ws.crossfadeRemaining = 0;
     }
+
+    // v1.0: Initialize tap fade envelopes
+    for (int t = 0; t < MAX_OBJECTS; ++t)
+    {
+        tapFadeGain[t] = 0.0f;
+        tapFadeTarget[t] = 0.0f;
+    }
+    tapFadeIncrement = 1.0f / 64.0f;
 
     // Pre-allocate input buffers
     monoInputBuffer.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
@@ -2336,6 +2374,10 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     }
     cachedFeedbackLPFreq = -1.0f;  // Force recalculation on first block
     cachedFeedbackHPFreq = -1.0f;
+    smoothedLPFreq = 20000.0f;
+    smoothedHPFreq = 20.0f;
+    smoothedFilterLPQ = 0.707f;
+    smoothedFilterHPQ = 0.707f;
 
     // Initialize smoothed values — setCurrentAndTargetValue prevents stale ramps
     // after mid-session prepareToPlay calls (e.g., bus renegotiation)
@@ -2410,6 +2452,7 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
         prevElevation[i] = 0.0f;
         prevDistance[i]   = 0.5f;
         dopplerSemitones[i] = 0.0f;
+        smoothedDopplerSemitones[i] = 0.0f;
         smoothedRadialVelocity[i] = 0.0f;
     }
 
@@ -3669,7 +3712,8 @@ static float computeWobbleWaveform (float phase, float morphPercent)
 // v0.8: Apply wobble modulation — LFO rate tied to delay time (shorter delay = faster wobble)
 inline float OpenSpatialDelayProcessor::applyWobble (float baseDelaySamples, float currentDelayMs)
 {
-    if (blockWobbleAmount <= 0.0f)
+    float wobbleAmt = smoothedWobbleAmount.getNextValue();
+    if (wobbleAmt <= 0.0f)
         return baseDelaySamples;
 
     float lfoFreqHz = 1000.0f / std::max (1.0f, currentDelayMs);
@@ -3679,7 +3723,7 @@ inline float OpenSpatialDelayProcessor::applyWobble (float baseDelaySamples, flo
 
     float waveform = computeWobbleWaveform (wobblePhase, blockWobbleMorph);
     constexpr float maxDeviation = 0.006f;  // ±0.6% of delay time at max amount
-    return baseDelaySamples * (1.0f + blockWobbleAmount * waveform * maxDeviation);
+    return baseDelaySamples * (1.0f + wobbleAmt * waveform * maxDeviation);
 }
 
 //==============================================================================
@@ -3693,8 +3737,11 @@ float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDe
     // v0.9: Per-tap pitch via WSOLA-lite (timing-preserving)
     float perTapPitch = cachedObj[objectIndex].pitchShift->load (std::memory_order_relaxed);
 
-    // v1.0: Combine per-tap pitch with Doppler pitch shift (restored via WSOLA)
-    float combinedPitch = perTapPitch + dopplerSemitones[objectIndex];
+    // v1.0: Smooth Doppler pitch to prevent WSOLA grain boundary artifacts
+    constexpr float dopplerSmoothAlpha = 0.15f;  // ~3-block settling
+    smoothedDopplerSemitones[objectIndex] += dopplerSmoothAlpha
+        * (dopplerSemitones[objectIndex] - smoothedDopplerSemitones[objectIndex]);
+    float combinedPitch = perTapPitch + smoothedDopplerSemitones[objectIndex];
 
     // v0.8: Per-tap input channel routing
     int inputCh = static_cast<int> (cachedObj[objectIndex].inputChannel->load (std::memory_order_relaxed));
@@ -3784,7 +3831,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // v0.8: Wobble modulation (block-rate parameter reads, gated by wobbleEnabled)
     {
         bool wobbleEnabled = cachedParam_wobbleEnabled->load() > 0.5f;
-        blockWobbleAmount = wobbleEnabled ? (cachedParam_wobbleAmount->load() / 100.0f) : 0.0f;
+        smoothedWobbleAmount.setTargetValue (wobbleEnabled ? (cachedParam_wobbleAmount->load() / 100.0f) : 0.0f);
         blockWobbleMorph  = cachedParam_wobbleMorph->load();
     }
 
@@ -3810,29 +3857,37 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     smoothedInputGain.setTargetValue  (juce::Decibels::decibelsToGain (inGainDb));
     smoothedOutputGain.setTargetValue (juce::Decibels::decibelsToGain (outGainDb));
 
-    // --- Update feedback filters (only when frequency or Q changes) -----------
-    bool lpQChanged = std::abs (filterLPQ - cachedFilterLPQ) > 0.001f;
-    bool hpQChanged = std::abs (filterHPQ - cachedFilterHPQ) > 0.001f;
-    bool lpChanged = std::abs (lpFreq - cachedFeedbackLPFreq) > 0.1f || lpQChanged;
-    bool hpChanged = std::abs (hpFreq - cachedFeedbackHPFreq) > 0.1f || hpQChanged;
-    if (lpChanged)
+    // --- Update feedback filters (EMA-smoothed coefficients for click-free sweeps) ---
     {
-        auto lpCoeffs = juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, lpFreq, filterLPQ);
-        feedbackLPFilter.coefficients = lpCoeffs;
-        for (int t = 0; t < MAX_OBJECTS; ++t)
-            tapLPFilter[t].coefficients = lpCoeffs;
-        cachedFeedbackLPFreq = lpFreq;
+        constexpr float filterSmoothAlpha = 0.3f;  // ~3-block settling — smooth enough to prevent transients
+        smoothedLPFreq += filterSmoothAlpha * (lpFreq - smoothedLPFreq);
+        smoothedHPFreq += filterSmoothAlpha * (hpFreq - smoothedHPFreq);
+        smoothedFilterLPQ += filterSmoothAlpha * (filterLPQ - smoothedFilterLPQ);
+        smoothedFilterHPQ += filterSmoothAlpha * (filterHPQ - smoothedFilterHPQ);
+
+        bool lpChanged = std::abs (smoothedLPFreq - cachedFeedbackLPFreq) > 0.01f
+                      || std::abs (smoothedFilterLPQ - cachedFilterLPQ) > 0.0001f;
+        bool hpChanged = std::abs (smoothedHPFreq - cachedFeedbackHPFreq) > 0.01f
+                      || std::abs (smoothedFilterHPQ - cachedFilterHPQ) > 0.0001f;
+        if (lpChanged)
+        {
+            auto lpCoeffs = juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, smoothedLPFreq, smoothedFilterLPQ);
+            feedbackLPFilter.coefficients = lpCoeffs;
+            for (int t = 0; t < MAX_OBJECTS; ++t)
+                tapLPFilter[t].coefficients = lpCoeffs;
+            cachedFeedbackLPFreq = smoothedLPFreq;
+            cachedFilterLPQ = smoothedFilterLPQ;
+        }
+        if (hpChanged)
+        {
+            auto hpCoeffs = juce::dsp::IIR::Coefficients<float>::makeHighPass (currentSampleRate, smoothedHPFreq, smoothedFilterHPQ);
+            feedbackHPFilter.coefficients = hpCoeffs;
+            for (int t = 0; t < MAX_OBJECTS; ++t)
+                tapHPFilter[t].coefficients = hpCoeffs;
+            cachedFeedbackHPFreq = smoothedHPFreq;
+            cachedFilterHPQ = smoothedFilterHPQ;
+        }
     }
-    if (hpChanged)
-    {
-        auto hpCoeffs = juce::dsp::IIR::Coefficients<float>::makeHighPass (currentSampleRate, hpFreq, filterHPQ);
-        feedbackHPFilter.coefficients = hpCoeffs;
-        for (int t = 0; t < MAX_OBJECTS; ++t)
-            tapHPFilter[t].coefficients = hpCoeffs;
-        cachedFeedbackHPFreq = hpFreq;
-    }
-    if (lpQChanged) cachedFilterLPQ = filterLPQ;
-    if (hpQChanged) cachedFilterHPQ = filterHPQ;
 
     // --- Block-rate constant: ms → samples conversion factor -------------------
     blockMsToSamples = 0.001f * static_cast<float> (currentSampleRate);
@@ -3885,6 +3940,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     {
         // Read per-object state via cached pointers (no string lookups)
         objects[t].enabled      = cachedObj[t].enabled->load()   > 0.5f;
+        tapFadeTarget[t] = objects[t].enabled ? 1.0f : 0.0f;
 
         // v0.9: When trajectory is active, read animated position from internal arrays
         // (the knobs/APVTS hold the origin; the internal arrays hold origin + trajectory offset)
@@ -3901,7 +3957,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             objects[t].distance     = cachedObj[t].distance->load();
         }
 
-        if (objects[t].enabled)
+        if (objects[t].enabled || tapFadeGain[t] > 0.0f)
         {
             lastEnabledObjectIndex = t;
             float azRad = juce::degreesToRadians (objects[t].azimuthDeg);
@@ -3943,7 +3999,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
-            if (! objects[t].enabled)
+            if (! objects[t].enabled && tapFadeGain[t] <= 0.0f)
             {
                 dopplerSemitones[t] = 0.0f;
                 // v1.0: Use pre-computed transparent coefficients (no heap allocation)
@@ -4237,9 +4293,14 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
         // STAGE 2: READ & ACCUMULATE (per-source mono × interpolated distance gain)
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
-            if (! objects[t].enabled) continue;
+            // v1.0: Per-tap fade envelope — prevents clicks on enable/disable transitions
+            if (tapFadeGain[t] < tapFadeTarget[t])
+                tapFadeGain[t] = std::min (tapFadeGain[t] + tapFadeIncrement, 1.0f);
+            else if (tapFadeGain[t] > tapFadeTarget[t])
+                tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
+            if (tapFadeGain[t] <= 0.0f) continue;
             float dist = prevDistGain[t] + frac * (objDistGain[t] - prevDistGain[t]);
-            sourceAccumBufPtrs[t][s] = readObjectSample (t, baseDelaySamples) * dist;
+            sourceAccumBufPtrs[t][s] = readObjectSample (t, baseDelaySamples) * dist * tapFadeGain[t];
         }
 
         // STAGE 3: FEEDBACK (mono, pre-spatial)
@@ -4253,7 +4314,7 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
     // === PASS 2: Per-block per-source HRTF convolution → wet L/R ===
     bool sourceEnabled[MAX_OBJECTS];
     for (int t = 0; t < MAX_OBJECTS; ++t)
-        sourceEnabled[t] = objects[t].enabled;
+        sourceEnabled[t] = (tapFadeGain[t] > 0.0f);
 
     const float* srcBufPtrs[MAX_OBJECTS];
     for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -4326,14 +4387,19 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
 
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
-            if (! objects[t].enabled) continue;
+            // v1.0: Per-tap fade envelope — prevents clicks on enable/disable transitions
+            if (tapFadeGain[t] < tapFadeTarget[t])
+                tapFadeGain[t] = std::min (tapFadeGain[t] + tapFadeIncrement, 1.0f);
+            else if (tapFadeGain[t] > tapFadeTarget[t])
+                tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
+            if (tapFadeGain[t] <= 0.0f) continue;
             float objMono = readObjectSample (t, baseDelaySamples);
 
             // Interpolate between previous and current block gains
             float gL = prevBinauralGains[t].leftGain  + frac * (objGains[t].leftGain  - prevBinauralGains[t].leftGain);
             float gR = prevBinauralGains[t].rightGain + frac * (objGains[t].rightGain - prevBinauralGains[t].rightGain);
-            wetL += objMono * gL;
-            wetR += objMono * gR;
+            wetL += objMono * gL * tapFadeGain[t];
+            wetR += objMono * gR * tapFadeGain[t];
         }
 
         // === STAGE 3: FEEDBACK ===
@@ -4375,7 +4441,7 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
 
     for (int t = 0; t < MAX_OBJECTS; ++t)
     {
-        if (! objects[t].enabled) continue;
+        if (! objects[t].enabled && tapFadeGain[t] <= 0.0f) continue;
 
         float azRad = juce::degreesToRadians (objects[t].azimuthDeg);
         float dG = objDistGain[t];
@@ -4459,14 +4525,19 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
 
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
-            if (! objects[t].enabled) continue;
+            // v1.0: Per-tap fade envelope — prevents clicks on enable/disable transitions
+            if (tapFadeGain[t] < tapFadeTarget[t])
+                tapFadeGain[t] = std::min (tapFadeGain[t] + tapFadeIncrement, 1.0f);
+            else if (tapFadeGain[t] > tapFadeTarget[t])
+                tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
+            if (tapFadeGain[t] <= 0.0f) continue;
             float objMono = readObjectSample (t, baseDelaySamples);
 
             // Interpolate between previous and current block gains
             float gL = prevStereoGainL[t] + frac * (objGainL[t] - prevStereoGainL[t]);
             float gR = prevStereoGainR[t] + frac * (objGainR[t] - prevStereoGainR[t]);
-            wetL += objMono * gL;
-            wetR += objMono * gR;
+            wetL += objMono * gL * tapFadeGain[t];
+            wetR += objMono * gR * tapFadeGain[t];
         }
 
         // === STAGE 3: FEEDBACK ===
@@ -4518,7 +4589,7 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
     // --- NFC-HOA: Update filter coefficients when distance changes (block-rate) ---
     for (int t = 0; t < MAX_OBJECTS; ++t)
     {
-        if (! objects[t].enabled) continue;
+        if (! objects[t].enabled && tapFadeGain[t] <= 0.0f) continue;
         float distMeters = objects[t].distance * 10.0f;  // 0..1 → 0..10m
         if (std::abs (distMeters - prevNfcDistance[t]) > 0.01f)
         {
@@ -4549,7 +4620,7 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
     float objSHCoeffs[MAX_OBJECTS][MAX_AMBI_CHANNELS] = {};
     for (int t = 0; t < MAX_OBJECTS; ++t)
     {
-        if (! objects[t].enabled) continue;
+        if (! objects[t].enabled && tapFadeGain[t] <= 0.0f) continue;
         float azRad = juce::degreesToRadians (objects[t].azimuthDeg);
         float elRad = juce::degreesToRadians (objects[t].elevationDeg);
         for (int c = 0; c < numAmbiCh; ++c)
@@ -4592,12 +4663,17 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
 
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
-            if (! objects[t].enabled) continue;
+            // v1.0: Per-tap fade envelope — prevents clicks on enable/disable transitions
+            if (tapFadeGain[t] < tapFadeTarget[t])
+                tapFadeGain[t] = std::min (tapFadeGain[t] + tapFadeIncrement, 1.0f);
+            else if (tapFadeGain[t] > tapFadeTarget[t])
+                tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
+            if (tapFadeGain[t] <= 0.0f) continue;
             float objMono = readObjectSample (t, baseDelaySamples);
 
             // Interpolate distance gain between previous and current block
             float dist = prevDistGain[t] + frac * (objDistGain[t] - prevDistGain[t]);
-            float scaledMono = objMono * dist;
+            float scaledMono = objMono * dist * tapFadeGain[t];
 
             // Order 0 (W channel): no NFC needed — interpolate SH coeff
             float sh0 = prevSHCoeffs[t][0] + frac * (objSHCoeffs[t][0] - prevSHCoeffs[t][0]);
@@ -4692,7 +4768,12 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
 
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
-            if (! objects[t].enabled) continue;
+            // v1.0: Per-tap fade envelope — prevents clicks on enable/disable transitions
+            if (tapFadeGain[t] < tapFadeTarget[t])
+                tapFadeGain[t] = std::min (tapFadeGain[t] + tapFadeIncrement, 1.0f);
+            else if (tapFadeGain[t] > tapFadeTarget[t])
+                tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
+            if (tapFadeGain[t] <= 0.0f) continue;
             float objMono = readObjectSample (t, baseDelaySamples);
 
             // Interpolate distance gain and channel gains between previous and current block
@@ -4701,10 +4782,10 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
             for (int sp = 0; sp < numSpeakers; ++sp)
             {
                 float g = prevChannelGains[t][sp] + frac * (objChannelGains[t][sp] - prevChannelGains[t][sp]);
-                channelAccum[sp] += objMono * dist * g;
+                channelAccum[sp] += objMono * dist * g * tapFadeGain[t];
             }
 
-            wetMono += objMono * dist;
+            wetMono += objMono * dist * tapFadeGain[t];
         }
 
         // === STAGE 3: FEEDBACK ===
