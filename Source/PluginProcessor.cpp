@@ -512,6 +512,46 @@ void HRTFDatabase::getInterpolatedHRIR (float azimuthRad, float elevationRad,
                             &delayL, &delayR);
 }
 
+void HRTFDatabase::getAlignedHRIR (float azimuthRad, float elevationRad,
+                                    float* irL, float* irR,
+                                    float& delayL, float& delayR) const
+{
+    // First get the standard interpolated HRIR with embedded ITD
+    getInterpolatedHRIR (azimuthRad, elevationRad, irL, irR, delayL, delayR);
+
+    if (! loaded || irLength <= 0)
+        return;
+
+    // Remove ITD by shifting each HRIR backward by its delay (integer part).
+    // The fractional part remains in delayL/delayR for the caller to apply
+    // as a separate fractional-sample delay.
+    //
+    // This produces time-aligned HRIRs with coherent phase structure,
+    // enabling smooth crossfading between neighboring positions without
+    // comb-filtering from ITD misalignment.
+
+    int shiftL = static_cast<int> (delayL);
+    int shiftR = static_cast<int> (delayR);
+
+    // Shift left channel: move samples backward by shiftL
+    if (shiftL > 0 && shiftL < irLength)
+    {
+        for (int i = 0; i < irLength - shiftL; ++i)
+            irL[i] = irL[i + shiftL];
+        for (int i = irLength - shiftL; i < irLength; ++i)
+            irL[i] = 0.0f;
+    }
+
+    // Shift right channel: move samples backward by shiftR
+    if (shiftR > 0 && shiftR < irLength)
+    {
+        for (int i = 0; i < irLength - shiftR; ++i)
+            irR[i] = irR[i + shiftR];
+        for (int i = irLength - shiftR; i < irLength; ++i)
+            irR[i] = 0.0f;
+    }
+}
+
 void HRTFDatabase::unload()
 {
     if (easyHandle != nullptr)
@@ -560,28 +600,32 @@ void PartitionedConvolver::setIR (const float* ir, int length)
 {
     if (fftSize == 0) return;
 
-    // v1.0: Save current IR + overlap as "previous" for crossfade
-    // Only crossfade if we already have a valid IR loaded (irLen > 0)
-    if (irLen > 0)
+    // v1.0: Non-restarting dual-convolver crossfade.
+    // Key behavior: if called during active crossfade, only update the new IR
+    // (irFreqDomain) without resetting crossfade progress. This ensures the
+    // fade always completes during continuous movement, rather than perpetually
+    // restarting at 0%.
+
+    if (irLen > 0 && crossfadeRemaining <= 0)
     {
+        // No crossfade active — start a new one.
+        // Save current IR + overlap as crossfade source.
         std::copy (irFreqDomain.begin(), irFreqDomain.end(), prevIrFreqDomain.begin());
         std::copy (overlapBuf.begin(), overlapBuf.end(), prevOverlapBuf.begin());
-        crossfadeRemaining = blockSize;
+        crossfadeTotalLength = blockSize * kCrossfadeBlocks;
+        crossfadeRemaining = crossfadeTotalLength;
     }
+    // else: crossfade already active — don't restart, don't touch prevIrFreqDomain
+    // or prevOverlapBuf. The crossfade continues from where it is, blending from
+    // the original source toward whatever the latest IR is.
 
-    // Zero-pad IR to fftSize and compute FFT
+    // Always update the "new" IR (target of crossfade)
     std::fill (irFreqDomain.begin(), irFreqDomain.end(), 0.0f);
     for (int i = 0; i < std::min (length, fftSize); ++i)
         irFreqDomain[static_cast<size_t> (i)] = ir[i];
 
     fft.performRealOnlyForwardTransform (irFreqDomain.data(), true);
     irLen = length;
-
-    // v1.0: Do NOT clear overlapBuf here — the crossfade handles the transition.
-    // The old overlap is shared between old and new outputs during crossfade,
-    // providing energy continuity. Clearing it would cause the new output to
-    // start "cold" (missing tail energy), creating an audible dip at the
-    // crossfade endpoint.
 }
 
 void PartitionedConvolver::process (const float* in, float* out, int numSamples)
@@ -594,26 +638,23 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
         return;
     }
 
-    // Simple overlap-save convolution:
-    // For each block of input, we perform FFT, multiply with IR spectrum, IFFT,
-    // and combine with overlap from previous block.
+    // Dual-convolver overlap-save with non-restarting crossfade:
+    // During crossfade, both old and new IRs convolve the same input.
+    // Outputs are blended via equal-power crossfade that always completes.
 
     int samplesProcessed = 0;
 
     while (samplesProcessed < numSamples)
     {
-        // How many samples we can accept before we need to process
         int spaceInAccum = blockSize - inputAccumPos;
         int samplesToAccum = std::min (spaceInAccum, numSamples - samplesProcessed);
 
-        // Accumulate input
         for (int i = 0; i < samplesToAccum; ++i)
             inputAccum[static_cast<size_t> (inputAccumPos + i)] = in[samplesProcessed + i];
 
         inputAccumPos += samplesToAccum;
         samplesProcessed += samplesToAccum;
 
-        // When we have a full block, process it
         if (inputAccumPos >= blockSize)
         {
             // Copy input to work buffer, zero-pad to fftSize
@@ -624,11 +665,10 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
             // Forward FFT of input
             fft.performRealOnlyForwardTransform (fftWorkBuf.data(), true);
 
-            // v1.0: If crossfading, also convolve with previous IR
+            // If crossfading, also convolve with previous (old) IR
             bool doCrossfade = (crossfadeRemaining > 0);
             if (doCrossfade)
             {
-                // Convolve same input with OLD IR into prevFftWorkBuf
                 std::copy (fftWorkBuf.begin(), fftWorkBuf.end(), prevFftWorkBuf.begin());
                 for (int i = 0; i < fftSize * 2; i += 2)
                 {
@@ -640,7 +680,7 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
                 fft.performRealOnlyInverseTransform (prevFftWorkBuf.data());
             }
 
-            // Complex multiply with NEW IR spectrum
+            // Complex multiply with new IR spectrum
             for (int i = 0; i < fftSize * 2; i += 2)
             {
                 float re1 = fftWorkBuf[static_cast<size_t> (i)],     im1 = fftWorkBuf[static_cast<size_t> (i + 1)];
@@ -649,22 +689,24 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
                 fftWorkBuf[static_cast<size_t> (i + 1)] = re1 * im2 + im1 * re2;
             }
 
-            // Inverse FFT
             fft.performRealOnlyInverseTransform (fftWorkBuf.data());
 
-            // Output: first blockSize samples = new output + overlap from previous block
-            int outStart = samplesProcessed - blockSize;  // Where in the output buffer to write
+            int outStart = samplesProcessed - blockSize;
             int outSamples = std::min (blockSize, numSamples - outStart);
 
             if (doCrossfade)
             {
-                // v1.0: Crossfade between old IR output and new IR output
-                float invFade = 1.0f / static_cast<float> (crossfadeRemaining);
+                // Equal-power crossfade: sin²+cos² = 1 constant energy
+                float totalLen = static_cast<float> (crossfadeTotalLength);
+                float samplesCompleted = static_cast<float> (crossfadeTotalLength - crossfadeRemaining);
+                constexpr float halfPi = juce::MathConstants<float>::halfPi;
+
                 for (int i = 0; i < outSamples; ++i)
                 {
-                    float fadeNew = static_cast<float> (i + (blockSize - crossfadeRemaining)) * invFade;
-                    fadeNew = std::min (fadeNew, 1.0f);
-                    float fadeOld = 1.0f - fadeNew;
+                    float fadeProgress = (samplesCompleted + static_cast<float> (i)) / totalLen;
+                    fadeProgress = std::min (fadeProgress, 1.0f);
+                    float fadeNew = std::sin (fadeProgress * halfPi);
+                    float fadeOld = std::cos (fadeProgress * halfPi);
 
                     float newOut = fftWorkBuf[static_cast<size_t> (i)]
                                  + overlapBuf[static_cast<size_t> (i)];
@@ -673,14 +715,15 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
                     out[outStart + i] = oldOut * fadeOld + newOut * fadeNew;
                 }
 
-                // Save old overlap for potential continued crossfade
+                // Update old overlap for next crossfade block
                 int overlapLen = fftSize - blockSize;
                 for (int i = 0; i < overlapLen; ++i)
                     prevOverlapBuf[static_cast<size_t> (i)] = prevFftWorkBuf[static_cast<size_t> (blockSize + i)];
                 for (int i = overlapLen; i < fftSize; ++i)
                     prevOverlapBuf[static_cast<size_t> (i)] = 0.0f;
 
-                crossfadeRemaining = 0;  // Crossfade completes in one block
+                crossfadeRemaining -= outSamples;
+                if (crossfadeRemaining < 0) crossfadeRemaining = 0;
             }
             else
             {
@@ -691,12 +734,10 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
                 }
             }
 
-            // Save overlap: samples [blockSize .. fftSize-1] for next block
+            // Save new-IR overlap for next block
             int overlapLen = fftSize - blockSize;
             for (int i = 0; i < overlapLen; ++i)
                 overlapBuf[static_cast<size_t> (i)] = fftWorkBuf[static_cast<size_t> (blockSize + i)];
-
-            // Zero the rest of overlap buffer
             for (int i = overlapLen; i < fftSize; ++i)
                 overlapBuf[static_cast<size_t> (i)] = 0.0f;
 
@@ -713,6 +754,7 @@ void PartitionedConvolver::reset()
     std::fill (prevOverlapBuf.begin(), prevOverlapBuf.end(), 0.0f);
     std::fill (prevFftWorkBuf.begin(), prevFftWorkBuf.end(), 0.0f);
     crossfadeRemaining = 0;
+    crossfadeTotalLength = 0;
     inputAccumPos = 0;
 }
 
@@ -737,10 +779,15 @@ void BinauralRenderer::setProfile (int profileIndex, HRTFDatabase& hrtfDb)
         // Simple mode — no convolution needed
         storedNormGain = 1.0f;
         storedIRLength = 0;
+        itdActive = false;
         for (int i = 0; i < MAX_SOURCES; ++i)
             sourceConvReady[i] = false;
         return;
     }
+
+    // v1.0: Enable ITD-free HRIR mode for all SOFA profiles.
+    // ITD is extracted and applied separately for smooth crossfading.
+    itdActive = true;
 
     int irLen = hrtfDb.getIRLength();
     storedIRLength = irLen;
@@ -826,7 +873,11 @@ void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elR
         tmpR.resize (static_cast<size_t> (storedIRLength));
     }
 
-    db.getInterpolatedHRIR (azRad, elRad, tmpL.data(), tmpR.data(), delayL, delayR);
+    // v1.0: Use ITD-free HRIRs for smooth crossfading (no comb-filtering from ITD misalignment)
+    if (itdActive)
+        db.getAlignedHRIR (azRad, elRad, tmpL.data(), tmpR.data(), delayL, delayR);
+    else
+        db.getInterpolatedHRIR (azRad, elRad, tmpL.data(), tmpR.data(), delayL, delayR);
 
     // Apply cross-profile normalization
     for (int n = 0; n < storedIRLength; ++n)
@@ -838,6 +889,13 @@ void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elR
     // Load into convolver (realtime-safe: in-place FFT in pre-allocated buffers)
     sourceConvL[sourceIndex].setIR (tmpL.data(), storedIRLength);
     sourceConvR[sourceIndex].setIR (tmpR.data(), storedIRLength);
+
+    // v1.0: Store ITD target for smooth per-sample interpolation in renderSourceBuffers
+    if (itdActive)
+    {
+        targetITDL[sourceIndex] = delayL;
+        targetITDR[sourceIndex] = delayR;
+    }
 
     cachedSourceAz[sourceIndex] = azRad;
     cachedSourceEl[sourceIndex] = elRad;
@@ -868,11 +926,60 @@ void BinauralRenderer::renderSourceBuffers (const float* const* sourceBufs,
         sourceConvL[src].process (sourceBufs[src], convTmpL.data(), numSamples);
         sourceConvR[src].process (sourceBufs[src], convTmpR.data(), numSamples);
 
-        // Sum into output
-        for (int s = 0; s < numSamples; ++s)
+        // v1.0: Apply ITD as fractional-sample delay if using aligned HRIRs.
+        // ITD is smoothly interpolated per-sample from currentITD to targetITD
+        // to prevent timing discontinuities during rapid position changes.
+        if (itdActive)
         {
-            outL[s] += convTmpL[static_cast<size_t> (s)];
-            outR[s] += convTmpR[static_cast<size_t> (s)];
+            float itdL0 = currentITDL[src];
+            float itdR0 = currentITDR[src];
+            float itdL1 = targetITDL[src];
+            float itdR1 = targetITDR[src];
+            float invN = (numSamples > 1) ? 1.0f / static_cast<float> (numSamples - 1) : 1.0f;
+
+            int wp = itdWritePos[src];
+
+            for (int s = 0; s < numSamples; ++s)
+            {
+                float frac = static_cast<float> (s) * invN;
+                float delL = itdL0 + frac * (itdL1 - itdL0);
+                float delR = itdR0 + frac * (itdR1 - itdR0);
+
+                // Write to circular ITD delay buffer
+                itdBufferL[src][wp] = convTmpL[static_cast<size_t> (s)];
+                itdBufferR[src][wp] = convTmpR[static_cast<size_t> (s)];
+
+                // Read with fractional delay (linear interpolation)
+                int idxL = static_cast<int> (delL);
+                float fracL = delL - static_cast<float> (idxL);
+                int rp0L = (wp - idxL + kITDBufferSize) & (kITDBufferSize - 1);
+                int rp1L = (rp0L - 1 + kITDBufferSize) & (kITDBufferSize - 1);
+                float sampleL = itdBufferL[src][rp0L] * (1.0f - fracL) + itdBufferL[src][rp1L] * fracL;
+
+                int idxR = static_cast<int> (delR);
+                float fracR = delR - static_cast<float> (idxR);
+                int rp0R = (wp - idxR + kITDBufferSize) & (kITDBufferSize - 1);
+                int rp1R = (rp0R - 1 + kITDBufferSize) & (kITDBufferSize - 1);
+                float sampleR = itdBufferR[src][rp0R] * (1.0f - fracR) + itdBufferR[src][rp1R] * fracR;
+
+                outL[s] += sampleL;
+                outR[s] += sampleR;
+
+                wp = (wp + 1) & (kITDBufferSize - 1);
+            }
+
+            itdWritePos[src] = wp;
+            currentITDL[src] = itdL1;
+            currentITDR[src] = itdR1;
+        }
+        else
+        {
+            // No ITD processing — direct sum
+            for (int s = 0; s < numSamples; ++s)
+            {
+                outL[s] += convTmpL[static_cast<size_t> (s)];
+                outR[s] += convTmpR[static_cast<size_t> (s)];
+            }
         }
     }
 }
@@ -884,6 +991,13 @@ void BinauralRenderer::reset()
         sourceConvL[i].reset();
         sourceConvR[i].reset();
         sourceConvReady[i] = false;
+        currentITDL[i] = 0.0f;
+        currentITDR[i] = 0.0f;
+        targetITDL[i] = 0.0f;
+        targetITDR[i] = 0.0f;
+        itdWritePos[i] = 0;
+        std::memset (itdBufferL[i], 0, sizeof (itdBufferL[i]));
+        std::memset (itdBufferR[i], 0, sizeof (itdBufferR[i]));
     }
 }
 

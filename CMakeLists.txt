@@ -36,8 +36,6 @@ include(FetchContent)
 set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(BUILD_STATIC_LIBS ON CACHE BOOL "" FORCE)
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
-
 FetchContent_Declare(
     libmysofa
     GIT_REPOSITORY https://github.com/hoene/libmysofa.git
@@ -151,27 +149,6 @@ elseif(MSVC)
 endif()
 
 # =============================================================================
-# Build-time preset installer — standalone CLI that generates .osdpreset files
-# Links only juce_core (no audio/GUI dependencies)
-# =============================================================================
-add_executable(install_presets
-    tools/install_presets.cpp
-    Source/PresetData.cpp
-)
-target_link_libraries(install_presets PRIVATE juce::juce_core)
-target_compile_definitions(install_presets PRIVATE
-    JUCE_STANDALONE_APPLICATION=1
-    JUCE_USE_CURL=0
-    JUCE_WEB_BROWSER=0
-)
-
-# IMPORTANT: install_presets MUST build before VST3 post-build script.
-# The post-build script (install_plugins.sh) runs install_presets to write
-# factory presets to disk. Without this dependency, CMake may compile
-# install_presets AFTER the post-build fires, causing stale preset files.
-add_dependencies(OpenSpatialDelay_VST3 install_presets)
-
-# =============================================================================
 # Post-build: install plugins (macOS only)
 # Runs scripts/install_plugins.sh after the final target (VST3) is built.
 # =============================================================================
@@ -206,6 +183,9 @@ if(BUILD_OSD_TESTS)
 
     add_executable(OpenSpatialDelayTests
         Tests/TrajectoryTests.cpp
+        Tests/SurroundOutputTests.cpp
+        Tests/OscTests.cpp
+        Tests/ConvolverGlitchTests.cpp
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/PresetData.cpp

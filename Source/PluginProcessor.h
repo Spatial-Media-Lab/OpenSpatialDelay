@@ -282,6 +282,15 @@ public:
                               float* irL, float* irR,
                               float& delayL, float& delayR) const;
 
+    /** Get ITD-free interpolated HRIR pair for a direction.
+        The returned HRIRs have ITD removed (time-aligned onsets). The ITD values
+        are returned separately in delayL/delayR (in samples, fractional).
+        This produces phase-coherent HRIRs that can be smoothly crossfaded
+        without comb-filtering artifacts from ITD misalignment. */
+    void getAlignedHRIR (float azimuthRad, float elevationRad,
+                         float* irL, float* irR,
+                         float& delayL, float& delayR) const;
+
     int getIRLength() const { return irLength; }
     int getNumPositions() const { return numPositions; }
     bool isLoaded() const { return loaded; }
@@ -309,7 +318,9 @@ public:
     void prepare (int maxBlockSize, int irLength);
 
     /** Set or update the impulse response. Pre-computes FFT of IR.
-        v1.0: On IR change, enables one-block crossfade from old to new IR. */
+        v1.0: On IR change, initiates dual-convolver equal-power crossfade.
+        If called during active crossfade, updates target IR without restarting
+        the fade — ensures crossfade always completes during continuous movement. */
     void setIR (const float* ir, int length);
 
     /** Process one block: convolve input with IR, write to output.
@@ -328,19 +339,23 @@ private:
     int irLen = 0;
     int blockSize = 0;
 
-    std::vector<float> irFreqDomain;     // Pre-computed IR in frequency domain
+    std::vector<float> irFreqDomain;     // Current (new) IR in frequency domain
     std::vector<float> inputAccum;       // Input accumulator for FFT
     std::vector<float> fftWorkBuf;       // FFT work buffer
     std::vector<float> overlapBuf;       // Overlap-save tail buffer
     int inputAccumPos = 0;               // Current position in input accumulator
 
-    // v1.0: Dual-convolver crossfade — when IR changes, old IR runs one more
-    // block while new IR ramps in, producing a smooth transition with no
-    // phase discontinuity clicks or amplitude dropout.
-    std::vector<float> prevIrFreqDomain; // Previous IR in frequency domain
+    // v1.0: Dual-convolver crossfade with non-restarting state machine.
+    // When IR changes, old IR runs in parallel with new IR, outputs blended
+    // via equal-power crossfade over N blocks. If setIR() fires during active
+    // crossfade, only the new IR is updated — crossfade progress continues
+    // uninterrupted, ensuring the fade always completes.
+    std::vector<float> prevIrFreqDomain; // Previous IR in frequency domain (crossfade source)
     std::vector<float> prevFftWorkBuf;   // Work buffer for old IR convolution
     std::vector<float> prevOverlapBuf;   // Overlap tail from old IR
     int crossfadeRemaining = 0;          // Samples remaining in crossfade (0 = inactive)
+    int crossfadeTotalLength = 0;        // Total crossfade duration in samples
+    static constexpr int kCrossfadeBlocks = 4; // Crossfade over 4 blocks (~21ms @ 256/48kHz)
 };
 
 //==============================================================================
@@ -401,6 +416,22 @@ private:
 
     // Temporary work buffers for convolution output
     std::vector<float> convTmpL, convTmpR;
+
+    // v1.0: ITD (Inter-aural Time Difference) tracking for smooth HRIR transitions.
+    // When using getAlignedHRIR(), HRIRs are time-aligned (ITD removed).
+    // ITD is applied as a separate fractional-sample delay, smoothly interpolated
+    // between blocks to prevent timing discontinuities.
+    float currentITDL[MAX_SOURCES] = {};    // Current applied ITD (samples, fractional)
+    float currentITDR[MAX_SOURCES] = {};
+    float targetITDL[MAX_SOURCES] = {};     // Target ITD from latest HRIR lookup
+    float targetITDR[MAX_SOURCES] = {};
+
+    // Short delay lines for ITD application (max ITD ≈ 0.7ms ≈ 34 samples @ 48kHz)
+    static constexpr int kITDBufferSize = 64;
+    float itdBufferL[MAX_SOURCES][kITDBufferSize] = {};
+    float itdBufferR[MAX_SOURCES][kITDBufferSize] = {};
+    int itdWritePos[MAX_SOURCES] = {};
+    bool itdActive = false;  // true when using aligned HRIRs (non-Simple profiles)
 };
 
 // #############################################################################
