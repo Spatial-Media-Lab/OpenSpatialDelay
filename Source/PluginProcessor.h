@@ -859,12 +859,18 @@ private:
     WSOLAState wsolaState[MAX_OBJECTS] = {};  // 12 objects (feedback uses direct delay read, no pitch shift)
     float wsolaProcess (int objectIndex, float inputSample, float perTapSemitones);
 
+    // v1.0: Per-tap fade envelope for glitch-free enable/disable transitions
+    // 64-sample ramp (~1.3ms @ 48kHz) — fast enough to be inaudible, long enough to prevent clicks
+    float tapFadeGain[MAX_OBJECTS] = {};
+    float tapFadeTarget[MAX_OBJECTS] = {};
+    float tapFadeIncrement = 0.0f;  // 1.0f / 64, set in prepareToPlay
+
     // Block-rate cached conversion factor: ms → samples (set at top of processBlock)
     float blockMsToSamples = 0.0f;
 
     // v0.8/v1.0: Wobble modulation — tape wow/flutter emulation
     float wobblePhase = 0.0f;
-    float blockWobbleAmount = 0.0f;  // read once per block from APVTS
+    juce::SmoothedValue<float> smoothedWobbleAmount;  // v1.0: replaces blockWobbleAmount for click-free onset
     float blockWobbleMorph = 0.0f;
     inline float applyWobble (float baseDelaySamples, float currentDelayMs);
 
@@ -901,24 +907,14 @@ private:
         return x;
     }
 
-    // Output Limiter — hard +2dB ceiling for speaker protection during self-oscillation
-    // Soft saturation curve for musical character, hard clamp enforces true ceiling.
+    // Output Limiter — tanh-based soft ceiling for speaker protection during self-oscillation
+    // C-infinity continuous (no derivative discontinuities), asymptotes to ±threshold
     static float outputLimiter (float x)
     {
         if (! std::isfinite (x))
             return 0.0f;
         const float threshold = 1.2589f;  // +2 dB
-        if (x > threshold)
-        {
-            float soft = threshold + (x - threshold) / (1.0f + (x - threshold) * (x - threshold));
-            return juce::jmin (soft, threshold);  // v0.9: enforce hard ceiling at +2 dB
-        }
-        if (x < -threshold)
-        {
-            float soft = -threshold + (x + threshold) / (1.0f + (x + threshold) * (x + threshold));
-            return juce::jmax (soft, -threshold);  // v0.9: enforce hard floor at -2 dB
-        }
-        return x;
+        return threshold * std::tanh (x / threshold);
     }
 
     // Pre-allocated work buffers (avoid allocation in processBlock)
@@ -994,6 +990,12 @@ private:
     float cachedFilterLPQ = -1.0f;
     bool  filterBypassed = true;   // v0.9: true when filterEnabled param is OFF (default)
 
+    // v1.0: EMA-smoothed filter frequencies for click-free coefficient updates
+    float smoothedLPFreq = 20000.0f;
+    float smoothedHPFreq = 20.0f;
+    float smoothedFilterLPQ = 0.707f;
+    float smoothedFilterHPQ = 0.707f;
+
     // v1.0: Previous-block gains for per-sample interpolation (prevent clicks on rapid position changes)
     float prevStereoGainL[MAX_OBJECTS] = {};
     float prevStereoGainR[MAX_OBJECTS] = {};
@@ -1007,6 +1009,7 @@ private:
     float prevElevation[MAX_OBJECTS] = {};   // radians, previous block
     float prevDistance[MAX_OBJECTS]   = {};   // normalized 0..1, previous block
     float dopplerSemitones[MAX_OBJECTS] = {};  // computed per-block
+    float smoothedDopplerSemitones[MAX_OBJECTS] = {};  // v1.0: EMA-smoothed for WSOLA grain stability
     float smoothedRadialVelocity[MAX_OBJECTS] = {};  // EMA-smoothed velocity
 
     // v0.7: Per-tap activity for UI glow (written in processBlock, read by editor timer)
