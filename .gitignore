@@ -24,3 +24,15 @@ docs/node_modules/
 
 # Generated manual drafts and preview
 docs/preview-manual.html
+docs/preview-readme.html
+docs/preview-wiki.html
+
+# npm package files (doc generation toolchain)
+docs/package.json
+docs/package-lock.json
+
+# Design prototypes (scratch work)
+docs/prototypes/
+
+# Claude tool state
+.superpowers/
