@@ -2,9 +2,21 @@
 #include <JuceHeader.h>
 #include <array>
 #include <vector>
+#include "PresetData.h"
 
 // libmysofa — SOFA file reader for HRTF data
 struct MYSOFA_EASY;  // Forward declaration (avoids including mysofa.h in header)
+
+// #############################################################################
+// SPATIAL MEDIA LIBRARY — Extraction Guide
+// Sections marked "SPATIAL MEDIA LIBRARY" or "SPATIAL FRAMEWORK" are reusable
+// across future SML plugins. To create a new plugin:
+//   1. Keep all SPATIAL MEDIA LIBRARY sections (IO, algorithms, HRTF, layouts,
+//      OSC receive/send, bus negotiation, utility DSP)
+//   2. Replace all DELAY-SPECIFIC sections (delay line, pitch shift, feedback,
+//      wobble, trajectories, render loop internals)
+//   3. Parameter layout (MIXED) — keep spatial params, replace effect-specific
+// #############################################################################
 
 // #############################################################################
 // SPATIAL MEDIA LIBRARY — Reusable spatial audio data structures
@@ -72,6 +84,20 @@ struct ObjectState
     float distance     = 0.5f;
     float delayTimeMs  = 500.0f;
     bool  enabled      = false;
+};
+
+//==============================================================================
+// Per-object trajectory state (for editor visualization)
+//==============================================================================
+struct TrajectoryState
+{
+    float originAzDeg  = 0.0f;   // Base/origin position (captured at shape change)
+    float originElDeg  = 0.0f;
+    float originDist   = 0.5f;
+    int   shape        = 0;      // 0 = None, 1+ = active trajectory
+    float phase        = 0.0f;   // 0..1 animation progress
+    bool  reverse      = false;
+    float randomTime   = 0.0f;   // Random trajectory: current time accumulator
 };
 
 //==============================================================================
@@ -256,6 +282,15 @@ public:
                               float* irL, float* irR,
                               float& delayL, float& delayR) const;
 
+    /** Get ITD-free interpolated HRIR pair for a direction.
+        The returned HRIRs have ITD removed (time-aligned onsets). The ITD values
+        are returned separately in delayL/delayR (in samples, fractional).
+        This produces phase-coherent HRIRs that can be smoothly crossfaded
+        without comb-filtering artifacts from ITD misalignment. */
+    void getAlignedHRIR (float azimuthRad, float elevationRad,
+                         float* irL, float* irR,
+                         float& delayL, float& delayR) const;
+
     int getIRLength() const { return irLength; }
     int getNumPositions() const { return numPositions; }
     bool isLoaded() const { return loaded; }
@@ -282,7 +317,10 @@ public:
     /** Prepare the convolver for a given max block size and IR length. */
     void prepare (int maxBlockSize, int irLength);
 
-    /** Set or update the impulse response. Pre-computes FFT of IR. */
+    /** Set or update the impulse response. Pre-computes FFT of IR.
+        v1.0: On IR change, initiates dual-convolver equal-power crossfade.
+        If called during active crossfade, updates target IR without restarting
+        the fade — ensures crossfade always completes during continuous movement. */
     void setIR (const float* ir, int length);
 
     /** Process one block: convolve input with IR, write to output.
@@ -301,11 +339,23 @@ private:
     int irLen = 0;
     int blockSize = 0;
 
-    std::vector<float> irFreqDomain;     // Pre-computed IR in frequency domain
+    std::vector<float> irFreqDomain;     // Current (new) IR in frequency domain
     std::vector<float> inputAccum;       // Input accumulator for FFT
     std::vector<float> fftWorkBuf;       // FFT work buffer
     std::vector<float> overlapBuf;       // Overlap-save tail buffer
     int inputAccumPos = 0;               // Current position in input accumulator
+
+    // v1.0: Dual-convolver crossfade with non-restarting state machine.
+    // When IR changes, old IR runs in parallel with new IR, outputs blended
+    // via equal-power crossfade over N blocks. If setIR() fires during active
+    // crossfade, only the new IR is updated — crossfade progress continues
+    // uninterrupted, ensuring the fade always completes.
+    std::vector<float> prevIrFreqDomain; // Previous IR in frequency domain (crossfade source)
+    std::vector<float> prevFftWorkBuf;   // Work buffer for old IR convolution
+    std::vector<float> prevOverlapBuf;   // Overlap tail from old IR
+    int crossfadeRemaining = 0;          // Samples remaining in crossfade (0 = inactive)
+    int crossfadeTotalLength = 0;        // Total crossfade duration in samples
+    static constexpr int kCrossfadeBlocks = 4; // Crossfade over 4 blocks (~21ms @ 256/48kHz)
 };
 
 //==============================================================================
@@ -366,6 +416,22 @@ private:
 
     // Temporary work buffers for convolution output
     std::vector<float> convTmpL, convTmpR;
+
+    // v1.0: ITD (Inter-aural Time Difference) tracking for smooth HRIR transitions.
+    // When using getAlignedHRIR(), HRIRs are time-aligned (ITD removed).
+    // ITD is applied as a separate fractional-sample delay, smoothly interpolated
+    // between blocks to prevent timing discontinuities.
+    float currentITDL[MAX_SOURCES] = {};    // Current applied ITD (samples, fractional)
+    float currentITDR[MAX_SOURCES] = {};
+    float targetITDL[MAX_SOURCES] = {};     // Target ITD from latest HRIR lookup
+    float targetITDR[MAX_SOURCES] = {};
+
+    // Short delay lines for ITD application (max ITD ≈ 0.7ms ≈ 34 samples @ 48kHz)
+    static constexpr int kITDBufferSize = 64;
+    float itdBufferL[MAX_SOURCES][kITDBufferSize] = {};
+    float itdBufferR[MAX_SOURCES][kITDBufferSize] = {};
+    int itdWritePos[MAX_SOURCES] = {};
+    bool itdActive = false;  // true when using aligned HRIRs (non-Simple profiles)
 };
 
 // #############################################################################
@@ -390,8 +456,17 @@ public:
     static constexpr int MAX_AMBI_ORDER = 6;
     static constexpr int MAX_AMBI_CHANNELS = (MAX_AMBI_ORDER + 1) * (MAX_AMBI_ORDER + 1); // = 49
 
-    // v0.5: Output formats — Binaural first, then Stereo, Surround, Ambisonics
-    // 1 Binaural + 1 Stereo + 13 Surround + 6 Ambisonics = 21 total
+    // v0.7: ACN channel index → SH order lookup (constexpr for compile-time optimization)
+    static constexpr int acnToOrder (int acn)
+    {
+        if (acn < 1)  return 0;  if (acn < 4)  return 1;
+        if (acn < 9)  return 2;  if (acn < 16) return 3;
+        if (acn < 25) return 4;  if (acn < 36) return 5;
+        return 6;
+    }
+
+    // Output formats — Binaural, Stereo, Surround, Octaphonic, Atmos, SML, Ambisonics
+    // 1 Binaural + 1 Stereo + 14 Surround + 6 Ambisonics = 22 total
     // Stereo mode (Equal Power, VBAP, XY, MS, Blumlein) selected via algorithm parameter
     enum class OutputFormat {
         // Binaural (HRTF head model) — default
@@ -399,10 +474,13 @@ public:
         // Stereo (mode selected by algorithm param indices 6-10)
         Stereo,
         // Surround (ascending channel count)
-        Quad, Surround5_0, Surround5_1, Surround7_0,
-        Surround5_1_2, Surround7_1, Octaphonic,
-        Surround7_0_2, Surround5_1_4, Surround7_1_2,
-        Surround7_1_4, Surround7_1_6, Surround9_1_6,
+        Quad, Surround5_0, Surround5_1, Surround7_0, Surround7_1,
+        // Octaphonic
+        Octaphonic,
+        // Atmos / Immersive (ascending channel count)
+        Surround5_1_2, Surround5_1_4, Surround7_1_2,
+        Surround7_1_4, Surround7_1_6, Surround9_1_4, Surround9_1_6,
+        SurroundSML13_1,  // SML Multi-Use Room (13 speakers + LFE)
         // Ambisonics output (AmbiX ACN/SN3D)
         AmbisonicsFOA, AmbisonicsSOA, AmbisonicsHOA,
         Ambisonics4OA, Ambisonics5OA, Ambisonics6OA
@@ -422,7 +500,7 @@ public:
         int  ambiOrder;             // 0 for non-ambi, 1-6 for Ambisonics output
         bool isStereoVariant;       // true for Stereo (single entry, mode via algorithm param)
     };
-    static constexpr int NUM_OUTPUT_FORMATS = 21;
+    static constexpr int NUM_OUTPUT_FORMATS = 22;
     static const std::array<OutputFormatInfo, NUM_OUTPUT_FORMATS> outputFormatRegistry;
 
     // Double-buffered layout state for lock-free audio thread reads
@@ -481,6 +559,11 @@ public:
 
     // Access for the editor
     ObjectState getObjectState (int objectIndex) const;
+    TrajectoryState getTrajectoryState (int objectIndex) const;
+
+    // v0.9: Evaluate Random trajectory noise at a given time (for look-ahead trail drawing)
+    struct RandomPosition { float azDeg, elDeg, dist; };
+    RandomPosition evaluateRandomNoise (int objectIndex, float time) const;
 
     // v0.6: OSC state accessors for editor
     bool isOscConnected() const { return oscConnected; }
@@ -494,50 +577,56 @@ public:
     int getOscReceivePort() const { return oscReceivePort; }
     void setOscReceivePort (int port);
 
-    //--- v0.6: Preset system --------------------------------------------------
-    struct PresetData
-    {
-        juce::String name;
-        // Global params
-        float delayTime = 500.0f;
-        bool  tempoSync = false;
-        float noteDivision = 4.0f;
-        int   syncMode = 0;
-        float feedback = 0.3f;
-        float filterLP = 20000.0f;
-        float filterHP = 20.0f;
-        float pitchShift = 0.0f;
-        float dryWet = 0.5f;
-        float inputGain = 0.0f;
-        float outputGain = 0.0f;
-        bool  airAbsorption = false;
-        int   algorithm = 4;       // VBAP
-        int   hrtfProfile = 0;
-        // Per-tap data
-        struct TapData
-        {
-            bool  enabled = false;
-            float azimuthDeg = 0.0f;
-            float elevationDeg = 0.0f;
-            float distance = 0.5f;
-            float dopplerAmount = 0.0f;
-            int   trajectoryShape = 0;
-            float trajectorySpeed = 1.0f;
-        };
-        TapData taps[MAX_OBJECTS] = {};
-    };
+    // v1.0: Global tap drawer state (persisted for editor)
+    bool getGlobalDrawerOpen() const { return globalDrawerOpen; }
+    void setGlobalDrawerOpen (bool open) { globalDrawerOpen = open; }
 
-    static constexpr int NUM_FACTORY_PRESETS = 8;
-    static const PresetData factoryPresets[NUM_FACTORY_PRESETS];
+    // v1.0: Global tap offset values (for OSC ↔ editor sync)
+    static constexpr int kNumGlobalTapOffsets = 6;
+    std::atomic<float> globalTapOffset[kNumGlobalTapOffsets] = {};  // AZ, EL, DIST, DOPPLER, PITCH, SPEED
+    std::atomic<bool>  globalTapOffsetChanged { false };
+
+    // v0.7: OSC Send accessors for editor
+    bool isOscSendConnected() const { return oscSendConnected; }
+    bool getOscSendEnabled() const { return oscSendEnabled; }
+    void setOscSendEnabled (bool enabled);
+
+    // v0.8: Delay channel routing for per-tap input selection
+    enum class DelayChannel { Mono = 0, Left = 1, Right = 2 };
+
+    // v0.7: Per-tap activity level (RMS) for UI glow animation
+    float getTapActivityRMS (int i) const
+    {
+        return (i >= 0 && i < MAX_OBJECTS) ? tapActivityRMS[i].load (std::memory_order_relaxed) : 0.0f;
+    }
+    int getOscSendPort() const { return oscSendPort; }
+    void setOscSendPort (int port);
+    juce::String getOscSendIP() const { return oscSendIP; }
+    void setOscSendIP (const juce::String& ip);
+
+    //--- v0.6: Preset system --------------------------------------------------
+    // PresetData struct, factory presets, and category names are in PresetData.h/cpp
+    // (shared between plugin and build-time install_presets CLI tool)
+
+    struct CategorizedPreset
+    {
+        juce::String category;
+        juce::String name;
+        int originalIndex;   // index into allPresets
+        bool isFactory;
+    };
+    std::vector<CategorizedPreset> getCategorizedPresets() const;
 
     int  getNumPresets() const;
     int  getCurrentPresetIndex() const { return currentPresetIndex; }
+    void setCurrentPresetIndex (int idx) { currentPresetIndex = idx; }
     juce::StringArray getPresetNames() const;
     void loadPreset (int index);
     void saveUserPreset (const juce::String& name);
+    void saveUserPreset (const juce::String& name, const juce::String& category);
     void loadNextPreset();
     void loadPreviousPreset();
-    static juce::File getUserPresetDirectory();
+    static juce::File getPresetDirectory();
 
     static const std::array<BinauralProfile, 5> binauralProfiles;
 
@@ -552,34 +641,33 @@ private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
 
     //--- DELAY-SPECIFIC: DSP helpers ------------------------------------------
-    void   writeDelayLine (float sample);
-    float  readDelayLine  (float delaySamples) const;
-    float  readPitchShifted (float delaySamples, float semitones, int phaseIndex);
+    void   writeDelayLine (float sampleL, float sampleR);
+    float  readDelayLineL    (float delaySamples) const;
+    float  readDelayLineR    (float delaySamples) const;
+    float  readDelayLineMono (float delaySamples) const;
     float getTempoSyncedDelayMs (int noteDivisionIndex) const;
 
     //--- DELAY-SPECIFIC: Render path methods (v0.5 refactor) ------------------
-    /** Read one tap sample: delay + pitch shift + air absorption. */
-    float readObjectSample (int objectIndex, float baseDelaySamples, float pitchSemitones);
+    /** Read one tap sample: delay + per-tap pitch shift + air absorption. */
+    float readObjectSample (int objectIndex, float baseDelaySamples);
     /** Process feedback: read from end of chain, filter, soft-clip, NaN guard. */
     void  processFeedbackSample (float currentLoopMult, float baseDelaySamples,
-                                 float pitchSemitones, float fb);
+                                 float fb);
 
     void renderDirectBinauralHRTF (juce::AudioBuffer<float>& buffer, int numSamples,
-                                   const ObjectState* objects, const float* objDistGain,
-                                   float pitchSemitones);
+                                   const ObjectState* objects, const float* objDistGain);
     void renderSimpleBinauralWoodworth (juce::AudioBuffer<float>& buffer, int numSamples,
-                                       const ObjectState* objects, const BinauralGains* objGains,
-                                       float pitchSemitones);
+                                       const ObjectState* objects, const BinauralGains* objGains);
     void renderAmbisonicsOutput (juce::AudioBuffer<float>& buffer, int numSamples,
                                 const ObjectState* objects, const float* objDistGain,
-                                float pitchSemitones, int ambiOrder);
+                                int ambiOrder);
     void renderStereoVariant (juce::AudioBuffer<float>& buffer, int numSamples,
                              const ObjectState* objects, const float* objDistGain,
-                             float pitchSemitones, int stereoMode);
+                             int stereoMode);
     void renderDiscreteSurround (juce::AudioBuffer<float>& buffer, int numSamples,
                                 const ObjectState* objects,
                                 const float (*objChannelGains)[16],
-                                const float* objDistGain, float pitchSemitones,
+                                const float* objDistGain,
                                 const SpeakerLayout& surLayout);
 
     //--- SPATIAL FRAMEWORK: Modular 3D Audio Core ----------------------------
@@ -622,15 +710,55 @@ private:
     void timerCallback() override;
     std::atomic<int> targetHRTFProfile { 0 };
 
-    //--- v0.6: ADM-OSC Receive -------------------------------------------------
+    //--- SPATIAL MEDIA LIBRARY: ADM-OSC Receive --------------------------------
     void oscMessageReceived (const juce::OSCMessage& message) override;
     void handleOSCPosition (int objectIndex, float azDeg, float elDeg, float dist);
+    void handleOSCParam (const juce::String& paramID, float denormValue);
+public:
+    // v1.0: Public test entry point — forwards to oscMessageReceived
+    void testProcessOSCMessage (const juce::OSCMessage& msg) { oscMessageReceived (msg); }
+private:
 
     juce::OSCReceiver oscReceiver;
     int  oscReceivePort = 4002;                         // Default ADM-OSC receive port
+    bool globalDrawerOpen = false;                      // v1.0: global tap drawer visibility
     bool oscConnected = false;                          // Current connection state
     bool prevAdmOscEnabled = false;                     // Edge-detect for enable/disable transitions
     std::atomic<float>* cachedParam_admOscEnabled = nullptr;
+
+    //--- SPATIAL MEDIA LIBRARY: ADM-OSC Send state ---
+    juce::OSCSender oscSender;
+    bool oscSendEnabled = false;
+    bool oscSendConnected = false;
+    int  oscSendPort = 4003;
+    juce::String oscSendIP = "127.0.0.1";
+    int  oscSendTickCounter = 0;                           // 60Hz ticks → send every 2nd (30Hz)
+    float oscSendPrevAz[MAX_OBJECTS]   = {};               // position-change gating
+    float oscSendPrevEl[MAX_OBJECTS]   = {};
+    float oscSendPrevDist[MAX_OBJECTS] = {};
+
+    // v1.0: Per-object non-position send tracking (change-gated)
+    float oscSendPrevDoppler[MAX_OBJECTS]    = {};
+    float oscSendPrevObjPitch[MAX_OBJECTS]   = {};
+    float oscSendPrevEnabled[MAX_OBJECTS]    = {};
+    float oscSendPrevTrajShape[MAX_OBJECTS]  = {};
+    float oscSendPrevTrajSpeed[MAX_OBJECTS]  = {};
+    float oscSendPrevTrajDir[MAX_OBJECTS]    = {};
+    float oscSendPrevInput[MAX_OBJECTS]      = {};
+
+    // v1.0: Global param send tracking (change-gated)
+    struct OscSendPrevGlobal {
+        float delayTime = -1.0f, feedback = -1.0f, filterLP = -1.0f, filterHP = -1.0f;
+        float filterLPQ = -1.0f, filterHPQ = -1.0f, dryWet = -1.0f;
+        float inputGain = -999.0f, outputGain = -999.0f;
+        float tempoSync = -1.0f, noteDivision = -1.0f, syncMode = -1.0f;
+        float filterEnabled = -1.0f, algorithm = -1.0f, hrtfProfile = -1.0f;
+        float outputFormat = -1.0f, airAbsorption = -1.0f;
+        float wobbleEnabled = -1.0f, wobbleAmount = -1.0f, wobbleMorph = -1.0f;
+        float tapAzimuth = -999.0f, tapElevation = -999.0f, tapDistance = -999.0f;
+        float tapDoppler = -999.0f, tapPitch = -999.0f, tapSpeed = -999.0f;
+    };
+    OscSendPrevGlobal oscSendPrevGlobal;
 
     // Per-object OSC override: when active, OSC controls position (trajectory paused)
     std::atomic<bool> oscOverrideActive[MAX_OBJECTS] = {};
@@ -644,23 +772,64 @@ private:
     //--- v0.6: Per-object trajectory animation engine --------------------------
     std::atomic<float>* cachedParam_trajectoryShape[MAX_OBJECTS] = {};
     std::atomic<float>* cachedParam_trajectorySpeed[MAX_OBJECTS] = {};
+    std::atomic<float>* cachedParam_trajectoryDirection[MAX_OBJECTS] = {};  // v0.8: 0=Forward, 1=Reverse
+
+    // Cached RangedAudioParameter* for trajectory setValueNotifyingHost (avoids string lookups in timer)
+    juce::RangedAudioParameter* trajParam_azimuth[MAX_OBJECTS]   = {};
+
+    // Pre-built OSC address strings for ADM-OSC Send (avoids per-tick string allocation)
+    juce::String oscSendAddress[MAX_OBJECTS];
 
     float trajectoryPhase[MAX_OBJECTS] = {};            // 0..1 animation progress per object
-    float baseAzimuth[MAX_OBJECTS]   = {};              // Captured when trajectory starts
+    float baseAzimuth[MAX_OBJECTS]   = {};              // Legacy: captured origin (used by getTrajectoryState)
     float baseElevation[MAX_OBJECTS] = {};
     float baseDistance[MAX_OBJECTS]   = {};
     int   prevTrajectoryShape[MAX_OBJECTS] = {};        // Detect shape changes (None→active)
 
-    // Trajectory shape computation (pure functions)
-    struct TrajectoryResult { float azDeg, elDeg, dist; };
+    // v0.9: Origin-point trajectory architecture — computed animated positions
+    // Timer callback writes here; processBlock reads here when trajectory is active
+    float trajectoryFinalAz[MAX_OBJECTS]   = {};        // Animated azimuth (origin + offset)
+    float trajectoryFinalEl[MAX_OBJECTS]   = {};        // Animated elevation
+    float trajectoryFinalDist[MAX_OBJECTS] = {};        // Animated distance
+    std::atomic<bool> trajectoryActive[MAX_OBJECTS] = {};  // True when shape != None
+
+    // v0.9: Random trajectory noise system (Issue #9)
+    // Randomized multi-sine frequencies/phases per instance — smooth, all axes simultaneous
+    struct RandomNoiseState {
+        float freqAz[4]  = {}, phaseAz[4]  = {}, ampAz[4]  = {};
+        float freqEl[4]  = {}, phaseEl[4]  = {}, ampEl[4]  = {};
+        float freqDist[3]= {}, phaseDist[3]= {}, ampDist[3]= {};
+        bool initialized = false;
+    };
+    RandomNoiseState randomNoise[MAX_OBJECTS] = {};
+    float randomTime[MAX_OBJECTS] = {};  // ever-increasing time (never wraps) for non-repeating motion
+    juce::Random randomRng;  // seeded per-instance (timer thread only)
+
+public:
+    // Trajectory shape computation (pure functions) — public for editor path sampling
+    // controlsAz/El/Dist flags indicate which axes the shape actively modifies
+    struct TrajectoryResult { float azDeg, elDeg, dist; bool controlsAz, controlsEl, controlsDist; };
     static TrajectoryResult computeTrajectory (int shape, float phase,
-                                               float baseAz, float baseEl, float baseDist);
+                                               float baseAz, float baseEl, float baseDist,
+                                               bool reverse = false);
+
+    // v1.0: Doppler pitch accessor for automated latency measurement tests
+    float getDopplerSemitones (int objectIndex) const { return dopplerSemitones[objectIndex]; }
+
+private:
 
     //--- DELAY-SPECIFIC: DSP state --------------------------------------------
+    // Tuning constants (named to avoid magic numbers in hot paths)
+    static constexpr float kFeedbackInputHeadroom  = 0.98f;   // prevents feedback runaway at unity
+    static constexpr float kMakeupGainCoeff        = 0.2f;    // self-oscillation loss compensation
+    // v0.9: Threshold bypass constants removed — filterEnabled param drives bypass directly
+
     double currentSampleRate = 44100.0;
 
-    // Main delay buffer (circular, power-of-2 size for bitmask indexing)
-    std::vector<float> delayBuffer;
+    // Main delay buffers (circular, power-of-2 size for bitmask indexing)
+    // v0.8: Dual delay lines for stereo input routing
+    std::vector<float> delayBufferL;
+    std::vector<float> delayBufferR;
     int delayBufferSize = 0;
     int delayBufferMask = 0;   // v0.5: = delayBufferSize - 1, for & instead of %
     int writePosition   = 0;
@@ -670,9 +839,34 @@ private:
     juce::dsp::IIR::Filter<float> feedbackLPFilter;
     juce::dsp::IIR::Filter<float> feedbackHPFilter;
 
-    // Per-object pitch shifter state (grain phase counters)
-    // MAX_OBJECTS + 1: indices 0..11 for objects, index 12 for feedback pitch shifter
-    float pitchPhase[MAX_OBJECTS + 1] = {};
+    // Per-tap output filters (same coefficients as feedback, independent state per tap)
+    juce::dsp::IIR::Filter<float> tapLPFilter[MAX_OBJECTS];
+    juce::dsp::IIR::Filter<float> tapHPFilter[MAX_OBJECTS];
+
+    // v0.9: WSOLA-lite per-tap pitch shifter — timing-preserving pitch shift
+    struct WSOLAState {
+        static constexpr int kBufSize = 2048;       // ~42ms at 48kHz, power of 2
+        static constexpr int kBufMask = kBufSize - 1;
+        static constexpr int kGrainSize = 1024;     // ~21ms grain
+        static constexpr int kCrossfadeLen = 512;   // ~10ms crossfade (50% overlap)
+
+        float buffer[kBufSize] = {};
+        int   writePos = 0;
+        float readPhase = 0.0f;      // fractional read position in buffer
+        float fadingPhase = 0.0f;    // fading grain read position
+        int   crossfadeRemaining = 0;
+    };
+    WSOLAState wsolaState[MAX_OBJECTS] = {};  // 12 objects (feedback uses direct delay read, no pitch shift)
+    float wsolaProcess (int objectIndex, float inputSample, float perTapSemitones);
+
+    // Block-rate cached conversion factor: ms → samples (set at top of processBlock)
+    float blockMsToSamples = 0.0f;
+
+    // v0.8/v1.0: Wobble modulation — tape wow/flutter emulation
+    float wobblePhase = 0.0f;
+    float blockWobbleAmount = 0.0f;  // read once per block from APVTS
+    float blockWobbleMorph = 0.0f;
+    inline float applyWobble (float baseDelaySamples, float currentDelayMs);
 
     // Smoothing for delay time to create "Repitch" effect
     juce::LinearSmoothedValue<float> smoothedDelayTime;
@@ -692,6 +886,7 @@ private:
 
     juce::dsp::IIR::Filter<float> lfeFilter;     // 120 Hz LP for LFE generation
 
+    //--- SPATIAL FRAMEWORK: Utility DSP (reusable by any SML plugin) ----------
     // Soft Clipper helper (NaN-safe, preserves natural asymptotic curve for self-oscillation)
     static float softClip (float x)
     {
@@ -706,8 +901,30 @@ private:
         return x;
     }
 
+    // Output Limiter — hard +2dB ceiling for speaker protection during self-oscillation
+    // Soft saturation curve for musical character, hard clamp enforces true ceiling.
+    static float outputLimiter (float x)
+    {
+        if (! std::isfinite (x))
+            return 0.0f;
+        const float threshold = 1.2589f;  // +2 dB
+        if (x > threshold)
+        {
+            float soft = threshold + (x - threshold) / (1.0f + (x - threshold) * (x - threshold));
+            return juce::jmin (soft, threshold);  // v0.9: enforce hard ceiling at +2 dB
+        }
+        if (x < -threshold)
+        {
+            float soft = -threshold + (x + threshold) / (1.0f + (x + threshold) * (x + threshold));
+            return juce::jmax (soft, -threshold);  // v0.9: enforce hard floor at -2 dB
+        }
+        return x;
+    }
+
     // Pre-allocated work buffers (avoid allocation in processBlock)
     std::vector<float> monoInputBuffer;
+    std::vector<float> inputBufferL;   // v0.8: per-channel input for stereo delay lines
+    std::vector<float> inputBufferR;
 
     // v0.5: Contiguous per-source accumulation buffers for direct HRTF convolution
     std::vector<float> sourceAccumBufStorage;          // MAX_OBJECTS * maxBlockSize (contiguous)
@@ -722,6 +939,10 @@ private:
 
     // v0.4: Air absorption — global toggle, per-object LP filter driven by distance
     juce::dsp::IIR::Filter<float> airAbsorptionFilter[MAX_OBJECTS];
+    juce::dsp::IIR::Coefficients<float> airTransparentCoeffs; // v1.0: pre-computed 20kHz LP (avoids heap alloc in processBlock)
+    float smoothedAirCutoff[MAX_OBJECTS] = {};  // v1.0: smoothed air absorption cutoff to prevent IIR coefficient transients
+    bool airAbsorptionActive = false;       // v0.9: block-rate true bypass (set in processBlock)
+    bool prevAirAbsorptionActive = false;   // v0.9: edge detection for AIR toggle state changes
 
     // v0.5: NFC-HOA — per-order shelf filters for near-field compensation (Ambisonics output only)
     // Applied internally in renderAmbisonicsOutput(), not exposed to user
@@ -729,19 +950,57 @@ private:
     juce::dsp::IIR::Filter<float> nfcFilters[MAX_OBJECTS][MAX_AMBI_ORDER];  // 12 objects × 6 orders
     float prevNfcDistance[MAX_OBJECTS] = {};
 
-    // v0.5: Cached per-object parameter pointers (avoid string lookup in processBlock)
-    std::atomic<float>* cachedParam_enabled[MAX_OBJECTS]       = {};
-    std::atomic<float>* cachedParam_azimuth[MAX_OBJECTS]       = {};
-    std::atomic<float>* cachedParam_elevation[MAX_OBJECTS]     = {};
-    std::atomic<float>* cachedParam_distance[MAX_OBJECTS]      = {};
-    std::atomic<float>* cachedParam_dopplerAmount[MAX_OBJECTS]  = {};
+    // v0.7: Cached max-rE weights (recomputed only when ambi order changes)
+    int cachedMaxrEOrder = -1;
+    float cachedMaxrE[MAX_AMBI_ORDER + 1] = {};
 
-    // v0.5: Cached feedback filter frequencies (skip recalculation when unchanged)
+    // v0.5: Cached per-object parameter pointers (avoid string lookup in processBlock)
+    struct CachedObjectParams {
+        std::atomic<float>* enabled       = nullptr;
+        std::atomic<float>* azimuth       = nullptr;
+        std::atomic<float>* elevation     = nullptr;
+        std::atomic<float>* distance      = nullptr;
+        std::atomic<float>* dopplerAmount = nullptr;
+        std::atomic<float>* pitchShift    = nullptr;  // v0.7: per-tap additive pitch
+        std::atomic<float>* inputChannel  = nullptr;  // v0.8: L+R/L/R selection
+    };
+    CachedObjectParams cachedObj[MAX_OBJECTS];
+
+    // Cached global parameter pointers (avoid string lookup in processBlock)
+    std::atomic<float>* cachedParam_tempoSync      = nullptr;
+    std::atomic<float>* cachedParam_noteDivision    = nullptr;
+    std::atomic<float>* cachedParam_filterLP        = nullptr;
+    std::atomic<float>* cachedParam_filterHP        = nullptr;
+    std::atomic<float>* cachedParam_filterHPQ       = nullptr;
+    std::atomic<float>* cachedParam_filterLPQ       = nullptr;
+    std::atomic<float>* cachedParam_filterEnabled   = nullptr;
+    std::atomic<float>* cachedParam_hrtfProfile     = nullptr;
+    std::atomic<float>* cachedParam_airAbsorption   = nullptr;
+    std::atomic<float>* cachedParam_wobbleEnabled   = nullptr;
+    std::atomic<float>* cachedParam_wobbleAmount    = nullptr;
+    std::atomic<float>* cachedParam_wobbleMorph     = nullptr;
+    std::atomic<float>* cachedParam_inputFormat     = nullptr;
+    std::atomic<float>* cachedParam_delayTime       = nullptr;
+    std::atomic<float>* cachedParam_dryWet          = nullptr;
+    std::atomic<float>* cachedParam_feedback        = nullptr;
+    std::atomic<float>* cachedParam_inputGain       = nullptr;
+    std::atomic<float>* cachedParam_outputGain      = nullptr;
+    std::atomic<float>* cachedParam_algorithm       = nullptr;
+
+    // v0.5: Cached feedback filter frequencies + Q (skip recalculation when unchanged)
     float cachedFeedbackLPFreq = -1.0f;
     float cachedFeedbackHPFreq = -1.0f;
+    float cachedFilterHPQ = -1.0f;
+    float cachedFilterLPQ = -1.0f;
+    bool  filterBypassed = true;   // v0.9: true when filterEnabled param is OFF (default)
 
-    // v0.5: Cached pitch shifter window size (set in prepareToPlay, constant within session)
-    float cachedPitchWindowSamples = 0.0f;
+    // v1.0: Previous-block gains for per-sample interpolation (prevent clicks on rapid position changes)
+    float prevStereoGainL[MAX_OBJECTS] = {};
+    float prevStereoGainR[MAX_OBJECTS] = {};
+    BinauralGains prevBinauralGains[MAX_OBJECTS] = {};
+    float prevChannelGains[MAX_OBJECTS][16] = {};
+    float prevSHCoeffs[MAX_OBJECTS][MAX_AMBI_CHANNELS] = {};
+    float prevDistGain[MAX_OBJECTS] = {};
 
     // v0.4: Doppler effect — per-object checkbox, global amount, velocity tracking
     float prevAzimuth[MAX_OBJECTS]   = {};   // radians, previous block
@@ -750,13 +1009,18 @@ private:
     float dopplerSemitones[MAX_OBJECTS] = {};  // computed per-block
     float smoothedRadialVelocity[MAX_OBJECTS] = {};  // EMA-smoothed velocity
 
-    //--- v0.6: Preset system (private) -----------------------------------------
+    // v0.7: Per-tap activity for UI glow (written in processBlock, read by editor timer)
+    std::atomic<float> tapActivityRMS[MAX_OBJECTS] = {};
+    float tapPeakAccum[MAX_OBJECTS] = {};  // per-block peak accumulator (reset each block)
+
+    //--- v0.9: Preset system (private) — file-based, all presets on disk ------
     int currentPresetIndex = 0;
-    std::vector<PresetData> userPresets;
-    void loadUserPresetsFromDisk();
+    std::vector<PresetData> allPresets;  // v1.0: factory from compiled array + user from disk
+    std::vector<int> categorizedOrder;   // v0.9: maps sequential position → index into allPresets
+    void loadAllPresets();               // v1.0: load factory from compiled-in array + user from disk
+    void rebuildCategorizedOrder();
     PresetData captureCurrentState() const;
-    static PresetData parsePresetJson (const juce::String& json);
-    static juce::String serializePresetToJson (const PresetData& preset);
+    // serializePresetToJson() and parsePresetJson() are now free functions in PresetData.h
 
     //--------------------------------------------------------------------------
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OpenSpatialDelayProcessor)

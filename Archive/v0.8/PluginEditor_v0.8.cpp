@@ -1,0 +1,2598 @@
+#include "PluginEditor.h"
+#include "FontData.h"
+
+//==============================================================================
+// Object colours for the spatial map
+//==============================================================================
+const juce::Colour SpatialMapComponent::objectColours[SpatialMapComponent::MAX_OBJECTS] = {
+    juce::Colour (0xffED5E5E),  //  1 red        — hsl(0, 80%, 65%)
+    juce::Colour (0xffEDA65E),  //  2 orange     — hsl(30, 80%, 65%)
+    juce::Colour (0xffACD435),  //  3 lime       — hsl(75, 65%, 52%)
+    juce::Colour (0xff3BCE6C),  //  4 green      — hsl(140, 60%, 52%)
+    juce::Colour (0xff3CDDA7),  //  5 teal       — hsl(160, 70%, 55%)
+    juce::Colour (0xff52E0E0),  //  6 cyan       — hsl(180, 70%, 60%)
+    juce::Colour (0xff4DB3E6),  //  7 light blue — hsl(200, 75%, 60%)
+    juce::Colour (0xff6390E9),  //  8 blue       — hsl(220, 75%, 65%)
+    juce::Colour (0xff6767E4),  //  9 indigo     — hsl(240, 70%, 65%)
+    juce::Colour (0xffA667E4),  // 10 violet     — hsl(270, 70%, 65%)
+    juce::Colour (0xffE467E4),  // 11 magenta    — hsl(300, 70%, 65%)
+    juce::Colour (0xffE963A6),  // 12 rose       — hsl(330, 75%, 65%)
+};
+
+//==============================================================================
+// Colour constants
+//==============================================================================
+namespace Colours_OSD
+{
+    // === Backgrounds (OKLCH hue 260 = blue-tinted darks) ===
+    // Hex values from browser canvas rendering of oklch() CSS values
+    static const juce::Colour bgVoid       (0xff03060b);  // oklch(12% 0.015 260) — main bg
+    static const juce::Colour bgPanel      (0xff0a0d12);  // oklch(16% 0.012 260) — right/bottom panels
+    static const juce::Colour bgHeader     (0xff06090f);  // oklch(14% 0.014 260) — header bar
+    static const juce::Colour bgRecessed   (0xff010205);  // oklch(9% 0.012 260) — inputs, dropdowns, knob bg
+    static const juce::Colour bgWell       (0xff020307);  // oklch(10% 0.013 260) — filter graph bg
+
+    // === Borders ===
+    static const juce::Colour borderSubtle (0xff252930);  // oklch(28% 0.015 260) — primary borders
+    static const juce::Colour borderDim    (0xff171b20);  // oklch(22% 0.012 260) — dim borders, panel edges
+
+    // === Accent Colors (browser canvas-verified OKLCH→sRGB) ===
+    static const juce::Colour accentStellar    (0xff80d8ff);  // oklch(85% 0.12 240) — delay section
+    static const juce::Colour accentStellarDim (0xff5187ab);  // oklch(60% 0.08 240)
+    static const juce::Colour accentViolet     (0xff7457d1);  // oklch(55% 0.18 290) — tone section
+    static const juce::Colour accentVioletDim  (0xff493883);  // oklch(40% 0.12 290)
+    static const juce::Colour accentAmber      (0xfff0a646);  // oklch(78% 0.14 70) — mix section
+    static const juce::Colour accentAmberDim   (0xff936831);  // oklch(55% 0.09 70)
+    static const juce::Colour accentGreen      (0xff3bce6c);  // oklch(75% 0.16 155) — OSC section
+    static const juce::Colour accentGreenDim   (0xff277a42);  // oklch(50% 0.10 155)
+    static const juce::Colour accentRose       (0xffe467a6);  // oklch(70% 0.14 350) — mod section
+    static const juce::Colour accentSync       (0xffe1c34b);  // oklch(82% 0.14 95)  — sync buttons (gold/yellow)
+    static const juce::Colour accentSyncDim    (0xff8b7a36);  // oklch(58% 0.09 95)
+    static const juce::Colour accentChannelL   (0xff4499ff);  // standard audio blue — Left channel
+    static const juce::Colour accentChannelR   (0xffff4444);  // standard audio red — Right channel
+
+    // === Text (browser canvas-verified OKLCH→sRGB) ===
+    static const juce::Colour textPrimary   (0xffe1e5ea);  // oklch(92% 0.008 260)
+    static const juce::Colour textSecondary (0xff9fa5ae);  // oklch(72% 0.015 260)
+    static const juce::Colour textDim       (0xff6d7279);  // oklch(55% 0.012 260) — labels, inactive
+    static const juce::Colour textEtched    (0xff5a5e63);  // oklch(48% 0.01 260) — cardinals
+
+    // === Spatial map ===
+    static const juce::Colour mapVoid      (0xff010204);  // oklch(8% 0.015 260)
+    static const juce::Colour mapRing      (0x28506e8c);  // rgba(80,110,140, 0.16) — semi-transparent with glow
+    static const juce::Colour mapCross     (0x0d3c5a78);  // rgba(60,90,120, 0.05)
+    static const juce::Colour mapReticle   (0x2e8caac8);  // rgba(140,170,200, 0.18)
+
+    // === Backward-compat aliases (used in a few spots) ===
+    static const juce::Colour selectionBox (0x40ffffff);
+}
+
+// Helper: create a Font from a specific Typeface with height and optional kerning
+static juce::Font makeFont (juce::Typeface::Ptr tf, float height, float kerning = 0.0f)
+{
+    return juce::Font (juce::FontOptions (tf).withHeight (height).withKerningFactor (kerning));
+}
+
+//==============================================================================
+// IndicatorToggle — reusable toggle pill with indicator dot
+//==============================================================================
+IndicatorToggle::IndicatorToggle (const juce::String& lbl, const juce::Colour& col,
+                                   juce::Typeface::Ptr tf)
+    : juce::Button (lbl), label (lbl), accent (col), typeface (tf)
+{
+    setClickingTogglesState (true);
+}
+
+int IndicatorToggle::getPreferredWidth (juce::Typeface::Ptr tf, const juce::String& text)
+{
+    auto font = makeFont (tf, kFontSize, kKerning);
+    juce::GlyphArrangement gl;
+    gl.addLineOfText (font, text, 0.0f, 0.0f);
+    return (int) kLeftPad + (int) (kDotRadius * 2.0f) + (int) kDotGap
+         + juce::roundToInt (gl.getBoundingBox (0, gl.getNumGlyphs(), true).getWidth())
+         + (int) kRightPad;
+}
+
+void IndicatorToggle::paintButton (juce::Graphics& g, bool isMouseOverButton, bool /*isButtonDown*/)
+{
+    auto bounds = getLocalBounds().toFloat();
+    if (bounds.getWidth() <= 0.0f) return;
+
+    bool isOn = getToggleState();
+
+    // Background
+    float bgAlpha = isOn ? 0.08f : 0.0f;
+    if (isMouseOverButton) bgAlpha += 0.06f;
+    g.setColour (isOn ? accent.withAlpha (bgAlpha)
+                      : (isMouseOverButton ? accent.withAlpha (0.04f) : Colours_OSD::bgRecessed));
+    g.fillRoundedRectangle (bounds, kCornerR);
+
+    // Border
+    float borderAlpha = isOn ? 0.6f : 0.0f;
+    if (isMouseOverButton && !isOn)  borderAlpha = 0.3f;
+    else if (isMouseOverButton && isOn) borderAlpha = 0.85f;
+    g.setColour (isOn || isMouseOverButton ? accent.withAlpha (borderAlpha) : Colours_OSD::borderSubtle);
+    g.drawRoundedRectangle (bounds.reduced (0.5f), kCornerR, 1.0f);
+
+    // Indicator dot
+    float dotX = bounds.getX() + kLeftPad + kDotRadius;
+    float dotY = bounds.getCentreY();
+    g.setColour (isOn ? accent
+                      : (isMouseOverButton ? Colours_OSD::textDim.withAlpha (0.6f)
+                                           : Colours_OSD::textDim.withAlpha (0.4f)));
+    g.fillEllipse (dotX - kDotRadius, dotY - kDotRadius, kDotRadius * 2.0f, kDotRadius * 2.0f);
+    if (isOn)
+    {
+        g.setColour (accent.withAlpha (0.25f));
+        g.fillEllipse (dotX - kDotRadius - 2.0f, dotY - kDotRadius - 2.0f,
+                       (kDotRadius + 2.0f) * 2.0f, (kDotRadius + 2.0f) * 2.0f);
+    }
+
+    // Text label
+    g.setColour (isOn ? accent
+                      : (isMouseOverButton ? Colours_OSD::textSecondary : Colours_OSD::textDim));
+    g.setFont (makeFont (typeface, kFontSize, kKerning));
+    auto textBounds = bounds.withLeft (dotX + kDotRadius + kDotGap);
+    g.drawText (label, textBounds.toNearestInt(), juce::Justification::centredLeft);
+}
+
+//==============================================================================
+// StyledButton — centred-text button, same visual language as IndicatorToggle
+//==============================================================================
+StyledButton::StyledButton (const juce::String& lbl, const juce::Colour& col,
+                            juce::Typeface::Ptr tf)
+    : juce::Button (lbl), label (lbl), accent (col), typeface (tf)
+{
+    setClickingTogglesState (true);
+}
+
+int StyledButton::getPreferredWidth (juce::Typeface::Ptr tf, const juce::String& text)
+{
+    auto font = makeFont (tf, kFontSize, kKerning);
+    juce::GlyphArrangement gl;
+    gl.addLineOfText (font, text, 0.0f, 0.0f);
+    return (int) kHPad
+         + juce::roundToInt (gl.getBoundingBox (0, gl.getNumGlyphs(), true).getWidth())
+         + (int) kHPad;
+}
+
+void StyledButton::paintButton (juce::Graphics& g, bool isMouseOverButton, bool /*isButtonDown*/)
+{
+    auto bounds = getLocalBounds().toFloat();
+    if (bounds.getWidth() <= 0.0f) return;
+
+    bool isOn = alwaysActive || getToggleState();
+
+    // Background — identical algebra to IndicatorToggle
+    float bgAlpha = isOn ? 0.08f : 0.0f;
+    if (isMouseOverButton) bgAlpha += 0.06f;
+    g.setColour (isOn ? accent.withAlpha (bgAlpha)
+                      : (isMouseOverButton ? accent.withAlpha (0.04f) : Colours_OSD::bgRecessed));
+    g.fillRoundedRectangle (bounds, kCornerR);
+
+    // Border
+    float borderAlpha = isOn ? 0.6f : 0.0f;
+    if (isMouseOverButton && !isOn)  borderAlpha = 0.3f;
+    else if (isMouseOverButton && isOn) borderAlpha = 0.85f;
+    g.setColour (isOn || isMouseOverButton ? accent.withAlpha (borderAlpha) : Colours_OSD::borderSubtle);
+    g.drawRoundedRectangle (bounds.reduced (0.5f), kCornerR, 1.0f);
+
+    // Text — centred
+    g.setColour (isOn ? accent
+                      : (isMouseOverButton ? Colours_OSD::textSecondary : Colours_OSD::textDim));
+    g.setFont (makeFont (typeface, kFontSize, kKerning));
+    g.drawText (label, bounds.toNearestInt(), juce::Justification::centred);
+}
+
+//==============================================================================
+// Ableton12Look — Observatory v6 LookAndFeel implementation
+//==============================================================================
+Ableton12Look::Ableton12Look()
+{
+    // Load embedded fonts
+    dmSansRegular    = juce::Typeface::createSystemTypefaceFor (FontData::DM_SansRegular_ttf,    FontData::DM_SansRegular_ttfSize);
+    dmSansMedium     = juce::Typeface::createSystemTypefaceFor (FontData::DM_SansMedium_ttf,     FontData::DM_SansMedium_ttfSize);
+    dmSansSemiBold   = juce::Typeface::createSystemTypefaceFor (FontData::DM_SansSemiBold_ttf,   FontData::DM_SansSemiBold_ttfSize);
+    dmSansBold       = juce::Typeface::createSystemTypefaceFor (FontData::DM_SansBold_ttf,       FontData::DM_SansBold_ttfSize);
+    jetbrainsRegular = juce::Typeface::createSystemTypefaceFor (FontData::JetBrains_MonoRegular_ttf, FontData::JetBrains_MonoRegular_ttfSize);
+    jetbrainsMedium  = juce::Typeface::createSystemTypefaceFor (FontData::JetBrains_MonoMedium_ttf,  FontData::JetBrains_MonoMedium_ttfSize);
+    jetbrainsBold    = juce::Typeface::createSystemTypefaceFor (FontData::JetBrains_MonoBold_ttf,    FontData::JetBrains_MonoBold_ttfSize);
+
+    // Observatory v6 popup/dropdown colors (matched to OKLCH rendering)
+    setColour (juce::PopupMenu::backgroundColourId,            juce::Colour (0xff06090f));
+    setColour (juce::PopupMenu::textColourId,                  juce::Colour (0xffe4e6ec));
+    setColour (juce::PopupMenu::highlightedBackgroundColourId, juce::Colour (0xff7cc8f0));
+    setColour (juce::PopupMenu::highlightedTextColourId,       juce::Colours::black);
+    setColour (juce::ComboBox::backgroundColourId,             juce::Colour (0xff010205));
+    setColour (juce::ComboBox::textColourId,                   juce::Colour (0xff9fa2b0));
+    setColour (juce::ComboBox::outlineColourId,                juce::Colour (0xff252930));
+    setColour (juce::ComboBox::arrowColourId,                  juce::Colour (0xff6d7080));
+}
+
+void Ableton12Look::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
+                                       float sliderPos, const float rotaryStartAngle,
+                                       const float rotaryEndAngle, juce::Slider& slider)
+{
+    // Observatory v6: knobs adapt to available space (42-46px typical)
+    float knobDiameter = std::min ((float) std::min (width, height), 46.0f);
+    auto knobBounds = juce::Rectangle<float> (x + (width - knobDiameter) * 0.5f,
+                                              y + (height - knobDiameter) * 0.5f,
+                                              knobDiameter, knobDiameter);
+
+    auto cx = knobBounds.getCentreX();
+    auto cy = knobBounds.getCentreY();
+    auto arcR = knobDiameter * 0.5f - 5.0f;
+    auto angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
+    auto lineW = 2.2f;
+
+    // 1. Dark circle background with subtle border
+    g.setColour (Colours_OSD::bgRecessed);
+    g.fillEllipse (cx - arcR - 1.5f, cy - arcR - 1.5f, (arcR + 1.5f) * 2.0f, (arcR + 1.5f) * 2.0f);
+    g.setColour (Colours_OSD::borderDim);
+    g.drawEllipse (cx - arcR - 1.5f, cy - arcR - 1.5f, (arcR + 1.5f) * 2.0f, (arcR + 1.5f) * 2.0f, 0.8f);
+
+    // 2. Background track arc
+    juce::Path backgroundTrack;
+    backgroundTrack.addCentredArc (cx, cy, arcR, arcR, 0.0f, rotaryStartAngle, rotaryEndAngle, true);
+    g.setColour (Colours_OSD::borderSubtle);
+    g.strokePath (backgroundTrack, juce::PathStrokeType (lineW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+    // 3. Active value arc with glow
+    if (slider.isEnabled())
+    {
+        auto accentColour = slider.findColour (juce::Slider::thumbColourId);
+        if (accentColour == juce::Colours::transparentBlack)
+            accentColour = juce::Colour (0xff7cc8f0);
+
+        juce::Path valueArc;
+        valueArc.addCentredArc (cx, cy, arcR, arcR, 0.0f, rotaryStartAngle, angle, true);
+        g.setColour (accentColour.withAlpha (0.3f));
+        g.strokePath (valueArc, juce::PathStrokeType (lineW + 3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        g.setColour (accentColour);
+        g.strokePath (valueArc, juce::PathStrokeType (lineW, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+    }
+
+    // 4. Tick marks at 0%, 50%, 100%
+    g.setColour (Colours_OSD::borderSubtle);
+    for (float t : { 0.0f, 0.5f, 1.0f })
+    {
+        float tickAngle = rotaryStartAngle + t * (rotaryEndAngle - rotaryStartAngle);
+        float cosA = std::cos (tickAngle - juce::MathConstants<float>::halfPi);
+        float sinA = std::sin (tickAngle - juce::MathConstants<float>::halfPi);
+        float inner = arcR + 2.0f;
+        float outer = arcR + 5.0f;
+        g.drawLine (cx + cosA * inner, cy + sinA * inner,
+                    cx + cosA * outer, cy + sinA * outer, 0.7f);
+    }
+
+    // 5. Center dot
+    g.setColour (juce::Colour (0xff3e4150));
+    g.fillEllipse (cx - 1.8f, cy - 1.8f, 3.6f, 3.6f);
+
+    // 6. Indicator needle
+    if (slider.isEnabled())
+    {
+        auto accentColour = slider.findColour (juce::Slider::thumbColourId);
+        if (accentColour == juce::Colours::transparentBlack)
+            accentColour = juce::Colour (0xff7cc8f0);
+
+        float cosA = std::cos (angle - juce::MathConstants<float>::halfPi);
+        float sinA = std::sin (angle - juce::MathConstants<float>::halfPi);
+        float innerR = arcR - 4.0f;
+        float outerR = arcR + 1.0f;
+        g.setColour (accentColour.withAlpha (0.85f));
+        g.drawLine (cx + cosA * innerR, cy + sinA * innerR,
+                    cx + cosA * outerR, cy + sinA * outerR, 1.3f);
+    }
+}
+
+void Ableton12Look::drawButtonBackground (juce::Graphics& g, juce::Button& button,
+                                           const juce::Colour& backgroundColour,
+                                           bool isMouseOverButton, bool isButtonDown)
+{
+    if (backgroundColour.isTransparent())
+        return;
+
+    auto bounds = button.getLocalBounds().toFloat().reduced (0.5f);
+    auto baseColour = backgroundColour;
+    if (isButtonDown)            baseColour = baseColour.brighter (0.15f);
+    else if (isMouseOverButton)  baseColour = baseColour.brighter (0.12f);
+
+    g.setColour (baseColour);
+    g.fillRoundedRectangle (bounds, 4.0f);
+
+    // 1px border stroke — brighter on hover
+    float borderBright = isMouseOverButton ? 0.5f : 0.3f;
+    auto borderCol = baseColour.brighter (borderBright).withAlpha (isMouseOverButton ? 0.8f : 0.6f);
+    g.setColour (borderCol);
+    g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
+}
+
+void Ableton12Look::drawComboBox (juce::Graphics& g, int width, int height, bool /*isButtonDown*/,
+                                   int /*buttonX*/, int /*buttonY*/, int /*buttonW*/, int /*buttonH*/,
+                                   juce::ComboBox& /*box*/)
+{
+    auto bounds = juce::Rectangle<float> (0, 0, (float) width, (float) height);
+
+    // Recessed background
+    g.setColour (findColour (juce::ComboBox::backgroundColourId));
+    g.fillRoundedRectangle (bounds, 4.0f);
+
+    // Subtle border
+    g.setColour (findColour (juce::ComboBox::outlineColourId));
+    g.drawRoundedRectangle (bounds.reduced (0.5f), 4.0f, 1.0f);
+
+    // Small dropdown arrow
+    float arrowX = (float) width - 12.0f;
+    float arrowY = (float) height * 0.5f;
+    juce::Path arrow;
+    arrow.addTriangle (arrowX - 3.0f, arrowY - 1.5f,
+                       arrowX + 3.0f, arrowY - 1.5f,
+                       arrowX,        arrowY + 2.5f);
+    g.setColour (findColour (juce::ComboBox::arrowColourId));
+    g.fillPath (arrow);
+}
+
+void Ableton12Look::drawLabel (juce::Graphics& g, juce::Label& label)
+{
+    // Override slider text-box labels to use JetBrains Mono 12px
+    // Only match labels whose parent is a Slider (the value readout text box)
+    if (dynamic_cast<juce::Slider*> (label.getParentComponent()) != nullptr
+        && jetbrainsRegular)
+    {
+        g.setFont (juce::Font (juce::FontOptions (jetbrainsRegular).withHeight (12.0f)));
+        g.setColour (label.findColour (juce::Label::textColourId));
+        g.drawText (label.getText(), label.getLocalBounds(),
+                    label.getJustificationType(), true);
+        return;
+    }
+    LookAndFeel_V4::drawLabel (g, label);
+}
+
+//==============================================================================
+// SpatialMapComponent
+//==============================================================================
+SpatialMapComponent::SpatialMapComponent() { generateStars(); }
+
+void SpatialMapComponent::generateStars()
+{
+    // ~80 stars with deterministic LCG random positions (increased from 50 for visibility)
+    stars.clear();
+    uint32_t seed = 0x5ACEA10u;  // deterministic seed
+    auto lcg = [&seed]() -> float {
+        seed = seed * 1103515245u + 12345u;
+        return (float) ((seed >> 16) & 0x7FFF) / 32767.0f;
+    };
+
+    // Star colours from prototype: 82% cyan-white, 15% amber, 3% violet
+    auto cyanWhite = juce::Colour (0xffe0f0fa);   // oklch(90% 0.02 240)
+    auto amber     = juce::Colour (0xfff0d8a8);   // oklch(85% 0.05 70)
+    auto violet    = juce::Colour (0xffc0a8f0);   // oklch(80% 0.06 290)
+
+    for (int i = 0; i < 80; ++i)
+    {
+        Star s;
+        s.x = lcg();
+        s.y = lcg();
+        s.phase = lcg() * juce::MathConstants<float>::twoPi;
+        s.speed = 0.7f + lcg() * 1.4f;  // 3-9s cycle (2π/2.1 ≈ 3s, 2π/0.7 ≈ 9s)
+        s.size = lcg() < 0.80f ? 1.0f : 2.0f;  // 20% are 2px (increased from 12%)
+
+        float colRoll = lcg();
+        if (colRoll < 0.82f)       s.colour = cyanWhite;
+        else if (colRoll < 0.97f)  s.colour = amber;
+        else                       s.colour = violet;
+
+        stars.push_back (s);
+    }
+}
+
+juce::Point<float> SpatialMapComponent::spatialToPixel (float azimuthDeg, float dist) const
+{
+    float radius = std::min (getWidth(), getHeight()) * 0.45f;
+    float cx = getWidth()  * 0.5f;
+    float cy = getHeight() * 0.5f;
+
+    float azRad = juce::degreesToRadians (azimuthDeg);
+    float x = cx - std::sin (azRad) * dist * radius;
+    float y = cy - std::cos (azRad) * dist * radius;
+    return { x, y };
+}
+
+std::pair<float, float> SpatialMapComponent::pixelToSpatial (juce::Point<float> pixel) const
+{
+    float radius = std::min (getWidth(), getHeight()) * 0.45f;
+    float cx = getWidth()  * 0.5f;
+    float cy = getHeight() * 0.5f;
+
+    float dx = (pixel.x - cx) / radius;
+    float dy = (pixel.y - cy) / radius;
+    float dist = std::sqrt (dx * dx + dy * dy);
+    dist = juce::jlimit (0.0f, 1.0f, dist);
+
+    float azRad = std::atan2 (-dx, -dy);
+    float azDeg = juce::radiansToDegrees (azRad);
+
+    return { azDeg, dist };
+}
+
+int SpatialMapComponent::findObjectAt (juce::Point<float> pos) const
+{
+    for (int i = MAX_OBJECTS - 1; i >= 0; --i)
+    {
+        if (! objects[(size_t)i].enabled) continue;
+        auto p = spatialToPixel (objects[(size_t)i].azimuthDeg, objects[(size_t)i].distance);
+
+        // Variable hit radius based on elevation-dependent dot size
+        float elDeg = objects[(size_t)i].elevationDeg;
+        float z = std::sin (juce::degreesToRadians (elDeg));
+        float baseDiam = (i == selectedObject) ? 18.0f : 14.0f;
+        float elevScale = (z >= 0.0f) ? 5.0f : 3.0f;  // asymmetric: bigger up, gentler down
+        float currentDotSize = baseDiam + elevScale * z;
+        float hitRadius = std::max (currentDotSize * 0.5f + 2.0f, 10.0f);
+
+        if (p.getDistanceFrom (pos) < hitRadius)
+            return (int)i;
+    }
+    return -1;
+}
+
+void SpatialMapComponent::setObjectState (int index, float azimuthDeg, float elevationDeg,
+                                        float distance, bool enabled)
+{
+    if (index < 0 || index >= MAX_OBJECTS) return;
+    objects[(size_t)index].azimuthDeg   = azimuthDeg;
+    objects[(size_t)index].elevationDeg = elevationDeg;
+    objects[(size_t)index].distance     = distance;
+    objects[(size_t)index].enabled      = enabled;
+    repaint();
+}
+
+void SpatialMapComponent::paint (juce::Graphics& g)
+{
+    auto* lf = dynamic_cast<Ableton12Look*> (&getLookAndFeel());
+    float radius = std::min (getWidth(), getHeight()) * 0.45f;
+    float cx = getWidth()  * 0.5f;
+    float cy = getHeight() * 0.5f;
+
+    // Observatory v6: nearly pure black void
+    g.fillAll (Colours_OSD::mapVoid);
+
+    // Subtle radial vignette
+    {
+        juce::ColourGradient vignette (Colours_OSD::mapVoid.withAlpha (0.0f), cx, cy,
+                                       juce::Colour (0xff000000).withAlpha (0.5f),
+                                       cx + (float) getWidth() * 0.5f, cy, true);
+        g.setGradientFill (vignette);
+        g.fillRect (getLocalBounds());
+    }
+
+    // Star field — twinkling dots with forward parallax (expanding from center)
+    {
+        float w = (float) getWidth();
+        float h = (float) getHeight();
+        float globalPhase = std::fmod (starTime * 0.04f, 1.0f);  // continuous 0→1 cycle, ~25s
+
+        for (auto& s : stars)
+        {
+            float twinkle = 0.15f + 0.50f * (0.5f + 0.5f * std::sin (starTime * s.speed + s.phase));
+
+            // Per-star phase offset for depth staggering
+            float starPhase = std::fmod (globalPhase + s.phase * 0.159f, 1.0f);  // 0.159 ≈ 1/2π
+
+            // Expand from center: at phase≈0 star is near center, at phase≈1 near edge
+            float baseX = s.x - 0.5f;   // -0.5..+0.5 relative to center
+            float baseY = s.y - 0.5f;
+            float expand = 0.3f + starPhase * 0.7f;  // scale 0.3→1.0
+
+            float sx = cx + baseX * expand * w;
+            float sy = cy + baseY * expand * h;
+
+            // Grow slightly as they approach (0.8x → 1.5x)
+            float sizeMult = 0.8f + starPhase * 0.7f;
+            float drawSize = s.size * sizeMult;
+
+            // Fade: appear faint near center, brighten mid-distance, fade at edge
+            float fadeMult = std::sin (starPhase * juce::MathConstants<float>::pi);
+            g.setColour (s.colour.withAlpha (twinkle * fadeMult));
+
+            g.fillEllipse (sx, sy, drawSize, drawSize);
+        }
+    }
+
+    // Crosshairs — subtle dashed lines
+    {
+        float dashLengths[] = { 2.0f, 6.0f };
+
+        // Horizontal dashed line
+        juce::Path hSrc, hDashed;
+        hSrc.startNewSubPath (cx - radius, cy);
+        hSrc.lineTo (cx + radius, cy);
+        juce::PathStrokeType (0.5f).createDashedStroke (hDashed, hSrc, dashLengths, 2);
+        g.setColour (Colours_OSD::textEtched.withAlpha (0.6f));
+        g.fillPath (hDashed);
+
+        // Vertical dashed line
+        juce::Path vSrc, vDashed;
+        vSrc.startNewSubPath (cx, cy - radius);
+        vSrc.lineTo (cx, cy + radius);
+        juce::PathStrokeType (0.5f).createDashedStroke (vDashed, vSrc, dashLengths, 2);
+        g.fillPath (vDashed);
+
+        // Diagonal crosshairs (±45°, subtler)
+        float diagDash[] = { 1.0f, 8.0f };
+        float diagR = radius * 0.707f;
+        g.setColour (Colours_OSD::textEtched.withAlpha (0.12f));
+
+        juce::Path d1Src, d1Dashed;
+        d1Src.startNewSubPath (cx - diagR, cy - diagR);
+        d1Src.lineTo (cx + diagR, cy + diagR);
+        juce::PathStrokeType (0.25f).createDashedStroke (d1Dashed, d1Src, diagDash, 2);
+        g.fillPath (d1Dashed);
+
+        juce::Path d2Src, d2Dashed;
+        d2Src.startNewSubPath (cx + diagR, cy - diagR);
+        d2Src.lineTo (cx - diagR, cy + diagR);
+        juce::PathStrokeType (0.25f).createDashedStroke (d2Dashed, d2Src, diagDash, 2);
+        g.fillPath (d2Dashed);
+    }
+
+    // Distance rings — thin stroke matching center reticle weight
+    for (float r = 0.25f; r <= 1.0f; r += 0.25f)
+    {
+        float ringR = r * radius;
+        g.setColour (Colours_OSD::textEtched.withAlpha (0.6f));
+        g.drawEllipse (cx - ringR, cy - ringR, ringR * 2.0f, ringR * 2.0f, 0.7f);
+    }
+
+    // Ring distance labels at 30° angle (lower-right from center, matching prototype CSS)
+    // In screen coords: cos(30°)→right, sin(30°)→down
+    g.setColour (Colours_OSD::textSecondary.withAlpha (0.5f));
+    if (lf) g.setFont (makeFont (lf->jetbrainsRegular, 9.0f));
+    else    g.setFont (juce::FontOptions (9.0f));
+    for (int ri = 1; ri <= 4; ++ri)
+    {
+        float r = ri * 0.25f;
+        float ringR = r * radius;
+        float labelAngle = juce::MathConstants<float>::pi / 6.0f;  // 30° in screen coords
+        float lx = cx + std::cos (labelAngle) * ringR + 3.0f;
+        float ly = cy + std::sin (labelAngle) * ringR + 2.0f;  // positive Y = downward
+        g.drawText (juce::String (r, 2), juce::roundToInt (lx), juce::roundToInt (ly), 28, 10,
+                    juce::Justification::centredLeft);
+    }
+
+    // Center reticle (ring + dot + short cross arms)
+    {
+        float reticleR = 7.0f;
+        // Reticle ring
+        g.setColour (Colours_OSD::textEtched.withAlpha (0.6f));
+        g.drawEllipse (cx - reticleR, cy - reticleR, reticleR * 2.0f, reticleR * 2.0f, 0.7f);
+        // Center dot
+        g.setColour (Colours_OSD::textEtched.withAlpha (0.6f));
+        g.fillEllipse (cx - 1.5f, cy - 1.5f, 3.0f, 3.0f);
+        // Short cross arms (4px each side)
+        g.setColour (Colours_OSD::textEtched.withAlpha (0.6f));
+        float armLen = 4.0f;
+        g.drawLine (cx - reticleR - armLen, cy, cx - reticleR, cy, 0.5f);
+        g.drawLine (cx + reticleR, cy, cx + reticleR + armLen, cy, 0.5f);
+        g.drawLine (cx, cy - reticleR - armLen, cx, cy - reticleR, 0.5f);
+        g.drawLine (cx, cy + reticleR, cx, cy + reticleR + armLen, 0.5f);
+    }
+
+    // Cardinals — JetBrains Mono Medium, wide tracking, larger text
+    g.setColour (Colours_OSD::textEtched);
+    if (lf) g.setFont (makeFont (lf->jetbrainsMedium, 14.0f, 0.2f));
+    else    g.setFont (juce::FontOptions (14.0f).withStyle ("Bold"));
+    g.drawText ("F",  juce::Rectangle<float> (cx - 30.0f, cy - radius - 20.0f, 60.0f, 16.0f), juce::Justification::centred);
+    g.drawText ("B",  juce::Rectangle<float> (cx - 30.0f, cy + radius + 4.0f,  60.0f, 16.0f), juce::Justification::centred);
+    g.drawText ("L",  juce::roundToInt (cx - radius - 22), juce::roundToInt (cy - 8),  24, 16, juce::Justification::centred);
+    g.drawText ("R",  juce::roundToInt (cx + radius + 2),  juce::roundToInt (cy - 8),  24, 16, juce::Justification::centred);
+
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+    {
+        if (! objects[(size_t)i].enabled) continue;
+
+        auto pos = spatialToPixel (objects[(size_t)i].azimuthDeg, objects[(size_t)i].distance);
+        pos = { std::round (pos.x), std::round (pos.y) };  // pixel-grid snap for HiDPI sharpness
+
+        // v0.6: IEM-faithful elevation visualization
+        // Elevation encoded through dot visual properties: size, opacity, outline, text
+        // (no stems — matches IEM StereoEncoder / Nuendo / Pro Tools industry standard)
+        float elDeg = objects[(size_t)i].elevationDeg;
+        bool isAbove = (elDeg >= 0.0f);
+        float z = std::sin (juce::degreesToRadians (elDeg));  // -1..+1
+
+        float baseDiam = (i == selectedObject) ? 18.0f : 14.0f;
+        float elevScale = (z >= 0.0f) ? 5.0f : 3.0f;  // asymmetric: +5px up, -3px down
+        float dotSize = baseDiam + elevScale * z;
+        float half = dotSize * 0.5f;
+
+        // 1. Selection halo (scales with dot, alpha adapts by hemisphere)
+        if (i == selectedObject)
+        {
+            g.setColour (objectColours[i].withAlpha (isAbove ? 0.3f : 0.15f));
+            float haloSize = dotSize + 8.0f;
+            float haloHalf = haloSize * 0.5f;
+            g.fillEllipse (pos.x - haloHalf, pos.y - haloHalf, haloSize, haloSize);
+        }
+
+        // 1b. Activity glow — expanding pulse ring + core glow (v0.7)
+        // Matches prototype tapPulse: ring expands scale(1)→scale(1.8), fades out
+        if (activityLevel[(size_t)i] > 0.01f)
+        {
+            float act = juce::jlimit (0.0f, 1.0f, activityLevel[(size_t)i]);
+            float phase = pulsePhase[(size_t)i];
+
+            // Soft ambient glow (always present when active)
+            float ambientR = half + 8.0f + act * 6.0f;
+            g.setColour (objectColours[i].withAlpha (act * 0.20f));
+            g.fillEllipse (pos.x - ambientR, pos.y - ambientR, ambientR * 2.0f, ambientR * 2.0f);
+
+            // Expanding pulse ring (prototype tapPulse keyframes)
+            float ringOpacity = 0.0f;
+            float ringScale = 1.0f;
+            if (phase < 0.03f)
+            {
+                // 0%→3%: opacity 0→0.7, scale 1.0
+                float t = phase / 0.03f;
+                ringOpacity = t * 0.7f;
+                ringScale = 1.0f;
+            }
+            else if (phase < 0.08f)
+            {
+                // 3%→8%: opacity 0.7→0.6, scale 1.0→1.3
+                float t = (phase - 0.03f) / 0.05f;
+                ringOpacity = 0.7f - t * 0.1f;
+                ringScale = 1.0f + t * 0.3f;
+            }
+            else if (phase < 0.20f)
+            {
+                // 8%→20%: opacity 0.6→0, scale 1.3→1.8
+                float t = (phase - 0.08f) / 0.12f;
+                ringOpacity = 0.6f * (1.0f - t);
+                ringScale = 1.3f + t * 0.5f;
+            }
+            // 20%→100%: invisible
+
+            if (ringOpacity > 0.01f)
+            {
+                float ringR = (half + 4.0f) * ringScale;
+                g.setColour (objectColours[i].withAlpha (ringOpacity * act));
+                g.drawEllipse (pos.x - ringR, pos.y - ringR, ringR * 2.0f, ringR * 2.0f, 1.5f);
+            }
+        }
+
+        // 2. Dot outline at full colour (IEM: always visible regardless of hemisphere)
+        juce::Path dotPath;
+        dotPath.addEllipse (pos.x - half, pos.y - half, dotSize, dotSize);
+
+        // Core brightness boost during activity pulse (prototype tapCorePulse: brightness 1→1.5→1.4→1)
+        float coreBrightness = 1.0f;
+        if (activityLevel[(size_t)i] > 0.01f)
+        {
+            float phase = pulsePhase[(size_t)i];
+            if (phase < 0.03f)
+                coreBrightness = 1.0f + (phase / 0.03f) * 0.5f;
+            else if (phase < 0.08f)
+                coreBrightness = 1.5f - ((phase - 0.03f) / 0.05f) * 0.1f;
+            else if (phase < 0.18f)
+                coreBrightness = 1.4f - ((phase - 0.08f) / 0.10f) * 0.4f;
+        }
+        auto coreColour = (coreBrightness > 1.01f)
+                        ? objectColours[i].brighter (coreBrightness - 1.0f)
+                        : objectColours[i];
+
+        g.setColour (coreColour);
+        g.strokePath (dotPath, juce::PathStrokeType (1.2f));
+
+        // 3. Dot fill with hemisphere alpha (IEM: 1.0 above, 0.3 below)
+        g.setColour (coreColour.withAlpha (isAbove ? 1.0f : 0.3f));
+        g.fillPath (dotPath);
+
+        // 4. Number label — Path-based faux bold with pixel-perfect centering
+        //    Converts glyphs to a Path, then fills + strokes for guaranteed visual weight.
+        //    GlyphArrangement getBoundingBox() centers on actual pixel bounds (no descent offset).
+        {
+            auto labelColour = isAbove ? juce::Colour (0xff161820) : objectColours[i];
+            juce::Font labelFont = lf ? makeFont (lf->jetbrainsBold, 10.0f)
+                                      : juce::Font (juce::FontOptions (10.0f));
+            juce::GlyphArrangement glyphs;
+            juce::String numText (i + 1);
+            glyphs.addLineOfText (labelFont, numText, 0.0f, 0.0f);
+            auto glyphBounds = glyphs.getBoundingBox (0, glyphs.getNumGlyphs(), true);
+            float gx = pos.x - glyphBounds.getWidth() * 0.5f - glyphBounds.getX();
+            float gy = pos.y - glyphBounds.getHeight() * 0.5f - glyphBounds.getY();
+            glyphs.moveRangeOfGlyphs (0, -1, gx, gy);
+
+            // Convert to Path and fill+stroke for faux bold effect
+            juce::Path textPath;
+            glyphs.createPath (textPath);
+            g.setColour (labelColour);
+            g.fillPath (textPath);
+            g.strokePath (textPath, juce::PathStrokeType (0.8f));
+        }
+
+        // 5. Elevation degree label (selected object only, non-zero elevation)
+        if (i == selectedObject && std::abs (elDeg) > 1.0f)
+        {
+            float labelOffsetY = isAbove ? -(half + 14.0f) : (half + 2.0f);
+            g.setColour (objectColours[i].withAlpha (0.85f));
+            if (lf) g.setFont (makeFont (lf->jetbrainsRegular, 11.0f));
+            else    g.setFont (juce::FontOptions (11.0f));
+            juce::String elText = (elDeg > 0.0f ? "+" : "")
+                                + juce::String (juce::roundToInt (elDeg))
+                                + juce::String::charToString (0x00B0);
+            g.drawText (elText, juce::roundToInt (pos.x - 18), juce::roundToInt (pos.y + labelOffsetY),
+                        36, 12, juce::Justification::centred);
+        }
+
+        // 6. OSC override label (collision-aware positioning)
+        if (oscOverride[(size_t)i])
+        {
+            float oscLabelY = (i == selectedObject && elDeg < -1.0f)
+                            ? pos.y + half + 14.0f    // below elevation label
+                            : pos.y + half + 1.0f;    // normal position
+            g.setColour (Colours_OSD::accentStellar);
+            if (lf) g.setFont (makeFont (lf->jetbrainsBold, 10.0f));
+            else    g.setFont (juce::FontOptions (10.0f).withStyle ("Bold"));
+            g.drawText ("OSC", juce::roundToInt (pos.x - half - 2), juce::roundToInt (oscLabelY),
+                        juce::roundToInt (dotSize + 4), 10, juce::Justification::centred);
+        }
+    }
+}
+
+void SpatialMapComponent::mouseDown (const juce::MouseEvent& e)
+{
+    draggedObject = findObjectAt (e.position);
+    if (draggedObject >= 0)
+        listeners.call ([this](Listener& l) { l.objectSelected (draggedObject); });
+}
+
+void SpatialMapComponent::mouseDrag (const juce::MouseEvent& e)
+{
+    if (draggedObject < 0) return;
+
+    auto result = pixelToSpatial (e.position);
+    float azDeg = result.first;
+    float dist  = result.second;
+    objects[(size_t)draggedObject].azimuthDeg = azDeg;
+    objects[(size_t)draggedObject].distance   = dist;
+    repaint();
+
+    listeners.call ([this, azDeg, dist](Listener& l) {
+        l.objectPositionChanged (draggedObject, azDeg, dist);
+    });
+}
+
+//==============================================================================
+// Helper: create a rotary slider with consistent styling
+//==============================================================================
+static void styleSlider (juce::Slider& slider, juce::LookAndFeel& lf,
+                         juce::Slider::SliderStyle style = juce::Slider::RotaryVerticalDrag)
+{
+    slider.setLookAndFeel (&lf);
+    slider.setSliderStyle (style);
+    slider.setWantsKeyboardFocus (true);
+    slider.setMouseClickGrabsKeyboardFocus (true);
+    slider.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 60, 12);
+    slider.setColour (juce::Slider::textBoxTextColourId, Colours_OSD::textSecondary);
+    slider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+    slider.setColour (juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
+}
+
+static void styleLabel (juce::Label& label, const juce::String& text, Ableton12Look* lf = nullptr)
+{
+    label.setText (text, juce::dontSendNotification);
+    if (lf && lf->jetbrainsMedium)
+        label.setFont (makeFont (lf->jetbrainsMedium, 10.0f, 0.12f));
+    else
+        label.setFont (juce::FontOptions (10.0f));
+    label.setColour (juce::Label::textColourId, Colours_OSD::textDim);
+    label.setJustificationType (juce::Justification::centred);
+}
+
+//==============================================================================
+// v0.7: FilterGraphComponent — Ableton Echo-style bandpass display
+//==============================================================================
+FilterGraphComponent::FilterGraphComponent() {}
+
+float FilterGraphComponent::freqToX (float freqHz) const
+{
+    float w = static_cast<float> (getWidth());
+    float logMin = std::log10 (kMinFreq);
+    float logMax = std::log10 (kMaxFreq);
+    float logF   = std::log10 (juce::jlimit (kMinFreq, kMaxFreq, freqHz));
+    return (logF - logMin) / (logMax - logMin) * w;
+}
+
+float FilterGraphComponent::xToFreq (float x) const
+{
+    float w = static_cast<float> (getWidth());
+    float logMin = std::log10 (kMinFreq);
+    float logMax = std::log10 (kMaxFreq);
+    float logF   = logMin + (x / w) * (logMax - logMin);
+    return std::pow (10.0f, logF);
+}
+
+void FilterGraphComponent::setFrequencies (float hp, float lp)
+{
+    if (std::abs (hp - hpFreq) > 0.01f || std::abs (lp - lpFreq) > 0.01f)
+    {
+        hpFreq = hp;
+        lpFreq = lp;
+        repaint();
+    }
+}
+
+void FilterGraphComponent::setQ (float newHPQ, float newLPQ)
+{
+    if (std::abs (newHPQ - hpQ) > 0.001f || std::abs (newLPQ - lpQ) > 0.001f)
+    {
+        hpQ = newHPQ;
+        lpQ = newLPQ;
+        repaint();
+    }
+}
+
+// 2nd-order high-pass magnitude response
+float FilterGraphComponent::hpMagnitude (float f, float fc, float q)
+{
+    if (fc < 1.0f) return 1.0f;
+    float ratio = f / fc;
+    float r2 = ratio * ratio;
+    float denom = (1.0f - r2) * (1.0f - r2) + (ratio / q) * (ratio / q);
+    return (denom > 0.0f) ? (r2 / std::sqrt (denom)) : 0.0f;
+}
+
+// 2nd-order low-pass magnitude response
+float FilterGraphComponent::lpMagnitude (float f, float fc, float q)
+{
+    if (fc < 1.0f) return 0.0f;
+    float ratio = f / fc;
+    float r2 = ratio * ratio;
+    float denom = (1.0f - r2) * (1.0f - r2) + (ratio / q) * (ratio / q);
+    return (denom > 0.0f) ? (1.0f / std::sqrt (denom)) : 0.0f;
+}
+
+void FilterGraphComponent::paint (juce::Graphics& g)
+{
+    auto bounds = getLocalBounds().toFloat();
+    float w = bounds.getWidth();
+    float h = bounds.getHeight();
+    float alpha = filterEnabled ? 1.0f : 0.3f;
+
+    // Background
+    g.setColour (Colours_OSD::bgRecessed);
+    g.fillRoundedRectangle (bounds, 4.0f);
+
+    // 1px border
+    g.setColour (Colours_OSD::borderDim);
+    g.drawRoundedRectangle (bounds.reduced (0.5f), 4.0f, 1.0f);
+
+    // Grid lines at key frequencies (Ableton-style)
+    g.setColour (Colours_OSD::borderDim.withAlpha (alpha * 0.5f));
+    for (float freq : { 50.0f, 200.0f, 500.0f, 2000.0f, 5000.0f })
+    {
+        float x = freqToX (freq);
+        g.drawVerticalLine (juce::roundToInt (x), bounds.getY() + 2, bounds.getBottom() - 2);
+    }
+    // Primary grid lines (brighter)
+    g.setColour (Colours_OSD::borderDim.withAlpha (alpha * 0.8f));
+    for (float freq : { 100.0f, 1000.0f, 10000.0f })
+    {
+        float x = freqToX (freq);
+        g.drawVerticalLine (juce::roundToInt (x), bounds.getY() + 2, bounds.getBottom() - 2);
+    }
+
+    // Frequency labels — more markers like Ableton
+    {
+        auto* lfPtr = dynamic_cast<Ableton12Look*> (&getLookAndFeel());
+        if (lfPtr) g.setFont (makeFont (lfPtr->jetbrainsRegular, 8.0f));
+        else       g.setFont (juce::FontOptions (8.0f));
+    }
+    g.setColour (Colours_OSD::textDim.withAlpha (alpha * 0.5f));
+    g.drawText ("50",  juce::roundToInt (freqToX (50.0f)) - 10,  juce::roundToInt (h) - 11, 20, 10, juce::Justification::centred);
+    g.drawText ("200", juce::roundToInt (freqToX (200.0f)) - 12, juce::roundToInt (h) - 11, 24, 10, juce::Justification::centred);
+    g.drawText ("500", juce::roundToInt (freqToX (500.0f)) - 12, juce::roundToInt (h) - 11, 24, 10, juce::Justification::centred);
+    g.drawText ("2k",  juce::roundToInt (freqToX (2000.0f)) - 10, juce::roundToInt (h) - 11, 20, 10, juce::Justification::centred);
+    g.drawText ("5k",  juce::roundToInt (freqToX (5000.0f)) - 10, juce::roundToInt (h) - 11, 20, 10, juce::Justification::centred);
+    // Primary labels (brighter)
+    g.setColour (Colours_OSD::textDim.withAlpha (alpha * 0.7f));
+    g.drawText ("100", juce::roundToInt (freqToX (100.0f)) - 12, juce::roundToInt (h) - 11, 24, 10, juce::Justification::centred);
+    g.drawText ("1k",  juce::roundToInt (freqToX (1000.0f)) - 12, juce::roundToInt (h) - 11, 24, 10, juce::Justification::centred);
+    g.drawText ("10k", juce::roundToInt (freqToX (10000.0f)) - 12, juce::roundToInt (h) - 11, 24, 10, juce::Justification::centred);
+
+    // --- Compute combined HP+LP magnitude response curve ---
+    // Layout: passband baseline in upper portion, peaks above, rolloff extends well past bottom
+    float plotTop = 2.0f;           // top of drawable area (peak headroom)
+    float plotBot = h + 20.0f;      // extend PAST bottom edge so curve disappears off-screen
+    float passbaseY = plotTop + (h - plotTop) * 0.25f;  // 0 dB line at 25% of visible height
+    float dbPerPixelAbove = 18.0f / (passbaseY - plotTop);    // 18 dB headroom above baseline
+    float dbPerPixelBelow = 48.0f / (plotBot - passbaseY);    // 48 dB rolloff — steeper visual slope
+
+    auto dbToY = [&] (float dB) -> float {
+        if (dB >= 0.0f)
+            return juce::jlimit (plotTop, passbaseY, passbaseY - dB / dbPerPixelAbove);
+        else
+            return juce::jlimit (passbaseY, plotBot, passbaseY - dB / dbPerPixelBelow);
+    };
+
+    // Build the magnitude response path (2px steps for smoothness)
+    juce::Path curve;
+    bool started = false;
+    for (float px = 0; px <= w; px += 2.0f)
+    {
+        float f = xToFreq (px);
+        float mag = hpMagnitude (f, hpFreq, hpQ) * lpMagnitude (f, lpFreq, lpQ);
+        float dB = 20.0f * std::log10 (std::max (mag, 0.0001f));
+        float y = dbToY (dB);
+
+        if (! started)
+        {
+            curve.startNewSubPath (px, y);
+            started = true;
+        }
+        else
+        {
+            curve.lineTo (px, y);
+        }
+    }
+
+    // Fill under curve
+    juce::Path fillPath (curve);
+    fillPath.lineTo (w, plotBot);
+    fillPath.lineTo (0.0f, plotBot);
+    fillPath.closeSubPath();
+    g.setColour (Colours_OSD::accentViolet.withAlpha (0.10f * alpha));
+    g.fillPath (fillPath);
+
+    // Stroke
+    g.setColour (Colours_OSD::accentViolet.withAlpha (0.8f * alpha));
+    g.strokePath (curve, juce::PathStrokeType (1.5f));
+
+    // --- HP handle dot (filled) at HP frequency, on the curve ---
+    {
+        float hpX = freqToX (hpFreq);
+        float hpMag = hpMagnitude (hpFreq, hpFreq, hpQ) * lpMagnitude (hpFreq, lpFreq, lpQ);
+        float hpdB = 20.0f * std::log10 (std::max (hpMag, 0.0001f));
+        float hpY = dbToY (hpdB);
+        g.setColour (Colours_OSD::accentViolet.withAlpha (alpha));
+        g.fillEllipse (hpX - 5.0f, hpY - 5.0f, 10.0f, 10.0f);
+    }
+
+    // --- LP handle dot (hollow ring) at LP frequency, on the curve ---
+    {
+        float lpX = freqToX (lpFreq);
+        float lpMag = hpMagnitude (lpFreq, hpFreq, hpQ) * lpMagnitude (lpFreq, lpFreq, lpQ);
+        float lpdB = 20.0f * std::log10 (std::max (lpMag, 0.0001f));
+        float lpY = dbToY (lpdB);
+        g.setColour (Colours_OSD::accentViolet.withAlpha (alpha));
+        g.drawEllipse (lpX - 5.0f, lpY - 5.0f, 10.0f, 10.0f, 1.5f);
+    }
+}
+
+void FilterGraphComponent::mouseDown (const juce::MouseEvent& e)
+{
+    float hpX = freqToX (hpFreq);
+    float lpX = freqToX (lpFreq);
+    float mx = static_cast<float> (e.x);
+
+    if (std::abs (mx - hpX) < 12.0f)
+        currentDrag = HP;
+    else if (std::abs (mx - lpX) < 12.0f)
+        currentDrag = LP;
+    else
+        currentDrag = None;
+
+    dragStartY = static_cast<float> (e.y);
+    dragStartQ = (currentDrag == HP) ? hpQ : lpQ;
+}
+
+void FilterGraphComponent::mouseDrag (const juce::MouseEvent& e)
+{
+    if (currentDrag == None) return;
+
+    // Horizontal: frequency
+    float freq = xToFreq (static_cast<float> (e.x));
+    if (currentDrag == HP)
+        hpFreq = juce::jlimit (20.0f, 5000.0f, freq);
+    else
+        lpFreq = juce::jlimit (200.0f, 20000.0f, freq);
+
+    // Vertical: resonance Q (drag up = more Q, drag down = less)
+    float dy = dragStartY - static_cast<float> (e.y);  // positive = dragged up
+    float qDelta = dy * 0.05f;  // sensitivity: 20px drag = 1.0 Q change
+    float newQ = juce::jlimit (0.5f, 8.0f, dragStartQ + qDelta);
+
+    if (currentDrag == HP)
+    {
+        hpQ = newQ;
+        if (onHPQChanged) onHPQChanged (hpQ);
+    }
+    else
+    {
+        lpQ = newQ;
+        if (onLPQChanged) onLPQChanged (lpQ);
+    }
+
+    repaint();
+    if (onFrequencyChanged)
+        onFrequencyChanged (hpFreq, lpFreq);
+}
+
+void FilterGraphComponent::mouseUp (const juce::MouseEvent&)
+{
+    currentDrag = None;
+}
+
+//==============================================================================
+// Editor constructor
+//==============================================================================
+OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
+    : AudioProcessorEditor (&p), processorRef (p)
+{
+    setLookAndFeel (&ableton12Look);
+    setSize (kWindowWidth, kWindowHeight);
+
+    // --- Title (painted directly in paint(), no Label component needed) ------
+    titleLabel.setVisible (false);
+
+    // --- Spatial map ---------------------------------------------------------
+    addAndMakeVisible (spatialMap);
+    spatialMap.addListener (this);
+
+    // --- Global knobs --------------------------------------------------------
+    auto addKnob = [&](juce::Slider& s, juce::Label& l, const juce::String& name,
+                        const juce::String& paramId, std::unique_ptr<SliderAttachment>& attach) {
+        styleSlider (s, ableton12Look);
+        addAndMakeVisible (s);
+        styleLabel (l, name, &ableton12Look);
+        addAndMakeVisible (l);
+        attach = std::make_unique<SliderAttachment> (processorRef.apvts, paramId, s);
+    };
+
+    addKnob (inputGainSlider,  inputGainLabel,  "INPUT",    "inputGain",  inputGainAttach);
+    addKnob (delayTimeSlider,  delayTimeLabel,  "TIME",     "delayTime",  delayTimeAttach);
+    addKnob (noteDivisionSlider, delayTimeLabel, "TIME",    "noteDivision", noteDivisionAttach);
+    addKnob (feedbackSlider,   feedbackLabel,   "FEEDBACK", "feedback",   feedbackAttach);
+    addKnob (pitchShiftSlider, pitchShiftLabel, "PITCH",    "pitchShift", pitchShiftAttach);
+    addKnob (filterHPSlider,   filterHPLabel,   "HP",       "filterHP",   filterHPAttach);
+    addKnob (filterLPSlider,   filterLPLabel,   "LP",       "filterLP",   filterLPAttach);
+    addKnob (dryWetSlider,     dryWetLabel,     "DRY/WET",  "dryWet",     dryWetAttach);
+    addKnob (outputGainSlider, outputGainLabel, "OUTPUT",   "outputGain", outputGainAttach);
+
+    // Section-based knob accent colors (prototype v6: DELAY=stellar, TONE=no knobs, MIX=amber)
+    // DELAY section — cyan (stellar) — includes Input, Time, Feedback, Pitch
+    inputGainSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentStellar);
+    delayTimeSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentStellar);
+    noteDivisionSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentStellar);
+    feedbackSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentStellar);
+    pitchShiftSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentStellar);
+    // TONE section — filter handles are violet (handled in FilterGraphComponent)
+    filterHPSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentViolet);
+    filterLPSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentViolet);
+    // MIX section — amber
+    dryWetSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentAmber);
+    outputGainSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentAmber);
+
+    // --- v0.8: Wobble modulation knobs (MOD section) -------------------------
+    {
+        styleSlider (wobbleAmountSlider, ableton12Look, juce::Slider::RotaryVerticalDrag);
+        addAndMakeVisible (wobbleAmountSlider);
+        styleLabel (wobbleAmountLabel, "AMOUNT", &ableton12Look);
+        addAndMakeVisible (wobbleAmountLabel);
+        wobbleAmountAttach = std::make_unique<SliderAttachment> (processorRef.apvts, "wobbleAmount", wobbleAmountSlider);
+
+        styleSlider (wobbleMorphSlider, ableton12Look, juce::Slider::RotaryVerticalDrag);
+        addAndMakeVisible (wobbleMorphSlider);
+        styleLabel (wobbleMorphLabel, "MORPH", &ableton12Look);
+        addAndMakeVisible (wobbleMorphLabel);
+        wobbleMorphAttach = std::make_unique<SliderAttachment> (processorRef.apvts, "wobbleMorph", wobbleMorphSlider);
+
+        // MOD section — rose/pink accent
+        static const juce::Colour accentRose (0xffe467a6);  // oklch(70% 0.15 340) — rose for modulation
+        wobbleAmountSlider.setColour (juce::Slider::thumbColourId, accentRose);
+        wobbleMorphSlider.setColour (juce::Slider::thumbColourId, accentRose);
+    }
+
+    // --- Dropdowns (#13: consistent font) ------------------------------------
+    auto setupCombo = [&](juce::ComboBox& box, juce::Label& label, const juce::String& name,
+                          const juce::String& paramId, const juce::StringArray& items,
+                          std::unique_ptr<ComboBoxAttachment>& attach)
+    {
+        for (int i = 0; i < items.size(); ++i)
+            box.addItem (items[i], i + 1);
+        // (#9) Colors inherited from Ableton12Look for consistency
+        box.setLookAndFeel (&ableton12Look);
+        addAndMakeVisible (box);
+        if (&label != &delayTimeLabel) {
+            styleLabel (label, name, &ableton12Look);
+            addAndMakeVisible (label);
+        }
+        attach = std::make_unique<ComboBoxAttachment> (processorRef.apvts, paramId, box);
+    };
+
+    // Algorithm combo — manually managed (no ComboBoxParameterAttachment)
+    // Items dynamically populated based on output format (stereo vs surround)
+    algorithmBox.setLookAndFeel (&ableton12Look);
+    addAndMakeVisible (algorithmBox);
+    styleLabel (algorithmLabel, "ALGORITHM", &ableton12Look);
+    addAndMakeVisible (algorithmLabel);
+    algorithmBox.onChange = [this]
+    {
+        int selectedId = algorithmBox.getSelectedId();
+        if (selectedId > 0)
+        {
+            int paramIdx = selectedId - 1;  // IDs are 1-based, param indices are 0-based
+            auto* param = processorRef.apvts.getParameter ("algorithm");
+            float normVal = static_cast<float> (paramIdx) / 10.0f;  // 11 items (0..10)
+            param->setValueNotifyingHost (normVal);
+        }
+    };
+    setupCombo (hrtfProfileBox, hrtfProfileLabel, "PROFILE",
+                "hrtfProfile", { "Simple", "Studio Ref", "Immersive", "Natural", "Precise", "Spatial" },
+                hrtfProfileAttach);
+    // v0.7: syncMode reworked to 3-state (Straight/Dotted/Triplet)
+    // Uses music note icons: straight = ♩, dotted = ♩., triplet = ♩³
+    setupCombo (syncModeBox, delayTimeLabel, "SYNC MODE",
+                "syncMode", { juce::String (juce::CharPointer_UTF8 ("\xe2\x99\xa9")),
+                              juce::String (juce::CharPointer_UTF8 ("\xe2\x99\xa9.") ),
+                              juce::String (juce::CharPointer_UTF8 ("\xe2\x99\xa9\xc2\xb3")) },
+                syncModeAttach);
+
+    // --- Output format dropdown (header bar) ---------------------------------
+    {
+        juce::StringArray formatNames;
+        for (const auto& info : OpenSpatialDelayProcessor::outputFormatRegistry)
+            formatNames.add (info.name);
+        setupCombo (outputFormatBox, outputFormatLabel, "OUTPUT",
+                    "outputFormat", formatNames, outputFormatAttach);
+    }
+
+    // --- Header dropdown labels: left-aligned, JetBrains Mono Medium ----------
+    {
+        auto headerLblFont = makeFont (ableton12Look.jetbrainsMedium, 9.5f, 0.1f);
+        auto headerLblColour = Colours_OSD::textDim;
+
+        for (auto* lbl : { &algorithmLabel, &outputFormatLabel, &hrtfProfileLabel })
+        {
+            lbl->setFont (headerLblFont);
+            lbl->setColour (juce::Label::textColourId, headerLblColour);
+            lbl->setJustificationType (juce::Justification::centredLeft);
+        }
+    }
+
+    // --- Tempo sync button (#5/#6) -------------------------------------------
+    tempoSyncButton = std::make_unique<StyledButton> ("SYNC", Colours_OSD::accentSync,
+                                                       ableton12Look.jetbrainsMedium);
+    tempoSyncButton->setAlwaysActive (true);
+    addAndMakeVisible (*tempoSyncButton);
+    tempoSyncAttach = std::make_unique<ButtonAttachment> (processorRef.apvts, "tempoSync", *tempoSyncButton);
+
+    auto updateSyncUI = [this] {
+        bool isSynced = tempoSyncButton->getToggleState();
+        delayTimeSlider.setVisible (!isSynced);
+        noteDivisionSlider.setVisible (isSynced);
+        syncModeBox.setVisible (false);  // hidden — replaced by toggle buttons
+        syncDottedButton->setVisible (isSynced);
+        syncTripletButton->setVisible (isSynced);
+
+        // Toggle button text: "Sync" when synced, "Time" when free
+        tempoSyncButton->setLabel (isSynced ? "SYNC" : "TIME");
+        tempoSyncButton->setAccentColour (isSynced ? Colours_OSD::accentSync : Colours_OSD::accentStellar);
+        delayTimeLabel.setText ("TIME", juce::dontSendNotification);
+
+        // Knob arc color matches button state: gold/yellow when synced, stellar when free
+        auto knobCol = isSynced ? Colours_OSD::accentSync : Colours_OSD::accentStellar;
+        delayTimeSlider.setColour (juce::Slider::thumbColourId, knobCol);
+        noteDivisionSlider.setColour (juce::Slider::thumbColourId, knobCol);
+    };
+
+    tempoSyncButton->onStateChange = updateSyncUI;
+
+    // v0.7: Dotted/Triplet toggle buttons (mutually exclusive, radio-style)
+    syncDottedButton = std::make_unique<StyledButton> (juce::String::fromUTF8 ("\xe2\x99\xaa."),
+                                                        Colours_OSD::accentSync,
+                                                        ableton12Look.jetbrainsMedium);
+    syncDottedButton->setClickingTogglesState (false);
+    addAndMakeVisible (*syncDottedButton);
+
+    syncTripletButton = std::make_unique<StyledButton> (juce::String::fromUTF8 ("\xe2\x99\xaa\xc2\xb3"),
+                                                         Colours_OSD::accentSync,
+                                                         ableton12Look.jetbrainsMedium);
+    syncTripletButton->setClickingTogglesState (false);
+    addAndMakeVisible (*syncTripletButton);
+
+    // Dotted button: toggle → set syncMode to 1 (Dotted) or 0 (Straight)
+    syncDottedButton->onClick = [this] {
+        bool newState = !syncDottedButton->getToggleState();
+        syncDottedButton->setToggleState (newState, juce::dontSendNotification);
+        if (newState) syncTripletButton->setToggleState (false, juce::dontSendNotification);
+        int mode = newState ? 1 : 0;
+        if (auto* param = processorRef.apvts.getParameter ("syncMode"))
+            param->setValueNotifyingHost (param->convertTo0to1 ((float) mode));
+        repaint();
+    };
+    // Triplet button: toggle → set syncMode to 2 (Triplet) or 0 (Straight)
+    syncTripletButton->onClick = [this] {
+        bool newState = !syncTripletButton->getToggleState();
+        syncTripletButton->setToggleState (newState, juce::dontSendNotification);
+        if (newState) syncDottedButton->setToggleState (false, juce::dontSendNotification);
+        int mode = newState ? 2 : 0;
+        if (auto* param = processorRef.apvts.getParameter ("syncMode"))
+            param->setValueNotifyingHost (param->convertTo0to1 ((float) mode));
+        repaint();
+    };
+
+    updateSyncUI();
+
+    // --- Object selector buttons ---------------------------------------------
+    for (int i = 0; i < SpatialMapComponent::MAX_OBJECTS; ++i)
+    {
+        auto& btn = objectButtons[(size_t)i];
+        btn.setButtonText (juce::String (i + 1));
+        btn.setClickingTogglesState (false);
+        btn.setLookAndFeel (&ableton12Look);
+        btn.onClick = [this, i] { selectObject (i); };
+        addAndMakeVisible (btn);
+    }
+    updateObjectButtonColours();
+
+    // --- Per-object controls -------------------------------------------------
+    // (#3) Azimuth: rotary knob — use RotaryHorizontalVerticalDrag for natural direction
+    styleSlider (objAzimuthSlider, ableton12Look, juce::Slider::RotaryHorizontalVerticalDrag);
+    objAzimuthSlider.setRotaryParameters (juce::MathConstants<float>::pi, 3.0f * juce::MathConstants<float>::pi, false);
+    objAzimuthSlider.setReversed (true);  // (#8) IEM StereoEncoder convention: clockwise knob = clockwise on map
+    addAndMakeVisible (objAzimuthSlider);
+    styleLabel (objAzLabel, "AZIMUTH", &ableton12Look);
+    addAndMakeVisible (objAzLabel);
+
+    // v0.7: Elevation: rotary knob — 0° at left (9 o'clock), -90° at bottom, +90° at top
+    styleSlider (objElevationSlider, ableton12Look, juce::Slider::RotaryVerticalDrag);
+    objElevationSlider.setRotaryParameters (juce::MathConstants<float>::pi,
+                                            juce::MathConstants<float>::twoPi,
+                                            true);
+    addAndMakeVisible (objElevationSlider);
+    styleLabel (objElLabel, "ELEVATION", &ableton12Look);
+    addAndMakeVisible (objElLabel);
+
+    // Distance: rotary knob
+    styleSlider (objDistanceSlider, ableton12Look, juce::Slider::RotaryVerticalDrag);
+    addAndMakeVisible (objDistanceSlider);
+    styleLabel (objDistLabel, "DISTANCE", &ableton12Look);
+    addAndMakeVisible (objDistLabel);
+
+    // --- Enabled toggle (IndicatorToggle — accent matches selected tap color) --
+    objEnabledButton = std::make_unique<IndicatorToggle> ("ON", SpatialMapComponent::objectColours[0],
+                                                           ableton12Look.jetbrainsMedium);
+    addAndMakeVisible (*objEnabledButton);
+
+    // --- v0.4: Per-object Doppler amount knob --------------------------------
+    styleSlider (objDopplerSlider, ableton12Look, juce::Slider::RotaryVerticalDrag);
+    addAndMakeVisible (objDopplerSlider);
+    styleLabel (objDopplerLabel, "DOPPLER", &ableton12Look);
+    addAndMakeVisible (objDopplerLabel);
+    // Doppler color set per-tap in selectObject()
+
+    // --- v0.6: Per-object trajectory controls (bottom panel, bound in selectObject) ---
+    objTrajectoryBox.setLookAndFeel (&ableton12Look);
+    objTrajectoryBox.addItem ("None",     1);
+    objTrajectoryBox.addItem ("Spiral",   2);
+    objTrajectoryBox.addItem ("Orbit",    3);
+    objTrajectoryBox.addItem ("Bounce",   4);
+    objTrajectoryBox.addItem ("Figure-8", 5);
+    objTrajectoryBox.addItem ("Random",   6);
+    addAndMakeVisible (objTrajectoryBox);
+    styleLabel (objTrajectoryLabel, "TRAJECTORY", &ableton12Look);
+    addAndMakeVisible (objTrajectoryLabel);
+    // Attachment created in selectObject()
+
+    // v0.8: Trajectory direction arrow buttons (← →)
+    objTrajectoryFwdButton = std::make_unique<StyledButton> (juce::String::charToString (0x2192),
+                                                              SpatialMapComponent::objectColours[0],
+                                                              ableton12Look.jetbrainsMedium);
+    objTrajectoryFwdButton->setClickingTogglesState (false);
+    addAndMakeVisible (*objTrajectoryFwdButton);
+
+    objTrajectoryRevButton = std::make_unique<StyledButton> (juce::String::charToString (0x2190),
+                                                              SpatialMapComponent::objectColours[0],
+                                                              ableton12Look.jetbrainsMedium);
+    objTrajectoryRevButton->setClickingTogglesState (false);
+    addAndMakeVisible (*objTrajectoryRevButton);
+
+    // Hidden ComboBox for APVTS binding
+    objTrajectoryDirBox.addItem ("Forward", 1);
+    objTrajectoryDirBox.addItem ("Reverse", 2);
+    addChildComponent (objTrajectoryDirBox);  // invisible
+    objTrajectoryFwdButton->onClick = [this] {
+        objTrajectoryDirBox.setSelectedId (1, juce::sendNotificationSync);
+        objTrajectoryFwdButton->setToggleState (true, juce::dontSendNotification);
+        objTrajectoryRevButton->setToggleState (false, juce::dontSendNotification);
+    };
+    objTrajectoryRevButton->onClick = [this] {
+        objTrajectoryDirBox.setSelectedId (2, juce::sendNotificationSync);
+        objTrajectoryRevButton->setToggleState (true, juce::dontSendNotification);
+        objTrajectoryFwdButton->setToggleState (false, juce::dontSendNotification);
+    };
+
+    styleSlider (objTrajectorySpeedSlider, ableton12Look, juce::Slider::RotaryVerticalDrag);
+    addAndMakeVisible (objTrajectorySpeedSlider);
+    styleLabel (objTrajectorySpeedLabel, "SPEED", &ableton12Look);
+    addAndMakeVisible (objTrajectorySpeedLabel);
+    // Speed color set per-tap in selectObject()
+    // Attachment created in selectObject()
+
+    // --- v0.6: ADM-OSC Receive toggle (IndicatorToggle) ----------------------
+    oscToggleButton = std::make_unique<IndicatorToggle> ("RECEIVE", Colours_OSD::accentGreen,
+                                                          ableton12Look.jetbrainsMedium);
+    addAndMakeVisible (*oscToggleButton);
+    oscToggleAttach = std::make_unique<ButtonAttachment> (processorRef.apvts, "admOscEnabled",
+                                                          *oscToggleButton);
+
+    // v0.6: Editable OSC port label (double-click to edit, Enter to commit)
+    oscPortLabel.setText (juce::String (processorRef.getOscReceivePort()), juce::dontSendNotification);
+    oscPortLabel.setEditable (false, true, false);  // single-click no, double-click yes, return-key commits
+    oscPortLabel.setFont (makeFont (ableton12Look.jetbrainsRegular, 11.0f));
+    oscPortLabel.setColour (juce::Label::textColourId, Colours_OSD::textSecondary);
+    oscPortLabel.setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
+    oscPortLabel.setColour (juce::Label::backgroundWhenEditingColourId, Colours_OSD::bgWell);
+    oscPortLabel.setColour (juce::Label::outlineWhenEditingColourId, Colours_OSD::accentStellar);
+    oscPortLabel.setJustificationType (juce::Justification::centred);
+    oscPortLabel.setColour (juce::Label::backgroundColourId, Colours_OSD::bgRecessed);
+    oscPortLabel.setColour (juce::Label::outlineColourId, Colours_OSD::borderDim);  // matches ComboBox outline
+    oscPortLabel.onTextChange = [this]
+    {
+        auto text = oscPortLabel.getText().trim();
+        int port = text.getIntValue();
+        if (port >= 1024 && port <= 65535)
+        {
+            processorRef.setOscReceivePort (port);
+        }
+        else
+        {
+            // Revert to current valid port
+            oscPortLabel.setText (juce::String (processorRef.getOscReceivePort()), juce::dontSendNotification);
+        }
+    };
+    addAndMakeVisible (oscPortLabel);
+
+    // --- v0.4: Global Air Absorption toggle (IndicatorToggle) ----------------
+    airAbsorptionButton = std::make_unique<IndicatorToggle> ("AIR", Colours_OSD::accentStellar,
+                                                              ableton12Look.jetbrainsMedium);
+    addAndMakeVisible (*airAbsorptionButton);
+    airAbsorptionAttach = std::make_unique<ButtonAttachment> (processorRef.apvts, "airAbsorption",
+                                                              *airAbsorptionButton);
+
+    // --- v0.7: ADM-OSC Send toggle (IndicatorToggle) -------------------------
+    oscSendToggleButton = std::make_unique<IndicatorToggle> ("SEND", Colours_OSD::accentGreen,
+                                                              ableton12Look.jetbrainsMedium);
+    oscSendToggleButton->onClick = [this]
+    {
+        processorRef.setOscSendEnabled (oscSendToggleButton->getToggleState());
+    };
+    addAndMakeVisible (*oscSendToggleButton);
+
+    oscSendIPLabel.setText (processorRef.getOscSendIP(), juce::dontSendNotification);
+    oscSendIPLabel.setEditable (false, true, false);
+    oscSendIPLabel.setFont (makeFont (ableton12Look.jetbrainsRegular, 11.0f));
+    oscSendIPLabel.setColour (juce::Label::textColourId, Colours_OSD::textSecondary);
+    oscSendIPLabel.setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
+    oscSendIPLabel.setColour (juce::Label::backgroundWhenEditingColourId, Colours_OSD::bgWell);
+    oscSendIPLabel.setColour (juce::Label::outlineWhenEditingColourId, Colours_OSD::accentStellar);
+    oscSendIPLabel.setColour (juce::Label::backgroundColourId, Colours_OSD::bgRecessed);
+    oscSendIPLabel.setColour (juce::Label::outlineColourId, Colours_OSD::borderDim);
+    oscSendIPLabel.setJustificationType (juce::Justification::centred);
+    oscSendIPLabel.onTextChange = [this]
+    {
+        processorRef.setOscSendIP (oscSendIPLabel.getText().trim());
+    };
+    addAndMakeVisible (oscSendIPLabel);
+
+    oscSendPortLabel.setText (juce::String (processorRef.getOscSendPort()), juce::dontSendNotification);
+    oscSendPortLabel.setEditable (false, true, false);
+    oscSendPortLabel.setFont (makeFont (ableton12Look.jetbrainsRegular, 11.0f));
+    oscSendPortLabel.setColour (juce::Label::textColourId, Colours_OSD::textSecondary);
+    oscSendPortLabel.setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
+    oscSendPortLabel.setColour (juce::Label::backgroundWhenEditingColourId, Colours_OSD::bgWell);
+    oscSendPortLabel.setColour (juce::Label::outlineWhenEditingColourId, Colours_OSD::accentStellar);
+    oscSendPortLabel.setColour (juce::Label::backgroundColourId, Colours_OSD::bgRecessed);
+    oscSendPortLabel.setColour (juce::Label::outlineColourId, Colours_OSD::borderDim);
+    oscSendPortLabel.setJustificationType (juce::Justification::centred);
+    oscSendPortLabel.onTextChange = [this]
+    {
+        int port = oscSendPortLabel.getText().trim().getIntValue();
+        if (port >= 1024 && port <= 65535)
+            processorRef.setOscSendPort (port);
+        else
+            oscSendPortLabel.setText (juce::String (processorRef.getOscSendPort()), juce::dontSendNotification);
+    };
+    addAndMakeVisible (oscSendPortLabel);
+
+    // --- v0.8: FLT toggle (TONE section header) — timer-driven ---------------
+    fltToggle = std::make_unique<IndicatorToggle> ("FLT", Colours_OSD::accentViolet,
+                                                    ableton12Look.jetbrainsMedium);
+    fltToggle->setClickingTogglesState (false);  // timer drives visual state
+    fltToggle->onClick = [this]
+    {
+        auto* hpParam = processorRef.apvts.getParameter ("filterHP");
+        auto* lpParam = processorRef.apvts.getParameter ("filterLP");
+        if (hpParam != nullptr && lpParam != nullptr)
+        {
+            float hpHz = processorRef.apvts.getRawParameterValue ("filterHP")->load();
+            float lpHz = processorRef.apvts.getRawParameterValue ("filterLP")->load();
+            bool isAtDefaults = (hpHz < 21.0f && lpHz > 19999.0f);
+            if (isAtDefaults)
+            {
+                hpParam->setValueNotifyingHost (hpParam->convertTo0to1 (200.0f));
+                lpParam->setValueNotifyingHost (lpParam->convertTo0to1 (8000.0f));
+            }
+            else
+            {
+                hpParam->setValueNotifyingHost (hpParam->convertTo0to1 (20.0f));
+                lpParam->setValueNotifyingHost (lpParam->convertTo0to1 (20000.0f));
+            }
+        }
+    };
+    addAndMakeVisible (*fltToggle);
+    // Set initial visual state from current parameter values
+    {
+        float hp = processorRef.apvts.getRawParameterValue ("filterHP")->load();
+        float lp = processorRef.apvts.getRawParameterValue ("filterLP")->load();
+        filterIsActive = (hp > 21.0f || lp < 19900.0f);
+        fltToggle->setToggleState (filterIsActive, juce::dontSendNotification);
+    }
+
+    // --- v0.8: MOD toggle (MOD section header) — timer-driven ----------------
+    modToggle = std::make_unique<IndicatorToggle> ("MOD", Colours_OSD::accentRose,
+                                                    ableton12Look.jetbrainsMedium);
+    modToggle->setClickingTogglesState (false);  // timer drives visual state
+    modToggle->onClick = [this]
+    {
+        auto* param = processorRef.apvts.getParameter ("wobbleEnabled");
+        if (param != nullptr)
+        {
+            float cur = processorRef.apvts.getRawParameterValue ("wobbleEnabled")->load();
+            param->setValueNotifyingHost (cur > 0.5f ? 0.0f : 1.0f);
+        }
+    };
+    addAndMakeVisible (*modToggle);
+    // Set initial visual state
+    modIsActive = processorRef.apvts.getRawParameterValue ("wobbleEnabled")->load() > 0.5f;
+    modToggle->setToggleState (modIsActive, juce::dontSendNotification);
+
+    // --- v0.7: Filter graph component (TONE section, replaces HP/LP knobs) ----
+    addAndMakeVisible (filterGraph);
+    filterGraph.onFrequencyChanged = [this] (float hp, float lp)
+    {
+        if (auto* param = processorRef.apvts.getParameter ("filterHP"))
+            param->setValueNotifyingHost (param->convertTo0to1 (hp));
+        if (auto* param = processorRef.apvts.getParameter ("filterLP"))
+            param->setValueNotifyingHost (param->convertTo0to1 (lp));
+    };
+    filterGraph.onHPQChanged = [this] (float q)
+    {
+        if (auto* param = processorRef.apvts.getParameter ("filterHPQ"))
+            param->setValueNotifyingHost (param->convertTo0to1 (q));
+        repaint();  // update painted readout
+    };
+    filterGraph.onLPQChanged = [this] (float q)
+    {
+        if (auto* param = processorRef.apvts.getParameter ("filterLPQ"))
+            param->setValueNotifyingHost (param->convertTo0to1 (q));
+        repaint();  // update painted readout
+    };
+
+    // --- v0.7: Per-object pitch shift knob (bottom panel) --------------------
+    styleSlider (objPitchShiftSlider, ableton12Look, juce::Slider::RotaryVerticalDrag);
+    addAndMakeVisible (objPitchShiftSlider);
+    styleLabel (objPitchShiftLabel, "PITCH", &ableton12Look);
+    addAndMakeVisible (objPitchShiftLabel);
+    // Per-object pitch color set per-tap in selectObject()
+
+    // --- v0.8: Per-object input channel cycling button -----------------------
+    {
+        // Hidden ComboBox for APVTS binding (items must be 1-based)
+        objInputChannelBox.addItem ("L+R", 1);
+        objInputChannelBox.addItem ("L",   2);
+        objInputChannelBox.addItem ("R",   3);
+        addChildComponent (objInputChannelBox);  // invisible
+
+        // Cycling button — onClick advances to next item, wraps around
+        objInputChannelButton = std::make_unique<StyledButton> ("L+R",
+                                                                 SpatialMapComponent::objectColours[0],
+                                                                 ableton12Look.jetbrainsMedium);
+        objInputChannelButton->setClickingTogglesState (false);
+        objInputChannelButton->setAlwaysActive (true);
+        addAndMakeVisible (*objInputChannelButton);
+
+        // Update button text whenever hidden combo changes
+        objInputChannelBox.onChange = [this] {
+            int sel = objInputChannelBox.getSelectedId();
+            juce::String labels[] = { "L+R", "L+R", "L", "R" };  // index 0 unused, 1-based
+            if (sel >= 1 && sel <= 3)
+            {
+                objInputChannelButton->setLabel (labels[sel]);
+                if (sel == 2)
+                    objInputChannelButton->setAccentColour (Colours_OSD::accentChannelL);
+                else if (sel == 3)
+                    objInputChannelButton->setAccentColour (Colours_OSD::accentChannelR);
+                else
+                    objInputChannelButton->setAccentColour (
+                        SpatialMapComponent::objectColours[currentObjectIndex]);
+            }
+        };
+
+        // Cycle on click: L+R (1) → L (2) → R (3) → L+R (1)
+        objInputChannelButton->onClick = [this] {
+            int cur = objInputChannelBox.getSelectedId();
+            int next = (cur >= 3) ? 1 : cur + 1;
+            objInputChannelBox.setSelectedId (next, juce::sendNotificationSync);
+        };
+    }
+
+    // --- v0.7: Input format dropdown (header bar) ----------------------------
+    inputFormatBox.setLookAndFeel (&ableton12Look);
+    inputFormatBox.addItem ("Mono", 1);
+    inputFormatBox.addItem ("Stereo", 2);
+    addAndMakeVisible (inputFormatBox);
+    inputFormatAttach = std::make_unique<ComboBoxAttachment> (processorRef.apvts, "inputFormat", inputFormatBox);
+
+    // Header dropdown labels: JetBrains Mono Medium 7.5px, wide kerning
+    {
+        auto headerLblFont2 = makeFont (ableton12Look.jetbrainsMedium, 9.5f, 0.1f);
+        auto headerLblColour2 = Colours_OSD::textDim;
+
+        presetLabel.setText ("PRESET", juce::dontSendNotification);
+        presetLabel.setFont (headerLblFont2);
+        presetLabel.setColour (juce::Label::textColourId, headerLblColour2);
+        presetLabel.setJustificationType (juce::Justification::centredLeft);
+        addAndMakeVisible (presetLabel);
+
+        inputFormatLabel.setText ("INPUT", juce::dontSendNotification);
+        inputFormatLabel.setFont (headerLblFont2);
+        inputFormatLabel.setColour (juce::Label::textColourId, headerLblColour2);
+        inputFormatLabel.setJustificationType (juce::Justification::centredLeft);
+        addAndMakeVisible (inputFormatLabel);
+    }
+
+    // --- v0.6: Preset browser (header bar) ------------------------------------
+    presetBox.setLookAndFeel (&ableton12Look);
+    presetBox.setTextWhenNothingSelected ("Preset...");
+    addAndMakeVisible (presetBox);
+    refreshPresetBox();
+    presetBox.onChange = [this]
+    {
+        int sel = presetBox.getSelectedId();
+        if (sel > 0)
+            processorRef.loadPreset (sel - 1);  // ComboBox IDs are 1-based
+    };
+
+    auto stylePresetButton = [&] (juce::TextButton& btn, const juce::String& text)
+    {
+        btn.setButtonText (text);
+        btn.setLookAndFeel (&ableton12Look);
+        btn.setColour (juce::TextButton::buttonColourId, Colours_OSD::bgRecessed);
+        btn.setColour (juce::TextButton::textColourOffId, Colours_OSD::textSecondary);
+        addAndMakeVisible (btn);
+    };
+
+    stylePresetButton (presetPrevButton, "<");
+    presetPrevButton.onClick = [this]
+    {
+        processorRef.loadPreviousPreset();
+        presetBox.setSelectedId (processorRef.getCurrentPresetIndex() + 1, juce::dontSendNotification);
+    };
+
+    stylePresetButton (presetNextButton, ">");
+    presetNextButton.onClick = [this]
+    {
+        processorRef.loadNextPreset();
+        presetBox.setSelectedId (processorRef.getCurrentPresetIndex() + 1, juce::dontSendNotification);
+    };
+
+    stylePresetButton (presetSaveButton, "Save");
+    presetSaveButton.onClick = [this]
+    {
+        auto* aw = new juce::AlertWindow ("Save Preset",
+                                           "Enter a name for this preset:",
+                                           juce::MessageBoxIconType::NoIcon);
+        aw->addTextEditor ("presetName", "", "Name:");
+        aw->addButton ("Save", 1, juce::KeyPress (juce::KeyPress::returnKey));
+        aw->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+        aw->enterModalState (true, juce::ModalCallbackFunction::create (
+            [this, aw] (int result)
+            {
+                if (result == 1)
+                {
+                    auto name = aw->getTextEditorContents ("presetName").trim();
+                    if (name.isNotEmpty())
+                    {
+                        processorRef.saveUserPreset (name);
+                        refreshPresetBox();
+                        presetBox.setSelectedId (processorRef.getCurrentPresetIndex() + 1,
+                                                 juce::dontSendNotification);
+                    }
+                }
+                delete aw;
+            }), true);
+    };
+
+    // --- SML badge button (header branding link) ---
+    smlButton = std::make_unique<StyledButton> ("SML", Colours_OSD::accentStellar,
+                                                  ableton12Look.jetbrainsMedium);
+    smlButton->setClickingTogglesState (false);
+    smlButton->onClick = [] { juce::URL ("https://spatialmedialab.org").launchInDefaultBrowser(); };
+    smlButton->setAlwaysActive (true);
+    addAndMakeVisible (*smlButton);
+
+    selectObject (0);
+    resized();  // re-layout now that all unique_ptr components are constructed
+    startTimerHz (30);
+}
+
+OpenSpatialDelayEditor::~OpenSpatialDelayEditor()
+{
+    spatialMap.removeListener (this);
+    setLookAndFeel (nullptr);
+    stopTimer();
+}
+
+//==============================================================================
+// Preset browser helpers
+//==============================================================================
+void OpenSpatialDelayEditor::refreshPresetBox()
+{
+    presetBox.clear (juce::dontSendNotification);
+    auto names = processorRef.getPresetNames();
+    for (int i = 0; i < names.size(); ++i)
+        presetBox.addItem (names[i], i + 1);  // ComboBox IDs are 1-based
+
+    int current = processorRef.getCurrentPresetIndex();
+    if (current >= 0 && current < names.size())
+        presetBox.setSelectedId (current + 1, juce::dontSendNotification);
+}
+
+//==============================================================================
+// Object selection
+//==============================================================================
+void OpenSpatialDelayEditor::selectObject (int index)
+{
+    currentObjectIndex = juce::jlimit (0, SpatialMapComponent::MAX_OBJECTS - 1, index);
+    objAzAttach.reset();
+    objElAttach.reset();
+    objDistAttach.reset();
+    objEnabledAttach.reset();
+    objDopplerAttach.reset();
+    objPitchShiftAttach.reset();
+    objInputChannelAttach.reset();
+    objTrajectoryAttach.reset();
+    objTrajectorySpeedAttach.reset();
+    objTrajectoryDirAttach.reset();
+
+    auto prefix = "object" + juce::String (currentObjectIndex + 1) + "_";
+    objAzAttach      = std::make_unique<SliderAttachment> (processorRef.apvts, prefix + "azimuth",   objAzimuthSlider);
+    objElAttach      = std::make_unique<SliderAttachment> (processorRef.apvts, prefix + "elevation", objElevationSlider);
+    objDistAttach    = std::make_unique<SliderAttachment> (processorRef.apvts, prefix + "distance",  objDistanceSlider);
+    objEnabledAttach = std::make_unique<ButtonAttachment> (processorRef.apvts, prefix + "enabled",   *objEnabledButton);
+    objDopplerAttach = std::make_unique<SliderAttachment> (processorRef.apvts, prefix + "dopplerAmount", objDopplerSlider);
+    objPitchShiftAttach      = std::make_unique<SliderAttachment> (processorRef.apvts, prefix + "pitchShift", objPitchShiftSlider);
+    objInputChannelAttach    = std::make_unique<ComboBoxAttachment> (processorRef.apvts, prefix + "inputChannel", objInputChannelBox);
+    objTrajectoryAttach      = std::make_unique<ComboBoxAttachment> (processorRef.apvts, prefix + "trajectoryShape", objTrajectoryBox);
+    objTrajectorySpeedAttach = std::make_unique<SliderAttachment>   (processorRef.apvts, prefix + "trajectorySpeed", objTrajectorySpeedSlider);
+    objTrajectoryDirAttach   = std::make_unique<ComboBoxAttachment> (processorRef.apvts, prefix + "trajectoryDirection", objTrajectoryDirBox);
+
+    for (int i = 0; i < SpatialMapComponent::MAX_OBJECTS; ++i)
+        objectButtons[(size_t)i].setToggleState (i == currentObjectIndex, juce::dontSendNotification);
+
+    // Set ALL bottom panel controls to match the selected object's tap color
+    auto objCol = SpatialMapComponent::objectColours[currentObjectIndex];
+    objEnabledButton->setAccentColour (objCol);
+    objAzimuthSlider.setColour  (juce::Slider::thumbColourId, objCol);
+    objElevationSlider.setColour (juce::Slider::thumbColourId, objCol);
+    objDistanceSlider.setColour (juce::Slider::thumbColourId, objCol);
+    objDopplerSlider.setColour (juce::Slider::thumbColourId, objCol);
+    objPitchShiftSlider.setColour (juce::Slider::thumbColourId, objCol);
+    objTrajectorySpeedSlider.setColour (juce::Slider::thumbColourId, objCol);
+
+    // Trajectory dropdown — outline and text match tap color
+    objTrajectoryBox.setColour (juce::ComboBox::outlineColourId, objCol.withAlpha (0.5f));
+    objTrajectoryBox.setColour (juce::ComboBox::textColourId, objCol);
+    objTrajectoryBox.setColour (juce::ComboBox::arrowColourId, objCol.withAlpha (0.6f));
+
+    // v0.8: Update trajectory direction button highlights
+    objTrajectoryFwdButton->setAccentColour (objCol);
+    objTrajectoryRevButton->setAccentColour (objCol);
+    {
+        int dir = static_cast<int> (processorRef.apvts.getRawParameterValue (prefix + "trajectoryDirection")->load());
+        objTrajectoryFwdButton->setToggleState (dir == 0, juce::dontSendNotification);
+        objTrajectoryRevButton->setToggleState (dir == 1, juce::dontSendNotification);
+    }
+
+    // v0.8: Update input channel button text + color per mode
+    {
+        int ich = static_cast<int> (processorRef.apvts.getRawParameterValue (prefix + "inputChannel")->load());
+        juce::String labels[] = { "L+R", "L", "R" };
+        objInputChannelButton->setLabel (labels[juce::jlimit (0, 2, ich)]);
+        if (ich == 1)
+            objInputChannelButton->setAccentColour (Colours_OSD::accentChannelL);
+        else if (ich == 2)
+            objInputChannelButton->setAccentColour (Colours_OSD::accentChannelR);
+        else
+            objInputChannelButton->setAccentColour (objCol);
+
+        // Visibility: only show when Input Format = Stereo (index 1)
+        int inputFmt = static_cast<int> (processorRef.apvts.getRawParameterValue ("inputFormat")->load());
+        objInputChannelButton->setVisible (inputFmt == 1);
+    }
+
+    spatialMap.setSelectedObject (currentObjectIndex);
+    updateObjectButtonColours();
+}
+
+void OpenSpatialDelayEditor::updateObjectButtonColours()
+{
+    // Observatory v6: 4-state tap buttons (enabled/disabled × selected/unselected)
+    for (int i = 0; i < SpatialMapComponent::MAX_OBJECTS; ++i)
+    {
+        auto& btn = objectButtons[(size_t)i];
+        auto colour = SpatialMapComponent::objectColours[i];
+
+        auto prefix = "object" + juce::String (i + 1) + "_";
+        bool enabled = false;
+        if (auto* p = processorRef.apvts.getRawParameterValue (prefix + "enabled"))
+            enabled = p->load() > 0.5f;
+
+        bool selected = (i == currentObjectIndex);
+
+        juce::Colour bg, border, text;
+
+        if (enabled && selected)
+        {
+            // Enabled + Selected: bright tap color bg, tap color border, primary text
+            bg     = colour.withAlpha (0.4f);
+            border = colour;
+            text   = Colours_OSD::textPrimary;
+        }
+        else if (enabled && !selected)
+        {
+            // Enabled + Unselected: dim tap color bg, dim border, tap color text
+            bg     = colour.withAlpha (0.25f);
+            border = colour.withAlpha (0.4f);
+            text   = colour;
+        }
+        else if (!enabled && selected)
+        {
+            // Disabled + Selected: recessed bg, tap color border, tap color text
+            bg     = Colours_OSD::bgRecessed;
+            border = colour;
+            text   = colour;
+        }
+        else
+        {
+            // Disabled + Unselected: recessed bg, dim border, dim text
+            bg     = Colours_OSD::bgRecessed;
+            border = Colours_OSD::borderDim;
+            text   = Colours_OSD::textDim;
+        }
+
+        btn.setColour (juce::TextButton::buttonColourId,   bg);
+        btn.setColour (juce::TextButton::buttonOnColourId,  bg);
+        btn.setColour (juce::TextButton::textColourOffId,  text);
+        btn.setColour (juce::TextButton::textColourOnId,   text);
+    }
+}
+
+void OpenSpatialDelayEditor::objectPositionChanged (int objectIndex, float azimuthDeg, float distance)
+{
+    auto prefix = "object" + juce::String (objectIndex + 1) + "_";
+    if (auto* param = processorRef.apvts.getParameter (prefix + "azimuth"))
+        param->setValueNotifyingHost (param->convertTo0to1 (azimuthDeg));
+    if (auto* param = processorRef.apvts.getParameter (prefix + "distance"))
+        param->setValueNotifyingHost (param->convertTo0to1 (distance));
+}
+
+void OpenSpatialDelayEditor::objectSelected (int objectIndex) { selectObject (objectIndex); }
+
+void OpenSpatialDelayEditor::updateMapFromParameters()
+{
+    for (int i = 0; i < SpatialMapComponent::MAX_OBJECTS; ++i)
+    {
+        auto state = processorRef.getObjectState (i);
+        spatialMap.setObjectState (i, state.azimuthDeg, state.elevationDeg, state.distance, state.enabled);
+        // v0.6: Pass OSC override state to spatial map for indicator
+        spatialMap.setOscOverride (i, processorRef.isOscOverrideActive (i));
+    }
+}
+
+void OpenSpatialDelayEditor::timerCallback()
+{
+    // v0.7: Advance star field animation (~30Hz timer → dt ≈ 0.033s)
+    float dt = 1.0f / 30.0f;
+    spatialMap.advanceStarAnimation (dt);
+
+    // v0.7: Poll per-tap activity for glow animation (exponential decay)
+    for (int i = 0; i < SpatialMapComponent::MAX_OBJECTS; ++i)
+    {
+        float rms = processorRef.getTapActivityRMS (i);
+        smoothedActivity[i] = rms * 0.7f + smoothedActivity[i] * 0.3f;
+        spatialMap.setObjectActivityLevel (i, smoothedActivity[i]);
+    }
+    spatialMap.advancePulsePhases (dt);
+
+    spatialMap.repaint();
+
+    updateMapFromParameters();
+    updateObjectButtonColours();
+
+    // v0.8: Show/hide input channel button based on Input Format (Mono=hide, Stereo=show)
+    {
+        int inputFmt = static_cast<int> (processorRef.apvts.getRawParameterValue ("inputFormat")->load());
+        if (objInputChannelButton) objInputChannelButton->setVisible (inputFmt == 1);
+    }
+
+    // v0.8: Show/hide trajectory direction arrows — only when a trajectory is active (not None)
+    {
+        auto prefix = "object" + juce::String (currentObjectIndex + 1) + "_";
+        int trajShape = static_cast<int> (processorRef.apvts.getRawParameterValue (prefix + "trajectoryShape")->load());
+        bool hasTraj = (trajShape > 0);  // 0 = None
+        if (objTrajectoryFwdButton) objTrajectoryFwdButton->setVisible (hasTraj);
+        if (objTrajectoryRevButton) objTrajectoryRevButton->setVisible (hasTraj);
+    }
+
+    // v0.8: MOD enable/disable — dim wobble knobs + labels when disabled
+    {
+        bool modActive = processorRef.apvts.getRawParameterValue ("wobbleEnabled")->load() > 0.5f;
+        // Always apply on first timer tick (modIsActive starts false, but UI defaults to enabled look)
+        bool forceUpdate = (wobbleAmountSlider.isEnabled() != modActive);
+        if (modActive != modIsActive || forceUpdate)
+        {
+            modIsActive = modActive;
+            modToggle->setToggleState (modIsActive, juce::dontSendNotification);
+            float alpha = modActive ? 1.0f : 0.3f;
+            wobbleAmountSlider.setEnabled (modActive);
+            wobbleMorphSlider.setEnabled (modActive);
+            wobbleAmountSlider.setAlpha (alpha);
+            wobbleMorphSlider.setAlpha (alpha);
+            wobbleAmountLabel.setAlpha (alpha);
+            wobbleMorphLabel.setAlpha (alpha);
+            repaint();
+        }
+    }
+
+    // v0.8: Grey out all per-tap controls when the selected tap is disabled
+    {
+        auto prefix = "object" + juce::String (currentObjectIndex + 1) + "_";
+        bool tapOn = processorRef.apvts.getRawParameterValue (prefix + "enabled")->load() > 0.5f;
+        float tapAlpha = tapOn ? 1.0f : 0.3f;
+
+        // Knobs + labels
+        objAzimuthSlider.setEnabled (tapOn);        objAzimuthSlider.setAlpha (tapAlpha);
+        objElevationSlider.setEnabled (tapOn);      objElevationSlider.setAlpha (tapAlpha);
+        objDistanceSlider.setEnabled (tapOn);       objDistanceSlider.setAlpha (tapAlpha);
+        objDopplerSlider.setEnabled (tapOn);        objDopplerSlider.setAlpha (tapAlpha);
+        objPitchShiftSlider.setEnabled (tapOn);     objPitchShiftSlider.setAlpha (tapAlpha);
+        objTrajectorySpeedSlider.setEnabled (tapOn); objTrajectorySpeedSlider.setAlpha (tapAlpha);
+        objAzLabel.setAlpha (tapAlpha);
+        objElLabel.setAlpha (tapAlpha);
+        objDistLabel.setAlpha (tapAlpha);
+        objDopplerLabel.setAlpha (tapAlpha);
+        objPitchShiftLabel.setAlpha (tapAlpha);
+        objTrajectorySpeedLabel.setAlpha (tapAlpha);
+
+        // Trajectory dropdown + direction arrows + label
+        objTrajectoryBox.setEnabled (tapOn);        objTrajectoryBox.setAlpha (tapAlpha);
+        objTrajectoryLabel.setAlpha (tapAlpha);
+        if (objTrajectoryFwdButton) { objTrajectoryFwdButton->setEnabled (tapOn);  objTrajectoryFwdButton->setAlpha (tapAlpha); }
+        if (objTrajectoryRevButton) { objTrajectoryRevButton->setEnabled (tapOn);  objTrajectoryRevButton->setAlpha (tapAlpha); }
+
+        // Input channel button
+        if (objInputChannelButton) { objInputChannelButton->setEnabled (tapOn);   objInputChannelButton->setAlpha (tapAlpha); }
+    }
+
+    // v0.2: Bus-aware output format greying (v0.7: only re-check when bus count changes)
+    int maxCh = processorRef.getMaxBusChannels();
+    if (maxCh != lastMaxBusChannels)
+    {
+        lastMaxBusChannels = maxCh;
+        for (int i = 0; i < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS; ++i)
+        {
+            const auto& info = OpenSpatialDelayProcessor::outputFormatRegistry[static_cast<size_t> (i)];
+            bool available = (info.requiredChannels <= maxCh);
+            outputFormatBox.setItemEnabled (i + 1, available);
+        }
+    }
+
+    // Trigger layout recomputation if format changed
+    processorRef.requestOutputFormatChange (outputFormatBox.getSelectedItemIndex());
+
+    // v0.5: Context-sensitive header dropdowns based on output format
+    int fmtIdx = static_cast<int> (processorRef.getActiveOutputFormat());
+    bool isBinaural = (processorRef.getActiveOutputFormat() == OpenSpatialDelayProcessor::OutputFormat::Binaural);
+    bool isStereoVariant = (fmtIdx >= 0 && fmtIdx < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS)
+                           && OpenSpatialDelayProcessor::outputFormatRegistry[static_cast<size_t> (fmtIdx)].isStereoVariant;
+    bool isAmbiOutput = (fmtIdx >= 0 && fmtIdx < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS)
+                        && OpenSpatialDelayProcessor::outputFormatRegistry[static_cast<size_t> (fmtIdx)].isAmbisonicsOutput;
+
+    // HRTF Profile: only visible for binaural output
+    hrtfProfileBox.setVisible (isBinaural);
+    hrtfProfileLabel.setVisible (isBinaural);
+
+    // Algorithm dropdown — dynamically populated based on output format category
+    // Binaural: hide (rendering is always Direct Binaural / HRTF)
+    // Ambisonics: show disabled, text = "Ambisonics Encode"
+    // Stereo: show only stereo modes (param indices 6-10)
+    // Surround: show only surround algorithms (param indices 0-5)
+    int algoIdx = static_cast<int> (processorRef.apvts.getRawParameterValue ("algorithm")->load());
+
+    // Determine current format category: 0=binaural, 1=ambi, 2=stereo, 3=surround
+    int fmtCategory = isBinaural ? 0 : isAmbiOutput ? 1 : isStereoVariant ? 2 : 3;
+
+    if (isBinaural)
+    {
+        algorithmBox.setVisible (false);
+        algorithmLabel.setVisible (false);
+    }
+    else if (isAmbiOutput)
+    {
+        algorithmBox.setVisible (true);
+        algorithmLabel.setVisible (true);
+        algorithmBox.setEnabled (false);
+        algorithmBox.setText ("Ambisonics Encode", juce::dontSendNotification);
+    }
+    else
+    {
+        algorithmBox.setVisible (true);
+        algorithmLabel.setVisible (true);
+        algorithmBox.setEnabled (true);
+
+        // Rebuild combo items only when format category changes
+        if (fmtCategory != lastAlgoCategoryShown)
+        {
+            lastAlgoCategoryShown = fmtCategory;
+            algorithmBox.clear (juce::dontSendNotification);
+
+            if (isStereoVariant)
+            {
+                // Stereo modes only — IDs match param indices + 1
+                algorithmBox.addItem ("Equal Power",  7);   // param index 6
+                algorithmBox.addItem ("Stereo VBAP",  8);   // param index 7
+                algorithmBox.addItem ("XY Pair",      9);   // param index 8
+                algorithmBox.addItem ("MS Encode",    10);  // param index 9
+                algorithmBox.addItem ("Blumlein",     11);  // param index 10
+
+                // Auto-snap if current param is a surround algorithm
+                if (algoIdx < 6)
+                {
+                    processorRef.apvts.getParameter ("algorithm")
+                        ->setValueNotifyingHost (6.0f / 10.0f);  // Equal Power
+                    algoIdx = 6;
+                }
+            }
+            else  // Surround
+            {
+                // Surround algorithms only — IDs match param indices + 1
+                algorithmBox.addItem ("Ambisonics",   1);   // param index 0
+                algorithmBox.addItem ("DBAP",         2);   // param index 1
+                algorithmBox.addItem ("KNN",          3);   // param index 2
+                algorithmBox.addItem ("MDAP",         4);   // param index 3
+                algorithmBox.addItem ("VBAP",         5);   // param index 4
+                algorithmBox.addItem ("VBIP",         6);   // param index 5
+
+                // Auto-snap if current param is a stereo mode
+                if (algoIdx > 5)
+                {
+                    processorRef.apvts.getParameter ("algorithm")
+                        ->setValueNotifyingHost (4.0f / 10.0f);  // VBAP
+                    algoIdx = 4;
+                }
+            }
+        }
+
+        // Sync combo selection from parameter (IDs are param index + 1)
+        algorithmBox.setSelectedId (algoIdx + 1, juce::dontSendNotification);
+    }
+
+    // v0.6: Sync OSC port label from processor (v0.7: skip string compare when port unchanged)
+    {
+        int currentPort = processorRef.getOscReceivePort();
+        if (currentPort != lastOscPort && ! oscPortLabel.isBeingEdited())
+        {
+            lastOscPort = currentPort;
+            oscPortLabel.setText (juce::String (currentPort), juce::dontSendNotification);
+        }
+    }
+
+    // v0.6: Sync preset dropdown selection from processor
+    {
+        int expected = processorRef.getCurrentPresetIndex() + 1;  // 1-based ComboBox ID
+        if (presetBox.getSelectedId() != expected)
+            presetBox.setSelectedId (expected, juce::dontSendNotification);
+    }
+
+    // v0.7: Sync filter graph from parameters + auto-dim when at defaults
+    {
+        float hp  = processorRef.apvts.getRawParameterValue ("filterHP")->load();
+        float lp  = processorRef.apvts.getRawParameterValue ("filterLP")->load();
+        float hpq = processorRef.apvts.getRawParameterValue ("filterHPQ")->load();
+        float lpq = processorRef.apvts.getRawParameterValue ("filterLPQ")->load();
+
+        bool filterActive = (hp > 21.0f || lp < 19900.0f);
+        filterGraph.setEnabled (filterActive);
+        filterIsActive = filterActive;
+        if (fltToggle) fltToggle->setToggleState (filterIsActive, juce::dontSendNotification);
+
+        // Only update graph when active — when inactive, graph freezes at last active position
+        if (filterActive)
+        {
+            filterGraph.setFrequencies (hp, lp);
+            filterGraph.setQ (hpq, lpq);
+            lastActiveHP = hp;   lastActiveLP = lp;
+            lastActiveHPQ = hpq; lastActiveLPQ = lpq;
+        }
+    }
+
+    // v0.7: Sync dotted/triplet buttons from syncMode parameter
+    {
+        int mode = static_cast<int> (processorRef.apvts.getRawParameterValue ("syncMode")->load());
+        if (syncDottedButton)  syncDottedButton->setToggleState  (mode == 1, juce::dontSendNotification);
+        if (syncTripletButton) syncTripletButton->setToggleState (mode == 2, juce::dontSendNotification);
+    }
+
+    repaint();
+}
+
+//==============================================================================
+// Drawing helpers
+//==============================================================================
+void OpenSpatialDelayEditor::drawSelectionBox (juce::Graphics& g, juce::Component& label, juce::Component& slider)
+{
+    if (slider.isVisible() && slider.hasKeyboardFocus (false) && slider.isEnabled())
+    {
+        auto bounds = label.getBounds().getUnion (slider.getBounds()).toFloat().expanded (3.0f, 2.0f);
+        g.setColour (Colours_OSD::selectionBox);
+        constexpr float len = 4.0f, t = 1.0f;
+        float l = bounds.getX(), r = bounds.getRight(), top = bounds.getY(), bot = bounds.getBottom();
+        // Four corner indicators (horizontal + vertical line each)
+        for (auto [cx, cy, dx, dy] : { std::tuple{l,top,1.f,1.f}, {r,top,-1.f,1.f},
+                                         {l,bot,1.f,-1.f}, {r,bot,-1.f,-1.f} })
+        {
+            g.drawLine (cx, cy, cx + len * dx, cy, t);
+            g.drawLine (cx, cy, cx, cy + len * dy, t);
+        }
+    }
+}
+
+void OpenSpatialDelayEditor::drawSectionHeader (juce::Graphics& g, int x, int y, int w, const juce::String& text)
+{
+    // Observatory v6: JetBrains Mono Bold, wide tracking
+    g.setColour (Colours_OSD::textDim);
+    juce::Font headerFont = makeFont (ableton12Look.jetbrainsBold, 11.0f, 0.15f);
+    g.setFont (headerFont);
+    g.drawText (text, x, y, w, 12, juce::Justification::centredLeft);
+    juce::GlyphArrangement glyphs;
+    glyphs.addLineOfText (headerFont, text, 0.0f, 0.0f);
+    int textWidth = (int) glyphs.getBoundingBox (0, glyphs.getNumGlyphs(), true).getWidth() + 6;
+    g.setColour (Colours_OSD::borderSubtle);
+    g.drawLine ((float)(x + textWidth), (float)(y + 6), (float)(x + w), (float)(y + 6), 1.0f);
+}
+
+//==============================================================================
+// Paint
+//==============================================================================
+void OpenSpatialDelayEditor::paint (juce::Graphics& g)
+{
+    // === Observatory v6: Panel backgrounds and borders ===
+    g.fillAll (Colours_OSD::bgVoid);
+
+    // Header bar — full width, 52px
+    g.setColour (Colours_OSD::bgHeader);
+    g.fillRect (0, 0, getWidth(), kHeaderHeight);
+    // Header bottom border
+    g.setColour (Colours_OSD::borderSubtle);
+    g.drawLine (0.0f, (float) kHeaderHeight, (float) getWidth(), (float) kHeaderHeight, 1.0f);
+    // Subtle stellar glow on header border
+    {
+        juce::ColourGradient glow (Colours_OSD::accentStellar.withAlpha (0.0f), 0.0f, (float) kHeaderHeight,
+                                   Colours_OSD::accentStellar.withAlpha (0.0f), (float) getWidth(), (float) kHeaderHeight,
+                                   false);
+        glow.addColour (0.2, Colours_OSD::accentStellar.withAlpha (0.12f));
+        glow.addColour (0.5, Colours_OSD::accentStellar.withAlpha (0.2f));
+        glow.addColour (0.8, Colours_OSD::accentStellar.withAlpha (0.12f));
+        g.setGradientFill (glow);
+        g.fillRect (0.0f, (float) kHeaderHeight - 1.0f, (float) getWidth(), 2.0f);
+    }
+
+    // Right panel — full height below header, bg fill + left border
+    int rpLeft = getWidth() - kRightPanelWidth;
+    g.setColour (Colours_OSD::bgPanel);
+    g.fillRect (rpLeft, kHeaderHeight, kRightPanelWidth, getHeight() - kHeaderHeight);
+    g.setColour (Colours_OSD::borderDim);
+    g.drawLine ((float) rpLeft, (float) kHeaderHeight, (float) rpLeft, (float) getHeight(), 1.0f);
+
+    // Bottom panel — column 1 only, bg fill + top border + right border
+    int bpTop = getHeight() - kBottomPanelHeight;
+    int bpRight = rpLeft;
+    g.setColour (Colours_OSD::bgPanel);
+    g.fillRect (0, bpTop, bpRight, kBottomPanelHeight);
+    g.setColour (Colours_OSD::borderDim);
+    g.drawLine (0.0f, (float) bpTop, (float) bpRight, (float) bpTop, 1.0f);
+    g.drawLine ((float) bpRight, (float) bpTop, (float) bpRight, (float) getHeight(), 1.0f);
+
+    // Title — SML button self-paints via StyledButton::paintButton() + "OpenSpatialDelay" + version
+    {
+        int leftX = 10;  // prototype: padding 0 10px
+        int smlW = StyledButton::getPreferredWidth (ableton12Look.jetbrainsMedium, "SML");
+
+        // SML button self-paints via StyledButton::paintButton()
+
+        // Plugin title — DM Sans Medium 14px
+        int titleX = leftX + smlW + 6;
+        g.setColour (Colours_OSD::textPrimary);
+        auto titleFont = makeFont (ableton12Look.dmSansMedium, 17.0f, 0.02f);
+        g.setFont (titleFont);
+        juce::String titleText = "OpenSpatialDelay";
+        juce::GlyphArrangement titleGlyphs;
+        titleGlyphs.addLineOfText (titleFont, titleText, 0.0f, 0.0f);
+        float titleTextW = titleGlyphs.getBoundingBox (0, titleGlyphs.getNumGlyphs(), true).getWidth();
+        g.drawText (titleText, titleX, 0, (int) titleTextW + 4, kHeaderHeight,
+                    juce::Justification::centredLeft);
+
+        // "v0.8" dim version tag — JetBrains Mono 9px
+        int versionX = titleX + (int) titleTextW + 4;
+        g.setColour (Colours_OSD::textDim);
+        g.setFont (makeFont (ableton12Look.jetbrainsRegular, 11.0f));
+        g.drawText ("v0.8", versionX, 0, 40, kHeaderHeight,
+                    juce::Justification::centredLeft);
+    }
+
+    // --- Header separator lines between dropdown groups ---
+    {
+        int sepH = 24;
+        int sepY = kHeaderHeight / 2 - sepH / 2;
+        g.setColour (Colours_OSD::borderDim);
+
+        // Separator after Preset Save button (before flex spacer)
+        int presetRight = presetSaveButton.getRight();
+        if (presetRight > 0)
+            g.fillRect (presetRight + 4, sepY, 1, sepH);
+
+        // Separator before Input Format group
+        int inputLeft = inputFormatBox.getX();
+        if (inputLeft > 0)
+            g.fillRect (inputLeft - 4, sepY, 1, sepH);
+
+        // Separator before Output Format group
+        int outputLeft = outputFormatBox.getX();
+        if (outputLeft > 0)
+            g.fillRect (outputLeft - 4, sepY, 1, sepH);
+
+        // Separator before Algorithm/Profile group
+        int algoLeft = algorithmBox.isVisible() ? algorithmBox.getX()
+                     : hrtfProfileBox.isVisible() ? hrtfProfileBox.getX() : 0;
+        if (algoLeft > 0)
+            g.fillRect (algoLeft - 4, sepY, 1, sepH);
+    }
+
+    // --- Section headers (positions computed in resized) ---
+    drawSectionHeader (g, rpX, delayHeaderY,  rpW, "DELAY");
+    drawSectionHeader (g, rpX, modHeaderY,    rpW - (modToggle ? modToggle->getWidth() + 4 : 46), "MOD");
+    drawSectionHeader (g, rpX, toneHeaderY,   rpW - (fltToggle ? fltToggle->getWidth() + 4 : 42), "TONE");
+    drawSectionHeader (g, rpX, mixHeaderY,    rpW - (airAbsorptionButton ? airAbsorptionButton->getWidth() + 4 : 42), "MIX");
+    drawSectionHeader (g, rpX, oscHeaderY,    rpW, "OSC");
+
+    // Toggle pills (IndicatorToggle instances) self-paint via paintButton() — no manual calls needed
+
+    // ON/OFF pill — now self-paints via IndicatorToggle::paintButton()
+
+    // Input channel button self-paints via StyledButton::paintButton()
+    // v0.8: "INPUT" label above input channel cycling button
+    if (objInputChannelButton && objInputChannelButton->isVisible())
+    {
+        auto btnBounds = objInputChannelButton->getBounds();
+        g.setColour (Colours_OSD::textDim);
+        g.setFont (makeFont (ableton12Look.jetbrainsMedium, 10.0f, 0.12f));
+        g.drawText ("INPUT", btnBounds.getX(), btnBounds.getY() - 14, btnBounds.getWidth(), 12,
+                    juce::Justification::centred);
+    }
+
+    // SYNC/TIME button self-paints via StyledButton::paintButton()
+
+    // Dotted/Triplet buttons self-paint via StyledButton::paintButton()
+
+    // Trajectory direction arrow buttons self-paint via StyledButton::paintButton()
+    // v0.8: "DIR" label above trajectory direction buttons
+    if (objTrajectoryRevButton && objTrajectoryRevButton->isVisible())
+    {
+        auto revBounds = objTrajectoryRevButton->getBounds();
+        auto fwdBounds = objTrajectoryFwdButton->getBounds();
+        int dirLabelW = fwdBounds.getRight() - revBounds.getX();
+        g.setColour (Colours_OSD::textDim);
+        g.setFont (makeFont (ableton12Look.jetbrainsMedium, 10.0f, 0.12f));
+        g.drawText ("DIRECTION", revBounds.getX(), revBounds.getY() - 14, dirLabelW, 12,
+                    juce::Justification::centred);
+    }
+
+    // FLT and MOD toggles self-paint via IndicatorToggle::paintButton()
+
+    // "Port" label for Receive row
+    if (oscToggleButton)
+    {
+        auto oscBounds = oscToggleButton->getBounds().toFloat();
+        if (oscBounds.getWidth() > 0)
+        {
+            g.setColour (Colours_OSD::textDim);
+            g.setFont (makeFont (ableton12Look.jetbrainsMedium, 10.0f, 0.08f));
+            g.drawText ("Port", (int)(oscBounds.getRight() + 4), (int)oscBounds.getY(),
+                        28, (int)oscBounds.getHeight(), juce::Justification::centredLeft);
+        }
+    }
+
+    // "IP" and "Port" labels for Send row
+    if (oscSendToggleButton)
+    {
+        auto sendBounds = oscSendToggleButton->getBounds().toFloat();
+        if (sendBounds.getWidth() > 0)
+        {
+            g.setColour (Colours_OSD::textDim);
+            g.setFont (makeFont (ableton12Look.jetbrainsMedium, 10.0f, 0.08f));
+            g.drawText ("IP", (int)(sendBounds.getRight() + 4), (int)sendBounds.getY(),
+                        14, (int)sendBounds.getHeight(), juce::Justification::centredLeft);
+            auto ipBounds = oscSendIPLabel.getBounds().toFloat();
+            g.drawText ("Port", (int)(ipBounds.getRight() + 4), (int)ipBounds.getY(),
+                        28, (int)ipBounds.getHeight(), juce::Justification::centredLeft);
+        }
+    }
+
+    // Filter readout text below filter graph — dims when filter at defaults
+    {
+        // v0.8: Use frozen values when filter is inactive so readout doesn't jump
+        float hp  = filterIsActive ? processorRef.apvts.getRawParameterValue ("filterHP")->load()  : lastActiveHP;
+        float lp  = filterIsActive ? processorRef.apvts.getRawParameterValue ("filterLP")->load()  : lastActiveLP;
+        float hpq = filterIsActive ? processorRef.apvts.getRawParameterValue ("filterHPQ")->load() : lastActiveHPQ;
+        float lpq = filterIsActive ? processorRef.apvts.getRawParameterValue ("filterLPQ")->load() : lastActiveLPQ;
+        auto hpStr = (hp >= 1000.0f) ? juce::String (hp / 1000.0f, 1) + "k"
+                                     : juce::String (juce::roundToInt (hp));
+        auto lpStr = (lp >= 1000.0f) ? juce::String (lp / 1000.0f, 1) + "k"
+                                     : juce::String (juce::roundToInt (lp));
+        auto filterBounds = filterGraph.getBounds();
+        float readoutAlpha = filterIsActive ? 1.0f : 0.3f;
+        g.setColour (Colours_OSD::textDim.withAlpha (readoutAlpha));
+        g.setFont (makeFont (ableton12Look.jetbrainsRegular, 11.0f, 0.04f));
+        g.drawText ("HP " + hpStr + "  Res " + juce::String (hpq, 2)
+                    + "    LP " + lpStr + "  Res " + juce::String (lpq, 2),
+                    filterBounds.getX(), filterBounds.getBottom() + 2,
+                    filterBounds.getWidth(), 12, juce::Justification::centred);
+    }
+}
+
+//==============================================================================
+// Layout
+//==============================================================================
+void OpenSpatialDelayEditor::resized()
+{
+    auto area = getLocalBounds();
+    auto header = area.removeFromTop (kHeaderHeight);
+
+    // === HEADER: [Title block] [Preset group] ... [Input|Output|Profile] right-aligned ===
+    const int hPad = 8, hGap = 6;
+    const int algoBoxW = 110, outBoxW = 110, inBoxW = 70;
+    const int lblH = 12, boxH = 22;
+    int lblY = header.getY() + 8;
+    int boxY = lblY + lblH + 2;
+
+    // --- Right-aligned dropdown groups (Algorithm/Profile, Output, Input) ---
+    int rx = header.getRight() - hPad;
+
+    // Algorithm / HRTF Profile (rightmost)
+    rx -= algoBoxW;
+    algorithmLabel.setBounds   (rx, lblY, algoBoxW, lblH);
+    algorithmBox.setBounds     (rx, boxY, algoBoxW, boxH);
+    hrtfProfileLabel.setBounds (rx, lblY, algoBoxW, lblH);
+    hrtfProfileBox.setBounds   (rx, boxY, algoBoxW, boxH);
+    rx -= hGap;
+
+    // Output Format
+    rx -= outBoxW;
+    outputFormatLabel.setBounds (rx, lblY, outBoxW, lblH);
+    outputFormatBox.setBounds   (rx, boxY, outBoxW, boxH);
+    rx -= hGap;
+
+    // v0.7: Input Format
+    rx -= inBoxW;
+    inputFormatLabel.setBounds (rx, lblY, inBoxW, lblH);
+    inputFormatBox.setBounds (rx, boxY, inBoxW, boxH);
+
+    // --- Left-aligned preset group (after title block) ---
+    // Title block: [10px pad][28px SML][6px][~155px title][4px][~35px v0.7] ≈ 238px
+    int presetStartX = 240;
+    presetLabel.setBounds (presetStartX, lblY, 120, lblH);
+    presetBox.setBounds (presetStartX, boxY, 120, boxH);
+    int px = presetStartX + 120 + 2;
+    presetPrevButton.setBounds (px, boxY, 22, boxH);
+    px += 22;
+    presetNextButton.setBounds (px, boxY, 22, boxH);
+    px += 22 + 2;
+    presetSaveButton.setBounds (px, boxY, 40, boxH);
+
+    // Title is painted directly in paint() — no setBounds needed
+    // SML badge button (header, left-aligned)
+    {
+        int smlW = StyledButton::getPreferredWidth (ableton12Look.jetbrainsMedium, "SML");
+        int headerY = kHeaderHeight / 2;
+        if (smlButton) smlButton->setBounds (10, headerY - StyledButton::kHeight / 2, smlW, StyledButton::kHeight);
+    }
+
+    // === RIGHT PANEL (Observatory v6: padding 16px H, 6px V) ==================
+    auto rightPanel = area.removeFromRight (kRightPanelWidth).reduced (16, 6);
+
+    rpX = rightPanel.getX();
+    rpW = rightPanel.getWidth();
+    int panelW = rpW;
+
+    // Observatory v6: 72px knob columns, 8px gap
+    int knobW = 72;
+    int knobGap = 8;
+    // 3-column layout for DELAY section
+    int tripleW = knobW * 3 + knobGap * 2;
+    int centerOff3 = (panelW - tripleW) / 2;
+    int kx0 = rpX + centerOff3;
+    int kx1 = kx0 + knobW + knobGap;
+    int kx2 = kx1 + knobW + knobGap;
+    // 2-column layout for MOD, MIX sections
+    int pairW = knobW * 2 + knobGap;
+    int centerOff2 = (panelW - pairW) / 2;
+    int px0 = rpX + centerOff2;
+    int px1 = px0 + knobW + knobGap;
+
+    // placeKnob: 12px label + 54px slider (42px rotary + 12px text box) = 66px total
+    auto placeKnob = [knobW](juce::Slider& slider, juce::Label& label, int x, int y) {
+        label.setBounds (x, y, knobW, 12);
+        slider.setBounds (x, y + 12, knobW, 54);
+    };
+
+    // --- DELAY section (3-knob single row: INPUT, TIME, FEEDBACK) ---
+    int curY = rightPanel.getY();
+    delayHeaderY = curY;
+    curY += 18;  // header 12px + gap 6px
+
+    placeKnob (inputGainSlider,    inputGainLabel,  kx0, curY);
+    placeKnob (delayTimeSlider,    delayTimeLabel,  kx1, curY);
+    placeKnob (noteDivisionSlider, delayTimeLabel,  kx1, curY);
+    placeKnob (feedbackSlider,     feedbackLabel,   kx2, curY);
+
+    // Time/Sync toggle below TIME knob — centered under the knob column
+    int syncY = curY + 66 + 2;
+    int syncBtnW = 50;
+    int timeCenterX = kx1 + knobW / 2;
+    if (tempoSyncButton) tempoSyncButton->setBounds (timeCenterX - syncBtnW / 2, syncY, syncBtnW, StyledButton::kHeight);
+    // Dotted/Triplet toggle buttons — row below SYNC, half-width each
+    int modRowY = syncY + StyledButton::kHeight + 2;
+    int modBtnGap = 2;
+    int modBtnW = (syncBtnW - modBtnGap) / 2;
+    int modRowX = timeCenterX - syncBtnW / 2;
+    if (syncDottedButton)  syncDottedButton->setBounds  (modRowX, modRowY, modBtnW, StyledButton::kHeight);
+    if (syncTripletButton) syncTripletButton->setBounds (modRowX + modBtnW + modBtnGap, modRowY, modBtnW, StyledButton::kHeight);
+    bool isSynced = tempoSyncButton ? tempoSyncButton->getToggleState() : false;
+    if (syncDottedButton)  syncDottedButton->setVisible (isSynced);
+    if (syncTripletButton) syncTripletButton->setVisible (isSynced);
+    syncModeBox.setVisible (false);  // hidden — replaced by toggle buttons
+
+    // Hide pitchShift knob — parameter stays connected for automation/preset compatibility
+    pitchShiftSlider.setVisible (false);
+    pitchShiftLabel.setVisible (false);
+
+    curY += 66 + 22 + 20 + 2;  // knob row + sync row + modifier row + gap
+
+    // --- MOD section (v0.8: Wobble modulation) ---
+    curY += 4;
+    modHeaderY = curY;
+    curY += 14;  // header + gap
+
+    placeKnob (wobbleAmountSlider, wobbleAmountLabel, px0, curY);
+    placeKnob (wobbleMorphSlider,  wobbleMorphLabel,  px1, curY);
+    curY += 66;
+
+    // --- TONE section ---
+    curY += 4;
+    toneHeaderY = curY;
+    curY += 14;  // header + gap
+
+    // FilterGraph — 6px top padding for breathing room below FLT toggle
+    filterGraph.setBounds (rpX, curY + 6, panelW, 104);
+    filterHPSlider.setVisible (false);
+    filterLPSlider.setVisible (false);
+    filterHPLabel.setVisible (false);
+    filterLPLabel.setVisible (false);
+
+    // (Q readout is painted in paint(), not a label component)
+
+    curY += 110 + 22;  // filter graph + readout text below
+
+    // --- MIX section ---
+    curY += 4;
+    mixHeaderY = curY;
+    curY += 14;  // header + gap
+
+    placeKnob (dryWetSlider,     dryWetLabel,     px0, curY);
+    placeKnob (outputGainSlider, outputGainLabel, px1, curY);
+
+    // Toggle pill sizes (IndicatorToggle::getPreferredWidth)
+    auto jbm = ableton12Look.jetbrainsMedium;
+    int airW = IndicatorToggle::getPreferredWidth (jbm, "AIR");
+    int fltW = IndicatorToggle::getPreferredWidth (jbm, "FLT");
+    int modW = IndicatorToggle::getPreferredWidth (jbm, "MOD");
+    int rcvW = IndicatorToggle::getPreferredWidth (jbm, "RECEIVE");
+    int sndW = IndicatorToggle::getPreferredWidth (jbm, "SEND");
+
+    // Place FLT and MOD toggles in their section headers
+    // (null guards needed: setSize() triggers resized() before unique_ptrs are constructed)
+    if (fltToggle)
+        fltToggle->setBounds (rpX + panelW - fltW, toneHeaderY - 2, fltW, IndicatorToggle::kHeight);
+    if (modToggle)
+        modToggle->setBounds (rpX + panelW - modW, modHeaderY - 2, modW, IndicatorToggle::kHeight);
+    if (airAbsorptionButton)
+        airAbsorptionButton->setBounds (rpX + panelW - airW, mixHeaderY - 2, airW, IndicatorToggle::kHeight);
+
+    // --- OSC section (pushed to bottom of right panel) ---
+    int rpBottom = rightPanel.getBottom();
+    oscHeaderY = rpBottom - 60;
+    int oscCtrlY = oscHeaderY + 16;
+    // Receive row
+    if (oscToggleButton)
+        oscToggleButton->setBounds (rpX, oscCtrlY, rcvW, 20);
+    oscPortLabel.setBounds (rpX + rcvW + 34, oscCtrlY, 54, 20);
+    // Send row
+    int oscSendY = oscCtrlY + 24;
+    if (oscSendToggleButton)
+        oscSendToggleButton->setBounds (rpX, oscSendY, sndW, 20);
+    oscSendIPLabel.setBounds (rpX + sndW + 4, oscSendY, 90, 20);
+    oscSendPortLabel.setBounds (rpX + sndW + 4 + 94, oscSendY, 48, 20);
+
+    // === BOTTOM PANEL (column 1 only, 106px) =================================
+    auto bottomPanel = area.removeFromBottom (kBottomPanelHeight);
+
+    objectHeaderY = bottomPanel.getY();
+    int bpX = bottomPanel.getX() + 8;
+    int bpY = bottomPanel.getY() + 8;
+
+    // Tap selector — stretch to fill available width, 3px gap
+    int bpRight = kWindowWidth - kRightPanelWidth;
+    int bpAvailW = bpRight - bpX - 8;  // available width minus right padding
+    int btnGap = 3;
+    int totalGaps = (SpatialMapComponent::MAX_OBJECTS - 1) * btnGap;
+    int btnBase = (bpAvailW - totalGaps) / SpatialMapComponent::MAX_OBJECTS;
+    int btnRem  = (bpAvailW - totalGaps) % SpatialMapComponent::MAX_OBJECTS;
+    int btnX = bpX;
+    for (int i = 0; i < SpatialMapComponent::MAX_OBJECTS; ++i)
+    {
+        int w = btnBase + (i < btnRem ? 1 : 0);
+        objectButtons[(size_t)i].setBounds (btnX, bpY, w, 22);
+        btnX += w + btnGap;
+    }
+    int tapRightEdge = btnX - btnGap;  // right edge of tap #12
+
+    // Controls row — dynamic knob width fills available space
+    int ctrlY = bpY + 30;  // below tap buttons (8px gap)
+    int ctrlX = bpX;
+    int ctrlAvailW = tapRightEdge - bpX;  // match tap buttons width exactly
+    int objKnobDiam = 46;  // slightly larger bottom-panel knobs
+
+    // Compute trajectory column width — max of title and widest dropdown item
+    auto trajFont = makeFont (ableton12Look.jetbrainsMedium, 10.0f, 0.12f);
+    juce::GlyphArrangement trajGa;
+    trajGa.addLineOfText (trajFont, "TRAJECTORY", 0.0f, 0.0f);
+    int trajLabelW = juce::roundToInt (std::ceil (trajGa.getBoundingBox (0, -1, false).getWidth())) + 6;
+
+    // Measure widest dropdown item (DM Sans Regular 13px + arrow/padding)
+    auto comboFont = juce::Font (juce::FontOptions (ableton12Look.dmSansRegular).withHeight (13.0f));
+    juce::GlyphArrangement itemGa;
+    itemGa.addLineOfText (comboFont, "Figure-8", 0.0f, 0.0f);
+    int itemTextW = juce::roundToInt (std::ceil (itemGa.getBoundingBox (0, -1, false).getWidth())) + 24;
+    int trajW = juce::jmax (trajLabelW, itemTextW);
+
+    // ON pill width
+    int onW = IndicatorToggle::getPreferredWidth (jbm, "ON");
+
+    // Dynamic knob width: 6 knobs fill remaining space after fixed elements
+    // Groups: ON/INPUT | gap | AZ EL DIST | gap | PITCH DOPPLER | gap | TRAJ/DIR SPEED
+    int groupGap = 10;
+    int fixedW = onW + 3 * groupGap + trajW + 4;  // ON + 3 gaps + TRAJ + TRAJ-to-SPEED gap
+    int knobBase = (ctrlAvailW - fixedW) / 6;
+    int knobRem  = (ctrlAvailW - fixedW) % 6;
+
+    // Column width: first knobRem columns get +1px (remainder into columns, not gaps)
+    auto knobColW = [knobBase, knobRem](int col) -> int {
+        return knobBase + (col < knobRem ? 1 : 0);
+    };
+
+    // placeObjKnob: 12px label + 58px slider, knob circle centered in column
+    auto placeObjKnob = [objKnobDiam, this](juce::Slider& slider, juce::Label& label,
+                                             int x, int y, int colW) {
+        label.setBounds (x, y, colW, 12);
+        label.setFont (makeFont (ableton12Look.jetbrainsMedium, 10.0f, 0.12f));
+        slider.setBounds (x + (colW - objKnobDiam) / 2, y + 12, objKnobDiam, 58);
+    };
+
+    // ON/OFF pill — top-aligned with knob title labels
+    int onBtnX = ctrlX;
+    if (objEnabledButton)
+        objEnabledButton->setBounds (ctrlX, ctrlY, onW, IndicatorToggle::kHeight);
+    ctrlX += onW + groupGap;
+
+    // v0.8: Input channel cycling button (L+R / L / R) — below ON/OFF pill
+    if (objInputChannelButton)
+        objInputChannelButton->setBounds (onBtnX, ctrlY + 38,
+                                          juce::jmax (onW, 34), StyledButton::kHeight);
+
+    // Position group: AZ (col 0), EL (col 1), DIST (col 2)
+    { int w = knobColW (0); placeObjKnob (objAzimuthSlider,   objAzLabel,   ctrlX, ctrlY, w); ctrlX += w; }
+    { int w = knobColW (1); placeObjKnob (objElevationSlider,  objElLabel,   ctrlX, ctrlY, w); ctrlX += w; }
+    { int w = knobColW (2); placeObjKnob (objDistanceSlider,   objDistLabel, ctrlX, ctrlY, w); ctrlX += w; }
+
+    ctrlX += groupGap;  // position / pitch-doppler boundary
+
+    // Pitch (col 3) + Doppler (col 4)
+    { int w = knobColW (3); placeObjKnob (objPitchShiftSlider, objPitchShiftLabel, ctrlX, ctrlY, w); ctrlX += w; }
+    { int w = knobColW (4); placeObjKnob (objDopplerSlider,    objDopplerLabel,    ctrlX, ctrlY, w); ctrlX += w; }
+
+    ctrlX += groupGap;  // pitch-doppler / motion boundary
+
+    // Trajectory dropdown — width matches "TRAJECTORY" title
+    int trajStartX = ctrlX;
+    {
+        objTrajectoryLabel.setFont (trajFont);
+        objTrajectoryLabel.setJustificationType (juce::Justification::centred);
+        objTrajectoryLabel.setBorderSize (juce::BorderSize<int> (0));  // remove default 5px internal padding
+        objTrajectoryLabel.setBounds (ctrlX, ctrlY, trajW, 12);
+        objTrajectoryBox.setBounds (ctrlX, ctrlY + 14, trajW, 20);   // 2px gap matches DIRECTION spacing
+        ctrlX += trajW + 4;
+    }
+
+    // v0.8: Trajectory direction arrows (← →) — stretch to TRAJECTORY dropdown width
+    {
+        int dirBtnW = (trajW - 2) / 2, dirBtnH = StyledButton::kHeight;
+        if (objTrajectoryRevButton) objTrajectoryRevButton->setBounds (trajStartX, ctrlY + 52, dirBtnW, dirBtnH);
+        if (objTrajectoryFwdButton) objTrajectoryFwdButton->setBounds (trajStartX + dirBtnW + 2, ctrlY + 52, dirBtnW, dirBtnH);
+    }
+
+    // Speed knob — standard column width, right-aligned to tap button #12 edge
+    {
+        int speedW = juce::jmax (knobColW (5), objKnobDiam + 4);
+        int speedX = tapRightEdge - speedW;
+        placeObjKnob (objTrajectorySpeedSlider, objTrajectorySpeedLabel, speedX, ctrlY, speedW);
+    }
+
+    // === SPATIAL MAP (fills remaining area) ===================================
+    spatialMap.setBounds (area);
+}
+
+//==============================================================================
+// Mouse click handler for painted UI elements (SML badge, FLT tag)
+//==============================================================================
+void OpenSpatialDelayEditor::mouseDown (const juce::MouseEvent&)
+{
+    // SML badge click handled by StyledButton instance (onClick callback)
+    // FLT and MOD clicks handled by IndicatorToggle instances (onClick callbacks)
+}
+
+//==============================================================================
+// Mouse up handler — SML badge launches URL on release
+//==============================================================================
+void OpenSpatialDelayEditor::mouseUp (const juce::MouseEvent&)
+{
+    // SML badge click handled by StyledButton instance
+}
+
+//==============================================================================
+// Mouse move/exit for hover states (SML badge)
+//==============================================================================
+void OpenSpatialDelayEditor::mouseMove (const juce::MouseEvent&)
+{
+    // SML badge hover handled by StyledButton instance internally
+    // FLT and MOD hover handled by IndicatorToggle instances internally
+}
+
+void OpenSpatialDelayEditor::mouseExit (const juce::MouseEvent&)
+{
+    // SML badge hover handled by StyledButton instance internally
+}

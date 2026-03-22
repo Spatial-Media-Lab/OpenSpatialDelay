@@ -55,15 +55,19 @@ const std::array<OpenSpatialDelayProcessor::OutputFormatInfo,
     { OutputFormat::Surround5_0,    "5.0 Surround",     "5.0",    5, false, false, false, 0, false },
     { OutputFormat::Surround5_1,    "5.1 Surround",     "5.1",    6, true,  false, false, 0, false },
     { OutputFormat::Surround7_0,    "7.0 Surround",     "7.0",    7, false, false, false, 0, false },
-    { OutputFormat::Surround5_1_2,  "5.1.2 Atmos",      "5.1.2",  8, true,  true,  false, 0, false },
     { OutputFormat::Surround7_1,    "7.1 Surround",     "7.1",    8, true,  false, false, 0, false },
+    // --- Octaphonic ---
     { OutputFormat::Octaphonic,     "Octaphonic",       "Oct",    8, false, false, false, 0, false },
-    { OutputFormat::Surround7_0_2,  "7.0.2",            "7.0.2",  9, false, true,  false, 0, false },
+    // --- Atmos / Immersive (ascending channel count) ---
+    { OutputFormat::Surround5_1_2,  "5.1.2 Atmos",      "5.1.2",  8, true,  true,  false, 0, false },
     { OutputFormat::Surround5_1_4,  "5.1.4 Atmos",      "5.1.4", 10, true,  true,  false, 0, false },
     { OutputFormat::Surround7_1_2,  "7.1.2 Atmos",      "7.1.2", 10, true,  true,  false, 0, false },
     { OutputFormat::Surround7_1_4,  "7.1.4 Atmos",      "7.1.4", 12, true,  true,  false, 0, false },
     { OutputFormat::Surround7_1_6,  "7.1.6 Atmos",      "7.1.6", 14, true,  true,  false, 0, false },
+    { OutputFormat::Surround9_1_4,  "9.1.4 Atmos",      "9.1.4", 14, true,  true,  false, 0, false },
     { OutputFormat::Surround9_1_6,  "9.1.6 Atmos",      "9.1.6", 16, true,  true,  false, 0, false },
+    // --- SML (Spatial Media Lab custom room) ---
+    { OutputFormat::SurroundSML13_1,"SpatialMediaLab 13.1", "SML", 14, true,  true,  false, 0, false },
     // --- Ambisonics output (AmbiX ACN/SN3D encoding) ---
     { OutputFormat::AmbisonicsFOA,  "1st Order Ambi",   "FOA",    4, false, false, true,  1, false },
     { OutputFormat::AmbisonicsSOA,  "2nd Order Ambi",   "SOA",    9, false, false, true,  2, false },
@@ -110,255 +114,72 @@ const std::array<VirtualSpeaker, OpenSpatialDelayProcessor::NUM_VIRTUAL_SPEAKERS
     { degToRad(   0.0f),  degToRad( 90.0f) },  // 15: T   — Top Centre (zenith)
 }};
 
-//==============================================================================
-// v0.2: Static speaker layouts for multi-channel output formats
-// ITU-R BS.775 / BS.2051 standard positions
+// --- SPATIAL MEDIA LIBRARY: Table-driven speaker layout definitions ----------
+// ITU-R BS.775 / BS.2051 / SMPTE ST 2098-1 standard positions
 // Convention: 0° = front, positive azimuth = left, negative = right
 // LFE is tracked but excluded from spatialization
+// Each entry: { azimuth°, elevation°, channelIndex }
 //==============================================================================
-static SpeakerLayout makeQuadLayout()
+struct SpeakerDef { float azDeg; float elDeg; int chIdx; };
+struct LayoutDef { int numSpeakers; int lfeIdx; int totalChs; SpeakerDef speakers[16]; };
+
+enum LayoutID { Quad, S5_0, S5_1, S7_0, S7_1, S5_1_2, S5_1_4, S7_1_2, S7_1_4, S7_1_6, S9_1_4, S9_1_6, Octaphonic, SML13_1, NUM_LAYOUT_DEFS };
+
+static const LayoutDef layoutDefs[NUM_LAYOUT_DEFS] = {
+    // Quad (4.0) — symmetric 90° spacing
+    { 4, -1, 4, {{ 45,0,0}, {-45,0,1}, { 135,0,2}, {-135,0,3}} },
+    // 5.0
+    { 5, -1, 5, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 110,0,3}, {-110,0,4}} },
+    // 5.1 (LFE=ch3)
+    { 5,  3, 6, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 110,0,4}, {-110,0,5}} },
+    // 7.0
+    { 7, -1, 7, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,3}, {-90,0,4}, { 135,0,5}, {-135,0,6}} },
+    // 7.1 (LFE=ch3)
+    { 7,  3, 8, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,4}, {-90,0,5}, { 135,0,6}, {-135,0,7}} },
+    // 5.1.2 (LFE=ch3)
+    { 7,  3, 8, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 110,0,4}, {-110,0,5}, { 90,45,6}, {-90,45,7}} },
+    // 5.1.4 (LFE=ch3)
+    { 9,  3, 10, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 110,0,4}, {-110,0,5}, { 45,45,6}, {-45,45,7}, { 135,45,8}, {-135,45,9}} },
+    // 7.1.2 (LFE=ch3)
+    { 9,  3, 10, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,4}, {-90,0,5}, { 135,0,6}, {-135,0,7}, { 90,45,8}, {-90,45,9}} },
+    // 7.1.4 (LFE=ch3)
+    { 11, 3, 12, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,4}, {-90,0,5}, { 135,0,6}, {-135,0,7}, { 45,45,8}, {-45,45,9}, { 135,45,10}, {-135,45,11}} },
+    // 7.1.6 (LFE=ch3)
+    { 13, 3, 14, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,4}, {-90,0,5}, { 135,0,6}, {-135,0,7}, { 45,45,8}, {-45,45,9}, { 135,45,10}, {-135,45,11}, { 90,45,12}, {-90,45,13}} },
+    // 9.1.4 (LFE=ch3)
+    { 13, 3, 14, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,4}, {-90,0,5}, { 135,0,6}, {-135,0,7}, { 60,0,8}, {-60,0,9}, { 45,45,10}, {-45,45,11}, { 135,45,12}, {-135,45,13}} },
+    // 9.1.6 (LFE=ch3)
+    { 15, 3, 16, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,4}, {-90,0,5}, { 135,0,6}, {-135,0,7}, { 60,0,8}, {-60,0,9}, { 45,45,10}, {-45,45,11}, { 90,45,12}, {-90,45,13}, { 135,45,14}, {-135,45,15}} },
+    // Octaphonic (8.0, no LFE) — "Center" configuration, 45° intervals
+    { 8, -1, 8, {{0,0,0}, {-45,0,1}, {-90,0,2}, {-135,0,3}, { 180,0,4}, { 135,0,5}, { 90,0,6}, { 45,0,7}} },
+    // SML 13.1 — Spatial Media Lab Multi-Use Room (13 speakers + LFE=ch13)
+    // Ear level (8 at El=0°), Height (4 at El=45°), Zenith (1 at El=90°)
+    // IEM AllRADecoder config — positive azimuth = left (matches OSD convention)
+    { 13, 13, 14, {
+        {   0,  0, 0},  // FC   — Front Center
+        { -45,  0, 1},  // FR   — Front Right
+        { -90,  0, 2},  // R    — Right
+        {-135,  0, 3},  // RR   — Rear Right
+        { 180,  0, 4},  // RC   — Rear Center
+        { 135,  0, 5},  // RL   — Rear Left
+        {  90,  0, 6},  // L    — Left
+        {  45,  0, 7},  // FL   — Front Left
+        { -45, 45, 8},  // UFR  — Upper Front Right
+        {-135, 45, 9},  // URR  — Upper Rear Right
+        { 135, 45,10},  // URL  — Upper Rear Left
+        {  45, 45,11},  // UFL  — Upper Front Left
+        {   0, 90,12},  // T    — Top (Zenith)
+    }},
+};
+
+static SpeakerLayout makeLayoutFromDef (const LayoutDef& def)
 {
     SpeakerLayout l = {};
-    l.numSpeakers = 4;
-    l.lfeChannelIndex = -1;
-    l.totalChannels = 4;
-    l.speakers[0] = { degToRad( 30.0f), 0.0f, 0 };  // L
-    l.speakers[1] = { degToRad(-30.0f), 0.0f, 1 };  // R
-    l.speakers[2] = { degToRad(110.0f), 0.0f, 2 };  // Ls
-    l.speakers[3] = { degToRad(-110.0f),0.0f, 3 };  // Rs
-    return l;
-}
-
-static SpeakerLayout make5_1Layout()
-{
-    SpeakerLayout l = {};
-    l.numSpeakers = 5;
-    l.lfeChannelIndex = 3;   // JUCE 5.1: L R C LFE Ls Rs
-    l.totalChannels = 6;
-    l.speakers[0] = { degToRad( 30.0f), 0.0f, 0 };  // L
-    l.speakers[1] = { degToRad(-30.0f), 0.0f, 1 };  // R
-    l.speakers[2] = { degToRad(  0.0f), 0.0f, 2 };  // C
-    l.speakers[3] = { degToRad(110.0f), 0.0f, 4 };  // Ls
-    l.speakers[4] = { degToRad(-110.0f),0.0f, 5 };  // Rs
-    return l;
-}
-
-static SpeakerLayout make7_1Layout()
-{
-    SpeakerLayout l = {};
-    l.numSpeakers = 7;
-    l.lfeChannelIndex = 3;   // JUCE 7.1: L R C LFE Lss Rss Lsr Rsr
-    l.totalChannels = 8;
-    l.speakers[0] = { degToRad( 30.0f), 0.0f, 0 };  // L
-    l.speakers[1] = { degToRad(-30.0f), 0.0f, 1 };  // R
-    l.speakers[2] = { degToRad(  0.0f), 0.0f, 2 };  // C
-    l.speakers[3] = { degToRad( 90.0f), 0.0f, 4 };  // Lss
-    l.speakers[4] = { degToRad(-90.0f), 0.0f, 5 };  // Rss
-    l.speakers[5] = { degToRad(135.0f), 0.0f, 6 };  // Lsr
-    l.speakers[6] = { degToRad(-135.0f),0.0f, 7 };  // Rsr
-    return l;
-}
-
-static SpeakerLayout make7_1_4Layout()
-{
-    SpeakerLayout l = {};
-    l.numSpeakers = 11;
-    l.lfeChannelIndex = 3;   // SMPTE 7.1.4: L R C LFE Lss Rss Lsr Rsr Tfl Tfr Trl Trr
-    l.totalChannels = 12;
-    // Ear level (7)
-    l.speakers[0]  = { degToRad( 30.0f), 0.0f, 0 };  // L
-    l.speakers[1]  = { degToRad(-30.0f), 0.0f, 1 };  // R
-    l.speakers[2]  = { degToRad(  0.0f), 0.0f, 2 };  // C
-    l.speakers[3]  = { degToRad( 90.0f), 0.0f, 4 };  // Lss  (ch4)
-    l.speakers[4]  = { degToRad(-90.0f), 0.0f, 5 };  // Rss  (ch5)
-    l.speakers[5]  = { degToRad(135.0f), 0.0f, 6 };  // Lsr  (ch6)
-    l.speakers[6]  = { degToRad(-135.0f),0.0f, 7 };  // Rsr  (ch7)
-    // Top (4)
-    l.speakers[7]  = { degToRad( 45.0f), degToRad(45.0f), 8 };   // Tfl  (ch8)
-    l.speakers[8]  = { degToRad(-45.0f), degToRad(45.0f), 9 };   // Tfr  (ch9)
-    l.speakers[9]  = { degToRad(135.0f), degToRad(45.0f), 10 };  // Trl  (ch10)
-    l.speakers[10] = { degToRad(-135.0f),degToRad(45.0f), 11 };  // Trr  (ch11)
-    return l;
-}
-
-static SpeakerLayout make9_1_6Layout()
-{
-    SpeakerLayout l = {};
-    l.numSpeakers = 15;
-    l.lfeChannelIndex = 3;   // SMPTE 9.1.6: L R C LFE Lss Rss Lsr Rsr Lw Rw Tfl Tfr Tsl Tsr Trl Trr
-    l.totalChannels = 16;
-    // Ear level (9)
-    l.speakers[0]  = { degToRad( 30.0f), 0.0f, 0 };   // L
-    l.speakers[1]  = { degToRad(-30.0f), 0.0f, 1 };   // R
-    l.speakers[2]  = { degToRad(  0.0f), 0.0f, 2 };   // C
-    l.speakers[3]  = { degToRad( 90.0f), 0.0f, 4 };   // Lss  (ch4)
-    l.speakers[4]  = { degToRad(-90.0f), 0.0f, 5 };   // Rss  (ch5)
-    l.speakers[5]  = { degToRad(135.0f), 0.0f, 6 };   // Lsr  (ch6)
-    l.speakers[6]  = { degToRad(-135.0f),0.0f, 7 };   // Rsr  (ch7)
-    l.speakers[7]  = { degToRad( 60.0f), 0.0f, 8 };   // Lw   (ch8)
-    l.speakers[8]  = { degToRad(-60.0f), 0.0f, 9 };   // Rw   (ch9)
-    // Top (6)
-    l.speakers[9]  = { degToRad( 45.0f), degToRad(45.0f), 10 };  // Tfl  (ch10)
-    l.speakers[10] = { degToRad(-45.0f), degToRad(45.0f), 11 };  // Tfr  (ch11)
-    l.speakers[11] = { degToRad( 90.0f), degToRad(45.0f), 12 };  // Tsl  (ch12)
-    l.speakers[12] = { degToRad(-90.0f), degToRad(45.0f), 13 };  // Tsr  (ch13)
-    l.speakers[13] = { degToRad(135.0f), degToRad(45.0f), 14 };  // Trl  (ch14)
-    l.speakers[14] = { degToRad(-135.0f),degToRad(45.0f), 15 };  // Trr  (ch15)
-    return l;
-}
-
-// Octaphonic (8-channel, no LFE) — "Center" configuration
-// 8 speakers at 45° intervals: C, RF, R, RR, Rear, RL, L, FL
-static SpeakerLayout makeOctaphonicLayout()
-{
-    auto degToRad = [] (float d) { return juce::degreesToRadians (d); };
-    SpeakerLayout l = {};
-    l.numSpeakers = 8;
-    l.lfeChannelIndex = -1;
-    l.totalChannels = 8;
-    l.speakers[0] = { degToRad(   0.0f), 0.0f, 0 };   // Center
-    l.speakers[1] = { degToRad( -45.0f), 0.0f, 1 };   // Right Front
-    l.speakers[2] = { degToRad( -90.0f), 0.0f, 2 };   // Right
-    l.speakers[3] = { degToRad(-135.0f), 0.0f, 3 };   // Rear Right
-    l.speakers[4] = { degToRad( 180.0f), 0.0f, 4 };   // Rear
-    l.speakers[5] = { degToRad( 135.0f), 0.0f, 5 };   // Rear Left
-    l.speakers[6] = { degToRad(  90.0f), 0.0f, 6 };   // Left
-    l.speakers[7] = { degToRad(  45.0f), 0.0f, 7 };   // Front Left
-    return l;
-}
-
-// v0.3: Additional surround layouts — ITU-R BS.2051 / Dolby Atmos positions
-// Channel indices follow SMPTE ST 2098-1 ordering (bed channels first, then height)
-
-static SpeakerLayout make5_0Layout()
-{
-    SpeakerLayout l = {};
-    l.numSpeakers = 5;
-    l.lfeChannelIndex = -1;  // No LFE
-    l.totalChannels = 5;     // JUCE create5point0(): L R C Ls Rs
-    l.speakers[0] = { degToRad( 30.0f), 0.0f, 0 };  // L
-    l.speakers[1] = { degToRad(-30.0f), 0.0f, 1 };  // R
-    l.speakers[2] = { degToRad(  0.0f), 0.0f, 2 };  // C
-    l.speakers[3] = { degToRad(110.0f), 0.0f, 3 };  // Ls
-    l.speakers[4] = { degToRad(-110.0f),0.0f, 4 };  // Rs
-    return l;
-}
-
-static SpeakerLayout make7_0Layout()
-{
-    SpeakerLayout l = {};
-    l.numSpeakers = 7;
-    l.lfeChannelIndex = -1;  // No LFE
-    l.totalChannels = 7;     // JUCE create7point0(): L R C Lss Rss Lsr Rsr
-    l.speakers[0] = { degToRad( 30.0f), 0.0f, 0 };  // L
-    l.speakers[1] = { degToRad(-30.0f), 0.0f, 1 };  // R
-    l.speakers[2] = { degToRad(  0.0f), 0.0f, 2 };  // C
-    l.speakers[3] = { degToRad( 90.0f), 0.0f, 3 };  // Lss
-    l.speakers[4] = { degToRad(-90.0f), 0.0f, 4 };  // Rss
-    l.speakers[5] = { degToRad(135.0f), 0.0f, 5 };  // Lsr
-    l.speakers[6] = { degToRad(-135.0f),0.0f, 6 };  // Rsr
-    return l;
-}
-
-static SpeakerLayout make5_1_2Layout()
-{
-    SpeakerLayout l = {};
-    l.numSpeakers = 7;       // 5 ear + 2 top (spatial speakers)
-    l.lfeChannelIndex = 3;   // JUCE create5point1point2(): L R C LFE Ls Rs Tsl Tsr
-    l.totalChannels = 8;
-    // Ear level (5)
-    l.speakers[0] = { degToRad( 30.0f), 0.0f, 0 };  // L
-    l.speakers[1] = { degToRad(-30.0f), 0.0f, 1 };  // R
-    l.speakers[2] = { degToRad(  0.0f), 0.0f, 2 };  // C
-    l.speakers[3] = { degToRad(110.0f), 0.0f, 4 };  // Ls
-    l.speakers[4] = { degToRad(-110.0f),0.0f, 5 };  // Rs
-    // Top (2) — side positions at +45° elevation
-    l.speakers[5] = { degToRad( 90.0f), degToRad(45.0f), 6 };  // Tsl
-    l.speakers[6] = { degToRad(-90.0f), degToRad(45.0f), 7 };  // Tsr
-    return l;
-}
-
-static SpeakerLayout make5_1_4Layout()
-{
-    SpeakerLayout l = {};
-    l.numSpeakers = 9;       // 5 ear + 4 top (spatial speakers)
-    l.lfeChannelIndex = 3;   // JUCE create5point1point4(): L R C LFE Ls Rs Tfl Tfr Trl Trr
-    l.totalChannels = 10;
-    // Ear level (5)
-    l.speakers[0] = { degToRad( 30.0f), 0.0f, 0 };  // L
-    l.speakers[1] = { degToRad(-30.0f), 0.0f, 1 };  // R
-    l.speakers[2] = { degToRad(  0.0f), 0.0f, 2 };  // C
-    l.speakers[3] = { degToRad(110.0f), 0.0f, 4 };  // Ls
-    l.speakers[4] = { degToRad(-110.0f),0.0f, 5 };  // Rs
-    // Top (4)
-    l.speakers[5] = { degToRad( 45.0f), degToRad(45.0f), 6 };  // Tfl
-    l.speakers[6] = { degToRad(-45.0f), degToRad(45.0f), 7 };  // Tfr
-    l.speakers[7] = { degToRad(135.0f), degToRad(45.0f), 8 };  // Trl
-    l.speakers[8] = { degToRad(-135.0f),degToRad(45.0f), 9 };  // Trr
-    return l;
-}
-
-static SpeakerLayout make7_0_2Layout()
-{
-    SpeakerLayout l = {};
-    l.numSpeakers = 9;       // 7 ear + 2 top (spatial speakers)
-    l.lfeChannelIndex = -1;  // No LFE
-    l.totalChannels = 9;     // JUCE create7point0point2(): L R C Lss Rss Lsr Rsr Tsl Tsr
-    // Ear level (7)
-    l.speakers[0] = { degToRad( 30.0f), 0.0f, 0 };  // L
-    l.speakers[1] = { degToRad(-30.0f), 0.0f, 1 };  // R
-    l.speakers[2] = { degToRad(  0.0f), 0.0f, 2 };  // C
-    l.speakers[3] = { degToRad( 90.0f), 0.0f, 3 };  // Lss
-    l.speakers[4] = { degToRad(-90.0f), 0.0f, 4 };  // Rss
-    l.speakers[5] = { degToRad(135.0f), 0.0f, 5 };  // Lsr
-    l.speakers[6] = { degToRad(-135.0f),0.0f, 6 };  // Rsr
-    // Top (2)
-    l.speakers[7] = { degToRad( 90.0f), degToRad(45.0f), 7 };  // Tsl
-    l.speakers[8] = { degToRad(-90.0f), degToRad(45.0f), 8 };  // Tsr
-    return l;
-}
-
-static SpeakerLayout make7_1_2Layout()
-{
-    SpeakerLayout l = {};
-    l.numSpeakers = 9;       // 7 ear + 2 top (spatial speakers)
-    l.lfeChannelIndex = 3;   // JUCE create7point1point2(): L R C LFE Lss Rss Lsr Rsr Tsl Tsr
-    l.totalChannels = 10;
-    // Ear level (7)
-    l.speakers[0] = { degToRad( 30.0f), 0.0f, 0 };  // L
-    l.speakers[1] = { degToRad(-30.0f), 0.0f, 1 };  // R
-    l.speakers[2] = { degToRad(  0.0f), 0.0f, 2 };  // C
-    l.speakers[3] = { degToRad( 90.0f), 0.0f, 4 };  // Lss
-    l.speakers[4] = { degToRad(-90.0f), 0.0f, 5 };  // Rss
-    l.speakers[5] = { degToRad(135.0f), 0.0f, 6 };  // Lsr
-    l.speakers[6] = { degToRad(-135.0f),0.0f, 7 };  // Rsr
-    // Top (2)
-    l.speakers[7] = { degToRad( 90.0f), degToRad(45.0f), 8 };  // Tsl
-    l.speakers[8] = { degToRad(-90.0f), degToRad(45.0f), 9 };  // Tsr
-    return l;
-}
-
-static SpeakerLayout make7_1_6Layout()
-{
-    SpeakerLayout l = {};
-    l.numSpeakers = 13;      // 7 ear + 6 top (spatial speakers)
-    l.lfeChannelIndex = 3;   // SMPTE 7.1.6: L R C LFE Lss Rss Lsr Rsr Tfl Tfr Trl Trr Tsl Tsr
-    l.totalChannels = 14;
-    // Ear level (7)
-    l.speakers[0]  = { degToRad( 30.0f), 0.0f, 0 };  // L
-    l.speakers[1]  = { degToRad(-30.0f), 0.0f, 1 };  // R
-    l.speakers[2]  = { degToRad(  0.0f), 0.0f, 2 };  // C
-    l.speakers[3]  = { degToRad( 90.0f), 0.0f, 4 };  // Lss  (ch4)
-    l.speakers[4]  = { degToRad(-90.0f), 0.0f, 5 };  // Rss  (ch5)
-    l.speakers[5]  = { degToRad(135.0f), 0.0f, 6 };  // Lsr  (ch6)
-    l.speakers[6]  = { degToRad(-135.0f),0.0f, 7 };  // Rsr  (ch7)
-    // Top (6)
-    l.speakers[7]  = { degToRad( 45.0f), degToRad(45.0f), 8 };   // Tfl  (ch8)
-    l.speakers[8]  = { degToRad(-45.0f), degToRad(45.0f), 9 };   // Tfr  (ch9)
-    l.speakers[9]  = { degToRad(135.0f), degToRad(45.0f), 10 };  // Trl  (ch10)
-    l.speakers[10] = { degToRad(-135.0f),degToRad(45.0f), 11 };  // Trr  (ch11)
-    l.speakers[11] = { degToRad( 90.0f), degToRad(45.0f), 12 };  // Tsl  (ch12)
-    l.speakers[12] = { degToRad(-90.0f), degToRad(45.0f), 13 };  // Tsr  (ch13)
+    l.numSpeakers = def.numSpeakers;
+    l.lfeChannelIndex = def.lfeIdx;
+    l.totalChannels = def.totalChs;
+    for (int i = 0; i < def.numSpeakers; ++i)
+        l.speakers[i] = { degToRad (def.speakers[i].azDeg), degToRad (def.speakers[i].elDeg), def.speakers[i].chIdx };
     return l;
 }
 
@@ -366,7 +187,7 @@ static SpeakerLayout make7_1_6Layout()
 // #############################################################################
 // MIXED — Parameter layout (spatial params are reusable; delay params are plugin-specific)
 // Spatial: outputFormat, algorithm, hrtfProfile, per-object azimuth/elevation/distance
-// Delay-specific: delayTime, feedback, filterLP/HP, pitchShift, dryWet, gains
+// Delay-specific: delayTime, feedback, filterLP/HP, dryWet, gains
 // #############################################################################
 
 //==============================================================================
@@ -376,6 +197,28 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     OpenSpatialDelayProcessor::createParameterLayout()
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+
+    // Shared string-from-value formatters (DRY)
+    auto fmtDbInf = [](float value, int) {
+        if (value <= -99.9f)
+            return juce::String (juce::CharPointer_UTF8 ("-\xe2\x88\x9e dB"));
+        return juce::String (value, 1) + " dB";
+    };
+    auto fmtPct01 = [](float value, int) {
+        return juce::String (juce::roundToInt (value * 100.0f)) + "%";
+    };
+    auto fmtPct100 = [](float value, int) {
+        if (value < 10.0f) return juce::String (value, 1) + "%";
+        return juce::String (juce::roundToInt (value)) + "%";
+    };
+    auto fmtFreq = [](float value, int) {
+        if (value >= 1000.0f)
+            return juce::String (value / 1000.0f, 1) + " kHz";
+        return juce::String (juce::roundToInt (value)) + " Hz";
+    };
+    auto fmtDeg = [](float value, int) {
+        return juce::String (value, 1) + juce::String::charToString (0x00B0);
+    };
 
     // --- Global parameters ---------------------------------------------------
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -391,77 +234,84 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID ("tempoSync", 1), "Tempo Sync", false));
 
+    // Note division: value = number of 16th notes. Range: 0.5 (1/32) to 32 (2/1)
+    // Steps at musical intervals: 0.5, 1, 2, 4, 8, 16, 32
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("noteDivision", 1), "Note Division",
-        juce::NormalisableRange<float> (1.0f, 16.0f, 1.0f), 4.0f,
+        juce::NormalisableRange<float> (0.5f, 32.0f, 0.5f), 4.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) {
-                // value is 1..16 representing number of 16th notes
-                // 4 = 1/4 note, 2 = 1/8 note, 1 = 1/16 note, 8 = 1/2 note, 16 = 1/1
-                int sixteenths = juce::roundToInt (value);
-                if (sixteenths == 16) return juce::String ("1/1");
-                if (sixteenths == 8)  return juce::String ("1/2");
-                if (sixteenths == 4)  return juce::String ("1/4");
-                if (sixteenths == 2)  return juce::String ("1/8");
-                if (sixteenths == 1)  return juce::String ("1/16");
-                // For irregular values, show x/16
-                return juce::String (sixteenths) + "/16";
+                // value = number of 16th notes
+                float sixteenths = value;
+                if (std::abs (sixteenths - 32.0f)  < 0.01f) return juce::String ("2/1");
+                if (std::abs (sixteenths - 16.0f)  < 0.01f) return juce::String ("1/1");
+                if (std::abs (sixteenths - 8.0f)   < 0.01f) return juce::String ("1/2");
+                if (std::abs (sixteenths - 4.0f)   < 0.01f) return juce::String ("1/4");
+                if (std::abs (sixteenths - 2.0f)   < 0.01f) return juce::String ("1/8");
+                if (std::abs (sixteenths - 1.0f)   < 0.01f) return juce::String ("1/16");
+                if (std::abs (sixteenths - 0.5f)   < 0.01f) return juce::String ("1/32");
+                // For other values, show as fraction of 16ths
+                if (sixteenths >= 1.0f)
+                    return juce::String (juce::roundToInt (sixteenths)) + "/16";
+                return juce::String (sixteenths, 1) + "/16";
             })));
 
+    // v0.7: Reworked to 3-state: Straight (0), Dotted (1), Triplet (2)
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
-        juce::ParameterID ("syncMode", 1), "Sync Mode",
-        juce::StringArray { "Notes", "Triplet", "Dotted", "16th" }, 0));
+        juce::ParameterID ("syncMode", 7), "Sync Mode",
+        juce::StringArray { "Straight", "Dotted", "Triplet" }, 0));
 
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("feedback", 1), "Feedback",
         juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.3f,
-        juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (
-            [](float value, int) { return juce::String (juce::roundToInt(value * 100.0f)) + "%"; })));
+        juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
+
+    // v0.9: Defaults changed from LP=20000/HP=20 to LP=5000/HP=50. Version bumped to 9
+    // so DAWs discard stale saved state and use new defaults on fresh instances.
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID ("filterLP", 9), "Low-Pass Filter",
+        juce::NormalisableRange<float> (200.0f, 20000.0f, 1.0f, 0.3f), 5000.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtFreq)));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("filterLP", 1), "Low-Pass Filter",
-        juce::NormalisableRange<float> (200.0f, 20000.0f, 1.0f, 0.3f), 20000.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-            [](float value, int) {
-                if (value >= 1000.0f)
-                    return juce::String (value / 1000.0f, 1) + " kHz";
-                return juce::String (juce::roundToInt (value)) + " Hz";
-            })));
+        juce::ParameterID ("filterHP", 9), "High-Pass Filter",
+        juce::NormalisableRange<float> (20.0f, 5000.0f, 1.0f, 0.3f), 50.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtFreq)));
 
+    // v0.7: Separate HP and LP resonance (Q). Range 0.5 (gentle) to 8.0 (sharp peak). Default: 0.707 (Butterworth).
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("filterHP", 1), "High-Pass Filter",
-        juce::NormalisableRange<float> (20.0f, 5000.0f, 1.0f, 0.3f), 20.0f,
+        juce::ParameterID ("filterHPQ", 7), "HP Resonance",
+        juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-            [](float value, int) {
-                if (value >= 1000.0f)
-                    return juce::String (value / 1000.0f, 1) + " kHz";
-                return juce::String (juce::roundToInt (value)) + " Hz";
-            })));
+            [](float value, int) { return juce::String (value, 2); })));
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID ("filterLPQ", 7), "LP Resonance",
+        juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
+            [](float value, int) { return juce::String (value, 2); })));
 
+    // v0.9: Dedicated filter enabled toggle (default OFF — filter bypassed on fresh load)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("pitchShift", 1), "Pitch Shift",
-        juce::NormalisableRange<float> (-24.0f, 24.0f, 0.1f), 0.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-            [](float value, int) { return juce::String (value, 1) + " st"; })));
+        juce::ParameterID ("filterEnabled", 9), "Filter Enabled",
+        juce::NormalisableRange<float> (0.0f, 1.0f, 1.0f), 0.0f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("dryWet", 1), "Dry/Wet",
         juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f,
-        juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (
-            [](float value, int) { return juce::String (juce::roundToInt(value * 100.0f)) + "%"; })));
+        juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
 
+    // Input gain: -100 dB (shown as -∞) to +40 dB
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("inputGain", 1), "Input Gain",
-        juce::NormalisableRange<float> (-60.0f, 12.0f, 0.1f, 2.0f), 0.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-            [](float value, int) { return juce::String (value, 1) + " dB"; })));
+        juce::NormalisableRange<float> (-100.0f, 40.0f, 0.1f, 3.0f), 0.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDbInf)));
 
+    // Output gain: -100 dB (shown as -∞) to +12 dB
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("outputGain", 1), "Output Gain",
-        juce::NormalisableRange<float> (-60.0f, 12.0f, 0.1f, 2.0f), 0.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-            [](float value, int) { return juce::String (value, 1) + " dB"; })));
+        juce::NormalisableRange<float> (-100.0f, 12.0f, 0.1f, 3.0f), 0.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDbInf)));
 
 
 
@@ -482,12 +332,27 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         for (const auto& info : outputFormatRegistry)
             formatNames.add (info.name);
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
-            juce::ParameterID ("outputFormat", 8), "Output Format", formatNames, 0));  // default=Binaural (index 0)
+            juce::ParameterID ("outputFormat", 9), "Output Format", formatNames, 0));  // default=Binaural (index 0)
     }
 
     // v0.4: Air absorption — global toggle (distance-driven HF rolloff for all taps)
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID ("airAbsorption", 4), "Air Absorption", false));
+
+    // v0.8: Wobble modulation (delay time LFO)
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID ("wobbleAmount", 8), "Wobble Amount",
+        juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f,
+        juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
+
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID ("wobbleMorph", 8), "Wobble Morph",
+        juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f,
+        juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
+
+    // v0.8: Wobble modulation enable toggle
+    params.push_back (std::make_unique<juce::AudioParameterBool> (
+        juce::ParameterID ("wobbleEnabled", 8), "Wobble Enabled", false));
 
     // --- Per-object parameters ------------------------------------------------
     for (int i = 0; i < MAX_OBJECTS; ++i)
@@ -501,10 +366,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout
 
         bool defaultEnabled = (i < 4);
         float defaultTime   = 100.0f * (i + 1);  // 100, 200, 300... ms
-        const float defaultAzArray[] = {-45.0f, 45.0f, -135.0f, 135.0f,
-                                         0.0f, 90.0f, -90.0f, 180.0f,
-                                         -30.0f, 30.0f, -60.0f, 60.0f};
-        float defaultAz = defaultAzArray[i];
+        // v0.9: Default azimuth is 0° (center front) so double-click resets to 0°.
+        // Initial spatial spread is applied in constructor after APVTS creation.
+        float defaultAz = 0.0f;
 
         params.push_back (std::make_unique<juce::AudioParameterBool> (
             id ("enabled"), name ("Enabled"), defaultEnabled));
@@ -516,14 +380,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("azimuth"), name ("Azimuth"),
             juce::NormalisableRange<float> (-180.0f, 180.0f, 0.1f), defaultAz,
-            juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-                [](float value, int) { return juce::String (value, 1) + juce::String::charToString (0x00B0); })));
+            juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDeg)));
 
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("elevation"), name ("Elevation"),
             juce::NormalisableRange<float> (-90.0f, 90.0f, 0.1f), 0.0f,
-            juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-                [](float value, int) { return juce::String (value, 1) + juce::String::charToString (0x00B0); })));
+            juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDeg)));
 
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("distance"), name ("Distance"),
@@ -533,18 +395,43 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("dopplerAmount"), name ("Doppler Amount"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.0f,
-            juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (
-                [](float value, int) { return juce::String (juce::roundToInt(value * 100.0f)) + "%"; })));
+            juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
+
+        // v0.8: Per-object pitch shift (semitones, integer ±24)
+        params.push_back (std::make_unique<juce::AudioParameterFloat> (
+            id ("pitchShift"), name ("Pitch Shift"),
+            juce::NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 0.0f,
+            juce::AudioParameterFloatAttributes().withStringFromValueFunction (
+                [](float value, int) { return juce::String (juce::roundToInt (value)) + " st"; })));
 
         // v0.6: Per-object trajectory (shape + speed)
+        // v0.9: Expanded from 6 to 14 shapes, alphabetized (None at top)
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("trajectoryShape"), name ("Trajectory Shape"),
-            juce::StringArray { "None", "Spiral", "Orbit", "Bounce", "Figure-8", "Random" }, 0));
+            juce::StringArray { "None", "Bounce", "Circle", "Cross", "Figure-8", "Heart", "Helix",
+                                "Infinity", "Line", "Orbit", "Random", "Spiral", "Square", "Triangle" }, 0));
 
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("trajectorySpeed"), name ("Trajectory Speed"),
-            juce::NormalisableRange<float> (0.0f, 10.0f, 0.01f), 1.0f));
+            juce::NormalisableRange<float> (0.0f, 5.0f, 0.01f), 0.3f,
+            juce::AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
+                [](float value, int) { return juce::String (value, 2) + " Hz"; })));
+
+        // v0.8: Per-object trajectory direction (0=Forward/CCW, 1=Reverse/CW)
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            id ("trajectoryDirection"), name ("Trajectory Direction"),
+            juce::StringArray { "Forward", "Reverse" }, 0));
+
+        // v0.8: Per-object input channel selection (only active when Input Format = Stereo)
+        params.push_back (std::make_unique<juce::AudioParameterChoice> (
+            id ("inputChannel"), name ("Input Channel"),
+            juce::StringArray { "L+R", "L", "R" }, 0));
     }
+
+    // v0.7: Input format (Mono / Stereo)
+    params.push_back (std::make_unique<juce::AudioParameterChoice> (
+        juce::ParameterID ("inputFormat", 7), "Input Format",
+        juce::StringArray { "Mono", "Stereo" }, 0));
 
     // v0.5: ADM-OSC global parameter stub (engine deferred to v0.6+)
     params.push_back (std::make_unique<juce::AudioParameterBool> (
@@ -625,6 +512,46 @@ void HRTFDatabase::getInterpolatedHRIR (float azimuthRad, float elevationRad,
                             &delayL, &delayR);
 }
 
+void HRTFDatabase::getAlignedHRIR (float azimuthRad, float elevationRad,
+                                    float* irL, float* irR,
+                                    float& delayL, float& delayR) const
+{
+    // First get the standard interpolated HRIR with embedded ITD
+    getInterpolatedHRIR (azimuthRad, elevationRad, irL, irR, delayL, delayR);
+
+    if (! loaded || irLength <= 0)
+        return;
+
+    // Remove ITD by shifting each HRIR backward by its delay (integer part).
+    // The fractional part remains in delayL/delayR for the caller to apply
+    // as a separate fractional-sample delay.
+    //
+    // This produces time-aligned HRIRs with coherent phase structure,
+    // enabling smooth crossfading between neighboring positions without
+    // comb-filtering from ITD misalignment.
+
+    int shiftL = static_cast<int> (delayL);
+    int shiftR = static_cast<int> (delayR);
+
+    // Shift left channel: move samples backward by shiftL
+    if (shiftL > 0 && shiftL < irLength)
+    {
+        for (int i = 0; i < irLength - shiftL; ++i)
+            irL[i] = irL[i + shiftL];
+        for (int i = irLength - shiftL; i < irLength; ++i)
+            irL[i] = 0.0f;
+    }
+
+    // Shift right channel: move samples backward by shiftR
+    if (shiftR > 0 && shiftR < irLength)
+    {
+        for (int i = 0; i < irLength - shiftR; ++i)
+            irR[i] = irR[i + shiftR];
+        for (int i = irLength - shiftR; i < irLength; ++i)
+            irR[i] = 0.0f;
+    }
+}
+
 void HRTFDatabase::unload()
 {
     if (easyHandle != nullptr)
@@ -661,6 +588,11 @@ void PartitionedConvolver::prepare (int maxBlockSize, int irLength_)
     fftWorkBuf.resize (static_cast<size_t> (fftSize * 2), 0.0f);
     overlapBuf.resize (static_cast<size_t> (fftSize), 0.0f);
 
+    // v1.0: Dual-convolver crossfade buffers
+    prevIrFreqDomain.resize (static_cast<size_t> (fftSize * 2), 0.0f);
+    prevFftWorkBuf.resize (static_cast<size_t> (fftSize * 2), 0.0f);
+    prevOverlapBuf.resize (static_cast<size_t> (fftSize), 0.0f);
+
     reset();
 }
 
@@ -668,7 +600,26 @@ void PartitionedConvolver::setIR (const float* ir, int length)
 {
     if (fftSize == 0) return;
 
-    // Zero-pad IR to fftSize and compute FFT
+    // v1.0: Non-restarting dual-convolver crossfade.
+    // Key behavior: if called during active crossfade, only update the new IR
+    // (irFreqDomain) without resetting crossfade progress. This ensures the
+    // fade always completes during continuous movement, rather than perpetually
+    // restarting at 0%.
+
+    if (irLen > 0 && crossfadeRemaining <= 0)
+    {
+        // No crossfade active — start a new one.
+        // Save current IR + overlap as crossfade source.
+        std::copy (irFreqDomain.begin(), irFreqDomain.end(), prevIrFreqDomain.begin());
+        std::copy (overlapBuf.begin(), overlapBuf.end(), prevOverlapBuf.begin());
+        crossfadeTotalLength = blockSize * kCrossfadeBlocks;
+        crossfadeRemaining = crossfadeTotalLength;
+    }
+    // else: crossfade already active — don't restart, don't touch prevIrFreqDomain
+    // or prevOverlapBuf. The crossfade continues from where it is, blending from
+    // the original source toward whatever the latest IR is.
+
+    // Always update the "new" IR (target of crossfade)
     std::fill (irFreqDomain.begin(), irFreqDomain.end(), 0.0f);
     for (int i = 0; i < std::min (length, fftSize); ++i)
         irFreqDomain[static_cast<size_t> (i)] = ir[i];
@@ -687,26 +638,23 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
         return;
     }
 
-    // Simple overlap-save convolution:
-    // For each block of input, we perform FFT, multiply with IR spectrum, IFFT,
-    // and combine with overlap from previous block.
+    // Dual-convolver overlap-save with non-restarting crossfade:
+    // During crossfade, both old and new IRs convolve the same input.
+    // Outputs are blended via equal-power crossfade that always completes.
 
     int samplesProcessed = 0;
 
     while (samplesProcessed < numSamples)
     {
-        // How many samples we can accept before we need to process
         int spaceInAccum = blockSize - inputAccumPos;
         int samplesToAccum = std::min (spaceInAccum, numSamples - samplesProcessed);
 
-        // Accumulate input
         for (int i = 0; i < samplesToAccum; ++i)
             inputAccum[static_cast<size_t> (inputAccumPos + i)] = in[samplesProcessed + i];
 
         inputAccumPos += samplesToAccum;
         samplesProcessed += samplesToAccum;
 
-        // When we have a full block, process it
         if (inputAccumPos >= blockSize)
         {
             // Copy input to work buffer, zero-pad to fftSize
@@ -717,8 +665,22 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
             // Forward FFT of input
             fft.performRealOnlyForwardTransform (fftWorkBuf.data(), true);
 
-            // Complex multiply with pre-computed IR spectrum
-            // juce::dsp::FFT stores as [re, im, re, im, ...]
+            // If crossfading, also convolve with previous (old) IR
+            bool doCrossfade = (crossfadeRemaining > 0);
+            if (doCrossfade)
+            {
+                std::copy (fftWorkBuf.begin(), fftWorkBuf.end(), prevFftWorkBuf.begin());
+                for (int i = 0; i < fftSize * 2; i += 2)
+                {
+                    float re1 = prevFftWorkBuf[static_cast<size_t> (i)],     im1 = prevFftWorkBuf[static_cast<size_t> (i + 1)];
+                    float re2 = prevIrFreqDomain[static_cast<size_t> (i)],   im2 = prevIrFreqDomain[static_cast<size_t> (i + 1)];
+                    prevFftWorkBuf[static_cast<size_t> (i)]     = re1 * re2 - im1 * im2;
+                    prevFftWorkBuf[static_cast<size_t> (i + 1)] = re1 * im2 + im1 * re2;
+                }
+                fft.performRealOnlyInverseTransform (prevFftWorkBuf.data());
+            }
+
+            // Complex multiply with new IR spectrum
             for (int i = 0; i < fftSize * 2; i += 2)
             {
                 float re1 = fftWorkBuf[static_cast<size_t> (i)],     im1 = fftWorkBuf[static_cast<size_t> (i + 1)];
@@ -727,25 +689,55 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
                 fftWorkBuf[static_cast<size_t> (i + 1)] = re1 * im2 + im1 * re2;
             }
 
-            // Inverse FFT
             fft.performRealOnlyInverseTransform (fftWorkBuf.data());
 
-            // Output: first blockSize samples = new output + overlap from previous block
-            int outStart = samplesProcessed - blockSize;  // Where in the output buffer to write
+            int outStart = samplesProcessed - blockSize;
             int outSamples = std::min (blockSize, numSamples - outStart);
 
-            for (int i = 0; i < outSamples; ++i)
+            if (doCrossfade)
             {
-                out[outStart + i] = fftWorkBuf[static_cast<size_t> (i)]
-                                  + overlapBuf[static_cast<size_t> (i)];
+                // Equal-power crossfade: sin²+cos² = 1 constant energy
+                float totalLen = static_cast<float> (crossfadeTotalLength);
+                float samplesCompleted = static_cast<float> (crossfadeTotalLength - crossfadeRemaining);
+                constexpr float halfPi = juce::MathConstants<float>::halfPi;
+
+                for (int i = 0; i < outSamples; ++i)
+                {
+                    float fadeProgress = (samplesCompleted + static_cast<float> (i)) / totalLen;
+                    fadeProgress = std::min (fadeProgress, 1.0f);
+                    float fadeNew = std::sin (fadeProgress * halfPi);
+                    float fadeOld = std::cos (fadeProgress * halfPi);
+
+                    float newOut = fftWorkBuf[static_cast<size_t> (i)]
+                                 + overlapBuf[static_cast<size_t> (i)];
+                    float oldOut = prevFftWorkBuf[static_cast<size_t> (i)]
+                                 + prevOverlapBuf[static_cast<size_t> (i)];
+                    out[outStart + i] = oldOut * fadeOld + newOut * fadeNew;
+                }
+
+                // Update old overlap for next crossfade block
+                int overlapLen = fftSize - blockSize;
+                for (int i = 0; i < overlapLen; ++i)
+                    prevOverlapBuf[static_cast<size_t> (i)] = prevFftWorkBuf[static_cast<size_t> (blockSize + i)];
+                for (int i = overlapLen; i < fftSize; ++i)
+                    prevOverlapBuf[static_cast<size_t> (i)] = 0.0f;
+
+                crossfadeRemaining -= outSamples;
+                if (crossfadeRemaining < 0) crossfadeRemaining = 0;
+            }
+            else
+            {
+                for (int i = 0; i < outSamples; ++i)
+                {
+                    out[outStart + i] = fftWorkBuf[static_cast<size_t> (i)]
+                                      + overlapBuf[static_cast<size_t> (i)];
+                }
             }
 
-            // Save overlap: samples [blockSize .. fftSize-1] for next block
+            // Save new-IR overlap for next block
             int overlapLen = fftSize - blockSize;
             for (int i = 0; i < overlapLen; ++i)
                 overlapBuf[static_cast<size_t> (i)] = fftWorkBuf[static_cast<size_t> (blockSize + i)];
-
-            // Zero the rest of overlap buffer
             for (int i = overlapLen; i < fftSize; ++i)
                 overlapBuf[static_cast<size_t> (i)] = 0.0f;
 
@@ -759,6 +751,10 @@ void PartitionedConvolver::reset()
     std::fill (inputAccum.begin(), inputAccum.end(), 0.0f);
     std::fill (overlapBuf.begin(), overlapBuf.end(), 0.0f);
     std::fill (fftWorkBuf.begin(), fftWorkBuf.end(), 0.0f);
+    std::fill (prevOverlapBuf.begin(), prevOverlapBuf.end(), 0.0f);
+    std::fill (prevFftWorkBuf.begin(), prevFftWorkBuf.end(), 0.0f);
+    crossfadeRemaining = 0;
+    crossfadeTotalLength = 0;
     inputAccumPos = 0;
 }
 
@@ -783,10 +779,15 @@ void BinauralRenderer::setProfile (int profileIndex, HRTFDatabase& hrtfDb)
         // Simple mode — no convolution needed
         storedNormGain = 1.0f;
         storedIRLength = 0;
+        itdActive = false;
         for (int i = 0; i < MAX_SOURCES; ++i)
             sourceConvReady[i] = false;
         return;
     }
+
+    // v1.0: Enable ITD-free HRIR mode for all SOFA profiles.
+    // ITD is extracted and applied separately for smooth crossfading.
+    itdActive = true;
 
     int irLen = hrtfDb.getIRLength();
     storedIRLength = irLen;
@@ -853,8 +854,8 @@ void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elR
     if (sourceIndex < 0 || sourceIndex >= MAX_SOURCES || storedIRLength <= 0)
         return;
 
-    // ~1° threshold — skip update if position hasn't changed significantly
-    constexpr float THRESHOLD = 0.017f;  // ~1 degree in radians
+    // ~2° threshold — skip update if position hasn't changed significantly
+    constexpr float THRESHOLD = 0.035f;  // ~2 degrees in radians — balances HRIR update frequency vs CPU (non-restarting crossfade handles rapid updates)
     if (sourceConvReady[sourceIndex]
         && std::abs (azRad - cachedSourceAz[sourceIndex]) < THRESHOLD
         && std::abs (elRad - cachedSourceEl[sourceIndex]) < THRESHOLD)
@@ -872,7 +873,11 @@ void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elR
         tmpR.resize (static_cast<size_t> (storedIRLength));
     }
 
-    db.getInterpolatedHRIR (azRad, elRad, tmpL.data(), tmpR.data(), delayL, delayR);
+    // v1.0: Use ITD-free HRIRs for smooth crossfading (no comb-filtering from ITD misalignment)
+    if (itdActive)
+        db.getAlignedHRIR (azRad, elRad, tmpL.data(), tmpR.data(), delayL, delayR);
+    else
+        db.getInterpolatedHRIR (azRad, elRad, tmpL.data(), tmpR.data(), delayL, delayR);
 
     // Apply cross-profile normalization
     for (int n = 0; n < storedIRLength; ++n)
@@ -884,6 +889,13 @@ void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elR
     // Load into convolver (realtime-safe: in-place FFT in pre-allocated buffers)
     sourceConvL[sourceIndex].setIR (tmpL.data(), storedIRLength);
     sourceConvR[sourceIndex].setIR (tmpR.data(), storedIRLength);
+
+    // v1.0: Store ITD target for smooth per-sample interpolation in renderSourceBuffers
+    if (itdActive)
+    {
+        targetITDL[sourceIndex] = delayL;
+        targetITDR[sourceIndex] = delayR;
+    }
 
     cachedSourceAz[sourceIndex] = azRad;
     cachedSourceEl[sourceIndex] = elRad;
@@ -914,11 +926,60 @@ void BinauralRenderer::renderSourceBuffers (const float* const* sourceBufs,
         sourceConvL[src].process (sourceBufs[src], convTmpL.data(), numSamples);
         sourceConvR[src].process (sourceBufs[src], convTmpR.data(), numSamples);
 
-        // Sum into output
-        for (int s = 0; s < numSamples; ++s)
+        // v1.0: Apply ITD as fractional-sample delay if using aligned HRIRs.
+        // ITD is smoothly interpolated per-sample from currentITD to targetITD
+        // to prevent timing discontinuities during rapid position changes.
+        if (itdActive)
         {
-            outL[s] += convTmpL[static_cast<size_t> (s)];
-            outR[s] += convTmpR[static_cast<size_t> (s)];
+            float itdL0 = currentITDL[src];
+            float itdR0 = currentITDR[src];
+            float itdL1 = targetITDL[src];
+            float itdR1 = targetITDR[src];
+            float invN = (numSamples > 1) ? 1.0f / static_cast<float> (numSamples - 1) : 1.0f;
+
+            int wp = itdWritePos[src];
+
+            for (int s = 0; s < numSamples; ++s)
+            {
+                float frac = static_cast<float> (s) * invN;
+                float delL = itdL0 + frac * (itdL1 - itdL0);
+                float delR = itdR0 + frac * (itdR1 - itdR0);
+
+                // Write to circular ITD delay buffer
+                itdBufferL[src][wp] = convTmpL[static_cast<size_t> (s)];
+                itdBufferR[src][wp] = convTmpR[static_cast<size_t> (s)];
+
+                // Read with fractional delay (linear interpolation)
+                int idxL = static_cast<int> (delL);
+                float fracL = delL - static_cast<float> (idxL);
+                int rp0L = (wp - idxL + kITDBufferSize) & (kITDBufferSize - 1);
+                int rp1L = (rp0L - 1 + kITDBufferSize) & (kITDBufferSize - 1);
+                float sampleL = itdBufferL[src][rp0L] * (1.0f - fracL) + itdBufferL[src][rp1L] * fracL;
+
+                int idxR = static_cast<int> (delR);
+                float fracR = delR - static_cast<float> (idxR);
+                int rp0R = (wp - idxR + kITDBufferSize) & (kITDBufferSize - 1);
+                int rp1R = (rp0R - 1 + kITDBufferSize) & (kITDBufferSize - 1);
+                float sampleR = itdBufferR[src][rp0R] * (1.0f - fracR) + itdBufferR[src][rp1R] * fracR;
+
+                outL[s] += sampleL;
+                outR[s] += sampleR;
+
+                wp = (wp + 1) & (kITDBufferSize - 1);
+            }
+
+            itdWritePos[src] = wp;
+            currentITDL[src] = itdL1;
+            currentITDR[src] = itdR1;
+        }
+        else
+        {
+            // No ITD processing — direct sum
+            for (int s = 0; s < numSamples; ++s)
+            {
+                outL[s] += convTmpL[static_cast<size_t> (s)];
+                outR[s] += convTmpR[static_cast<size_t> (s)];
+            }
         }
     }
 }
@@ -930,6 +991,13 @@ void BinauralRenderer::reset()
         sourceConvL[i].reset();
         sourceConvR[i].reset();
         sourceConvReady[i] = false;
+        currentITDL[i] = 0.0f;
+        currentITDR[i] = 0.0f;
+        targetITDL[i] = 0.0f;
+        targetITDR[i] = 0.0f;
+        itdWritePos[i] = 0;
+        std::memset (itdBufferL[i], 0, sizeof (itdBufferL[i]));
+        std::memset (itdBufferR[i], 0, sizeof (itdBufferR[i]));
     }
 }
 
@@ -1056,57 +1124,271 @@ void OpenSpatialDelayProcessor::timerCallback()
         }
     }
 
-    // --- v0.6: Per-object trajectory animation engine ---
-    // Each object has its own trajectory shape, speed, phase, and base position
+    // --- v0.9: Origin-point trajectory animation engine ---
+    // Knobs = live origin. Trajectory computes animated position stored in internal arrays.
+    // processBlock reads trajectoryFinalAz/El/Dist instead of APVTS when active.
+    // Knobs are never overwritten — user can move the origin while trajectory runs.
     {
         constexpr float dt = 1.0f / 60.0f;  // Timer runs at ~60Hz
 
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
-            // Skip if OSC is controlling this object
-            if (oscOverrideActive[t].load (std::memory_order_relaxed))
-                continue;
-
             int shape = juce::roundToInt (cachedParam_trajectoryShape[t] != nullptr
                                           ? cachedParam_trajectoryShape[t]->load() : 0.0f);
 
             if (shape == 0)
             {
-                // None — leave position alone, reset state for this object
+                // None — no trajectory active, processBlock reads from APVTS directly
+                trajectoryActive[t].store (false, std::memory_order_relaxed);
                 prevTrajectoryShape[t] = 0;
                 continue;
             }
 
+            // Skip animation if OSC is controlling this object (but keep trajectoryActive true
+            // so processBlock reads the last computed position, and OSC updates the origin)
+            if (oscOverrideActive[t].load (std::memory_order_relaxed))
+                continue;
+
             float speed = cachedParam_trajectorySpeed[t] != nullptr
                           ? cachedParam_trajectorySpeed[t]->load() : 1.0f;
 
-            // Detect shape change: capture base position for THIS object
+            // Detect shape change: reset phase (origin is always live from APVTS knobs)
             if (prevTrajectoryShape[t] == 0 || prevTrajectoryShape[t] != shape)
             {
-                baseAzimuth[t]   = cachedParam_azimuth[t]->load();    // -180..+180 degrees
-                baseElevation[t] = cachedParam_elevation[t]->load();  // -90..+90 degrees
-                baseDistance[t]   = cachedParam_distance[t]->load();   // 0..1
                 trajectoryPhase[t] = 0.0f;
+                randomNoise[t].initialized = false;  // re-randomize on shape change
+                randomTime[t] = 0.0f;
+                // Capture base for getTrajectoryState() visualization (used by editor)
+                baseAzimuth[t]   = cachedObj[t].azimuth->load();
+                baseElevation[t] = cachedObj[t].elevation->load();
+                baseDistance[t]   = cachedObj[t].distance->load();
             }
             prevTrajectoryShape[t] = shape;
 
             // Advance phase for this object
-            trajectoryPhase[t] += speed * dt;
+            // Spiral (shape 11), Random (shape 10), and Square (shape 12) run at half base speed
+            float effectiveSpeed = (shape == 10 || shape == 11 || shape == 12) ? speed * 0.5f : speed;
+            trajectoryPhase[t] += effectiveSpeed * dt;
             if (trajectoryPhase[t] >= 1.0f)
                 trajectoryPhase[t] -= std::floor (trajectoryPhase[t]);
 
-            auto result = computeTrajectory (shape, trajectoryPhase[t],
-                                             baseAzimuth[t], baseElevation[t], baseDistance[t]);
+            // v0.8: Read trajectory direction (0=Forward, 1=Reverse)
+            // Invert: natural phase progression is CCW on map; Forward should be CW
+            bool reverse = (cachedParam_trajectoryDirection[t] == nullptr
+                            || cachedParam_trajectoryDirection[t]->load() < 0.5f);
 
-            auto objStr = juce::String (t + 1);
-            if (auto* azParam = apvts.getParameter ("object" + objStr + "_azimuth"))
-                azParam->setValueNotifyingHost (azParam->convertTo0to1 (result.azDeg));
-            if (auto* elParam = apvts.getParameter ("object" + objStr + "_elevation"))
-                elParam->setValueNotifyingHost (elParam->convertTo0to1 (result.elDeg));
-            if (auto* distParam = apvts.getParameter ("object" + objStr + "_distance"))
-                distParam->setValueNotifyingHost (distParam->convertTo0to1 (result.dist));
+            // Read LIVE origin from APVTS knobs (not captured base)
+            float originAz   = cachedObj[t].azimuth->load();
+            float originEl   = cachedObj[t].elevation->load();
+            float originDist = cachedObj[t].distance->load();
+
+            if (shape == 10)  // Random — multi-sine noise with randomized parameters (Issue #9)
+            {
+                auto& rn = randomNoise[t];
+                if (! rn.initialized)
+                {
+                    // Generate unique frequencies, phases, and amplitudes per instance
+                    auto randSign = [&]() { return randomRng.nextBool() ? 1.0f : -1.0f; };
+                    float azAmps[]   = { 50.0f, 27.0f, 19.0f, 11.0f };
+                    float elAmps[]   = { 30.0f, 16.0f, 12.0f, 8.0f };
+                    float distAmps[] = { 0.50f, 0.30f, 0.20f };
+                    for (int k = 0; k < 4; ++k)
+                    {
+                        rn.freqAz[k]  = 0.15f + randomRng.nextFloat() * 1.75f;
+                        rn.phaseAz[k] = randomRng.nextFloat() * juce::MathConstants<float>::twoPi;
+                        rn.ampAz[k]   = azAmps[k] * randSign();
+                        rn.freqEl[k]  = 0.15f + randomRng.nextFloat() * 1.75f;
+                        rn.phaseEl[k] = randomRng.nextFloat() * juce::MathConstants<float>::twoPi;
+                        rn.ampEl[k]   = elAmps[k] * randSign();
+                    }
+                    for (int k = 0; k < 3; ++k)
+                    {
+                        rn.freqDist[k]  = 0.15f + randomRng.nextFloat() * 1.25f;
+                        rn.phaseDist[k] = randomRng.nextFloat() * juce::MathConstants<float>::twoPi;
+                        rn.ampDist[k]   = distAmps[k] * randSign();
+                    }
+                    rn.initialized = true;
+                }
+
+                // Use ever-increasing time (not wrapping phase) so pattern never repeats
+                randomTime[t] += effectiveSpeed * dt;
+                float p = randomTime[t] * juce::MathConstants<float>::twoPi;
+                float az = 0.0f, el = 0.0f, dist = 0.0f;
+                for (int k = 0; k < 4; ++k)
+                {
+                    az += rn.ampAz[k] * std::sin (p * rn.freqAz[k] + rn.phaseAz[k]);
+                    el += rn.ampEl[k] * std::sin (p * rn.freqEl[k] + rn.phaseEl[k]);
+                }
+                for (int k = 0; k < 3; ++k)
+                    dist += rn.ampDist[k] * std::sin (p * rn.freqDist[k] + rn.phaseDist[k]);
+
+                trajectoryFinalAz[t] = originAz + az;
+                trajectoryFinalEl[t] = juce::jlimit (-90.0f, 90.0f, originEl + el);
+                float distScaleR = 1.0f - originDist;
+                trajectoryFinalDist[t] = juce::jlimit (0.0f, 1.0f, originDist + dist * distScaleR);
+
+                while (trajectoryFinalAz[t] > 180.0f)  trajectoryFinalAz[t] -= 360.0f;
+                while (trajectoryFinalAz[t] < -180.0f) trajectoryFinalAz[t] += 360.0f;
+            }
+            else
+            {
+                auto result = computeTrajectory (shape, trajectoryPhase[t],
+                                                 originAz, originEl, originDist,
+                                                 reverse);
+
+                trajectoryFinalAz[t]   = result.azDeg;
+                trajectoryFinalEl[t]   = result.elDeg;
+                trajectoryFinalDist[t] = result.dist;
+            }
+
+            trajectoryActive[t].store (true, std::memory_order_relaxed);
+
+            // Update base for getTrajectoryState() visualization
+            baseAzimuth[t]   = originAz;
+            baseElevation[t] = originEl;
+            baseDistance[t]   = originDist;
         }
     }
+
+    // --- SPATIAL MEDIA LIBRARY: ADM-OSC Send — broadcast object positions at 30Hz ---
+    if (oscSendEnabled && oscSendConnected && ++oscSendTickCounter >= 2)
+    {
+        oscSendTickCounter = 0;
+        for (int t = 0; t < MAX_OBJECTS; ++t)
+        {
+            if (cachedObj[t].enabled == nullptr
+                || cachedObj[t].enabled->load() < 0.5f)
+                continue;
+
+            // v0.9: Send animated position when trajectory active, origin otherwise
+            float az, el, dist;
+            if (trajectoryActive[t].load (std::memory_order_relaxed))
+            {
+                az   = trajectoryFinalAz[t];
+                el   = trajectoryFinalEl[t];
+                dist = trajectoryFinalDist[t];
+            }
+            else
+            {
+                az   = cachedObj[t].azimuth->load();
+                el   = cachedObj[t].elevation->load();
+                dist = cachedObj[t].distance->load();
+            }
+
+            // Position-change gating: only send when position actually moved
+            if (std::abs (az - oscSendPrevAz[t]) < 0.1f
+                && std::abs (el - oscSendPrevEl[t]) < 0.1f
+                && std::abs (dist - oscSendPrevDist[t]) < 0.001f)
+                continue;
+
+            oscSendPrevAz[t]   = az;
+            oscSendPrevEl[t]   = el;
+            oscSendPrevDist[t] = dist;
+
+            // ADM-OSC: /adm/obj/N/aed azimuth elevation distance
+            juce::OSCMessage msg (oscSendAddress[t]);
+            msg.addFloat32 (az);
+            msg.addFloat32 (el);
+            msg.addFloat32 (dist);
+            oscSender.send (msg);
+        }
+
+        // v1.0: /osd/obj/N/ — per-object non-position params (change-gated)
+        for (int t = 0; t < MAX_OBJECTS; ++t)
+        {
+            auto objStr = juce::String (t + 1);
+            auto sendIfChanged = [&] (const char* prop, float current, float& prev) {
+                if (std::abs (current - prev) > 0.001f)
+                {
+                    prev = current;
+                    juce::OSCMessage m ("/osd/obj/" + objStr + "/" + prop);
+                    m.addFloat32 (current);
+                    oscSender.send (m);
+                }
+            };
+
+            if (cachedObj[t].enabled != nullptr)
+                sendIfChanged ("enabled", cachedObj[t].enabled->load(), oscSendPrevEnabled[t]);
+            if (cachedObj[t].dopplerAmount != nullptr)
+                sendIfChanged ("doppler", cachedObj[t].dopplerAmount->load(), oscSendPrevDoppler[t]);
+            if (cachedObj[t].pitchShift != nullptr)
+                sendIfChanged ("pitch", cachedObj[t].pitchShift->load(), oscSendPrevObjPitch[t]);
+            if (cachedObj[t].inputChannel != nullptr)
+                sendIfChanged ("input", cachedObj[t].inputChannel->load(), oscSendPrevInput[t]);
+            if (cachedParam_trajectoryShape[t] != nullptr)
+                sendIfChanged ("trajectory", cachedParam_trajectoryShape[t]->load(), oscSendPrevTrajShape[t]);
+            if (cachedParam_trajectorySpeed[t] != nullptr)
+                sendIfChanged ("speed", cachedParam_trajectorySpeed[t]->load(), oscSendPrevTrajSpeed[t]);
+            if (cachedParam_trajectoryDirection[t] != nullptr)
+                sendIfChanged ("direction", cachedParam_trajectoryDirection[t]->load(), oscSendPrevTrajDir[t]);
+        }
+
+        // v1.0: /osd/global/ — global params (change-gated)
+        {
+            auto& pg = oscSendPrevGlobal;
+            auto sendGlobal = [&] (const char* prop, float current, float& prev) {
+                if (std::abs (current - prev) > 0.001f)
+                {
+                    prev = current;
+                    juce::OSCMessage m (juce::String ("/osd/global/") + prop);
+                    m.addFloat32 (current);
+                    oscSender.send (m);
+                }
+            };
+
+            if (cachedParam_delayTime)      sendGlobal ("delaytime",     cachedParam_delayTime->load(),      pg.delayTime);
+            if (cachedParam_tempoSync)      sendGlobal ("temposync",     cachedParam_tempoSync->load(),      pg.tempoSync);
+            if (cachedParam_noteDivision)   sendGlobal ("notedivision",  cachedParam_noteDivision->load(),   pg.noteDivision);
+            if (cachedParam_feedback)       sendGlobal ("feedback",      cachedParam_feedback->load(),       pg.feedback);
+            if (cachedParam_filterLP)       sendGlobal ("filterlp",      cachedParam_filterLP->load(),       pg.filterLP);
+            if (cachedParam_filterHP)       sendGlobal ("filterhp",      cachedParam_filterHP->load(),       pg.filterHP);
+            if (cachedParam_filterLPQ)      sendGlobal ("filterlpq",     cachedParam_filterLPQ->load(),      pg.filterLPQ);
+            if (cachedParam_filterHPQ)      sendGlobal ("filterhpq",     cachedParam_filterHPQ->load(),      pg.filterHPQ);
+            if (cachedParam_filterEnabled)  sendGlobal ("filterenabled", cachedParam_filterEnabled->load(),  pg.filterEnabled);
+            if (cachedParam_dryWet)         sendGlobal ("drywet",        cachedParam_dryWet->load(),         pg.dryWet);
+            if (cachedParam_inputGain)      sendGlobal ("inputgain",     cachedParam_inputGain->load(),      pg.inputGain);
+            if (cachedParam_outputGain)     sendGlobal ("outputgain",    cachedParam_outputGain->load(),     pg.outputGain);
+            if (cachedParam_algorithm)      sendGlobal ("algorithm",     cachedParam_algorithm->load(),      pg.algorithm);
+            if (cachedParam_hrtfProfile)    sendGlobal ("hrtfprofile",   cachedParam_hrtfProfile->load(),    pg.hrtfProfile);
+            if (cachedParam_airAbsorption)  sendGlobal ("air",           cachedParam_airAbsorption->load(),  pg.airAbsorption);
+            if (cachedParam_wobbleEnabled)  sendGlobal ("wobble",        cachedParam_wobbleEnabled->load(),  pg.wobbleEnabled);
+            if (cachedParam_wobbleAmount)   sendGlobal ("wobbleamount",  cachedParam_wobbleAmount->load(),   pg.wobbleAmount);
+            if (cachedParam_wobbleMorph)    sendGlobal ("wobblemorph",   cachedParam_wobbleMorph->load(),    pg.wobbleMorph);
+
+            // syncMode and outputFormat use APVTS string lookup (no cached atomic pointer)
+            if (auto* syncParam = apvts.getRawParameterValue ("syncMode"))
+            {
+                float v = syncParam->load();
+                if (std::abs (v - pg.syncMode) > 0.001f)
+                {
+                    pg.syncMode = v;
+                    juce::OSCMessage m ("/osd/global/syncmode");
+                    m.addFloat32 (v);
+                    oscSender.send (m);
+                }
+            }
+            if (auto* fmtParam = apvts.getRawParameterValue ("outputFormat"))
+            {
+                float v = fmtParam->load();
+                if (std::abs (v - pg.outputFormat) > 0.001f)
+                {
+                    pg.outputFormat = v;
+                    juce::OSCMessage m ("/osd/global/outputformat");
+                    m.addFloat32 (v);
+                    oscSender.send (m);
+                }
+            }
+
+            // v1.0: Global tap offset knobs (UI-only, change-gated)
+            static const char* tapOffsetProps[] = { "tapazimuth", "tapelevation", "tapdistance",
+                                                    "tapdoppler", "tappitch",     "tapspeed" };
+            float* tapOffsetPrevs[] = { &pg.tapAzimuth, &pg.tapElevation, &pg.tapDistance,
+                                        &pg.tapDoppler, &pg.tapPitch,     &pg.tapSpeed };
+            for (int i = 0; i < kNumGlobalTapOffsets; ++i)
+                sendGlobal (tapOffsetProps[i], globalTapOffset[i].load (std::memory_order_relaxed), *tapOffsetPrevs[i]);
+        }
+    }
+
 }
 
 // #############################################################################
@@ -1120,8 +1402,8 @@ void OpenSpatialDelayProcessor::timerCallback()
 //==============================================================================
 OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     : AudioProcessor (BusesProperties()
-                        .withInput  ("Input",  juce::AudioChannelSet::mono(),   true)
-                        .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
+                        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                        .withOutput ("Output", juce::AudioChannelSet::discreteChannels (50), true)),
       apvts (*this, nullptr, "Parameters", createParameterLayout())
 {
     // Initialize polymorphic algorithm pointer array (O(1) index lookup)
@@ -1137,20 +1419,74 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     for (int i = 0; i < MAX_OBJECTS; ++i)
     {
         auto prefix = "object" + juce::String (i + 1) + "_";
-        cachedParam_enabled[i]       = apvts.getRawParameterValue (prefix + "enabled");
-        cachedParam_azimuth[i]       = apvts.getRawParameterValue (prefix + "azimuth");
-        cachedParam_elevation[i]     = apvts.getRawParameterValue (prefix + "elevation");
-        cachedParam_distance[i]      = apvts.getRawParameterValue (prefix + "distance");
-        cachedParam_dopplerAmount[i] = apvts.getRawParameterValue (prefix + "dopplerAmount");
+        cachedObj[i].enabled       = apvts.getRawParameterValue (prefix + "enabled");
+        cachedObj[i].azimuth       = apvts.getRawParameterValue (prefix + "azimuth");
+        cachedObj[i].elevation     = apvts.getRawParameterValue (prefix + "elevation");
+        cachedObj[i].distance      = apvts.getRawParameterValue (prefix + "distance");
+        cachedObj[i].dopplerAmount = apvts.getRawParameterValue (prefix + "dopplerAmount");
+        cachedObj[i].pitchShift    = apvts.getRawParameterValue (prefix + "pitchShift");
         cachedParam_trajectoryShape[i] = apvts.getRawParameterValue (prefix + "trajectoryShape");
         cachedParam_trajectorySpeed[i] = apvts.getRawParameterValue (prefix + "trajectorySpeed");
+        cachedParam_trajectoryDirection[i] = apvts.getRawParameterValue (prefix + "trajectoryDirection");
+        cachedObj[i].inputChannel      = apvts.getRawParameterValue (prefix + "inputChannel");
     }
 
-    // v0.6: ADM-OSC global parameter pointer
-    cachedParam_admOscEnabled = apvts.getRawParameterValue ("admOscEnabled");
+    // Cache global parameter pointers (stable for APVTS lifetime, avoids string lookups in processBlock)
+    cachedParam_tempoSync       = apvts.getRawParameterValue ("tempoSync");
+    cachedParam_noteDivision    = apvts.getRawParameterValue ("noteDivision");
+    cachedParam_filterLP        = apvts.getRawParameterValue ("filterLP");
+    cachedParam_filterHP        = apvts.getRawParameterValue ("filterHP");
+    cachedParam_filterHPQ       = apvts.getRawParameterValue ("filterHPQ");
+    cachedParam_filterLPQ       = apvts.getRawParameterValue ("filterLPQ");
+    cachedParam_filterEnabled   = apvts.getRawParameterValue ("filterEnabled");
+    cachedParam_hrtfProfile     = apvts.getRawParameterValue ("hrtfProfile");
+    cachedParam_airAbsorption   = apvts.getRawParameterValue ("airAbsorption");
+    cachedParam_wobbleEnabled   = apvts.getRawParameterValue ("wobbleEnabled");
+    cachedParam_wobbleAmount    = apvts.getRawParameterValue ("wobbleAmount");
+    cachedParam_wobbleMorph     = apvts.getRawParameterValue ("wobbleMorph");
+    cachedParam_inputFormat     = apvts.getRawParameterValue ("inputFormat");
+    cachedParam_delayTime       = apvts.getRawParameterValue ("delayTime");
+    cachedParam_dryWet          = apvts.getRawParameterValue ("dryWet");
+    cachedParam_feedback        = apvts.getRawParameterValue ("feedback");
+    cachedParam_inputGain       = apvts.getRawParameterValue ("inputGain");
+    cachedParam_outputGain      = apvts.getRawParameterValue ("outputGain");
+    cachedParam_algorithm       = apvts.getRawParameterValue ("algorithm");
+    cachedParam_admOscEnabled   = apvts.getRawParameterValue ("admOscEnabled");
 
-    // v0.6: Load user presets from disk at startup
-    loadUserPresetsFromDisk();
+    // Cache RangedAudioParameter* for trajectory writes and pre-build OSC addresses
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+    {
+        auto prefix = "object" + juce::String (i + 1) + "_";
+        trajParam_azimuth[i]   = apvts.getParameter (prefix + "azimuth");
+        oscSendAddress[i] = "/adm/obj/" + juce::String (i + 1) + "/aed";
+    }
+
+    // v0.9: Set initial azimuth spread for first 12 taps (overridden by saved state/presets)
+    // Parameter default is 0° so double-click resets to center front.
+    {
+        static const float initAz[] = {-45.0f, 45.0f, -135.0f, 135.0f,
+                                         0.0f, 90.0f, -90.0f, 180.0f,
+                                        -30.0f, 30.0f, -60.0f, 60.0f};
+        for (int i = 0; i < MAX_OBJECTS; ++i)
+            if (trajParam_azimuth[i] != nullptr)
+                trajParam_azimuth[i]->setValueNotifyingHost (
+                    trajParam_azimuth[i]->convertTo0to1 (initAz[i]));
+    }
+
+    // v1.0: Load factory presets from compiled-in array + user presets from disk
+    loadAllPresets();
+
+    // v1.0: Default preset selection — find "Quad Ping-Pong" by name so fresh instances
+    // start on it regardless of alphabetical category ordering.
+    // State restoration (setStateInformation) overwrites this for saved sessions.
+    for (int i = 0; i < static_cast<int> (allPresets.size()); ++i)
+    {
+        if (allPresets[static_cast<size_t> (i)].name == "Quad Ping-Pong")
+        {
+            currentPresetIndex = i;
+            break;
+        }
+    }
 }
 
 OpenSpatialDelayProcessor::~OpenSpatialDelayProcessor()
@@ -1158,6 +1494,8 @@ OpenSpatialDelayProcessor::~OpenSpatialDelayProcessor()
     // v0.6: Disconnect OSC receiver before destruction
     oscReceiver.disconnect();
     oscReceiver.removeListener (this);
+    // v0.7: Disconnect OSC sender
+    oscSender.disconnect();
 }
 
 //==============================================================================
@@ -1181,166 +1519,79 @@ void OpenSpatialDelayProcessor::setOscReceivePort (int port)
     }
 }
 
+//==============================================================================
+// v0.7: OSC Send control methods
+//==============================================================================
+void OpenSpatialDelayProcessor::setOscSendEnabled (bool enabled)
+{
+    if (enabled == oscSendEnabled)
+        return;
+
+    oscSendEnabled = enabled;
+    if (enabled)
+    {
+        oscSendConnected = oscSender.connect (oscSendIP, oscSendPort);
+    }
+    else
+    {
+        oscSender.disconnect();
+        oscSendConnected = false;
+    }
+}
+
+void OpenSpatialDelayProcessor::setOscSendPort (int port)
+{
+    if (port == oscSendPort)
+        return;
+    oscSendPort = port;
+    if (oscSendEnabled)
+    {
+        oscSender.disconnect();
+        oscSendConnected = oscSender.connect (oscSendIP, oscSendPort);
+    }
+}
+
+void OpenSpatialDelayProcessor::setOscSendIP (const juce::String& ip)
+{
+    if (ip == oscSendIP)
+        return;
+    oscSendIP = ip;
+    if (oscSendEnabled)
+    {
+        oscSender.disconnect();
+        oscSendConnected = oscSender.connect (oscSendIP, oscSendPort);
+    }
+}
+
 // #############################################################################
 // v0.6: Preset System — Factory presets, load/save, JSON serialization
 // #############################################################################
 
-//==============================================================================
-// Factory presets (8 presets, stored as static const)
-//==============================================================================
-const OpenSpatialDelayProcessor::PresetData
-    OpenSpatialDelayProcessor::factoryPresets[NUM_FACTORY_PRESETS] =
-{
-    // 0: Default — 4 taps in diagonal cross pattern
-    {
-        "Default",
-        500.0f, false, 4.0f, 0, 0.3f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
-        {
-            { true, -45.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 1: front-left
-            { true,  45.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 2: front-right
-            { true, -135.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 3: rear-left
-            { true,  135.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 4: rear-right
-            {}, {}, {}, {}, {}, {}, {}, {}
-        }
-    },
-    // 1: Stereo Ping-Pong — 2 taps at ±90°
-    {
-        "Stereo Ping-Pong",
-        350.0f, false, 4.0f, 0, 0.5f, 18000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
-        {
-            { true, -90.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 1: hard left
-            { true,  90.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 2: hard right
-            {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
-        }
-    },
-    // 2: Circle (Quad) — 4 taps in equidistant ring
-    {
-        "Circle (Quad)",
-        250.0f, false, 4.0f, 0, 0.4f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
-        {
-            { true,   0.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 1: front
-            { true,  90.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 2: right
-            { true, 180.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 3: rear
-            { true, -90.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Tap 4: left
-            {}, {}, {}, {}, {}, {}, {}, {}
-        }
-    },
-    // 3: Surround 5.1 — 5 taps at standard 5.1 positions
-    {
-        "Surround 5.1",
-        300.0f, false, 4.0f, 0, 0.35f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
-        {
-            { true,    0.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // C
-            { true,  -30.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // L
-            { true,   30.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // R
-            { true, -110.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Ls
-            { true,  110.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Rs
-            {}, {}, {}, {}, {}, {}, {}
-        }
-    },
-    // 4: Surround 7.1 — 7 taps at standard 7.1 positions
-    {
-        "Surround 7.1",
-        250.0f, false, 4.0f, 0, 0.35f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
-        {
-            { true,    0.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // C
-            { true,  -30.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // L
-            { true,   30.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // R
-            { true,  -90.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Ls
-            { true,   90.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Rs
-            { true, -135.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Lrs
-            { true,  135.0f, 0.0f, 0.5f, 0.0f, 0, 1.0f },   // Rrs
-            {}, {}, {}, {}, {}
-        }
-    },
-    // 5: Atmos 7.1.4 — 11 taps (ear-level 7.1 + 4 height)
-    {
-        "Atmos 7.1.4",
-        200.0f, false, 4.0f, 0, 0.3f, 20000.0f, 20.0f, 0.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
-        {
-            { true,    0.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },  // C
-            { true,  -30.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },  // L
-            { true,   30.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },  // R
-            { true,  -90.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },  // Ls
-            { true,   90.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },  // Rs
-            { true, -135.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },  // Lrs
-            { true,  135.0f,  0.0f, 0.5f, 0.0f, 0, 1.0f },  // Rrs
-            { true,  -45.0f, 45.0f, 0.5f, 0.0f, 0, 1.0f },  // Ltf
-            { true,   45.0f, 45.0f, 0.5f, 0.0f, 0, 1.0f },  // Rtf
-            { true, -135.0f, 45.0f, 0.5f, 0.0f, 0, 1.0f },  // Ltr
-            { true,  135.0f, 45.0f, 0.5f, 0.0f, 0, 1.0f },  // Rtr
-            {}
-        }
-    },
-    // 6: Rising Spiral — 8 taps spiraling upward with orbit trajectory
-    {
-        "Rising Spiral",
-        200.0f, false, 4.0f, 0, 0.4f, 16000.0f, 40.0f, 2.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
-        {
-            { true,    0.0f,  -20.0f, 0.7f, 0.2f, 2 /*Orbit*/, 1.5f },
-            { true,   45.0f,  -10.0f, 0.6f, 0.2f, 2 /*Orbit*/, 1.8f },
-            { true,   90.0f,    0.0f, 0.5f, 0.2f, 2 /*Orbit*/, 2.0f },
-            { true,  135.0f,   10.0f, 0.5f, 0.2f, 2 /*Orbit*/, 2.2f },
-            { true,  180.0f,   20.0f, 0.4f, 0.2f, 2 /*Orbit*/, 2.5f },
-            { true, -135.0f,   30.0f, 0.4f, 0.2f, 2 /*Orbit*/, 2.8f },
-            { true,  -90.0f,   40.0f, 0.3f, 0.2f, 2 /*Orbit*/, 3.0f },
-            { true,  -45.0f,   50.0f, 0.3f, 0.2f, 2 /*Orbit*/, 3.2f },
-            {}, {}, {}, {}
-        }
-    },
-    // 7: Falling Cascade — 6 taps descending with pitch drop
-    {
-        "Falling Cascade",
-        350.0f, false, 4.0f, 0, 0.45f, 14000.0f, 30.0f, -1.0f, 0.5f, 0.0f, 0.0f,
-        false, 4 /*VBAP*/, 0,
-        {
-            { true,  -30.0f,  40.0f, 0.3f, 0.1f, 0, 1.0f },   // High left
-            { true,   60.0f,  25.0f, 0.4f, 0.1f, 0, 1.0f },   // Mid-high right
-            { true, -120.0f,  10.0f, 0.5f, 0.1f, 0, 1.0f },   // Mid left-rear
-            { true,  150.0f,  -5.0f, 0.6f, 0.1f, 0, 1.0f },   // Low right-rear
-            { true,  -60.0f, -20.0f, 0.7f, 0.1f, 0, 1.0f },   // Lower left
-            { true,   90.0f, -35.0f, 0.8f, 0.1f, 0, 1.0f },   // Lowest right
-            {}, {}, {}, {}, {}, {}
-        }
-    }
-};
+// Factory presets moved to PresetData.cpp (v0.9)
+
 
 //==============================================================================
-// Preset API implementation
+// Preset API implementation — v0.9: all presets loaded from disk (allPresets)
 //==============================================================================
 int OpenSpatialDelayProcessor::getNumPresets() const
 {
-    return NUM_FACTORY_PRESETS + static_cast<int> (userPresets.size());
+    return static_cast<int> (allPresets.size());
 }
 
 juce::StringArray OpenSpatialDelayProcessor::getPresetNames() const
 {
     juce::StringArray names;
-    for (int i = 0; i < NUM_FACTORY_PRESETS; ++i)
-        names.add (factoryPresets[i].name);
-    for (const auto& up : userPresets)
-        names.add (up.name);
+    for (const auto& p : allPresets)
+        names.add (p.name);
     return names;
 }
 
 void OpenSpatialDelayProcessor::loadPreset (int index)
 {
-    const PresetData* preset = nullptr;
-
-    if (index >= 0 && index < NUM_FACTORY_PRESETS)
-        preset = &factoryPresets[index];
-    else if (index >= NUM_FACTORY_PRESETS
-             && (index - NUM_FACTORY_PRESETS) < static_cast<int> (userPresets.size()))
-        preset = &userPresets[static_cast<size_t> (index - NUM_FACTORY_PRESETS)];
-    else
+    if (index < 0 || index >= static_cast<int> (allPresets.size()))
         return;
+
+    const PresetData* preset = &allPresets[static_cast<size_t> (index)];
 
     // Helpers — use convertTo0to1() to handle skewed NormalisableRanges correctly
     auto setFloat = [&] (const juce::String& paramId, float value) {
@@ -1368,11 +1619,16 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
     setFloat  ("feedback",     preset->feedback);
     setFloat  ("filterLP",     preset->filterLP);
     setFloat  ("filterHP",     preset->filterHP);
-    setFloat  ("pitchShift",   preset->pitchShift);
+    setFloat  ("filterLPQ",    preset->filterLPQ);
+    setFloat  ("filterHPQ",    preset->filterHPQ);
     setFloat  ("dryWet",       preset->dryWet);
     setFloat  ("inputGain",    preset->inputGain);
     setFloat  ("outputGain",   preset->outputGain);
     setBool   ("airAbsorption", preset->airAbsorption);
+    setBool   ("filterEnabled", preset->filterEnabled);
+    setBool   ("wobbleEnabled", preset->wobbleEnabled);
+    setFloat  ("wobbleAmount", preset->wobbleAmount);
+    setFloat  ("wobbleMorph",  preset->wobbleMorph);
     setChoice ("algorithm",    preset->algorithm);
     setChoice ("hrtfProfile",  preset->hrtfProfile);
     // NOTE: outputFormat, admOscEnabled, oscReceivePort are NOT modified by presets
@@ -1388,8 +1644,24 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
         setFloat  (prefix + "elevation",       tap.elevationDeg);
         setFloat  (prefix + "distance",        tap.distance);
         setFloat  (prefix + "dopplerAmount",   tap.dopplerAmount);
+        setFloat  (prefix + "pitchShift",      tap.pitchShift);
         setChoice (prefix + "trajectoryShape", tap.trajectoryShape);
         setFloat  (prefix + "trajectorySpeed", tap.trajectorySpeed);
+        setChoice (prefix + "trajectoryDirection", tap.trajectoryDirection);
+        setChoice (prefix + "inputChannel",        tap.inputChannel);
+    }
+
+    // Reset Doppler tracking to prevent transient pitch artifact on preset change.
+    // Without this, the first processBlock sees a fake "velocity" between old and new
+    // positions, producing a spurious Doppler pitch shift.
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+    {
+        const auto& tap = preset->taps[i];
+        prevAzimuth[i]   = juce::degreesToRadians (tap.azimuthDeg);
+        prevElevation[i] = juce::degreesToRadians (tap.elevationDeg);
+        prevDistance[i]   = tap.distance;
+        dopplerSemitones[i] = 0.0f;
+        smoothedRadialVelocity[i] = 0.0f;
     }
 
     currentPresetIndex = index;
@@ -1397,19 +1669,33 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
 
 void OpenSpatialDelayProcessor::loadNextPreset()
 {
-    int total = getNumPresets();
-    if (total == 0) return;
-    loadPreset ((currentPresetIndex + 1) % total);
+    if (categorizedOrder.empty()) return;
+    // Find current position in category-ordered sequence
+    int pos = 0;
+    for (int i = 0; i < static_cast<int> (categorizedOrder.size()); ++i)
+    {
+        if (categorizedOrder[static_cast<size_t> (i)] == currentPresetIndex)
+        { pos = i; break; }
+    }
+    pos = (pos + 1) % static_cast<int> (categorizedOrder.size());
+    loadPreset (categorizedOrder[static_cast<size_t> (pos)]);
 }
 
 void OpenSpatialDelayProcessor::loadPreviousPreset()
 {
-    int total = getNumPresets();
-    if (total == 0) return;
-    loadPreset ((currentPresetIndex - 1 + total) % total);
+    if (categorizedOrder.empty()) return;
+    int pos = 0;
+    for (int i = 0; i < static_cast<int> (categorizedOrder.size()); ++i)
+    {
+        if (categorizedOrder[static_cast<size_t> (i)] == currentPresetIndex)
+        { pos = i; break; }
+    }
+    int sz = static_cast<int> (categorizedOrder.size());
+    pos = (pos - 1 + sz) % sz;
+    loadPreset (categorizedOrder[static_cast<size_t> (pos)]);
 }
 
-OpenSpatialDelayProcessor::PresetData OpenSpatialDelayProcessor::captureCurrentState() const
+PresetData OpenSpatialDelayProcessor::captureCurrentState() const
 {
     PresetData pd;
     pd.delayTime    = apvts.getRawParameterValue ("delayTime")->load();
@@ -1419,11 +1705,16 @@ OpenSpatialDelayProcessor::PresetData OpenSpatialDelayProcessor::captureCurrentS
     pd.feedback     = apvts.getRawParameterValue ("feedback")->load();
     pd.filterLP     = apvts.getRawParameterValue ("filterLP")->load();
     pd.filterHP     = apvts.getRawParameterValue ("filterHP")->load();
-    pd.pitchShift   = apvts.getRawParameterValue ("pitchShift")->load();
+    pd.filterLPQ    = apvts.getRawParameterValue ("filterLPQ")->load();
+    pd.filterHPQ    = apvts.getRawParameterValue ("filterHPQ")->load();
     pd.dryWet       = apvts.getRawParameterValue ("dryWet")->load();
     pd.inputGain    = apvts.getRawParameterValue ("inputGain")->load();
     pd.outputGain   = apvts.getRawParameterValue ("outputGain")->load();
     pd.airAbsorption = apvts.getRawParameterValue ("airAbsorption")->load() > 0.5f;
+    pd.filterEnabled = apvts.getRawParameterValue ("filterEnabled")->load() > 0.5f;
+    pd.wobbleEnabled = apvts.getRawParameterValue ("wobbleEnabled")->load() > 0.5f;
+    pd.wobbleAmount  = apvts.getRawParameterValue ("wobbleAmount")->load();
+    pd.wobbleMorph   = apvts.getRawParameterValue ("wobbleMorph")->load();
     pd.algorithm    = static_cast<int> (apvts.getRawParameterValue ("algorithm")->load());
     pd.hrtfProfile  = static_cast<int> (apvts.getRawParameterValue ("hrtfProfile")->load());
 
@@ -1436,157 +1727,181 @@ OpenSpatialDelayProcessor::PresetData OpenSpatialDelayProcessor::captureCurrentS
         tap.elevationDeg    = apvts.getRawParameterValue (prefix + "elevation")->load();
         tap.distance        = apvts.getRawParameterValue (prefix + "distance")->load();
         tap.dopplerAmount   = apvts.getRawParameterValue (prefix + "dopplerAmount")->load();
+        tap.pitchShift      = apvts.getRawParameterValue (prefix + "pitchShift")->load();
         tap.trajectoryShape = static_cast<int> (apvts.getRawParameterValue (prefix + "trajectoryShape")->load());
         tap.trajectorySpeed = apvts.getRawParameterValue (prefix + "trajectorySpeed")->load();
+        tap.trajectoryDirection = static_cast<int> (apvts.getRawParameterValue (prefix + "trajectoryDirection")->load());
+        tap.inputChannel        = static_cast<int> (apvts.getRawParameterValue (prefix + "inputChannel")->load());
     }
 
     return pd;
 }
 
+// JSON serialization / deserialization moved to PresetData.cpp (v0.9)
+
 //==============================================================================
-// JSON serialization / deserialization (using juce::JSON)
+// v0.9: Preset file I/O — all presets on disk as .osdpreset files
 //==============================================================================
-juce::String OpenSpatialDelayProcessor::serializePresetToJson (const PresetData& pd)
+juce::File OpenSpatialDelayProcessor::getPresetDirectory()
 {
-    auto* obj = new juce::DynamicObject();
-
-    obj->setProperty ("name",          pd.name);
-    obj->setProperty ("delayTime",     pd.delayTime);
-    obj->setProperty ("tempoSync",     pd.tempoSync);
-    obj->setProperty ("noteDivision",  pd.noteDivision);
-    obj->setProperty ("syncMode",      pd.syncMode);
-    obj->setProperty ("feedback",      pd.feedback);
-    obj->setProperty ("filterLP",      pd.filterLP);
-    obj->setProperty ("filterHP",      pd.filterHP);
-    obj->setProperty ("pitchShift",    pd.pitchShift);
-    obj->setProperty ("dryWet",        pd.dryWet);
-    obj->setProperty ("inputGain",     pd.inputGain);
-    obj->setProperty ("outputGain",    pd.outputGain);
-    obj->setProperty ("airAbsorption", pd.airAbsorption);
-    obj->setProperty ("algorithm",     pd.algorithm);
-    obj->setProperty ("hrtfProfile",   pd.hrtfProfile);
-
-    juce::Array<juce::var> tapsArray;
-    for (int i = 0; i < MAX_OBJECTS; ++i)
-    {
-        auto* tapObj = new juce::DynamicObject();
-        const auto& tap = pd.taps[i];
-        tapObj->setProperty ("enabled",         tap.enabled);
-        tapObj->setProperty ("azimuthDeg",      tap.azimuthDeg);
-        tapObj->setProperty ("elevationDeg",    tap.elevationDeg);
-        tapObj->setProperty ("distance",        tap.distance);
-        tapObj->setProperty ("dopplerAmount",   tap.dopplerAmount);
-        tapObj->setProperty ("trajectoryShape", tap.trajectoryShape);
-        tapObj->setProperty ("trajectorySpeed", tap.trajectorySpeed);
-        tapsArray.add (juce::var (tapObj));
-    }
-    obj->setProperty ("taps", tapsArray);
-
-    return juce::JSON::toString (juce::var (obj), false);
-}
-
-OpenSpatialDelayProcessor::PresetData
-    OpenSpatialDelayProcessor::parsePresetJson (const juce::String& json)
-{
-    PresetData pd;
-    auto parsed = juce::JSON::parse (json);
-    if (auto* obj = parsed.getDynamicObject())
-    {
-        pd.name          = obj->getProperty ("name").toString();
-        pd.delayTime     = static_cast<float> (obj->getProperty ("delayTime"));
-        pd.tempoSync     = static_cast<bool>  (obj->getProperty ("tempoSync"));
-        pd.noteDivision  = static_cast<float> (obj->getProperty ("noteDivision"));
-        pd.syncMode      = static_cast<int>   (obj->getProperty ("syncMode"));
-        pd.feedback      = static_cast<float> (obj->getProperty ("feedback"));
-        pd.filterLP      = static_cast<float> (obj->getProperty ("filterLP"));
-        pd.filterHP      = static_cast<float> (obj->getProperty ("filterHP"));
-        pd.pitchShift    = static_cast<float> (obj->getProperty ("pitchShift"));
-        pd.dryWet        = static_cast<float> (obj->getProperty ("dryWet"));
-        pd.inputGain     = static_cast<float> (obj->getProperty ("inputGain"));
-        pd.outputGain    = static_cast<float> (obj->getProperty ("outputGain"));
-        pd.airAbsorption = static_cast<bool>  (obj->getProperty ("airAbsorption"));
-        pd.algorithm     = static_cast<int>   (obj->getProperty ("algorithm"));
-        pd.hrtfProfile   = static_cast<int>   (obj->getProperty ("hrtfProfile"));
-
-        if (auto* tapsArr = obj->getProperty ("taps").getArray())
-        {
-            int numTaps = juce::jmin (static_cast<int> (tapsArr->size()), MAX_OBJECTS);
-            for (int i = 0; i < numTaps; ++i)
-            {
-                if (auto* tapObj = (*tapsArr)[i].getDynamicObject())
-                {
-                    auto& tap = pd.taps[i];
-                    tap.enabled         = static_cast<bool>  (tapObj->getProperty ("enabled"));
-                    tap.azimuthDeg      = static_cast<float> (tapObj->getProperty ("azimuthDeg"));
-                    tap.elevationDeg    = static_cast<float> (tapObj->getProperty ("elevationDeg"));
-                    tap.distance        = static_cast<float> (tapObj->getProperty ("distance"));
-                    tap.dopplerAmount   = static_cast<float> (tapObj->getProperty ("dopplerAmount"));
-                    tap.trajectoryShape = static_cast<int>   (tapObj->getProperty ("trajectoryShape"));
-                    tap.trajectorySpeed = static_cast<float> (tapObj->getProperty ("trajectorySpeed"));
-                }
-            }
-        }
-    }
-    return pd;
-}
-
-//==============================================================================
-// User preset file I/O
-//==============================================================================
-juce::File OpenSpatialDelayProcessor::getUserPresetDirectory()
-{
-    return juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
-               .getChildFile ("OpenSpatialDelay")
-               .getChildFile ("Presets");
+    return juce::File::getSpecialLocation (juce::File::userHomeDirectory)
+               .getChildFile ("Library")
+               .getChildFile ("Audio")
+               .getChildFile ("Presets")
+               .getChildFile ("OpenSpatialDelay");
 }
 
 void OpenSpatialDelayProcessor::saveUserPreset (const juce::String& name)
 {
-    auto pd  = captureCurrentState();
-    pd.name  = name;
-    auto json = serializePresetToJson (pd);
+    saveUserPreset (name, "User");
+}
 
-    auto dir  = getUserPresetDirectory();
+void OpenSpatialDelayProcessor::saveUserPreset (const juce::String& name, const juce::String& category)
+{
+    auto pd     = captureCurrentState();
+    pd.name     = name;
+    pd.category = category.isEmpty() ? juce::String ("User") : category;
+    pd.isFactory = false;
+    auto json   = serializePresetToJson (pd);
+
+    auto dir = getPresetDirectory().getChildFile (pd.category);
     dir.createDirectory();
 
-    auto file = dir.getChildFile (name + ".json");
+    auto file = dir.getChildFile (name + ".osdpreset");
     file.replaceWithText (json);
 
-    // Refresh user preset list and update index
-    loadUserPresetsFromDisk();
-    // Set index to the newly saved preset
-    for (int i = 0; i < static_cast<int> (userPresets.size()); ++i)
+    // Refresh all presets and update index
+    loadAllPresets();
+    for (int i = 0; i < static_cast<int> (allPresets.size()); ++i)
     {
-        if (userPresets[static_cast<size_t> (i)].name == name)
+        if (allPresets[static_cast<size_t> (i)].name == name
+            && allPresets[static_cast<size_t> (i)].category == pd.category)
         {
-            currentPresetIndex = NUM_FACTORY_PRESETS + i;
+            currentPresetIndex = i;
             break;
         }
     }
 }
 
-void OpenSpatialDelayProcessor::loadUserPresetsFromDisk()
+void OpenSpatialDelayProcessor::loadAllPresets()
 {
-    userPresets.clear();
+    allPresets.clear();
 
-    auto dir = getUserPresetDirectory();
-    if (! dir.isDirectory())
-        return;
-
-    auto files = dir.findChildFiles (juce::File::findFiles, false, "*.json");
-    files.sort();
-
-    for (const auto& file : files)
+    // v1.0: Load factory presets from compiled-in array (no disk I/O)
+    for (int i = 0; i < NUM_FACTORY_PRESETS; ++i)
     {
-        auto json = file.loadFileAsString();
-        if (json.isNotEmpty())
+        PresetData pd = factoryPresets[i];
+        pd.isFactory = true;
+        allPresets.push_back (pd);
+    }
+
+    // Load user presets from disk (User/ folder + subfolders as subcategories)
+    auto userDir = getPresetDirectory().getChildFile ("User");
+    if (userDir.isDirectory())
+    {
+        // Root-level user presets → category "User"
+        auto files = userDir.findChildFiles (juce::File::findFiles, false, "*.osdpreset");
+        auto jsonFiles = userDir.findChildFiles (juce::File::findFiles, false, "*.json");
+        files.addArray (jsonFiles);
+        files.sort();
+
+        for (const auto& file : files)
         {
-            auto pd = parsePresetJson (json);
-            if (pd.name.isEmpty())
-                pd.name = file.getFileNameWithoutExtension();
-            userPresets.push_back (pd);
+            auto json = file.loadFileAsString();
+            if (json.isNotEmpty())
+            {
+                auto pd = parsePresetJson (json);
+                if (pd.name.isEmpty())
+                    pd.name = file.getFileNameWithoutExtension();
+                pd.category = "User";
+                pd.isFactory = false;
+                allPresets.push_back (pd);
+            }
+        }
+
+        // User subfolders → category "User / SubfolderName"
+        auto subdirs = userDir.findChildFiles (juce::File::findDirectories, false);
+        subdirs.sort();
+        for (const auto& subdir : subdirs)
+        {
+            juce::String subCat = "User / " + subdir.getFileName();
+            auto subFiles = subdir.findChildFiles (juce::File::findFiles, false, "*.osdpreset");
+            auto subJsonFiles = subdir.findChildFiles (juce::File::findFiles, false, "*.json");
+            subFiles.addArray (subJsonFiles);
+            subFiles.sort();
+
+            for (const auto& file : subFiles)
+            {
+                auto json = file.loadFileAsString();
+                if (json.isNotEmpty())
+                {
+                    auto pd = parsePresetJson (json);
+                    if (pd.name.isEmpty())
+                        pd.name = file.getFileNameWithoutExtension();
+                    pd.category = subCat;
+                    pd.isFactory = false;
+                    allPresets.push_back (pd);
+                }
+            }
         }
     }
+
+    rebuildCategorizedOrder();
+}
+
+//==============================================================================
+// v0.9: Categorized preset helpers
+//==============================================================================
+std::vector<OpenSpatialDelayProcessor::CategorizedPreset>
+    OpenSpatialDelayProcessor::getCategorizedPresets() const
+{
+    std::vector<CategorizedPreset> result;
+
+    // Iterate categories in defined order
+    for (int c = 0; c < NUM_PRESET_CATEGORIES; ++c)
+    {
+        juce::String cat = presetCategoryNames[c];
+
+        // All presets in this category (factory first, then user)
+        for (int i = 0; i < static_cast<int> (allPresets.size()); ++i)
+        {
+            if (allPresets[static_cast<size_t> (i)].category == cat
+                && allPresets[static_cast<size_t> (i)].isFactory)
+                result.push_back ({ cat, allPresets[static_cast<size_t> (i)].name, i, true });
+        }
+        for (int i = 0; i < static_cast<int> (allPresets.size()); ++i)
+        {
+            if (allPresets[static_cast<size_t> (i)].category == cat
+                && ! allPresets[static_cast<size_t> (i)].isFactory)
+                result.push_back ({ cat, allPresets[static_cast<size_t> (i)].name, i, false });
+        }
+    }
+
+    // Safety net: any presets with unrecognized categories
+    for (int i = 0; i < static_cast<int> (allPresets.size()); ++i)
+    {
+        bool found = false;
+        for (int c = 0; c < NUM_PRESET_CATEGORIES; ++c)
+        {
+            if (allPresets[static_cast<size_t> (i)].category == presetCategoryNames[c])
+            { found = true; break; }
+        }
+        if (! found)
+            result.push_back ({ allPresets[static_cast<size_t> (i)].category,
+                                allPresets[static_cast<size_t> (i)].name,
+                                i, allPresets[static_cast<size_t> (i)].isFactory });
+    }
+
+    return result;
+}
+
+void OpenSpatialDelayProcessor::rebuildCategorizedOrder()
+{
+    categorizedOrder.clear();
+    auto cats = getCategorizedPresets();
+    categorizedOrder.reserve (cats.size());
+    for (const auto& cp : cats)
+        categorizedOrder.push_back (cp.originalIndex);
 }
 
 //==============================================================================
@@ -1616,13 +1931,18 @@ bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layou
     if (outputSet == juce::AudioChannelSet::octagonal())           return true;
     if (outputSet == juce::AudioChannelSet::discreteChannels (8))  return true;
 
+    // v1.0: SpatialMediaLab 13.1 / 7.1.6 (14 channels)
+    if (outputSet == juce::AudioChannelSet::discreteChannels (14)) return true;
+
     // v0.5: Ambisonics discrete channel buses (FOA through 6th order)
     if (outputSet == juce::AudioChannelSet::discreteChannels (4))  return true;  // FOA
     if (outputSet == juce::AudioChannelSet::discreteChannels (9))  return true;  // SOA
     if (outputSet == juce::AudioChannelSet::discreteChannels (16)) return true;  // HOA (3rd)
     if (outputSet == juce::AudioChannelSet::discreteChannels (25)) return true;  // 4th order
+    if (outputSet == juce::AudioChannelSet::discreteChannels (26)) return true;  // v0.8: 4OA stereo-pair (13×2)
     if (outputSet == juce::AudioChannelSet::discreteChannels (36)) return true;  // 5th order
     if (outputSet == juce::AudioChannelSet::discreteChannels (49)) return true;  // 6th order
+    if (outputSet == juce::AudioChannelSet::discreteChannels (50)) return true;  // v0.8: 6OA stereo-pair (25×2)
 
     return false;
 }
@@ -1643,6 +1963,7 @@ OpenSpatialDelayProcessor::OutputFormat
         case 6:  return OutputFormat::Surround5_1;
         case 8:  return OutputFormat::Surround7_1;
         case 12: return OutputFormat::Surround7_1_4;
+        case 14: return OutputFormat::Surround7_1_6;
         case 16: return OutputFormat::Surround9_1_6;
         default: return OutputFormat::Binaural;  // 2ch or unknown → stereo binaural
     }
@@ -1751,6 +2072,15 @@ void OpenSpatialDelayProcessor::computeAmbiDecodeForLayout (
         }
 }
 
+// v1.0: Check if a speaker layout has height speakers (elevation > 1°)
+static bool layoutHasHeight (const SpeakerLayout& layout)
+{
+    for (int s = 0; s < layout.numSpeakers; ++s)
+        if (std::abs (layout.speakers[s].elevationRad) > 0.0175f)  // ~1 degree
+            return true;
+    return false;
+}
+
 //==============================================================================
 // Build 3D VBAP triplets for a speaker layout with height speakers
 //==============================================================================
@@ -1826,19 +2156,20 @@ void OpenSpatialDelayProcessor::activateLayout (OutputFormat format)
 
     switch (format)
     {
-        case OutputFormat::Quad:          buf.layout = makeQuadLayout();       break;
-        case OutputFormat::Surround5_0:   buf.layout = make5_0Layout();       break;
-        case OutputFormat::Surround5_1:   buf.layout = make5_1Layout();       break;
-        case OutputFormat::Surround7_0:   buf.layout = make7_0Layout();       break;
-        case OutputFormat::Surround7_1:   buf.layout = make7_1Layout();       break;
-        case OutputFormat::Surround5_1_2: buf.layout = make5_1_2Layout();     break;
-        case OutputFormat::Surround5_1_4: buf.layout = make5_1_4Layout();     break;
-        case OutputFormat::Surround7_0_2: buf.layout = make7_0_2Layout();     break;
-        case OutputFormat::Surround7_1_2: buf.layout = make7_1_2Layout();     break;
-        case OutputFormat::Surround7_1_4: buf.layout = make7_1_4Layout();     break;
-        case OutputFormat::Surround7_1_6: buf.layout = make7_1_6Layout();     break;
-        case OutputFormat::Surround9_1_6: buf.layout = make9_1_6Layout();     break;
-        case OutputFormat::Octaphonic:    buf.layout = makeOctaphonicLayout(); break;
+        case OutputFormat::Quad:          buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::Quad]);       break;
+        case OutputFormat::Surround5_0:   buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S5_0]);       break;
+        case OutputFormat::Surround5_1:   buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S5_1]);       break;
+        case OutputFormat::Surround7_0:   buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S7_0]);       break;
+        case OutputFormat::Surround7_1:   buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S7_1]);       break;
+        case OutputFormat::Surround5_1_2: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S5_1_2]);     break;
+        case OutputFormat::Surround5_1_4: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S5_1_4]);     break;
+        case OutputFormat::Surround7_1_2: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S7_1_2]);     break;
+        case OutputFormat::Surround7_1_4: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S7_1_4]);     break;
+        case OutputFormat::Surround7_1_6: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S7_1_6]);     break;
+        case OutputFormat::Surround9_1_4: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S9_1_4]);     break;
+        case OutputFormat::Surround9_1_6: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S9_1_6]);     break;
+        case OutputFormat::SurroundSML13_1: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::SML13_1]); break;
+        case OutputFormat::Octaphonic:    buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::Octaphonic]); break;
 
         case OutputFormat::AmbisonicsFOA:
         case OutputFormat::AmbisonicsSOA:
@@ -1879,6 +2210,9 @@ void OpenSpatialDelayProcessor::activateLayout (OutputFormat format)
 
     // Build 3D VBAP triplets using shared helper
     buildVBAPTripletsForLayout (buf.layout, buf.vbapTriplets);
+
+    // v1.0: Diagnostic — height layouts must always have triplets
+    jassert (buf.vbapTriplets.empty() == ! layoutHasHeight (buf.layout));
 
     // Atomic swap: audio thread now reads the fully-populated buffer
     activeLayoutIndex.store (prepareLayoutIndex, std::memory_order_release);
@@ -1962,16 +2296,30 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
             delayBufferSize <<= 1;
         delayBufferMask = delayBufferSize - 1;
     }
-    delayBuffer.assign (static_cast<size_t> (delayBufferSize), 0.0f);
+    delayBufferL.assign (static_cast<size_t> (delayBufferSize), 0.0f);
+    delayBufferR.assign (static_cast<size_t> (delayBufferSize), 0.0f);
     writePosition = 0;
     feedbackSample = 0.0f;
-    
-    // Reset all pitch shifter phases (including the feedback shifter at index MAX_OBJECTS)
-    for (int i = 0; i < MAX_OBJECTS + 1; ++i)
-        pitchPhase[i] = 0.0f;
 
-    // Pre-allocate mono input buffer
+    // v0.8: Reset wobble modulation state
+    wobblePhase = 0.0f;
+    blockWobbleAmount = 0.0f;
+    blockWobbleMorph = 0.0f;
+
+    // v0.9: Reset all WSOLA-lite per-tap pitch states
+    for (auto& ws : wsolaState)
+    {
+        std::fill (std::begin (ws.buffer), std::end (ws.buffer), 0.0f);
+        ws.writePos = 0;
+        ws.readPhase = 0.0f;
+        ws.fadingPhase = 0.0f;
+        ws.crossfadeRemaining = 0;
+    }
+
+    // Pre-allocate input buffers
     monoInputBuffer.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+    inputBufferL.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+    inputBufferR.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
 
     // Initialize filters
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock, 1 };
@@ -1979,11 +2327,15 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     feedbackHPFilter.prepare (spec);
     feedbackLPFilter.reset();
     feedbackHPFilter.reset();
+    for (int t = 0; t < MAX_OBJECTS; ++t)
+    {
+        tapLPFilter[t].prepare (spec);
+        tapHPFilter[t].prepare (spec);
+        tapLPFilter[t].reset();
+        tapHPFilter[t].reset();
+    }
     cachedFeedbackLPFreq = -1.0f;  // Force recalculation on first block
     cachedFeedbackHPFreq = -1.0f;
-
-    // Cache pitch shifter window size (constant within session)
-    cachedPitchWindowSamples = static_cast<float> (sampleRate) * 0.250f;
 
     // Initialize smoothed values — setCurrentAndTargetValue prevents stale ramps
     // after mid-session prepareToPlay calls (e.g., bus renegotiation)
@@ -2028,12 +2380,14 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     *lfeFilter.coefficients = *juce::dsp::IIR::Coefficients<float>::makeLowPass (sampleRate, 120.0f);
 
     // v0.4: Prepare air absorption filters (per-object LP, distance-driven cutoff)
+    // v1.0: Pre-compute transparent coefficients to avoid heap allocation in processBlock
+    airTransparentCoeffs = *juce::dsp::IIR::Coefficients<float>::makeLowPass (sampleRate, 20000.0f);
     for (int i = 0; i < MAX_OBJECTS; ++i)
     {
         airAbsorptionFilter[i].prepare (spec);
         airAbsorptionFilter[i].reset();
-        *airAbsorptionFilter[i].coefficients =
-            *juce::dsp::IIR::Coefficients<float>::makeLowPass (sampleRate, 20000.0f);
+        *airAbsorptionFilter[i].coefficients = airTransparentCoeffs;
+        smoothedAirCutoff[i] = 20000.0f;
     }
 
     // v0.5: Prepare NFC-HOA filters (per-object, per-SH-order, Ambisonics output only)
@@ -2079,98 +2433,141 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
 
 void OpenSpatialDelayProcessor::releaseResources()
 {
-    delayBuffer.clear();
+    delayBufferL.clear();
+    delayBufferR.clear();
     monoInputBuffer.clear();
+    inputBufferL.clear();
+    inputBufferR.clear();
 }
 
 // #############################################################################
 // DELAY-SPECIFIC — Delay line, pitch shifter, tempo sync
 // This section contains the delay engine DSP: circular buffer read/write,
-// dual-head Hann crossfade pitch shifter, and tempo-sync note division mapping.
+// WSOLA-lite per-tap pitch shifter, and tempo-sync note division mapping.
 // Other SML plugins would replace this with their own DSP (reverb, chorus, etc.).
 // #############################################################################
 
 //==============================================================================
 // Delay line helpers
 //==============================================================================
-void OpenSpatialDelayProcessor::writeDelayLine (float sample)
+void OpenSpatialDelayProcessor::writeDelayLine (float sampleL, float sampleR)
 {
-    delayBuffer[static_cast<size_t> (writePosition)] = sample;
+    delayBufferL[static_cast<size_t> (writePosition)] = sampleL;
+    delayBufferR[static_cast<size_t> (writePosition)] = sampleR;
     writePosition = (writePosition + 1) & delayBufferMask;  // v0.5: bitmask wrap
 }
 
-float OpenSpatialDelayProcessor::readDelayLine (float delaySamples) const
+// v0.8: Templated helper — Cubic Hermite interpolation from a given buffer
+static inline float readDelayBuffer (const std::vector<float>& buf, int writePos,
+                                     int bufMask, int bufSize, float delaySamples)
 {
-    // readPos is floating point index relative to write head
-    float readPos = static_cast<float> (writePosition) - delaySamples - 1.0f;
-
-    // Handle wrap-around (add bufSize once is sufficient since readPos > -bufSize)
-    if (readPos < 0.0f) readPos += static_cast<float> (delayBufferSize);
+    float readPos = static_cast<float> (writePos) - delaySamples - 1.0f;
+    if (readPos < 0.0f) readPos += static_cast<float> (bufSize);
 
     int   i1 = static_cast<int> (readPos);
     float f  = readPos - static_cast<float> (i1);
 
-    // v0.5: Get 4 points for Cubic Hermite Interpolation — bitmask wrap instead of modulo
-    int i0 = (i1 - 1) & delayBufferMask;
-    int i2 = (i1 + 1) & delayBufferMask;
-    int i3 = (i1 + 2) & delayBufferMask;
-    i1 = i1 & delayBufferMask;
+    int i0 = (i1 - 1) & bufMask;
+    int i2 = (i1 + 1) & bufMask;
+    int i3 = (i1 + 2) & bufMask;
+    i1 = i1 & bufMask;
 
-    float y0 = delayBuffer[static_cast<size_t> (i0)];
-    float y1 = delayBuffer[static_cast<size_t> (i1)];
-    float y2 = delayBuffer[static_cast<size_t> (i2)];
-    float y3 = delayBuffer[static_cast<size_t> (i3)];
+    float y0 = buf[static_cast<size_t> (i0)];
+    float y1 = buf[static_cast<size_t> (i1)];
+    float y2 = buf[static_cast<size_t> (i2)];
+    float y3 = buf[static_cast<size_t> (i3)];
 
-    // Cubic Hermite spline interpolation (Catmull-Rom variant)
-    // This significantly reduces high-frequency roll-off compared to linear interpolation,
-    // which is essential for preserving the brightness required for self-oscillation.
     return y1 + 0.5f * f * (y2 - y0 + f * (2.0f * y0 - 5.0f * y1 + 4.0f * y2 - y3 + f * (3.0f * (y1 - y2) + y3 - y0)));
 }
 
-//==============================================================================
-// Pitch Shifter — Warm Dual-Head with 250ms Hann Crossfade
-// Two read heads with long window. No splice detection — natural phase
-// misalignment creates warm, chorused character. ~4 splices/sec for smooth,
-// ambient quality.
-//==============================================================================
-float OpenSpatialDelayProcessor::readPitchShifted (float delaySamples,
-                                                     float semitones, int phaseIndex)
+float OpenSpatialDelayProcessor::readDelayLineL (float delaySamples) const
 {
-    if (std::abs (semitones) < 0.005f)
-        return readDelayLine (delaySamples);
+    return readDelayBuffer (delayBufferL, writePosition, delayBufferMask, delayBufferSize, delaySamples);
+}
 
-    const float windowSamples = cachedPitchWindowSamples;
-    const float ratio = std::pow (2.0f, semitones / 12.0f);
-    const float twoPi = 2.0f * juce::MathConstants<float>::pi;
+float OpenSpatialDelayProcessor::readDelayLineR (float delaySamples) const
+{
+    return readDelayBuffer (delayBufferR, writePosition, delayBufferMask, delayBufferSize, delaySamples);
+}
 
-    float& phase = pitchPhase[phaseIndex];
+float OpenSpatialDelayProcessor::readDelayLineMono (float delaySamples) const
+{
+    return (readDelayLineL (delaySamples) + readDelayLineR (delaySamples)) * 0.5f;
+}
 
-    // Head 1 position (clamp defensively)
-    float p1 = phase;
-    if (p1 < 0.0f || p1 >= windowSamples)
+//==============================================================================
+// v0.9: WSOLA-Lite Per-Tap Pitch Shifter — Timing-Preserving
+// Reads from a small per-tap circular buffer at the pitch ratio rate.
+// When read-write drift exceeds grain size, Hann crossfade resets to nominal.
+//==============================================================================
+float OpenSpatialDelayProcessor::wsolaProcess (int objectIndex, float inputSample,
+                                                 float perTapSemitones)
+{
+    auto& ws = wsolaState[objectIndex];
+
+    // Write incoming sample into circular buffer
+    ws.buffer[ws.writePos & WSOLAState::kBufMask] = inputSample;
+    ws.writePos++;
+
+    const float ratio = std::pow (2.0f, perTapSemitones / 12.0f);
+
+    // Advance read phase by pitch ratio
+    ws.readPhase += ratio;
+
+    // Catmull-Rom interpolated read from WSOLA buffer
+    auto readBuf = [&](float phase) -> float {
+        float wrapped = std::fmod (phase, static_cast<float> (WSOLAState::kBufSize));
+        if (wrapped < 0.0f) wrapped += static_cast<float> (WSOLAState::kBufSize);
+
+        int   i1 = static_cast<int> (wrapped);
+        float f  = wrapped - static_cast<float> (i1);
+
+        int i0 = (i1 - 1) & WSOLAState::kBufMask;
+        int i2 = (i1 + 1) & WSOLAState::kBufMask;
+        int i3 = (i1 + 2) & WSOLAState::kBufMask;
+        i1 = i1 & WSOLAState::kBufMask;
+
+        float y0 = ws.buffer[i0], y1 = ws.buffer[i1];
+        float y2 = ws.buffer[i2], y3 = ws.buffer[i3];
+
+        return y1 + 0.5f * f * (y2 - y0 + f * (2.0f * y0 - 5.0f * y1 + 4.0f * y2 - y3
+                                                  + f * (3.0f * (y1 - y2) + y3 - y0)));
+    };
+
+    // During crossfade: blend fading grain with new primary grain
+    if (ws.crossfadeRemaining > 0)
     {
-        p1 = std::fmod (p1, windowSamples);
-        if (p1 < 0.0f) p1 += windowSamples;
+        float primary = readBuf (ws.readPhase);
+        float fading  = readBuf (ws.fadingPhase);
+        ws.fadingPhase += ratio;
+
+        float t = 1.0f - static_cast<float> (ws.crossfadeRemaining)
+                       / static_cast<float> (WSOLAState::kCrossfadeLen);
+        float halfPi = juce::MathConstants<float>::halfPi;
+        float gainNew = std::sin (t * halfPi);
+        float gainOld = std::cos (t * halfPi);
+
+        ws.crossfadeRemaining--;
+        return primary * gainNew + fading * gainOld;
     }
 
-    // Head 2: fixed half-window offset (no splice correction = warm character)
-    float p2 = std::fmod (phase + windowSamples * 0.5f, windowSamples);
-    if (p2 < 0.0f) p2 += windowSamples;
+    // Check if read-write drift exceeds grain size → initiate crossfade
+    float drift = ws.readPhase - static_cast<float> (ws.writePos);
+    if (std::abs (drift) > static_cast<float> (WSOLAState::kGrainSize))
+    {
+        ws.fadingPhase = ws.readPhase;
+        // Reset read phase to just behind write position (nominal latency ~1 grain)
+        ws.readPhase = static_cast<float> (ws.writePos) - static_cast<float> (WSOLAState::kGrainSize);
+        ws.crossfadeRemaining = WSOLAState::kCrossfadeLen;
 
-    // Hann crossfade
-    float gain1 = 0.5f - 0.5f * std::cos (twoPi * p1 / windowSamples);
-    float gain2 = 1.0f - gain1;
+        // First crossfade sample: fully on fading head
+        float fading = readBuf (ws.fadingPhase);
+        ws.fadingPhase += ratio;
+        ws.crossfadeRemaining--;
+        return fading;
+    }
 
-    // Read from delay line
-    float s1 = readDelayLine (delaySamples + p1);
-    float s2 = readDelayLine (delaySamples + p2);
-
-    // Advance phase (continuous accumulation)
-    phase += (1.0f - ratio);
-    phase = std::fmod (phase, windowSamples);
-    if (phase < 0.0f) phase += windowSamples;
-
-    return s1 * gain1 + s2 * gain2;
+    return readBuf (ws.readPhase);
 }
 
 // #############################################################################
@@ -2255,13 +2652,12 @@ float OpenSpatialDelayProcessor::getTempoSyncedDelayMs (int noteDivisionIndex) c
     // Echo knob value (noteDivisionIndex) represents number of 16th units
     double duration = (double)noteDivisionIndex * sixteenthMs;
 
-    // Apply mode multiplier
+    // v0.7: Apply mode multiplier (0=Straight, 1=Dotted, 2=Triplet)
     int mode = static_cast<int> (apvts.getRawParameterValue ("syncMode")->load());
-    if (mode == 1) // Triplet
-        duration *= (2.0 / 3.0);
-    else if (mode == 2) // Dotted
+    if (mode == 1) // Dotted
         duration *= 1.5;
-    // Notes and 16th use face value (1.0x)
+    else if (mode == 2) // Triplet
+        duration *= (2.0 / 3.0);
 
     return static_cast<float> (duration);
 }
@@ -2409,6 +2805,36 @@ const std::vector<VBAPTriplet>& OpenSpatialDelayProcessor::getVBAPTriplets()
     return triplets;
 }
 
+// v1.0: 3D nearest-speaker fallback — used when triplets are empty on a 3D layout.
+// Prevents 2D fallback from routing signal to height speakers for horizontal sources.
+static void nearestSpeaker3DFallback (const SpeakerLayout& layout,
+                                      float azimuthRad, float elevationRad,
+                                      float* outGains, int numSpeakers)
+{
+    for (int s = 0; s < numSpeakers; ++s)
+        outGains[s] = 0.0f;
+
+    float px = std::cos (elevationRad) * std::sin (azimuthRad);
+    float py = std::cos (elevationRad) * std::cos (azimuthRad);
+    float pz = std::sin (elevationRad);
+
+    float bestDot = -2.0f;
+    int bestSpeaker = 0;
+    for (int s = 0; s < numSpeakers; ++s)
+    {
+        float sx = std::cos (layout.speakers[s].elevationRad) * std::sin (layout.speakers[s].azimuthRad);
+        float sy = std::cos (layout.speakers[s].elevationRad) * std::cos (layout.speakers[s].azimuthRad);
+        float sz = std::sin (layout.speakers[s].elevationRad);
+        float dot = px * sx + py * sy + pz * sz;
+        if (dot > bestDot)
+        {
+            bestDot = dot;
+            bestSpeaker = s;
+        }
+    }
+    outGains[bestSpeaker] = 1.0f;
+}
+
 //==============================================================================
 // VBAPAlgorithm — Vector Base Amplitude Panning (2D or 3D)
 //==============================================================================
@@ -2417,6 +2843,13 @@ void VBAPAlgorithm::computeGains (const SourcePosition& source, const LayoutCont
 {
     if (! ctx.triplets.empty())
         computeVBAPGains3D (ctx.layout, ctx.triplets, source.azimuthRad, source.elevationRad, outputGains);
+    else if (layoutHasHeight (ctx.layout))
+    {
+        // v1.0: Guard — never use 2D fallback on 3D layouts (would route to height speakers)
+        jassertfalse;  // Triplets should be populated for height layouts — investigate
+        nearestSpeaker3DFallback (ctx.layout, source.azimuthRad, source.elevationRad,
+                                  outputGains, ctx.layout.numSpeakers);
+    }
     else
         computeVBAPGains2D (ctx.layout, source.azimuthRad, outputGains);
 }
@@ -2835,6 +3268,13 @@ void VBIPAlgorithm::computeGains (const SourcePosition& source, const LayoutCont
     // Start with VBAP gains
     if (! ctx.triplets.empty())
         computeVBAPGains3D (ctx.layout, ctx.triplets, source.azimuthRad, source.elevationRad, outputGains);
+    else if (layoutHasHeight (ctx.layout))
+    {
+        // v1.0: Guard — never use 2D fallback on 3D layouts
+        jassertfalse;
+        nearestSpeaker3DFallback (ctx.layout, source.azimuthRad, source.elevationRad,
+                                  outputGains, numSpeakers);
+    }
     else
         computeVBAPGains2D (ctx.layout, source.azimuthRad, outputGains);
 
@@ -2936,15 +3376,14 @@ void DBAPAlgorithm::computeGains (const SourcePosition& source, const LayoutCont
     if (numSpeakers == 0) return;
 
     // Convert source position (azimuth, elevation, distance) to Cartesian
-    // Source distance maps to radial position in 3D space (0..1 → 0..10 meters)
-    float physicalDist = source.distance * 10.0f;
+    // Source distance maps to radial position within speaker sphere (0..1 → 0..speakerRadius)
+    constexpr float speakerRadius = 1.0f;
+    float physicalDist = source.distance * speakerRadius;
     float srcX = physicalDist * std::cos (source.elevationRad) * std::sin (source.azimuthRad);
     float srcY = physicalDist * std::cos (source.elevationRad) * std::cos (source.azimuthRad);
     float srcZ = physicalDist * std::sin (source.elevationRad);
 
     // Compute Euclidean distance from source to each speaker
-    // Speakers are placed at unit distance (1.0) on the sphere
-    constexpr float speakerRadius = 1.0f;
     constexpr float epsilon = 0.001f;  // Avoid division by zero
 
     float totalWeight = 0.0f;
@@ -3036,6 +3475,13 @@ void MDAPAlgorithm::computeGains (const SourcePosition& source, const LayoutCont
     // Main source VBAP contribution
     if (! ctx.triplets.empty())
         computeVBAPGains3D (ctx.layout, ctx.triplets, source.azimuthRad, source.elevationRad, tempGains);
+    else if (layoutHasHeight (ctx.layout))
+    {
+        // v1.0: Guard — never use 2D fallback on 3D layouts
+        jassertfalse;
+        nearestSpeaker3DFallback (ctx.layout, source.azimuthRad, source.elevationRad,
+                                  tempGains, numSpeakers);
+    }
     else
         computeVBAPGains2D (ctx.layout, source.azimuthRad, tempGains);
 
@@ -3084,6 +3530,12 @@ void MDAPAlgorithm::computeGains (const SourcePosition& source, const LayoutCont
 
         if (! ctx.triplets.empty())
             computeVBAPGains3D (ctx.layout, ctx.triplets, auxAz, auxEl, tempGains);
+        else if (layoutHasHeight (ctx.layout))
+        {
+            // v1.0: Guard — never use 2D fallback on 3D layouts
+            jassertfalse;
+            nearestSpeaker3DFallback (ctx.layout, auxAz, auxEl, tempGains, numSpeakers);
+        }
         else
             computeVBAPGains2D (ctx.layout, auxAz, tempGains);
 
@@ -3119,14 +3571,63 @@ ObjectState OpenSpatialDelayProcessor::getObjectState (int objectIndex) const
         state.enabled = p->load() > 0.5f;
     if (auto* p = apvts.getRawParameterValue (prefix + "time"))
         state.delayTimeMs = p->load();
-    if (auto* p = apvts.getRawParameterValue (prefix + "azimuth"))
-        state.azimuthDeg = p->load();
-    if (auto* p = apvts.getRawParameterValue (prefix + "elevation"))
-        state.elevationDeg = p->load();
-    if (auto* p = apvts.getRawParameterValue (prefix + "distance"))
-        state.distance = p->load();
+
+    // v0.9: When trajectory is active, return the animated position (not the origin/knob values)
+    if (trajectoryActive[objectIndex].load (std::memory_order_relaxed))
+    {
+        state.azimuthDeg   = trajectoryFinalAz[objectIndex];
+        state.elevationDeg = trajectoryFinalEl[objectIndex];
+        state.distance     = trajectoryFinalDist[objectIndex];
+    }
+    else
+    {
+        if (auto* p = apvts.getRawParameterValue (prefix + "azimuth"))
+            state.azimuthDeg = p->load();
+        if (auto* p = apvts.getRawParameterValue (prefix + "elevation"))
+            state.elevationDeg = p->load();
+        if (auto* p = apvts.getRawParameterValue (prefix + "distance"))
+            state.distance = p->load();
+    }
 
     return state;
+}
+
+TrajectoryState OpenSpatialDelayProcessor::getTrajectoryState (int objectIndex) const
+{
+    TrajectoryState ts;
+    if (objectIndex < 0 || objectIndex >= MAX_OBJECTS)
+        return ts;
+
+    ts.originAzDeg = baseAzimuth[objectIndex];
+    ts.originElDeg = baseElevation[objectIndex];
+    ts.originDist  = baseDistance[objectIndex];
+    ts.shape       = prevTrajectoryShape[objectIndex];
+    ts.phase       = trajectoryPhase[objectIndex];
+    ts.reverse     = (cachedParam_trajectoryDirection[objectIndex] == nullptr
+                      || cachedParam_trajectoryDirection[objectIndex]->load() < 0.5f);
+    ts.randomTime  = randomTime[objectIndex];
+    return ts;
+}
+
+OpenSpatialDelayProcessor::RandomPosition
+OpenSpatialDelayProcessor::evaluateRandomNoise (int objectIndex, float time) const
+{
+    RandomPosition rp { 0.0f, 0.0f, 0.0f };
+    if (objectIndex < 0 || objectIndex >= MAX_OBJECTS || ! randomNoise[objectIndex].initialized)
+        return rp;
+
+    auto& rn = randomNoise[objectIndex];
+    float p = time * juce::MathConstants<float>::twoPi;
+
+    for (int k = 0; k < 4; ++k)
+    {
+        rp.azDeg += rn.ampAz[k] * std::sin (p * rn.freqAz[k] + rn.phaseAz[k]);
+        rp.elDeg += rn.ampEl[k] * std::sin (p * rn.freqEl[k] + rn.phaseEl[k]);
+    }
+    for (int k = 0; k < 3; ++k)
+        rp.dist += rn.ampDist[k] * std::sin (p * rn.freqDist[k] + rn.phaseDist[k]);
+
+    return rp;
 }
 
 // #############################################################################
@@ -3137,32 +3638,106 @@ ObjectState OpenSpatialDelayProcessor::getObjectState (int objectIndex) const
 // and render logic, calling the spatial algorithms via computeGains().
 // #############################################################################
 
+// --- DELAY-SPECIFIC: Wobble modulation (v0.9) --- tape wow/flutter emulation
+// 4 incommensurate sinusoids spanning wow (1.5 Hz) to flutter (8.1 Hz).
+// Morph crossfades weight distribution: wow-heavy at 0%, flutter-heavy at 100%.
+// v0.8: Wobble waveform — morphs between 4 shapes based on morph parameter (0..100)
+// 0=sine (smooth wow), 33=triangle, 66=rounded square (mechanical), 100=irregular (worn tape)
+static float computeWobbleWaveform (float phase, float morphPercent)
+{
+    float twoPi = juce::MathConstants<float>::twoPi;
+    float p = phase * twoPi;
+
+    float sine = std::sin (p);
+    float triangle = 2.0f * std::abs (2.0f * phase - 1.0f) - 1.0f;
+    float roundedSquare = std::tanh (4.0f * std::sin (p));
+    float irregular = std::sin (p)
+                    + 0.3f * std::sin (2.0f * p + 0.7f)
+                    + 0.15f * std::sin (3.0f * p + 1.3f)
+                    + 0.08f * std::sin (5.0f * p + 2.1f);
+    irregular *= 0.65f;  // normalize roughly to +/-1
+
+    // Crossfade between adjacent shapes (0→sine, 33→triangle, 66→roundedSq, 100→irregular)
+    float t = morphPercent / 100.0f * 3.0f;  // 0..3
+    int seg = juce::jlimit (0, 2, static_cast<int> (t));
+    float frac = t - static_cast<float> (seg);
+
+    float shapes[4] = { sine, triangle, roundedSquare, irregular };
+    return shapes[seg] * (1.0f - frac) + shapes[seg + 1] * frac;
+}
+
+// v0.8: Apply wobble modulation — LFO rate tied to delay time (shorter delay = faster wobble)
+inline float OpenSpatialDelayProcessor::applyWobble (float baseDelaySamples, float currentDelayMs)
+{
+    if (blockWobbleAmount <= 0.0f)
+        return baseDelaySamples;
+
+    float lfoFreqHz = 1000.0f / std::max (1.0f, currentDelayMs);
+    wobblePhase += lfoFreqHz / static_cast<float> (currentSampleRate);
+    if (wobblePhase >= 1.0f)
+        wobblePhase -= std::floor (wobblePhase);
+
+    float waveform = computeWobbleWaveform (wobblePhase, blockWobbleMorph);
+    constexpr float maxDeviation = 0.006f;  // ±0.6% of delay time at max amount
+    return baseDelaySamples * (1.0f + blockWobbleAmount * waveform * maxDeviation);
+}
+
 //==============================================================================
 // v0.5: Shared inline helpers for render methods
 //==============================================================================
-float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDelaySamples,
-                                                    float pitchSemitones)
+float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDelaySamples)
 {
     float objDelaySamples = static_cast<float> (objectIndex + 1) * baseDelaySamples;
     objDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), objDelaySamples);
-    float objPitch = static_cast<float> (objectIndex + 1) * pitchSemitones + dopplerSemitones[objectIndex];
 
-    float objMono = readPitchShifted (objDelaySamples, objPitch, objectIndex);
-    return airAbsorptionFilter[objectIndex].processSample (objMono);
+    // v0.9: Per-tap pitch via WSOLA-lite (timing-preserving)
+    float perTapPitch = cachedObj[objectIndex].pitchShift->load (std::memory_order_relaxed);
+
+    // v1.0: Combine per-tap pitch with Doppler pitch shift (restored via WSOLA)
+    float combinedPitch = perTapPitch + dopplerSemitones[objectIndex];
+
+    // v0.8: Per-tap input channel routing
+    int inputCh = static_cast<int> (cachedObj[objectIndex].inputChannel->load (std::memory_order_relaxed));
+    DelayChannel ch = (inputCh == 1) ? DelayChannel::Left : (inputCh == 2) ? DelayChannel::Right : DelayChannel::Mono;
+
+    // v0.8: Channel-aware delay line read
+    float objMono = readDelayLineMono (objDelaySamples);
+    if (ch == DelayChannel::Left)       objMono = readDelayLineL (objDelaySamples);
+    else if (ch == DelayChannel::Right) objMono = readDelayLineR (objDelaySamples);
+
+    // v0.9: Per-tap pitch via WSOLA-lite — applies user pitch + Doppler combined
+    if (std::abs (combinedPitch) >= 0.001f)
+        objMono = wsolaProcess (objectIndex, objMono, combinedPitch);
+    // v0.9: True bypass — skip filter entirely when AIR is off (saves 12 IIR evals/sample)
+    float result = airAbsorptionActive
+                 ? airAbsorptionFilter[objectIndex].processSample (objMono)
+                 : objMono;
+
+    // v0.7: Per-tap output filter (same coefficients as feedback filter)
+    // Ensures first cycle of taps is filtered, not just feedback repeats
+    if (! filterBypassed)
+        result = tapHPFilter[objectIndex].processSample (
+                     tapLPFilter[objectIndex].processSample (result));
+
+    // v0.7: Accumulate per-tap peak for UI activity glow
+    float absVal = std::abs (result);
+    if (absVal > tapPeakAccum[objectIndex])
+        tapPeakAccum[objectIndex] = absVal;
+
+    return result;
 }
 
 void OpenSpatialDelayProcessor::processFeedbackSample (float currentLoopMult,
                                                         float baseDelaySamples,
-                                                        float pitchSemitones, float fb)
+                                                        float fb)
 {
     float fbDelaySamples = currentLoopMult * baseDelaySamples;
     fbDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), fbDelaySamples);
-    float fbPitchShiftAmount = currentLoopMult * pitchSemitones;
 
-    float feedbackRaw = readPitchShifted (fbDelaySamples, fbPitchShiftAmount, MAX_OBJECTS);
-    float filtered = feedbackLPFilter.processSample (feedbackRaw);
-    filtered = feedbackHPFilter.processSample (filtered);
-    const float makeupGain = 1.0f + (fb * fb * 0.2f);
+    float feedbackRaw = readDelayLineMono (fbDelaySamples);
+    float filtered = filterBypassed ? feedbackRaw
+        : feedbackHPFilter.processSample (feedbackLPFilter.processSample (feedbackRaw));
+    const float makeupGain = 1.0f + (fb * fb * kMakeupGainCoeff);
     feedbackSample = softClip (filtered * makeupGain);
     if (! std::isfinite (feedbackSample))
     {
@@ -3183,52 +3758,84 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     auto numSamples       = buffer.getNumSamples();
     auto numInputChannels = getTotalNumInputChannels();
 
-    if (delayBuffer.empty() || numSamples <= 0)
+    if (delayBufferL.empty() || numSamples <= 0)
         return;
 
-    // --- Read parameter values -----------------------------------------------
-    bool  tempoSync       = apvts.getRawParameterValue ("tempoSync")->load() > 0.5f;
-    int   noteDivision    = static_cast<int> (apvts.getRawParameterValue ("noteDivision")->load());
-    float lpFreq          = apvts.getRawParameterValue ("filterLP")->load();
-    float hpFreq          = apvts.getRawParameterValue ("filterHP")->load();
-    int   profileIndex    = static_cast<int> (apvts.getRawParameterValue ("hrtfProfile")->load());
-    float pitchSemitones  = apvts.getRawParameterValue ("pitchShift")->load();
+    // v0.7: Reset per-tap peak accumulators for this block
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+        tapPeakAccum[i] = 0.0f;
 
-    // v0.4: Air absorption parameter read
-    bool  useAirAbsorption = apvts.getRawParameterValue ("airAbsorption")->load() > 0.5f;
+    // --- Read parameter values (cached pointers, no string lookups) -----------
+    bool  tempoSync       = cachedParam_tempoSync->load() > 0.5f;
+    int   noteDivision    = static_cast<int> (cachedParam_noteDivision->load());
+    float lpFreq          = cachedParam_filterLP->load();
+    float hpFreq          = cachedParam_filterHP->load();
+    float filterHPQ       = cachedParam_filterHPQ->load();
+    float filterLPQ       = cachedParam_filterLPQ->load();
+    // v0.9: Filter bypass driven by dedicated parameter (not threshold inference)
+    filterBypassed  = cachedParam_filterEnabled->load() < 0.5f;
+    int   profileIndex    = static_cast<int> (cachedParam_hrtfProfile->load());
+
+    // v0.4: Air absorption — true bypass with edge detection for immediate toggle response
+    airAbsorptionActive = cachedParam_airAbsorption->load() > 0.5f;
+    bool airStateChanged = (airAbsorptionActive != prevAirAbsorptionActive);
+    prevAirAbsorptionActive = airAbsorptionActive;
+
+    // v0.8: Wobble modulation (block-rate parameter reads, gated by wobbleEnabled)
+    {
+        bool wobbleEnabled = cachedParam_wobbleEnabled->load() > 0.5f;
+        blockWobbleAmount = wobbleEnabled ? (cachedParam_wobbleAmount->load() / 100.0f) : 0.0f;
+        blockWobbleMorph  = cachedParam_wobbleMorph->load();
+    }
+
+    // v0.8: Input format (0=Mono, 1=Stereo) — selects whether dual delay lines receive L/R or summed mono
+    int inputFormat = static_cast<int> (cachedParam_inputFormat->load());
 
     // (#3) Calculate target base delay
     float targetBaseDelayMs;
     if (tempoSync)
         targetBaseDelayMs = getTempoSyncedDelayMs (noteDivision);
     else
-        targetBaseDelayMs = apvts.getRawParameterValue ("delayTime")->load();
+        targetBaseDelayMs = cachedParam_delayTime->load();
 
     smoothedDelayTime.setTargetValue (targetBaseDelayMs);
 
-    float dryWetTarget    = apvts.getRawParameterValue ("dryWet")->load();
-    float fbTarget        = apvts.getRawParameterValue ("feedback")->load();
-    float inGainDb        = apvts.getRawParameterValue ("inputGain")->load();
-    float outGainDb       = apvts.getRawParameterValue ("outputGain")->load();
+    float dryWetTarget    = cachedParam_dryWet->load();
+    float fbTarget        = cachedParam_feedback->load();
+    float inGainDb        = cachedParam_inputGain->load();
+    float outGainDb       = cachedParam_outputGain->load();
 
     smoothedDryWet.setTargetValue     (dryWetTarget);
     smoothedFeedback.setTargetValue   (fbTarget);
     smoothedInputGain.setTargetValue  (juce::Decibels::decibelsToGain (inGainDb));
     smoothedOutputGain.setTargetValue (juce::Decibels::decibelsToGain (outGainDb));
 
-    // --- Update feedback filters (only when frequency changes) ----------------
-    if (std::abs (lpFreq - cachedFeedbackLPFreq) > 0.1f)
+    // --- Update feedback filters (only when frequency or Q changes) -----------
+    bool lpQChanged = std::abs (filterLPQ - cachedFilterLPQ) > 0.001f;
+    bool hpQChanged = std::abs (filterHPQ - cachedFilterHPQ) > 0.001f;
+    bool lpChanged = std::abs (lpFreq - cachedFeedbackLPFreq) > 0.1f || lpQChanged;
+    bool hpChanged = std::abs (hpFreq - cachedFeedbackHPFreq) > 0.1f || hpQChanged;
+    if (lpChanged)
     {
-        feedbackLPFilter.coefficients =
-            juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, lpFreq);
+        auto lpCoeffs = juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, lpFreq, filterLPQ);
+        feedbackLPFilter.coefficients = lpCoeffs;
+        for (int t = 0; t < MAX_OBJECTS; ++t)
+            tapLPFilter[t].coefficients = lpCoeffs;
         cachedFeedbackLPFreq = lpFreq;
     }
-    if (std::abs (hpFreq - cachedFeedbackHPFreq) > 0.1f)
+    if (hpChanged)
     {
-        feedbackHPFilter.coefficients =
-            juce::dsp::IIR::Coefficients<float>::makeHighPass (currentSampleRate, hpFreq);
+        auto hpCoeffs = juce::dsp::IIR::Coefficients<float>::makeHighPass (currentSampleRate, hpFreq, filterHPQ);
+        feedbackHPFilter.coefficients = hpCoeffs;
+        for (int t = 0; t < MAX_OBJECTS; ++t)
+            tapHPFilter[t].coefficients = hpCoeffs;
         cachedFeedbackHPFreq = hpFreq;
     }
+    if (lpQChanged) cachedFilterLPQ = filterLPQ;
+    if (hpQChanged) cachedFilterHPQ = filterHPQ;
+
+    // --- Block-rate constant: ms → samples conversion factor -------------------
+    blockMsToSamples = 0.001f * static_cast<float> (currentSampleRate);
 
     // --- Read output layout (once per block for consistent snapshot) -----------
     const auto& layoutState = getActiveLayout();
@@ -3240,8 +3847,9 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     bool isAmbiOutput = (fmtEnumIdx >= 0 && fmtEnumIdx < NUM_OUTPUT_FORMATS)
                         && outputFormatRegistry[static_cast<size_t> (fmtEnumIdx)].isAmbisonicsOutput;
 
+
     // --- Read algorithm selection (block-rate, surround only) -----------------
-    int algorithmIndex = static_cast<int> (apvts.getRawParameterValue ("algorithm")->load());
+    int algorithmIndex = static_cast<int> (cachedParam_algorithm->load());
     auto* algo = algorithms[juce::jlimit (0, NUM_ALGORITHMS - 1, algorithmIndex)];
 
     // For surround output, fall back if algorithm doesn't support speakers
@@ -3276,10 +3884,22 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     for (int t = 0; t < MAX_OBJECTS; ++t)
     {
         // Read per-object state via cached pointers (no string lookups)
-        objects[t].enabled      = cachedParam_enabled[t]->load()   > 0.5f;
-        objects[t].azimuthDeg   = cachedParam_azimuth[t]->load();
-        objects[t].elevationDeg = cachedParam_elevation[t]->load();
-        objects[t].distance     = cachedParam_distance[t]->load();
+        objects[t].enabled      = cachedObj[t].enabled->load()   > 0.5f;
+
+        // v0.9: When trajectory is active, read animated position from internal arrays
+        // (the knobs/APVTS hold the origin; the internal arrays hold origin + trajectory offset)
+        if (trajectoryActive[t].load (std::memory_order_relaxed))
+        {
+            objects[t].azimuthDeg   = trajectoryFinalAz[t];
+            objects[t].elevationDeg = trajectoryFinalEl[t];
+            objects[t].distance     = trajectoryFinalDist[t];
+        }
+        else
+        {
+            objects[t].azimuthDeg   = cachedObj[t].azimuth->load();
+            objects[t].elevationDeg = cachedObj[t].elevation->load();
+            objects[t].distance     = cachedObj[t].distance->load();
+        }
 
         if (objects[t].enabled)
         {
@@ -3318,7 +3938,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     {
         float blockDuration = static_cast<float> (numSamples) / static_cast<float> (currentSampleRate);
         constexpr float speedOfSound = 343.0f;   // m/s at 20°C
-        constexpr float emaAlpha = 0.1f;          // Smoothing factor for velocity
+        constexpr float emaAlpha = 0.35f;         // Smoothing factor for velocity (0.35 = ~40ms settling @ 256/48k — responsive without single-block noise)
         constexpr float maxDopplerSemitones = 12.0f;
 
         for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -3326,9 +3946,8 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             if (! objects[t].enabled)
             {
                 dopplerSemitones[t] = 0.0f;
-                // Set air absorption filter to transparent when object is disabled
-                *airAbsorptionFilter[t].coefficients =
-                    *juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, 20000.0f);
+                // v1.0: Use pre-computed transparent coefficients (no heap allocation)
+                *airAbsorptionFilter[t].coefficients = airTransparentCoeffs;
                 continue;
             }
 
@@ -3342,7 +3961,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                                 || (std::abs (dist  - prevDistance[t])  > 1e-5f);
 
             // --- Doppler velocity tracking (per-object amount: 0=off, >0=on) ---
-            float objDopplerAmount = cachedParam_dopplerAmount[t]->load();
+            float objDopplerAmount = cachedObj[t].dopplerAmount->load();
 
             if (objDopplerAmount > 0.001f && blockDuration > 0.0f)
             {
@@ -3359,10 +3978,19 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                     float py = prevPhysDist * std::cos (prevElevation[t]) * std::cos (prevAzimuth[t]);
                     float pz = prevPhysDist * std::sin (prevElevation[t]);
 
-                    // Radial velocity = rate of change of distance from source to listener (origin)
-                    float curDist3D  = std::sqrt (cx * cx + cy * cy + cz * cz);
-                    float prevDist3D = std::sqrt (px * px + py * py + pz * pz);
-                    float rawRadialVelocity = (curDist3D - prevDist3D) / blockDuration;
+                    // Virtual ear Doppler — offset listener position for audible
+                    // binaural Doppler from orbiting/tangentially moving sources.
+                    // Anatomical ear offset is ~0.085m; exaggerated for creative effect.
+                    constexpr float earOffset = 2.5f;   // virtual ear x-offset (meters, exaggerated for creative effect)
+                    float dxC = cx - earOffset;
+                    float dxP = px - earOffset;
+                    float distToEarCur  = std::sqrt (dxC * dxC + cy * cy + cz * cz);
+                    float distToEarPrev = std::sqrt (dxP * dxP + py * py + pz * pz);
+                    float rawRadialVelocity = (distToEarCur - distToEarPrev) / blockDuration;
+
+                    // v1.0: Clamp velocity to prevent extreme pitch transients from rapid azimuth sweeps
+                    // 50 m/s produces ~1.7 semitones of Doppler — more than enough for creative effect
+                    rawRadialVelocity = juce::jlimit (-50.0f, 50.0f, rawRadialVelocity);
 
                     // Exponential moving average smoothing to avoid clicks
                     smoothedRadialVelocity[t] = emaAlpha * rawRadialVelocity
@@ -3418,40 +4046,69 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             prevElevation[t] = elRad;
             prevDistance[t]   = dist;
 
-            // --- Air absorption filter coefficient update (only when distance changes) ---
-            if (useAirAbsorption && positionChanged)
+            // --- Air absorption filter coefficient update ---
+            // v0.9: Update on position change OR AIR toggle state change (true bypass fix).
+            // When AIR is OFF, readObjectSample() skips the filter entirely (zero CPU).
+            if (airAbsorptionActive && (positionChanged || airStateChanged))
             {
-                constexpr float absorbCoeff = 4.0f;   // Physically motivated absorption coefficient
-                float cutoff = 20000.0f * std::exp (-absorbCoeff * dist);
-                cutoff = juce::jlimit (200.0f, 20000.0f, cutoff);
+                // Quadratic distance mapping: gentle near (0–0.5 ≈ 0–5m), steep far (0.5–1.0 ≈ 5–20m)
+                // dist² compresses the near range and expands the far range perceptually.
+                float mappedDist = dist * dist;
+                constexpr float absorbCoeff = 3.1f;
+                float targetCutoff = 20000.0f * std::exp (-absorbCoeff * mappedDist);
+                targetCutoff = juce::jlimit (500.0f, 20000.0f, targetCutoff);
+
+                // v1.0: EMA-smooth the cutoff to prevent IIR coefficient transients
+                // on rapid distance changes. Alpha 0.3 ≈ 3-block settling time.
+                constexpr float airSmoothAlpha = 0.2f;  // EMA smoothing for IIR cutoff — 0.2 gives ~80ms settling, aligns with Doppler tracking speed
+                smoothedAirCutoff[t] = smoothedAirCutoff[t]
+                                     + airSmoothAlpha * (targetCutoff - smoothedAirCutoff[t]);
+
                 *airAbsorptionFilter[t].coefficients =
-                    *juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, cutoff);
-            }
-            else if (! useAirAbsorption && positionChanged)
-            {
-                // Bypass: set cutoff to 20kHz (transparent) — only update when position changes
-                *airAbsorptionFilter[t].coefficients =
-                    *juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, 20000.0f);
+                    *juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, smoothedAirCutoff[t]);
             }
         }
     }
 
-    // --- Prepare mono input --------------------------------------------------
-    if (monoInputBuffer.size() < static_cast<size_t> (numSamples))
-        monoInputBuffer.resize (static_cast<size_t> (numSamples));
+    // --- Prepare input buffers ------------------------------------------------
+    auto ns = static_cast<size_t> (numSamples);
+    if (monoInputBuffer.size() < ns)  monoInputBuffer.resize (ns);
+    if (inputBufferL.size() < ns)     inputBufferL.resize (ns);
+    if (inputBufferR.size() < ns)     inputBufferR.resize (ns);
 
     if (numInputChannels == 1)
     {
         auto* in = buffer.getReadPointer (0);
         for (int i = 0; i < numSamples; ++i)
+        {
             monoInputBuffer[static_cast<size_t> (i)] = in[i];
+            inputBufferL[static_cast<size_t> (i)] = in[i];
+            inputBufferR[static_cast<size_t> (i)] = in[i];
+        }
     }
     else
     {
         auto* inL = buffer.getReadPointer (0);
         auto* inR = buffer.getReadPointer (1);
-        for (int i = 0; i < numSamples; ++i)
-            monoInputBuffer[static_cast<size_t> (i)] = (inL[i] + inR[i]) * 0.5f;
+        if (inputFormat == 1)  // Stereo: keep L and R separate
+        {
+            for (int i = 0; i < numSamples; ++i)
+            {
+                inputBufferL[static_cast<size_t> (i)] = inL[i];
+                inputBufferR[static_cast<size_t> (i)] = inR[i];
+                monoInputBuffer[static_cast<size_t> (i)] = (inL[i] + inR[i]) * 0.5f;
+            }
+        }
+        else  // Mono: sum to mono, write same signal to both
+        {
+            for (int i = 0; i < numSamples; ++i)
+            {
+                float mono = (inL[i] + inR[i]) * 0.5f;
+                monoInputBuffer[static_cast<size_t> (i)] = mono;
+                inputBufferL[static_cast<size_t> (i)] = mono;
+                inputBufferR[static_cast<size_t> (i)] = mono;
+            }
+        }
     }
 
     // --- Clear output buffer -------------------------------------------------
@@ -3477,27 +4134,30 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         // Stereo mode from algorithm parameter: indices 6-10 → modes 0-4
         int stereoMode = juce::jlimit (6, 10, algorithmIndex) - 6;
         renderStereoVariant (buffer, numSamples, objects, objDistGain,
-                             pitchSemitones, stereoMode);
+                             stereoMode);
     }
     else if (isBinaural && useHRTF)
     {
-        renderDirectBinauralHRTF (buffer, numSamples, objects, objDistGain, pitchSemitones);
+        renderDirectBinauralHRTF (buffer, numSamples, objects, objDistGain);
     }
     else if (isBinaural)
     {
-        renderSimpleBinauralWoodworth (buffer, numSamples, objects, objGains, pitchSemitones);
+        renderSimpleBinauralWoodworth (buffer, numSamples, objects, objGains);
     }
     else if (isAmbiOutput)
     {
-        const int fmtIdx2 = static_cast<int> (layoutState.format);
-        const int ambiOrder = outputFormatRegistry[static_cast<size_t> (fmtIdx2)].ambiOrder;
-        renderAmbisonicsOutput (buffer, numSamples, objects, objDistGain, pitchSemitones, ambiOrder);
+        const int ambiOrder = outputFormatRegistry[static_cast<size_t> (fmtEnumIdx)].ambiOrder;
+        renderAmbisonicsOutput (buffer, numSamples, objects, objDistGain, ambiOrder);
     }
     else
     {
         renderDiscreteSurround (buffer, numSamples, objects, objChannelGains,
-                                objDistGain, pitchSemitones, surLayout);
+                                objDistGain, surLayout);
     }
+
+    // v0.7: Store per-tap peak to atomics for UI glow
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+        tapActivityRMS[i].store (tapPeakAccum[i], std::memory_order_relaxed);
 }
 
 //==============================================================================
@@ -3506,8 +4166,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
 void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
     juce::AudioBuffer<float>& buffer, int numSamples,
-    const ObjectState* objects, const float* objDistGain,
-    float pitchSemitones)
+    const ObjectState* objects, const float* objDistGain)
 {
     // =========================================================================
     // DIRECT BINAURAL PATH — per-source HRTF convolution (v0.3)
@@ -3548,36 +4207,48 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
     float dwStart      = smoothedDryWet.getCurrentValue();
     float outGainStart = smoothedOutputGain.getCurrentValue();
 
+    // v1.0: Per-sample distGain interpolation to prevent clicks on rapid position changes
+    float hrtfInvN = (numSamples > 1) ? 1.0f / static_cast<float> (numSamples - 1) : 1.0f;
+
     // === PASS 1: Per-sample delay engine → per-source accumulation ===
     for (int s = 0; s < numSamples; ++s)
     {
+        float frac = static_cast<float> (s) * hrtfInvN;
+
         float currentDelayMs = smoothedDelayTime.getNextValue();
-        float baseDelaySamples = currentDelayMs * 0.001f * static_cast<float> (currentSampleRate);
+        float baseDelaySamples = currentDelayMs * blockMsToSamples;
+        baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);
         float currentLoopMult = smoothedLoopMultiplier.getNextValue();
 
         float inGain = smoothedInputGain.getNextValue();
-        /* dw */       smoothedDryWet.getNextValue();
         float fb     = smoothedFeedback.getNextValue();
-        /* outGain */  smoothedOutputGain.getNextValue();
+        // Advance dryWet/outputGain smoothing per-sample; values read at block-end in PASS 3
+        smoothedDryWet.getNextValue();
+        smoothedOutputGain.getNextValue();
 
-        float rawInput    = monoInputBuffer[static_cast<size_t> (s)];
-        float inputSample = rawInput * inGain;
+        // STAGE 1: WRITE to delay line (dual L/R)
+        float rawL = inputBufferL[static_cast<size_t> (s)] * inGain;
+        float rawR = inputBufferR[static_cast<size_t> (s)] * inGain;
+        float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
+        float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
+        writeDelayLine (delayInputL, delayInputR);
+        // rawInput not needed here — PASS 3 reads monoInputBuffer directly
 
-        // STAGE 1: WRITE to delay line
-        float delayInput = inputSample + feedbackSample * fb;
-        delayInput = softClip (delayInput * 0.98f);
-        writeDelayLine (delayInput);
-
-        // STAGE 2: READ & ACCUMULATE (per-source mono × distance gain)
+        // STAGE 2: READ & ACCUMULATE (per-source mono × interpolated distance gain)
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
             if (! objects[t].enabled) continue;
-            sourceAccumBufPtrs[t][s] = readObjectSample (t, baseDelaySamples, pitchSemitones) * objDistGain[t];
+            float dist = prevDistGain[t] + frac * (objDistGain[t] - prevDistGain[t]);
+            sourceAccumBufPtrs[t][s] = readObjectSample (t, baseDelaySamples) * dist;
         }
 
         // STAGE 3: FEEDBACK (mono, pre-spatial)
-        processFeedbackSample (currentLoopMult, baseDelaySamples, pitchSemitones, fb);
+        processFeedbackSample (currentLoopMult, baseDelaySamples, fb);
     }
+
+    // Store current distGain as previous for next block
+    for (int t = 0; t < MAX_OBJECTS; ++t)
+        prevDistGain[t] = objDistGain[t];
 
     // === PASS 2: Per-block per-source HRTF convolution → wet L/R ===
     bool sourceEnabled[MAX_OBJECTS];
@@ -3603,8 +4274,8 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
         float outGain = outGainStart + frac * (outGainEnd - outGainStart);
         float rawInput = monoInputBuffer[static_cast<size_t> (s)];
 
-        outL[s] = (rawInput * (1.0f - dw) + wetBufL[static_cast<size_t> (s)] * dw) * outGain;
-        outR[s] = (rawInput * (1.0f - dw) + wetBufR[static_cast<size_t> (s)] * dw) * outGain;
+        outL[s] = outputLimiter ((rawInput * (1.0f - dw) + wetBufL[static_cast<size_t> (s)] * dw) * outGain);
+        outR[s] = outputLimiter ((rawInput * (1.0f - dw) + wetBufR[static_cast<size_t> (s)] * dw) * outGain);
     }
 
     // Zero remaining channels when binaural is selected on a multi-channel bus
@@ -3615,8 +4286,7 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
 //------------------------------------------------------------------------------
 void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
     juce::AudioBuffer<float>& buffer, int numSamples,
-    const ObjectState* objects, const BinauralGains* objGains,
-    float pitchSemitones)
+    const ObjectState* objects, const BinauralGains* objGains)
 {
     // =========================================================================
     // SIMPLE (WOODWORTH) BINAURAL PATH — per-sample rendering
@@ -3626,10 +4296,16 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
     auto* outL = buffer.getWritePointer (0);
     auto* outR = buffer.getWritePointer (1);
 
+    // v1.0: Per-sample gain interpolation to prevent clicks on rapid position changes
+    float invN = (numSamples > 1) ? 1.0f / static_cast<float> (numSamples - 1) : 1.0f;
+
     for (int s = 0; s < numSamples; ++s)
     {
+        float frac = static_cast<float> (s) * invN;
+
         float currentDelayMs = smoothedDelayTime.getNextValue();
-        float baseDelaySamples = currentDelayMs * 0.001f * static_cast<float> (currentSampleRate);
+        float baseDelaySamples = currentDelayMs * blockMsToSamples;
+        baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);
         float currentLoopMult = smoothedLoopMultiplier.getNextValue();
 
         float inGain  = smoothedInputGain.getNextValue();
@@ -3637,13 +4313,13 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
         float fb      = smoothedFeedback.getNextValue();
         float outGain = smoothedOutputGain.getNextValue();
 
-        float rawInput    = monoInputBuffer[static_cast<size_t> (s)];
-        float inputSample = rawInput * inGain;
-
-        // === STAGE 1: WRITE ===
-        float delayInput = inputSample + feedbackSample * fb;
-        delayInput = softClip (delayInput * 0.98f);
-        writeDelayLine (delayInput);
+        // === STAGE 1: WRITE (dual L/R) ===
+        float rawL = inputBufferL[static_cast<size_t> (s)] * inGain;
+        float rawR = inputBufferR[static_cast<size_t> (s)] * inGain;
+        float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
+        float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
+        writeDelayLine (delayInputL, delayInputR);
+        float rawInput = monoInputBuffer[static_cast<size_t> (s)];  // for dry mix (no inGain — INPUT only scales delay input)
 
         // === STAGE 2: READ & SPATIALIZE ===
         float wetL = 0.0f, wetR = 0.0f;
@@ -3651,20 +4327,26 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
             if (! objects[t].enabled) continue;
-            float objMono = readObjectSample (t, baseDelaySamples, pitchSemitones);
+            float objMono = readObjectSample (t, baseDelaySamples);
 
-            // Woodworth binaural gains (pre-computed at block start)
-            wetL += objMono * objGains[t].leftGain;
-            wetR += objMono * objGains[t].rightGain;
+            // Interpolate between previous and current block gains
+            float gL = prevBinauralGains[t].leftGain  + frac * (objGains[t].leftGain  - prevBinauralGains[t].leftGain);
+            float gR = prevBinauralGains[t].rightGain + frac * (objGains[t].rightGain - prevBinauralGains[t].rightGain);
+            wetL += objMono * gL;
+            wetR += objMono * gR;
         }
 
         // === STAGE 3: FEEDBACK ===
-        processFeedbackSample (currentLoopMult, baseDelaySamples, pitchSemitones, fb);
+        processFeedbackSample (currentLoopMult, baseDelaySamples, fb);
 
         // === STAGE 4: OUTPUT MIX ===
-        outL[s] = (rawInput * (1.0f - dw) + wetL * dw) * outGain;
-        outR[s] = (rawInput * (1.0f - dw) + wetR * dw) * outGain;
+        outL[s] = outputLimiter ((rawInput * (1.0f - dw) + wetL * dw) * outGain);
+        outR[s] = outputLimiter ((rawInput * (1.0f - dw) + wetR * dw) * outGain);
     }
+
+    // Store current gains as previous for next block
+    for (int t = 0; t < MAX_OBJECTS; ++t)
+        prevBinauralGains[t] = objGains[t];
 
     // Zero remaining channels when binaural is selected on a multi-channel bus
     for (int ch = 2; ch < buffer.getNumChannels(); ++ch)
@@ -3675,7 +4357,7 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
 void OpenSpatialDelayProcessor::renderStereoVariant (
     juce::AudioBuffer<float>& buffer, int numSamples,
     const ObjectState* objects, const float* objDistGain,
-    float pitchSemitones, int stereoMode)
+    int stereoMode)
 {
     // =========================================================================
     // STEREO VARIANT PATH — microphone simulation rendering (v0.5)
@@ -3746,11 +4428,17 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
         }
     }
 
+    // v1.0: Per-sample gain interpolation to prevent clicks on rapid position changes
+    float invN = (numSamples > 1) ? 1.0f / static_cast<float> (numSamples - 1) : 1.0f;
+
     // Per-sample processing (same engine as Woodworth, with stereo gains instead of binaural)
     for (int s = 0; s < numSamples; ++s)
     {
+        float frac = static_cast<float> (s) * invN;
+
         float currentDelayMs = smoothedDelayTime.getNextValue();
-        float baseDelaySamples = currentDelayMs * 0.001f * static_cast<float> (currentSampleRate);
+        float baseDelaySamples = currentDelayMs * blockMsToSamples;
+        baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);
         float currentLoopMult = smoothedLoopMultiplier.getNextValue();
 
         float inGain  = smoothedInputGain.getNextValue();
@@ -3758,13 +4446,13 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
         float fb      = smoothedFeedback.getNextValue();
         float outGain = smoothedOutputGain.getNextValue();
 
-        float rawInput    = monoInputBuffer[static_cast<size_t> (s)];
-        float inputSample = rawInput * inGain;
-
-        // === STAGE 1: WRITE ===
-        float delayInput = inputSample + feedbackSample * fb;
-        delayInput = softClip (delayInput * 0.98f);
-        writeDelayLine (delayInput);
+        // === STAGE 1: WRITE (dual L/R) ===
+        float rawL = inputBufferL[static_cast<size_t> (s)] * inGain;
+        float rawR = inputBufferR[static_cast<size_t> (s)] * inGain;
+        float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
+        float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
+        writeDelayLine (delayInputL, delayInputR);
+        float rawInput = monoInputBuffer[static_cast<size_t> (s)];  // for dry mix (no inGain — INPUT only scales delay input)
 
         // === STAGE 2: READ & SPATIALIZE ===
         float wetL = 0.0f, wetR = 0.0f;
@@ -3772,18 +4460,28 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
             if (! objects[t].enabled) continue;
-            float objMono = readObjectSample (t, baseDelaySamples, pitchSemitones);
+            float objMono = readObjectSample (t, baseDelaySamples);
 
-            wetL += objMono * objGainL[t];
-            wetR += objMono * objGainR[t];
+            // Interpolate between previous and current block gains
+            float gL = prevStereoGainL[t] + frac * (objGainL[t] - prevStereoGainL[t]);
+            float gR = prevStereoGainR[t] + frac * (objGainR[t] - prevStereoGainR[t]);
+            wetL += objMono * gL;
+            wetR += objMono * gR;
         }
 
         // === STAGE 3: FEEDBACK ===
-        processFeedbackSample (currentLoopMult, baseDelaySamples, pitchSemitones, fb);
+        processFeedbackSample (currentLoopMult, baseDelaySamples, fb);
 
         // === STAGE 4: OUTPUT MIX ===
-        outL[s] = (rawInput * (1.0f - dw) + wetL * dw) * outGain;
-        outR[s] = (rawInput * (1.0f - dw) + wetR * dw) * outGain;
+        outL[s] = outputLimiter ((rawInput * (1.0f - dw) + wetL * dw) * outGain);
+        outR[s] = outputLimiter ((rawInput * (1.0f - dw) + wetR * dw) * outGain);
+    }
+
+    // Store current gains as previous for next block
+    for (int t = 0; t < MAX_OBJECTS; ++t)
+    {
+        prevStereoGainL[t] = objGainL[t];
+        prevStereoGainR[t] = objGainR[t];
     }
 
     // Zero remaining channels when stereo is selected on a multi-channel bus
@@ -3795,7 +4493,7 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
 void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
     juce::AudioBuffer<float>& buffer, int numSamples,
     const ObjectState* objects, const float* objDistGain,
-    float pitchSemitones, int ambiOrder)
+    int ambiOrder)
 {
     // =========================================================================
     // AMBISONICS OUTPUT PATH — SH encode per source (v0.5: up to 6th order)
@@ -3808,17 +4506,14 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
 
     // Max-rE weights per SH order for perceptual quality (Zotter & Frank 2012)
     // w_n = cos(n * pi / (2*N + 2))  where N = max order used in this block
-    const float maxrEDenom = 2.0f * static_cast<float> (ambiOrder) + 2.0f;
-    float maxrE[MAX_AMBI_ORDER + 1];
-    for (int n = 0; n <= ambiOrder; ++n)
-        maxrE[n] = std::cos (static_cast<float> (n) * juce::MathConstants<float>::pi / maxrEDenom);
-
-    auto acnToOrder = [](int acn) -> int {
-        if (acn < 1)  return 0;  if (acn < 4)  return 1;
-        if (acn < 9)  return 2;  if (acn < 16) return 3;
-        if (acn < 25) return 4;  if (acn < 36) return 5;
-        return 6;
-    };
+    // v0.7: Cached — only recomputed when ambiOrder changes (rare: output format switch)
+    if (ambiOrder != cachedMaxrEOrder)
+    {
+        const float maxrEDenom = 2.0f * static_cast<float> (ambiOrder) + 2.0f;
+        for (int n = 0; n <= ambiOrder; ++n)
+            cachedMaxrE[n] = std::cos (static_cast<float> (n) * juce::MathConstants<float>::pi / maxrEDenom);
+        cachedMaxrEOrder = ambiOrder;
+    }
 
     // --- NFC-HOA: Update filter coefficients when distance changes (block-rate) ---
     for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -3858,7 +4553,7 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
         float azRad = juce::degreesToRadians (objects[t].azimuthDeg);
         float elRad = juce::degreesToRadians (objects[t].elevationDeg);
         for (int c = 0; c < numAmbiCh; ++c)
-            objSHCoeffs[t][c] = evalSH (c, azRad, elRad) * maxrE[acnToOrder (c)];
+            objSHCoeffs[t][c] = evalSH (c, azRad, elRad) * cachedMaxrE[acnToOrder (c)];
     }
 
     // Get output channel write pointers
@@ -3867,10 +4562,16 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
     for (int ch = 0; ch < numOutCh && ch < MAX_AMBI_CHANNELS; ++ch)
         outChannels[ch] = buffer.getWritePointer (ch);
 
+    // v1.0: Per-sample SH coefficient interpolation to prevent clicks on rapid position changes
+    float invN = (numSamples > 1) ? 1.0f / static_cast<float> (numSamples - 1) : 1.0f;
+
     for (int s = 0; s < numSamples; ++s)
     {
+        float frac = static_cast<float> (s) * invN;
+
         float currentDelayMs = smoothedDelayTime.getNextValue();
-        float baseDelaySamples = currentDelayMs * 0.001f * static_cast<float> (currentSampleRate);
+        float baseDelaySamples = currentDelayMs * blockMsToSamples;
+        baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);
         float currentLoopMult = smoothedLoopMultiplier.getNextValue();
 
         float inGain  = smoothedInputGain.getNextValue();
@@ -3878,13 +4579,13 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
         float fb      = smoothedFeedback.getNextValue();
         float outGain = smoothedOutputGain.getNextValue();
 
-        float rawInput    = monoInputBuffer[static_cast<size_t> (s)];
-        float inputSample = rawInput * inGain;
-
-        // === STAGE 1: WRITE ===
-        float delayInput = inputSample + feedbackSample * fb;
-        delayInput = softClip (delayInput * 0.98f);
-        writeDelayLine (delayInput);
+        // === STAGE 1: WRITE (dual L/R) ===
+        float rawL = inputBufferL[static_cast<size_t> (s)] * inGain;
+        float rawR = inputBufferR[static_cast<size_t> (s)] * inGain;
+        float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
+        float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
+        writeDelayLine (delayInputL, delayInputR);
+        float rawInput = monoInputBuffer[static_cast<size_t> (s)];  // for dry mix (no inGain — INPUT only scales delay input)
 
         // === STAGE 2: READ & SH ENCODE (with NFC-HOA) ===
         float ambiAccum[MAX_AMBI_CHANNELS] = {};
@@ -3892,38 +4593,52 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
             if (! objects[t].enabled) continue;
-            float objMono = readObjectSample (t, baseDelaySamples, pitchSemitones);
-            float dist = objDistGain[t];
+            float objMono = readObjectSample (t, baseDelaySamples);
+
+            // Interpolate distance gain between previous and current block
+            float dist = prevDistGain[t] + frac * (objDistGain[t] - prevDistGain[t]);
             float scaledMono = objMono * dist;
 
-            // Order 0 (W channel): no NFC needed
-            ambiAccum[0] += scaledMono * objSHCoeffs[t][0];
+            // Order 0 (W channel): no NFC needed — interpolate SH coeff
+            float sh0 = prevSHCoeffs[t][0] + frac * (objSHCoeffs[t][0] - prevSHCoeffs[t][0]);
+            ambiAccum[0] += scaledMono * sh0;
 
-            // Orders 1+: apply NFC-HOA per-order shelf filter
+            // Orders 1+: apply NFC-HOA per-order shelf filter — interpolate SH coeffs
             for (int ord = 0; ord < ambiOrder && ord < MAX_AMBI_ORDER; ++ord)
             {
                 float nfcMono = nfcFilters[t][ord].processSample (scaledMono);
                 int startACN = (ord + 1) * (ord + 1);
                 int endACN = (ord + 2) * (ord + 2);
                 for (int c = startACN; c < endACN && c < numAmbiCh; ++c)
-                    ambiAccum[c] += nfcMono * objSHCoeffs[t][c];
+                {
+                    float shc = prevSHCoeffs[t][c] + frac * (objSHCoeffs[t][c] - prevSHCoeffs[t][c]);
+                    ambiAccum[c] += nfcMono * shc;
+                }
             }
         }
 
         // === STAGE 3: FEEDBACK ===
-        processFeedbackSample (currentLoopMult, baseDelaySamples, pitchSemitones, fb);
+        processFeedbackSample (currentLoopMult, baseDelaySamples, fb);
 
         // === STAGE 4: OUTPUT MIX ===
         // Wet: SH-encoded signal to all Ambisonics channels
         for (int c = 0; c < numAmbiCh && c < numOutCh; ++c)
         {
             if (outChannels[c] != nullptr)
-                outChannels[c][s] = ambiAccum[c] * dw * outGain;
+                outChannels[c][s] = outputLimiter (ambiAccum[c] * dw * outGain);
         }
 
         // Dry: omnidirectional (W channel = ACN 0 only)
         if (outChannels[0] != nullptr)
-            outChannels[0][s] += rawInput * (1.0f - dw) * outGain;
+            outChannels[0][s] = outputLimiter (outChannels[0][s] + rawInput * (1.0f - dw) * outGain);
+    }
+
+    // Store current SH coefficients and distance gains as previous for next block
+    for (int t = 0; t < MAX_OBJECTS; ++t)
+    {
+        for (int c = 0; c < numAmbiCh; ++c)
+            prevSHCoeffs[t][c] = objSHCoeffs[t][c];
+        prevDistGain[t] = objDistGain[t];
     }
 }
 
@@ -3931,7 +4646,7 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
 void OpenSpatialDelayProcessor::renderDiscreteSurround (
     juce::AudioBuffer<float>& buffer, int numSamples,
     const ObjectState* objects, const float (*objChannelGains)[16],
-    const float* objDistGain, float pitchSemitones,
+    const float* objDistGain,
     const SpeakerLayout& surLayout)
 {
     // =========================================================================
@@ -3946,10 +4661,16 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
     for (int ch = 0; ch < numOutCh && ch < 16; ++ch)
         outChannels[ch] = buffer.getWritePointer (ch);
 
+    // v1.0: Per-sample gain interpolation to prevent clicks on rapid position changes
+    float invN = (numSamples > 1) ? 1.0f / static_cast<float> (numSamples - 1) : 1.0f;
+
     for (int s = 0; s < numSamples; ++s)
     {
+        float frac = static_cast<float> (s) * invN;
+
         float currentDelayMs = smoothedDelayTime.getNextValue();
-        float baseDelaySamples = currentDelayMs * 0.001f * static_cast<float> (currentSampleRate);
+        float baseDelaySamples = currentDelayMs * blockMsToSamples;
+        baseDelaySamples = applyWobble (baseDelaySamples, currentDelayMs);
         float currentLoopMult = smoothedLoopMultiplier.getNextValue();
 
         float inGain  = smoothedInputGain.getNextValue();
@@ -3957,13 +4678,13 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
         float fb      = smoothedFeedback.getNextValue();
         float outGain = smoothedOutputGain.getNextValue();
 
-        float rawInput    = monoInputBuffer[static_cast<size_t> (s)];
-        float inputSample = rawInput * inGain;
-
-        // === STAGE 1: WRITE ===
-        float delayInput = inputSample + feedbackSample * fb;
-        delayInput = softClip (delayInput * 0.98f);
-        writeDelayLine (delayInput);
+        // === STAGE 1: WRITE (dual L/R) ===
+        float rawL = inputBufferL[static_cast<size_t> (s)] * inGain;
+        float rawR = inputBufferR[static_cast<size_t> (s)] * inGain;
+        float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
+        float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
+        writeDelayLine (delayInputL, delayInputR);
+        float rawInput = monoInputBuffer[static_cast<size_t> (s)];  // for dry mix (no inGain — INPUT only scales delay input)
 
         // === STAGE 2: READ & SPATIALIZE ===
         float channelAccum[16] = {};
@@ -3972,17 +4693,22 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
             if (! objects[t].enabled) continue;
-            float objMono = readObjectSample (t, baseDelaySamples, pitchSemitones);
-            float dist = objDistGain[t];
+            float objMono = readObjectSample (t, baseDelaySamples);
+
+            // Interpolate distance gain and channel gains between previous and current block
+            float dist = prevDistGain[t] + frac * (objDistGain[t] - prevDistGain[t]);
 
             for (int sp = 0; sp < numSpeakers; ++sp)
-                channelAccum[sp] += objMono * dist * objChannelGains[t][sp];
+            {
+                float g = prevChannelGains[t][sp] + frac * (objChannelGains[t][sp] - prevChannelGains[t][sp]);
+                channelAccum[sp] += objMono * dist * g;
+            }
 
             wetMono += objMono * dist;
         }
 
         // === STAGE 3: FEEDBACK ===
-        processFeedbackSample (currentLoopMult, baseDelaySamples, pitchSemitones, fb);
+        processFeedbackSample (currentLoopMult, baseDelaySamples, fb);
 
         // === STAGE 4: OUTPUT MIX ===
         // Route spatialized signal to output channels
@@ -3990,127 +4716,219 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
         {
             int ch = surLayout.speakers[sp].channelIndex;
             if (ch >= 0 && ch < numOutCh && outChannels[ch] != nullptr)
-                outChannels[ch][s] = channelAccum[sp] * dw * outGain;
+                outChannels[ch][s] = outputLimiter (channelAccum[sp] * dw * outGain);
         }
 
         // Dry signal → L and R only (channels 0 and 1)
         float drySignal = rawInput * (1.0f - dw) * outGain;
-        if (outChannels[0] != nullptr) outChannels[0][s] += drySignal;
-        if (outChannels[1] != nullptr) outChannels[1][s] += drySignal;
+        if (outChannels[0] != nullptr) outChannels[0][s] = outputLimiter (outChannels[0][s] + drySignal);
+        if (outChannels[1] != nullptr) outChannels[1][s] = outputLimiter (outChannels[1][s] + drySignal);
 
         // LFE generation — low-pass filtered mono sum at −10 dB
         if (lfeIdx >= 0 && lfeIdx < numOutCh && outChannels[lfeIdx] != nullptr)
         {
-            float lfeSig = lfeFilter.processSample (wetMono) * 0.316f * dw * outGain;  // −10 dB ≈ 0.316
+            float lfeSig = outputLimiter (lfeFilter.processSample (wetMono) * 0.316f * dw * outGain);  // −10 dB ≈ 0.316
             outChannels[lfeIdx][s] = lfeSig;
         }
+    }
+
+    // Store current gains as previous for next block
+    for (int t = 0; t < MAX_OBJECTS; ++t)
+    {
+        for (int sp = 0; sp < numSpeakers; ++sp)
+            prevChannelGains[t][sp] = objChannelGains[t][sp];
+        prevDistGain[t] = objDistGain[t];
     }
 }
 
 // #############################################################################
-// v0.6 — ADM-OSC Receive & Trajectory Animation
+// SPATIAL MEDIA LIBRARY: ADM-OSC Receive
 // OSC message parsing (ADM-OSC namespace), position updates via APVTS,
-// Cartesian→Polar conversion (ITU-R BS.2127-0), and trajectory shape functions.
+// Cartesian→Polar conversion (ITU-R BS.2127-0).
+// Reusable by any SML plugin needing ADM-OSC object position control.
 // #############################################################################
 
 //==============================================================================
-// ADM-OSC Receive — message thread callback (MessageLoopCallback)
+// Cartesian→Polar conversion per ITU-R BS.2127-0
+// Converts ADM-OSC Cartesian (x,y,z) to polar (azimuth, elevation, distance)
+//==============================================================================
+static inline void cartesianToPolar (float x, float y, float z,
+                                     float& azDeg, float& elDeg, float& dist)
+{
+    azDeg = std::atan2 (-x, y) * (180.0f / juce::MathConstants<float>::pi);
+    float r = std::sqrt (x * x + y * y);
+    elDeg = std::atan2 (z, r) * (180.0f / juce::MathConstants<float>::pi);
+    dist = juce::jlimit (0.0f, 1.0f, std::sqrt (x * x + y * y + z * z));
+}
+
+//==============================================================================
+// OSC Receive — message thread callback (MessageLoopCallback)
+// Accepts ADM-OSC standard (/adm/obj/N/) and OSD custom (/osd/obj/N/, /osd/global/)
 //==============================================================================
 void OpenSpatialDelayProcessor::oscMessageReceived (const juce::OSCMessage& message)
 {
     const auto address = message.getAddressPattern().toString();
 
-    // ADM-OSC namespace: /adm/obj/N/...
-    // N is 1-based in ADM-OSC, we convert to 0-based internal index
-    if (! address.startsWith ("/adm/obj/"))
-        return;
+    // --- /adm/obj/N/... or /osd/obj/N/... — per-object messages ---
+    if (address.startsWith ("/adm/obj/") || address.startsWith ("/osd/obj/"))
+    {
+        auto afterObj = address.substring (9);  // both prefixes are 9 chars
+        auto slashIdx = afterObj.indexOf ("/");
+        if (slashIdx < 0) return;
 
-    // Parse object number: /adm/obj/N/...
-    auto afterObj = address.substring (9);  // skip "/adm/obj/"
-    auto slashIdx = afterObj.indexOf ("/");
-    if (slashIdx < 0) return;
+        int objNum = afterObj.substring (0, slashIdx).getIntValue();
+        if (objNum < 1 || objNum > MAX_OBJECTS) return;
+        int objIdx = objNum - 1;
 
-    int objNum = afterObj.substring (0, slashIdx).getIntValue();
-    if (objNum < 1 || objNum > MAX_OBJECTS) return;
-    int objIdx = objNum - 1;  // 0-based
+        auto property = afterObj.substring (slashIdx);
 
-    auto property = afterObj.substring (slashIdx);  // e.g., "/azim", "/aed", "/xyz"
+        // --- Position messages (accepted on both /adm/ and /osd/) ---
+        if (property == "/azim" && message.size() >= 1 && message[0].isFloat32())
+        {
+            handleOSCPosition (objIdx, message[0].getFloat32(),
+                               cachedObj[objIdx].elevation->load(),
+                               cachedObj[objIdx].distance->load());
+        }
+        else if (property == "/elev" && message.size() >= 1 && message[0].isFloat32())
+        {
+            handleOSCPosition (objIdx,
+                               cachedObj[objIdx].azimuth->load(),
+                               message[0].getFloat32(),
+                               cachedObj[objIdx].distance->load());
+        }
+        else if (property == "/dist" && message.size() >= 1 && message[0].isFloat32())
+        {
+            handleOSCPosition (objIdx,
+                               cachedObj[objIdx].azimuth->load(),
+                               cachedObj[objIdx].elevation->load(),
+                               message[0].getFloat32());
+        }
+        else if (property == "/aed" && message.size() >= 3
+                 && message[0].isFloat32() && message[1].isFloat32() && message[2].isFloat32())
+        {
+            handleOSCPosition (objIdx,
+                               message[0].getFloat32(),
+                               message[1].getFloat32(),
+                               message[2].getFloat32());
+        }
+        else if (property == "/xyz" && message.size() >= 3
+                 && message[0].isFloat32() && message[1].isFloat32() && message[2].isFloat32())
+        {
+            float azDeg, elDeg, dist;
+            cartesianToPolar (message[0].getFloat32(), message[1].getFloat32(),
+                              message[2].getFloat32(), azDeg, elDeg, dist);
+            handleOSCPosition (objIdx, azDeg, elDeg, dist);
+        }
+        else if (property == "/x" && message.size() >= 1 && message[0].isFloat32())
+        {
+            oscCartesianX[objIdx] = message[0].getFloat32();
+            float azDeg, elDeg, dist;
+            cartesianToPolar (oscCartesianX[objIdx], oscCartesianY[objIdx],
+                              oscCartesianZ[objIdx], azDeg, elDeg, dist);
+            handleOSCPosition (objIdx, azDeg, elDeg, dist);
+        }
+        else if (property == "/y" && message.size() >= 1 && message[0].isFloat32())
+        {
+            oscCartesianY[objIdx] = message[0].getFloat32();
+            float azDeg, elDeg, dist;
+            cartesianToPolar (oscCartesianX[objIdx], oscCartesianY[objIdx],
+                              oscCartesianZ[objIdx], azDeg, elDeg, dist);
+            handleOSCPosition (objIdx, azDeg, elDeg, dist);
+        }
+        else if (property == "/z" && message.size() >= 1 && message[0].isFloat32())
+        {
+            oscCartesianZ[objIdx] = message[0].getFloat32();
+            float azDeg, elDeg, dist;
+            cartesianToPolar (oscCartesianX[objIdx], oscCartesianY[objIdx],
+                              oscCartesianZ[objIdx], azDeg, elDeg, dist);
+            handleOSCPosition (objIdx, azDeg, elDeg, dist);
+        }
+        // --- Per-object non-position params (/osd/obj/N/ only) ---
+        else if (property == "/enabled" && message.size() >= 1)
+        {
+            handleOSCParam ("object" + juce::String (objNum) + "_enabled",
+                            message[0].isFloat32() ? message[0].getFloat32()
+                                                   : static_cast<float> (message[0].getInt32()));
+        }
+        else if (property == "/doppler" && message.size() >= 1 && message[0].isFloat32())
+        {
+            handleOSCParam ("object" + juce::String (objNum) + "_dopplerAmount",
+                            message[0].getFloat32());
+        }
+        else if (property == "/pitch" && message.size() >= 1 && message[0].isFloat32())
+        {
+            handleOSCParam ("object" + juce::String (objNum) + "_pitchShift",
+                            message[0].getFloat32());
+        }
+        else if (property == "/trajectory" && message.size() >= 1)
+        {
+            handleOSCParam ("object" + juce::String (objNum) + "_trajectoryShape",
+                            message[0].isFloat32() ? message[0].getFloat32()
+                                                   : static_cast<float> (message[0].getInt32()));
+        }
+        else if (property == "/speed" && message.size() >= 1 && message[0].isFloat32())
+        {
+            handleOSCParam ("object" + juce::String (objNum) + "_trajectorySpeed",
+                            message[0].getFloat32());
+        }
+        else if (property == "/direction" && message.size() >= 1)
+        {
+            handleOSCParam ("object" + juce::String (objNum) + "_trajectoryDirection",
+                            message[0].isFloat32() ? message[0].getFloat32()
+                                                   : static_cast<float> (message[0].getInt32()));
+        }
+        else if (property == "/input" && message.size() >= 1)
+        {
+            handleOSCParam ("object" + juce::String (objNum) + "_inputChannel",
+                            message[0].isFloat32() ? message[0].getFloat32()
+                                                   : static_cast<float> (message[0].getInt32()));
+        }
+    }
+    // --- /osd/global/... — global parameter messages ---
+    else if (address.startsWith ("/osd/global/"))
+    {
+        auto property = address.substring (11);  // skip "/osd/global" → "/delaytime" etc.
+        if (message.size() < 1) return;
+        float val = message[0].isFloat32() ? message[0].getFloat32()
+                                           : static_cast<float> (message[0].getInt32());
 
-    if (property == "/azim" && message.size() >= 1 && message[0].isFloat32())
-    {
-        float azDeg = message[0].getFloat32();
-        // getRawParameterValue returns actual (denormalized) values: el in -90..+90, dist in 0..1
-        handleOSCPosition (objIdx, azDeg,
-                           cachedParam_elevation[objIdx]->load(),
-                           cachedParam_distance[objIdx]->load());
+        if      (property == "/delaytime")     handleOSCParam ("delayTime", val);
+        else if (property == "/temposync")     handleOSCParam ("tempoSync", val);
+        else if (property == "/notedivision")  handleOSCParam ("noteDivision", val);
+        else if (property == "/syncmode")      handleOSCParam ("syncMode", val);
+        else if (property == "/feedback")      handleOSCParam ("feedback", val);
+        else if (property == "/filterlp")      handleOSCParam ("filterLP", val);
+        else if (property == "/filterhp")      handleOSCParam ("filterHP", val);
+        else if (property == "/filterlpq")     handleOSCParam ("filterLPQ", val);
+        else if (property == "/filterhpq")     handleOSCParam ("filterHPQ", val);
+        else if (property == "/filterenabled") handleOSCParam ("filterEnabled", val);
+        else if (property == "/drywet")        handleOSCParam ("dryWet", val);
+        else if (property == "/inputgain")     handleOSCParam ("inputGain", val);
+        else if (property == "/outputgain")    handleOSCParam ("outputGain", val);
+        else if (property == "/algorithm")     handleOSCParam ("algorithm", val);
+        else if (property == "/hrtfprofile")   handleOSCParam ("hrtfProfile", val);
+        else if (property == "/outputformat")  handleOSCParam ("outputFormat", val);
+        else if (property == "/air")           handleOSCParam ("airAbsorption", val);
+        else if (property == "/wobble")        handleOSCParam ("wobbleEnabled", val);
+        else if (property == "/wobbleamount")  handleOSCParam ("wobbleAmount", val);
+        else if (property == "/wobblemorph")   handleOSCParam ("wobbleMorph", val);
+        // v1.0: Global tap offset knobs (UI-only, not APVTS — stored in atomics)
+        else if (property == "/tapazimuth")    { globalTapOffset[0].store (juce::jlimit (-180.0f, 180.0f, val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
+        else if (property == "/tapelevation")  { globalTapOffset[1].store (juce::jlimit (-90.0f,  90.0f,  val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
+        else if (property == "/tapdistance")   { globalTapOffset[2].store (juce::jlimit (-1.0f,   1.0f,   val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
+        else if (property == "/tapdoppler")    { globalTapOffset[3].store (juce::jlimit (-100.0f, 100.0f, val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
+        else if (property == "/tappitch")      { globalTapOffset[4].store (juce::jlimit (-24.0f,  24.0f,  val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
+        else if (property == "/tapspeed")      { globalTapOffset[5].store (juce::jlimit (-5.0f,   5.0f,   val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
     }
-    else if (property == "/elev" && message.size() >= 1 && message[0].isFloat32())
-    {
-        float elDeg = message[0].getFloat32();
-        handleOSCPosition (objIdx,
-                           cachedParam_azimuth[objIdx]->load(),
-                           elDeg,
-                           cachedParam_distance[objIdx]->load());
-    }
-    else if (property == "/dist" && message.size() >= 1 && message[0].isFloat32())
-    {
-        float dist = message[0].getFloat32();
-        handleOSCPosition (objIdx,
-                           cachedParam_azimuth[objIdx]->load(),
-                           cachedParam_elevation[objIdx]->load(),
-                           dist);
-    }
-    else if (property == "/aed" && message.size() >= 3
-             && message[0].isFloat32() && message[1].isFloat32() && message[2].isFloat32())
-    {
-        handleOSCPosition (objIdx,
-                           message[0].getFloat32(),   // azimuth degrees
-                           message[1].getFloat32(),   // elevation degrees
-                           message[2].getFloat32());  // distance 0..1
-    }
-    else if (property == "/xyz" && message.size() >= 3
-             && message[0].isFloat32() && message[1].isFloat32() && message[2].isFloat32())
-    {
-        // Cartesian→Polar conversion per ITU-R BS.2127-0
-        float x = message[0].getFloat32();
-        float y = message[1].getFloat32();
-        float z = message[2].getFloat32();
-        float azDeg = std::atan2 (-x, y) * (180.0f / juce::MathConstants<float>::pi);
-        float r = std::sqrt (x * x + y * y);
-        float elDeg = std::atan2 (z, r) * (180.0f / juce::MathConstants<float>::pi);
-        float dist = juce::jlimit (0.0f, 1.0f, std::sqrt (x * x + y * y + z * z));
-        handleOSCPosition (objIdx, azDeg, elDeg, dist);
-    }
-    else if (property == "/x" && message.size() >= 1 && message[0].isFloat32())
-    {
-        oscCartesianX[objIdx] = message[0].getFloat32();
-        float x = oscCartesianX[objIdx], y = oscCartesianY[objIdx], z = oscCartesianZ[objIdx];
-        float azDeg = std::atan2 (-x, y) * (180.0f / juce::MathConstants<float>::pi);
-        float r = std::sqrt (x * x + y * y);
-        float elDeg = std::atan2 (z, r) * (180.0f / juce::MathConstants<float>::pi);
-        float dist = juce::jlimit (0.0f, 1.0f, std::sqrt (x * x + y * y + z * z));
-        handleOSCPosition (objIdx, azDeg, elDeg, dist);
-    }
-    else if (property == "/y" && message.size() >= 1 && message[0].isFloat32())
-    {
-        oscCartesianY[objIdx] = message[0].getFloat32();
-        float x = oscCartesianX[objIdx], y = oscCartesianY[objIdx], z = oscCartesianZ[objIdx];
-        float azDeg = std::atan2 (-x, y) * (180.0f / juce::MathConstants<float>::pi);
-        float r = std::sqrt (x * x + y * y);
-        float elDeg = std::atan2 (z, r) * (180.0f / juce::MathConstants<float>::pi);
-        float dist = juce::jlimit (0.0f, 1.0f, std::sqrt (x * x + y * y + z * z));
-        handleOSCPosition (objIdx, azDeg, elDeg, dist);
-    }
-    else if (property == "/z" && message.size() >= 1 && message[0].isFloat32())
-    {
-        oscCartesianZ[objIdx] = message[0].getFloat32();
-        float x = oscCartesianX[objIdx], y = oscCartesianY[objIdx], z = oscCartesianZ[objIdx];
-        float azDeg = std::atan2 (-x, y) * (180.0f / juce::MathConstants<float>::pi);
-        float r = std::sqrt (x * x + y * y);
-        float elDeg = std::atan2 (z, r) * (180.0f / juce::MathConstants<float>::pi);
-        float dist = juce::jlimit (0.0f, 1.0f, std::sqrt (x * x + y * y + z * z));
-        handleOSCPosition (objIdx, azDeg, elDeg, dist);
-    }
+}
+
+//==============================================================================
+// Set any APVTS parameter from OSC — denormalized value in, normalized write out
+//==============================================================================
+void OpenSpatialDelayProcessor::handleOSCParam (const juce::String& paramID, float denormValue)
+{
+    if (auto* param = apvts.getParameter (paramID))
+        param->setValueNotifyingHost (param->convertTo0to1 (denormValue));
 }
 
 //==============================================================================
@@ -4137,58 +4955,314 @@ void OpenSpatialDelayProcessor::handleOSCPosition (int objIdx, float azDeg, floa
         distParam->setValueNotifyingHost (distParam->convertTo0to1 (clampedDist));
     }
 
-    // Mark OSC override active (pauses trajectory for this object)
-    oscOverrideActive[objIdx].store (true, std::memory_order_relaxed);
-    oscLastReceiveTime[objIdx] = juce::Time::getMillisecondCounterHiRes();
+    // v0.9: When trajectory is active, OSC sets the origin (knobs/APVTS) —
+    // trajectory continues running around the new origin. No override needed.
+    // When NO trajectory is active, OSC overrides position directly (existing behavior).
+    if (! trajectoryActive[objIdx].load (std::memory_order_relaxed))
+    {
+        oscOverrideActive[objIdx].store (true, std::memory_order_relaxed);
+        oscLastReceiveTime[objIdx] = juce::Time::getMillisecondCounterHiRes();
+    }
 }
+
+// #############################################################################
+// DELAY-SPECIFIC: Trajectory Animation
+// Per-plugin modulation — each SML plugin implements its own trajectory shapes.
+// #############################################################################
 
 //==============================================================================
 // Trajectory shape computation — pure function, no side effects
 //==============================================================================
 OpenSpatialDelayProcessor::TrajectoryResult
 OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
-                                               float baseAz, float baseEl, float baseDist)
+                                               float baseAz, float baseEl, float baseDist,
+                                               bool reverse)
 {
+    // v0.8: Reverse direction — flip phase so trajectory runs backwards
+    if (reverse)
+        phase = 1.0f - phase;
+
     TrajectoryResult r;
+    r.controlsAz = false;
+    r.controlsEl = false;
+    r.controlsDist = false;
+
+    // Issue #3: distance amplitude scales inversely with origin distance
+    const float distScale = 1.0f - baseDist;
 
     switch (shape)
     {
-        case 1: // Spiral — azimuth sweeps 360°, elevation oscillates ±45°, distance pulses
-            r.azDeg = baseAz + 360.0f * phase;
-            r.elDeg = baseEl + 45.0f * std::sin (phase * juce::MathConstants<float>::twoPi);
-            r.dist  = 0.3f + 0.7f * (0.5f + 0.5f * std::cos (phase * juce::MathConstants<float>::twoPi));
-            break;
-
-        case 2: // Orbit — circular orbit, elevation & distance stay at base
-            r.azDeg = baseAz + 360.0f * phase;
-            r.elDeg = baseEl;
-            r.dist  = baseDist;
-            break;
-
-        case 3: // Bounce — azimuth ping-pongs ±90°, elevation bounces ±30°
+        case 1: // Bounce — azimuth ping-pongs ±90°, elevation bounces ±30°
         {
-            // Triangle wave: 0→1→0 over one phase cycle
             float tri = 1.0f - std::abs (2.0f * phase - 1.0f);
-            r.azDeg = baseAz + 90.0f * (2.0f * tri - 1.0f);
-            r.elDeg = baseEl + 30.0f * (2.0f * tri - 1.0f);
+            r.azDeg = baseAz - 90.0f * (2.0f * tri - 1.0f);
+            r.elDeg = baseEl - 30.0f * (2.0f * tri - 1.0f);
             r.dist  = baseDist;
+            r.controlsAz = r.controlsEl = true;
             break;
         }
 
-        case 4: // Figure-8 — Lissajous pattern
-            r.azDeg = baseAz + 90.0f  * std::sin (phase * juce::MathConstants<float>::twoPi);
-            r.elDeg = baseEl + 45.0f  * std::sin (phase * juce::MathConstants<float>::twoPi * 2.0f);
+        case 2: // Circle — circular path around origin (Cartesian→polar)
+        {
+            const float circleR = 1.0f * distScale;
+            float p = phase * juce::MathConstants<float>::twoPi;
+            float localX = circleR * std::sin (p);
+            float localY = circleR * std::cos (p);
+            // Rotate by baseAz and offset by baseDist
+            float baseAzRad = juce::degreesToRadians (baseAz);
+            float baseCx = baseDist * std::sin (baseAzRad);
+            float baseCy = baseDist * std::cos (baseAzRad);
+            float cosA = std::cos (baseAzRad);
+            float sinA = std::sin (baseAzRad);
+            float mapX = baseCx + localX * cosA + localY * sinA;
+            float mapY = baseCy - localX * sinA + localY * cosA;
+            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
+            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
+            r.elDeg = baseEl;
+            r.controlsAz = r.controlsDist = true;
+            break;
+        }
+
+        case 3: // Cross — plus-sign pattern, 4 cardinal sweeps (az ↔ el)
+        {
+            float p = phase * 4.0f;
+            int segment = juce::jlimit (0, 3, static_cast<int> (p));
+            float t = p - static_cast<float> (segment);
+            float tri = 1.0f - std::abs (2.0f * t - 1.0f); // 0→1→0 within segment
+            if (segment == 0)      { r.azDeg = baseAz;                       r.elDeg = baseEl + 60.0f * tri; }
+            else if (segment == 1) { r.azDeg = baseAz + 90.0f * tri;         r.elDeg = baseEl; }
+            else if (segment == 2) { r.azDeg = baseAz;                       r.elDeg = baseEl - 60.0f * tri; }
+            else                   { r.azDeg = baseAz - 90.0f * tri;         r.elDeg = baseEl; }
+            r.dist = baseDist;
+            r.controlsAz = r.controlsEl = true;
+            break;
+        }
+
+        case 4: // Figure-8 — front CCW, back CW, origin-relative (Cartesian→polar)
+        {
+            const float loopR = 0.5f * distScale;
+            constexpr float halfPi = juce::MathConstants<float>::halfPi;
+            constexpr float twoPi  = juce::MathConstants<float>::twoPi;
+            // Invert phase for Figure-8 so Forward button = correct traversal direction (#13)
+            float fig8Phase = 1.0f - phase;
+            float localX, localY;
+            if (fig8Phase < 0.5f)
+            {
+                float t = fig8Phase * 2.0f;
+                float theta = -halfPi + twoPi * t;
+                localX = loopR * std::cos (theta);
+                localY = loopR + loopR * std::sin (theta);
+            }
+            else
+            {
+                float t = (fig8Phase - 0.5f) * 2.0f;
+                float theta = halfPi - twoPi * t;
+                localX = loopR * std::cos (theta);
+                localY = -loopR + loopR * std::sin (theta);
+            }
+            // Rotate local shape by baseAz and offset by baseDist (like Line shape)
+            float baseAzRad = juce::degreesToRadians (baseAz);
+            float baseCx = baseDist * std::sin (baseAzRad);
+            float baseCy = baseDist * std::cos (baseAzRad);
+            // Rotate local coords by baseAz
+            float cosA = std::cos (baseAzRad);
+            float sinA = std::sin (baseAzRad);
+            float rotX = localX * cosA + localY * sinA;
+            float rotY = -localX * sinA + localY * cosA;
+            float mapX = baseCx + rotX;
+            float mapY = baseCy + rotY;
+            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
+            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
+            r.elDeg = baseEl;
+            r.controlsAz = r.controlsEl = r.controlsDist = true;
+            break;
+        }
+
+        case 5: // Heart — parametric heart curve (Cartesian→polar), origin-relative
+        {
+            float p = phase * juce::MathConstants<float>::twoPi;
+            // Standard parametric heart: x = 16sin³(t), y = 13cos(t) - 5cos(2t) - 2cos(3t) - cos(4t)
+            float sinP = std::sin (p);
+            float hx = 16.0f * sinP * sinP * sinP;
+            float hy = 13.0f * std::cos (p) - 5.0f * std::cos (2.0f * p)
+                      - 2.0f * std::cos (3.0f * p) - std::cos (4.0f * p);
+            // Normalize to ~0.35 radius (heart spans roughly -16..16 x, -17..15 y)
+            const float scale = (1.0f / 17.0f) * distScale;
+            float localX = hx * scale;
+            float localY = hy * scale;  // point-down orientation (Y+ = front)
+            // Rotate by baseAz and offset by baseDist
+            float baseAzRad = juce::degreesToRadians (baseAz);
+            float baseCx = baseDist * std::sin (baseAzRad);
+            float baseCy = baseDist * std::cos (baseAzRad);
+            float cosA = std::cos (baseAzRad);
+            float sinA = std::sin (baseAzRad);
+            float mapX = baseCx + localX * cosA + localY * sinA;
+            float mapY = baseCy - localX * sinA + localY * cosA;
+            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
+            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
+            r.elDeg = baseEl;
+            r.controlsAz = r.controlsDist = true;
+            break;
+        }
+
+        case 6: // Helix — orbit with cosine-eased elevation ramp (3D corkscrew)
+        {
+            r.azDeg = baseAz + 360.0f * phase;  // positive = CW on spatial map (with Forward→reverse phase inversion)
+            // Cosine easing: slows at -90° and +90° peaks (ease in/out)
+            float easedPhase = 0.5f * (1.0f - std::cos (phase * juce::MathConstants<float>::pi));
+            r.elDeg = 90.0f - 180.0f * easedPhase;  // inverted: bottom-to-top in Forward (#14)
             r.dist  = baseDist;
+            r.controlsAz = r.controlsEl = true;
+            break;
+        }
+
+        case 7: // Infinity — Bernoulli lemniscate (Cartesian→polar), origin-relative
+        {
+            float p = phase * juce::MathConstants<float>::twoPi;
+            // Lemniscate of Bernoulli: x = a*cos(t)/(1+sin²(t)), y = a*sin(t)*cos(t)/(1+sin²(t))
+            const float a = 1.0f * distScale;
+            float sinP = std::sin (p);
+            float cosP = std::cos (p);
+            float denom = 1.0f + sinP * sinP;
+            float localX = a * cosP / denom;
+            float localY = a * sinP * cosP / denom;
+            // Rotate by baseAz and offset by baseDist
+            float baseAzRad = juce::degreesToRadians (baseAz);
+            float baseCx = baseDist * std::sin (baseAzRad);
+            float baseCy = baseDist * std::cos (baseAzRad);
+            float cosA = std::cos (baseAzRad);
+            float sinA = std::sin (baseAzRad);
+            float mapX = baseCx + localX * cosA + localY * sinA;
+            float mapY = baseCy - localX * sinA + localY * cosA;
+            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
+            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
+            r.elDeg = baseEl;
+            r.controlsAz = r.controlsDist = true;
+            break;
+        }
+
+        case 8: // Line — sweep rotated by baseAz (Cartesian→polar)
+        {
+            const float amplitude = 1.0f * distScale;
+            float baseAzRad = juce::degreesToRadians (baseAz);
+            float baseCx = baseDist * std::sin (baseAzRad);
+            float baseCy = baseDist * std::cos (baseAzRad);
+            // Local sweep along X axis, then rotate by baseAz
+            float p = phase * juce::MathConstants<float>::twoPi;
+            float localX = amplitude * std::cos (p);
+            float localY = 0.0f;
+            float cosA = std::cos (baseAzRad);
+            float sinA = std::sin (baseAzRad);
+            float mapX = baseCx + localX * cosA + localY * sinA;
+            float mapY = baseCy - localX * sinA + localY * cosA;
+            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
+            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
+            r.elDeg = baseEl;
+            r.controlsAz = r.controlsDist = true;
+            break;
+        }
+
+        case 9: // Orbit — circular orbit (azimuth only)
+            r.azDeg = baseAz + 360.0f * phase;
+            r.elDeg = baseEl;
+            r.dist  = baseDist;
+            r.controlsAz = true;
             break;
 
-        case 5: // Random — smoothed random walk using sin-based pseudo-random
+        case 10: // Random — multi-layer irrational-frequency oscillators (all axes, half-speed)
         {
-            // Use deterministic oscillators at irrational frequency ratios for smooth "random" motion
             float p = phase * juce::MathConstants<float>::twoPi;
-            r.azDeg = baseAz + 60.0f * std::sin (p * 1.0f) + 30.0f * std::sin (p * 2.7183f);
-            r.elDeg = baseEl + 25.0f * std::sin (p * 1.4142f) + 15.0f * std::sin (p * 3.1416f);
+            r.azDeg = baseAz + 50.0f * std::sin (p * 0.5f)
+                             + 35.0f * std::sin (p * 1.3592f + 0.7f)
+                             + 20.0f * std::sin (p * 2.3346f + 2.1f)
+                             + 12.0f * std::sin (p * 3.6946f + 4.3f);
+            r.elDeg = baseEl + 30.0f * std::sin (p * 0.7071f + 1.1f)
+                             + 20.0f * std::sin (p * 1.5708f + 3.5f)
+                             + 12.0f * std::sin (p * 2.9299f + 0.3f)
+                             +  8.0f * std::sin (p * 4.2699f + 5.7f);
             r.dist  = juce::jlimit (0.0f, 1.0f,
-                                    baseDist + 0.3f * std::sin (p * 1.7321f) + 0.1f * std::sin (p * 2.2361f));
+                                    baseDist + 0.50f * distScale * std::sin (p * 0.8661f + 2.3f)
+                                             + 0.30f * distScale * std::sin (p * 1.9365f + 4.9f)
+                                             + 0.20f * distScale * std::sin (p * 3.1416f + 1.6f));
+            r.controlsAz = r.controlsEl = r.controlsDist = true;
+            break;
+        }
+
+        case 11: // Spiral — Archimedean spiral from origin outward (Cartesian→polar)
+        {
+            constexpr float numTurns = 1.75f;
+            const float maxRadius = 1.0f * distScale;
+            // Phase 0→1 spirals outward (origin→edge), positive theta = CW on spatial map
+            float theta = juce::MathConstants<float>::twoPi * numTurns * (1.0f - phase);
+            float rLocal = maxRadius * (1.0f - phase);  // inverted: origin→outward (#15)
+            float localX = rLocal * std::cos (theta);
+            float localY = rLocal * std::sin (theta);
+            // Rotate by baseAz and offset by baseDist
+            float baseAzRad = juce::degreesToRadians (baseAz);
+            float baseCx = baseDist * std::sin (baseAzRad);
+            float baseCy = baseDist * std::cos (baseAzRad);
+            float cosA = std::cos (baseAzRad);
+            float sinA = std::sin (baseAzRad);
+            float mapX = baseCx + localX * cosA + localY * sinA;
+            float mapY = baseCy - localX * sinA + localY * cosA;
+            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
+            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
+            r.elDeg = baseEl;
+            r.controlsAz = r.controlsDist = true;
+            break;
+        }
+
+        case 12: // Square — 4-corner rectangular path, origin-relative (Cartesian→polar)
+        {
+            const float halfSide = 0.7071f * distScale;
+            const float lcx[4] = { -halfSide,  halfSide,  halfSide, -halfSide };
+            const float lcy[4] = {  halfSide,  halfSide, -halfSide, -halfSide };
+            float p = phase * 4.0f;
+            int edge = juce::jlimit (0, 3, static_cast<int> (p));
+            float t = p - static_cast<float> (edge);
+            float ease = 0.5f * (1.0f - std::cos (t * juce::MathConstants<float>::pi));
+            int next = (edge + 1) & 3;
+            float localX = lcx[edge] + (lcx[next] - lcx[edge]) * ease;
+            float localY = lcy[edge] + (lcy[next] - lcy[edge]) * ease;
+            // Rotate by baseAz and offset by baseDist
+            float baseAzRad = juce::degreesToRadians (baseAz);
+            float baseCx = baseDist * std::sin (baseAzRad);
+            float baseCy = baseDist * std::cos (baseAzRad);
+            float cosA = std::cos (baseAzRad);
+            float sinA = std::sin (baseAzRad);
+            float mapX = baseCx + localX * cosA + localY * sinA;
+            float mapY = baseCy - localX * sinA + localY * cosA;
+            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
+            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
+            r.elDeg = baseEl;
+            r.controlsAz = r.controlsEl = r.controlsDist = true;
+            break;
+        }
+
+        case 13: // Triangle — equilateral triangle, origin-relative (Cartesian→polar)
+        {
+            const float circumR = 1.0f * distScale;
+            const float lvx[3] = { 0.0f,  circumR * 0.8660254f, -circumR * 0.8660254f };
+            const float lvy[3] = { circumR, -circumR * 0.5f, -circumR * 0.5f };
+            float p = phase * 3.0f;
+            int side = juce::jlimit (0, 2, static_cast<int> (p));
+            float t = p - static_cast<float> (side);
+            float ease = 0.5f * (1.0f - std::cos (t * juce::MathConstants<float>::pi));
+            int next = (side + 1) % 3;
+            float localX = lvx[side] + (lvx[next] - lvx[side]) * ease;
+            float localY = lvy[side] + (lvy[next] - lvy[side]) * ease;
+            // Rotate by baseAz and offset by baseDist
+            float baseAzRad = juce::degreesToRadians (baseAz);
+            float baseCx = baseDist * std::sin (baseAzRad);
+            float baseCy = baseDist * std::cos (baseAzRad);
+            float cosA = std::cos (baseAzRad);
+            float sinA = std::sin (baseAzRad);
+            float mapX = baseCx + localX * cosA + localY * sinA;
+            float mapY = baseCy - localX * sinA + localY * cosA;
+            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
+            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
+            r.elDeg = baseEl;
+            r.controlsAz = r.controlsEl = r.controlsDist = true;
             break;
         }
 
@@ -4222,9 +5296,14 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
 void OpenSpatialDelayProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
-    state.setProperty ("pluginStateVersion", 10, nullptr);  // v0.6 state format (10 = per-object trajectory, preset system)
+    state.setProperty ("pluginStateVersion", 19, nullptr);  // v1.0 state format (19 = 9.1.4 added)
     state.setProperty ("oscReceivePort", oscReceivePort, nullptr);  // v0.6: persist OSC port
+    state.setProperty ("globalDrawerOpen", globalDrawerOpen, nullptr);  // v1.0: persist drawer state
     state.setProperty ("currentPresetIndex", currentPresetIndex, nullptr);  // v0.6: persist preset selection
+    // v0.7: persist OSC Send settings
+    state.setProperty ("oscSendEnabled", oscSendEnabled, nullptr);
+    state.setProperty ("oscSendPort", oscSendPort, nullptr);
+    state.setProperty ("oscSendIP", oscSendIP, nullptr);
     std::unique_ptr<juce::XmlElement> xml (state.createXml());
     copyXmlToBinary (*xml, destData);
 }
@@ -4506,11 +5585,225 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
         tree.setProperty ("pluginStateVersion", 10, nullptr);
     }
 
+    // v0.9: Migrate trajectoryShape from 6-item to 13-item alphabetical ordering
+    // Old (6 items): None=0, Spiral=1, Orbit=2, Bounce=3, Figure-8=4, Random=5
+    // New (13 items): None=0, Bounce=1, Cross=2, Figure-8=3, Heart=4, Helix=5,
+    //                 Infinity=6, Line=7, Orbit=8, Random=9, Spiral=10, Square=11, Triangle=12
+    if (savedVersion < 13)
+    {
+        for (int i = 0; i < tree.getNumChildren(); ++i)
+        {
+            auto child = tree.getChild (i);
+            if (! child.hasProperty ("id"))
+                continue;
+
+            auto paramId = child.getProperty ("id").toString();
+            if (paramId.containsIgnoreCase ("trajectoryShape"))
+            {
+                float normalizedOld = static_cast<float> (child.getProperty ("value", 0.0f));
+                // Denormalize using old item count (6 items → indices 0..5)
+                int oldIndex = juce::roundToInt (normalizedOld * 5.0f);
+                oldIndex = juce::jlimit (0, 5, oldIndex);
+                int newIndex = trajectoryLegacyToNewIndex (oldIndex);
+                // Re-normalize using new item count (14 items → indices 0..13)
+                float normalizedNew = static_cast<float> (newIndex) / 13.0f;
+                child.setProperty ("value", normalizedNew, nullptr);
+            }
+        }
+
+        tree.setProperty ("pluginStateVersion", 15, nullptr);
+    }
+
+    // v0.9: Migrate from intermediate 12-item to final 14-item trajectory ordering
+    // Old 12: ..., 3=Figure-8(old), ..., 6=Lissajous, ...
+    // New 14: ..., 4=Figure-8(new), ..., 7=Infinity(=old Figure-8), ..., 13=Triangle(=old Lissajous)
+    if (savedVersion >= 13 && savedVersion < 14)
+    {
+        static const int v13ToV14Map[12] = {
+            0, 1, 3, 7, 5, 6, 13, 8, 9, 10, 11, 12
+        //  None Bounce Cross Inf  Heart Helix Tri Line Orbit Rand Spiral Square
+        };
+
+        for (int i = 0; i < tree.getNumChildren(); ++i)
+        {
+            auto child = tree.getChild (i);
+            if (! child.hasProperty ("id"))
+                continue;
+
+            auto paramId = child.getProperty ("id").toString();
+            if (paramId.containsIgnoreCase ("trajectoryShape"))
+            {
+                float normalizedOld = static_cast<float> (child.getProperty ("value", 0.0f));
+                // Denormalize using old item count (12 items → indices 0..11)
+                int oldIndex = juce::roundToInt (normalizedOld * 11.0f);
+                oldIndex = juce::jlimit (0, 11, oldIndex);
+                int newIndex = v13ToV14Map[oldIndex];
+                // Re-normalize using new item count (14 items → indices 0..13)
+                float normalizedNew = static_cast<float> (newIndex) / 13.0f;
+                child.setProperty ("value", normalizedNew, nullptr);
+            }
+        }
+
+        tree.setProperty ("pluginStateVersion", 15, nullptr);
+    }
+
+    // v0.9: Migrate from 13-item to 14-item trajectory ordering (Circle inserted at index 2)
+    // Old 13: None=0, Bounce=1, Cross=2, Figure-8=3, Heart=4, Helix=5, Infinity=6, Line=7, Orbit=8, Random=9, Spiral=10, Square=11, Triangle=12
+    // New 14: None=0, Bounce=1, Circle=2, Cross=3, Figure-8=4, Heart=5, Helix=6, Infinity=7, Line=8, Orbit=9, Random=10, Spiral=11, Square=12, Triangle=13
+    if (savedVersion == 14)
+    {
+        for (int i = 0; i < tree.getNumChildren(); ++i)
+        {
+            auto child = tree.getChild (i);
+            if (! child.hasProperty ("id"))
+                continue;
+
+            auto paramId = child.getProperty ("id").toString();
+            if (paramId.containsIgnoreCase ("trajectoryShape"))
+            {
+                float normalizedOld = static_cast<float> (child.getProperty ("value", 0.0f));
+                // Denormalize using old item count (13 items → indices 0..12)
+                int oldIndex = juce::roundToInt (normalizedOld * 12.0f);
+                oldIndex = juce::jlimit (0, 12, oldIndex);
+                // Shift indices ≥ 2 up by 1 (Circle inserted at index 2)
+                int newIndex = (oldIndex >= 2) ? oldIndex + 1 : oldIndex;
+                // Re-normalize using new item count (14 items → indices 0..13)
+                float normalizedNew = static_cast<float> (newIndex) / 13.0f;
+                child.setProperty ("value", normalizedNew, nullptr);
+            }
+        }
+
+        tree.setProperty ("pluginStateVersion", 15, nullptr);
+    }
+
+    // v1.0: Migrate outputFormat from 21-item to 22-item (SML 13.1 inserted at index 15)
+    // Old indices 0-14 stay the same. Old indices 15-20 (Ambisonics) shift to 16-21.
+    if (savedVersion < 16)
+    {
+        for (int i = 0; i < tree.getNumChildren(); ++i)
+        {
+            auto child = tree.getChild (i);
+            if (! child.hasProperty ("id"))
+                continue;
+
+            if (child.getProperty ("id").toString() == "outputFormat")
+            {
+                float normalizedOld = static_cast<float> (child.getProperty ("value", 0.0f));
+                // Denormalize using old item count (21 items → indices 0..20)
+                int oldIndex = juce::roundToInt (normalizedOld * 20.0f);
+                oldIndex = juce::jlimit (0, 20, oldIndex);
+                // Shift Ambisonics indices up by 1
+                int newIndex = (oldIndex >= 15) ? oldIndex + 1 : oldIndex;
+                // Re-normalize using new item count (22 items → indices 0..21)
+                float normalizedNew = static_cast<float> (newIndex) / 21.0f;
+                child.setProperty ("value", normalizedNew, nullptr);
+                break;
+            }
+        }
+
+        tree.setProperty ("pluginStateVersion", 16, nullptr);
+    }
+
+    // v1.0: Migrate outputFormat from 22-item to 21-item (7.0.2 removed at old index 9)
+    // Old indices 0-8 stay the same. Old index 9 (7.0.2) → 8 (Octaphonic fallback).
+    // Old indices 10-21 shift down by 1 to 9-20.
+    if (savedVersion < 17)
+    {
+        for (int i = 0; i < tree.getNumChildren(); ++i)
+        {
+            auto child = tree.getChild (i);
+            if (! child.hasProperty ("id"))
+                continue;
+
+            if (child.getProperty ("id").toString() == "outputFormat")
+            {
+                float normalizedOld = static_cast<float> (child.getProperty ("value", 0.0f));
+                // Denormalize using old item count (22 items → indices 0..21)
+                int oldIndex = juce::roundToInt (normalizedOld * 21.0f);
+                oldIndex = juce::jlimit (0, 21, oldIndex);
+                int newIndex;
+                if (oldIndex < 9)        newIndex = oldIndex;       // 0-8 unchanged
+                else if (oldIndex == 9)   newIndex = 8;             // 7.0.2 → Octaphonic fallback
+                else                      newIndex = oldIndex - 1;  // 10-21 shift down
+                // Re-normalize using new item count (21 items → indices 0..20)
+                float normalizedNew = static_cast<float> (newIndex) / 20.0f;
+                child.setProperty ("value", normalizedNew, nullptr);
+                break;
+            }
+        }
+
+        tree.setProperty ("pluginStateVersion", 17, nullptr);
+    }
+
+    // v1.0: Reorder outputFormat — 5.1.2/7.1/Oct rotated to 7.1/Oct/5.1.2
+    // Old index 6 (5.1.2) → new 8, old 7 (7.1) → new 6, old 8 (Oct) → new 7
+    if (savedVersion < 18)
+    {
+        for (int i = 0; i < tree.getNumChildren(); ++i)
+        {
+            auto child = tree.getChild (i);
+            if (! child.hasProperty ("id"))
+                continue;
+
+            if (child.getProperty ("id").toString() == "outputFormat")
+            {
+                float normalizedOld = static_cast<float> (child.getProperty ("value", 0.0f));
+                int oldIndex = juce::roundToInt (normalizedOld * 20.0f);  // 21 items (0..20)
+                oldIndex = juce::jlimit (0, 20, oldIndex);
+                int newIndex = oldIndex;
+                if (oldIndex == 6)       newIndex = 8;   // 5.1.2 → Atmos group
+                else if (oldIndex == 7)  newIndex = 6;   // 7.1 → Surround group
+                else if (oldIndex == 8)  newIndex = 7;   // Oct → after Surround
+                float normalizedNew = static_cast<float> (newIndex) / 20.0f;
+                child.setProperty ("value", normalizedNew, nullptr);
+                break;
+            }
+        }
+
+        tree.setProperty ("pluginStateVersion", 18, nullptr);
+    }
+
+    // v1.0: Migrate outputFormat from 21-item to 22-item (9.1.4 inserted at index 13)
+    // Old indices 0-12 stay the same. Old indices 13-20 (9.1.6, SML, Ambisonics) shift to 14-21.
+    if (savedVersion < 19)
+    {
+        for (int i = 0; i < tree.getNumChildren(); ++i)
+        {
+            auto child = tree.getChild (i);
+            if (! child.hasProperty ("id"))
+                continue;
+
+            if (child.getProperty ("id").toString() == "outputFormat")
+            {
+                float normalizedOld = static_cast<float> (child.getProperty ("value", 0.0f));
+                // Denormalize using old item count (21 items → indices 0..20)
+                int oldIndex = juce::roundToInt (normalizedOld * 20.0f);
+                oldIndex = juce::jlimit (0, 20, oldIndex);
+                // Shift indices >= 13 up by 1
+                int newIndex = (oldIndex >= 13) ? oldIndex + 1 : oldIndex;
+                // Re-normalize using new item count (22 items → indices 0..21)
+                float normalizedNew = static_cast<float> (newIndex) / 21.0f;
+                child.setProperty ("value", normalizedNew, nullptr);
+                break;
+            }
+        }
+
+        tree.setProperty ("pluginStateVersion", 19, nullptr);
+    }
+
     // v0.6: Restore OSC receive port (non-APVTS property)
     oscReceivePort = static_cast<int> (tree.getProperty ("oscReceivePort", 4002));
+    globalDrawerOpen = static_cast<bool> (tree.getProperty ("globalDrawerOpen", false));
 
     // v0.6: Restore preset index (non-APVTS property)
     currentPresetIndex = static_cast<int> (tree.getProperty ("currentPresetIndex", 0));
+
+    // v0.7: Restore OSC Send settings
+    oscSendPort = static_cast<int> (tree.getProperty ("oscSendPort", 4003));
+    oscSendIP   = tree.getProperty ("oscSendIP", "127.0.0.1").toString();
+    bool savedSendEnabled = static_cast<bool> (tree.getProperty ("oscSendEnabled", false));
+    if (savedSendEnabled)
+        setOscSendEnabled (true);
 
     apvts.replaceState (tree);
 }

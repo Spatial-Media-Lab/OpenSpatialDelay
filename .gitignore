@@ -13,7 +13,26 @@ Archive/*/builds/
 # Screenshots (local review/bug-report only, not needed in repo)
 docs/screenshots/
 
-# npm (used by docs/generate-manual.js)
-node_modules/
-package-lock.json
-package.json
+# IEM reference source (large, kept locally but not tracked)
+docs/references/IEM-PluginSuite-source/
+
+# Design prototypes (historical, keep v6 reference only)
+docs/design-prototypes/
+
+# Node.js (manual generation toolchain)
+docs/node_modules/
+
+# Generated manual drafts and preview
+docs/preview-manual.html
+docs/preview-readme.html
+docs/preview-wiki.html
+
+# npm package files (doc generation toolchain)
+docs/package.json
+docs/package-lock.json
+
+# Design prototypes (scratch work)
+docs/prototypes/
+
+# Claude tool state
+.superpowers/

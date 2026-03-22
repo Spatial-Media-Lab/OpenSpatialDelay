@@ -1,68 +1,133 @@
 # Output Formats
 
-OpenSpatialDelay supports 21 output formats across 4 categories. The output format is selected via the **Output Format** dropdown in the header bar.
+OpenSpatialDelay supports 22 output formats organized into four categories: Binaural, Stereo, Surround, and Ambisonics. The active format is selected from the dropdown in the header bar.
 
-## Format Registry
+## Five Rendering Paths
 
-### Binaural
+Internally, the plugin uses five distinct rendering paths. The active path is determined by the selected output format:
 
-| Format | Short Name | Channels | LFE | Height | Notes |
-|--------|-----------|----------|-----|--------|-------|
-| Binaural | Bin | 2 | No | No | Default. HRTF-based headphone monitoring. |
+| Rendering Path | Output Formats | Description |
+|---|---|---|
+| Direct Binaural HRTF | Binaural | Each tap convolved with measured HRTF at its exact 3D position. Full elevation and distance cues on headphones. |
+| Simple Binaural (Woodworth) | Binaural (Simple profile) | Lightweight ITD+ILD model for low-latency monitoring. No convolution. |
+| Stereo Variants | Stereo | Five mic simulation modes selected via the Algorithm dropdown. 2-channel output. |
+| Discrete Surround | Quad through 9.1.6 | Speaker panning via the selected algorithm. Direct-to-speaker gain computation + LFE. |
+| Ambisonics Output | 1st-6th Order Ambi | Spherical harmonic encoding (AmbiX, ACN/SN3D ordering). |
 
-### Stereo
+## Binaural (Headphone Monitoring)
 
-| Format | Short Name | Channels | LFE | Height | Notes |
-|--------|-----------|----------|-----|--------|-------|
-| Stereo | St | 2 | No | No | 5 sub-modes selected via Algorithm parameter (Equal Power, Stereo VBAP, XY Pair, MS Encode, Blumlein). |
+Binaural mode renders each delay tap through HRTF (Head-Related Transfer Function) convolution, producing a convincing 3D sound field over headphones. Each tap is convolved at its exact 3D position -- azimuth, elevation, and distance are all fully represented.
 
-### Surround
+### HRTF Profiles
 
-| Format | Short Name | Channels | LFE | Height |
-|--------|-----------|----------|-----|--------|
-| Quadraphonic | Quad | 4 | No | No |
-| 5.0 Surround | 5.0 | 5 | No | No |
-| 5.1 Surround | 5.1 | 6 | Yes | No |
-| 7.0 Surround | 7.0 | 7 | No | No |
-| 5.1.2 Atmos | 5.1.2 | 8 | Yes | Yes |
-| 7.1 Surround | 7.1 | 8 | Yes | No |
-| Octaphonic | Oct | 8 | No | No |
-| 7.0.2 | 7.0.2 | 9 | No | Yes |
-| 5.1.4 Atmos | 5.1.4 | 10 | Yes | Yes |
-| 7.1.2 Atmos | 7.1.2 | 10 | Yes | Yes |
-| 7.1.4 Atmos | 7.1.4 | 12 | Yes | Yes |
-| 7.1.6 Atmos | 7.1.6 | 14 | Yes | Yes |
-| 9.1.6 Atmos | 9.1.6 | 16 | Yes | Yes |
+When Binaural is selected, the rightmost dropdown in the header bar becomes the HRTF Profile selector. Six profiles are available:
 
-### Ambisonics (AmbiX ACN/SN3D)
+| Profile | Source | Character |
+|---|---|---|
+| Simple (Low CPU) | Woodworth model | Lightweight ITD+ILD only -- no convolution. Good for low-latency monitoring or when CPU is limited. Less spatial realism. |
+| Studio Reference | MIT KEMAR | Industry-standard dummy head measurement. Neutral, accurate localization. Good starting point. |
+| Immersive | SADIE II D2 (KU100) | Neumann KU100 dummy head. Rich low end, wide spatial image. Excellent for music production. |
+| Natural | CIPIC Subject003 | Human subject measurement. Organic, realistic externalization. Good for dialogue and field recordings. |
+| Precise | HUTUBS PP2 | High-resolution measurement. Tight localization, analytical character. Useful for spatial design work. |
+| Spatial | Bernschuetz KU100 | Full 2-degree resolution KU100. Smooth, even coverage. Great all-rounder for spatial mixing. |
 
-| Format | Short Name | Channels | Order |
-|--------|-----------|----------|-------|
-| 1st Order Ambi | FOA | 4 | 1 |
-| 2nd Order Ambi | SOA | 9 | 2 |
-| 3rd Order Ambi | HOA | 16 | 3 |
-| 4th Order Ambi | 4OA | 25 | 4 |
-| 5th Order Ambi | 5OA | 36 | 5 |
-| 6th Order Ambi | 6OA | 49 | 6 |
+> **Tip:** HRTF perception is highly individual. Try each profile and choose the one where you can most clearly locate sounds in space. The "right" profile depends on your head and ear shape.
 
-## LFE Generation
+All HRTF data comes from measured SOFA files, which are open-format standardized measurements of real heads and dummy heads.
 
-For surround formats that include an LFE channel:
+## Stereo (Speaker Monitoring)
 
-- **Filter:** 2nd-order Butterworth low-pass at 120 Hz
-- **Level:** -10 dB (gain factor 0.316)
-- **Source:** Derived from the mono sum of all wet delay taps
-- **LFE channel index:** Typically channel 3 (JUCE/SMPTE convention: L, R, C, LFE, ...)
+Stereo mode outputs a 2-channel signal using one of five mic simulation modes. These simulate different stereo microphone configurations, each with a distinct spatial character.
 
-## Bus Layout Behavior
+When Stereo is selected, the Algorithm dropdown shows the five stereo modes:
 
-The plugin accepts any output channel count provided by the DAW. Internally, it maps the available channels to the closest supported format. If the DAW provides more channels than the selected format requires, extra channels are zeroed. If the DAW provides fewer channels than requested, the plugin falls back to the closest matching format.
+| Mode | Description | Best For |
+|---|---|---|
+| Equal Power | Standard equal-power panning. Smooth, familiar. | General mixing, widest compatibility |
+| VBAP 2-Speaker | Vector-based panning between virtual speakers at +/- 30 degrees. | Focused stereo image matching standard speaker placement |
+| XY Cardioid | Coincident XY pair at +/- 45 degrees. | Natural stereo image, good mono compatibility |
+| MS Mid-Side | Mid-Side encoding (sum/difference). | Adjustable width in post, broadcast workflows |
+| Blumlein | Crossed figure-8 microphones at +/- 45 degrees. | Natural ambience capture, classical recording aesthetic |
 
-## Speaker Positions
+In Stereo mode, elevation contributes only to distance attenuation (perceived volume), not to left-right placement. This is a physical limitation of 2-channel playback.
 
-For detailed virtual speaker positions used by each surround layout, see the speaker layout definitions in `../speaker-layouts.md`.
+> **Note:** The Algorithm and HRTF Profile dropdowns are both hidden in Stereo mode since neither applies.
 
-## See Also
+## Surround (Speaker Arrays)
 
-- [Spatialization Algorithms](algorithms-guide.md) -- which algorithms are available per output format
-- [Getting Started](getting-started.md) -- initial setup and output format selection
+Surround formats output discrete speaker signals. The plugin computes per-speaker gains using the selected spatialization algorithm. All surround formats with an LFE channel include a 120 Hz low-pass filtered signal at -10 dB on the LFE channel.
+
+### Supported Surround Formats
+
+| Format | Channels | LFE | Height | Typical Use |
+|---|---|---|---|---|
+| Quadraphonic | 4 | No | No | Basic surround, art installations |
+| 5.0 Surround | 5 | No | No | Music surround without LFE |
+| 5.1 Surround | 6 | Yes | No | Standard film/broadcast surround |
+| 7.0 Surround | 7 | No | No | Extended surround without LFE |
+| 7.1 Surround | 8 | Yes | No | Standard high-channel surround |
+| Octaphonic | 8 | No | No | 8 equidistant speakers (ring), art/research |
+| 5.1.2 Atmos | 8 | Yes | Yes | Entry-level Atmos with 2 height speakers |
+| 5.1.4 Atmos | 10 | Yes | Yes | Atmos with 4 height speakers |
+| 7.1.2 Atmos | 10 | Yes | Yes | Atmos with 2 height speakers on 7.1 bed |
+| 7.1.4 Atmos | 12 | Yes | Yes | Full Dolby Atmos home cinema |
+| 7.1.6 Atmos | 14 | Yes | Yes | Extended Atmos with 6 height speakers |
+| 9.1.4 Atmos | 14 | Yes | Yes | Atmos with 9-speaker bed + 4 height speakers |
+| 9.1.6 Atmos | 16 | Yes | Yes | Maximum Atmos configuration |
+| SpatialMediaLab 13.1 | 14 | Yes | Yes | SpatialMediaLab multi-use room -- 8 ear-level + 4 height + 1 zenith |
+
+### Spatialization Algorithms
+
+When a surround format is selected, the Algorithm dropdown becomes active. Choose the algorithm that best fits your speaker layout and creative intent:
+
+| Algorithm | Full Name | Description | Best For |
+|---|---|---|---|
+| VBAP | Vector Base Amplitude Panning | Selects the nearest speaker triangle and distributes gain across up to 3 speakers. Sharp, focused image. | Standard surround, precise placement |
+| VBIP | Vector Base Intensity Panning | Like VBAP but with squared gains for even tighter localization. | Precision work, forensic audio |
+| MDAP | Multiple Direction Amplitude Panning | Spreads the source across multiple VBAP directions for a wider image. | Ambient sources, wide pads |
+| KNN | K-Nearest Neighbor | Inverse-distance weighting to the nearest speakers. Smooth, diffuse. | Gentle panning, ambient textures |
+| DBAP | Distance-Based Amplitude Panning | Pure distance-based gain (no direction). Works with any speaker layout including irregular ones. | Non-standard layouts, installations |
+| Ambisonics | Ambisonics Decode | Encodes to spherical harmonics then decodes to speakers. Even coverage, layout-independent. | When format-agnostic rendering is needed |
+
+> **Tip:** For most surround work, start with VBAP. If sources sound too pinpointed, try MDAP or KNN for a wider spread. DBAP is the go-to choice for non-standard or irregular speaker arrays.
+
+## Ambisonics (Spherical Harmonic Output)
+
+Ambisonics formats output spherical harmonic channels in AmbiX format (ACN channel ordering, SN3D normalization). These are designed to feed into an Ambisonics decoder or renderer downstream in your signal chain.
+
+| Format | Order | Channels | Typical Use |
+|---|---|---|---|
+| 1st Order Ambi (FOA) | 1 | 4 | VR, 360 video, basic spatial audio |
+| 2nd Order Ambi (SOA) | 2 | 9 | Improved spatial resolution |
+| 3rd Order Ambi (HOA) | 3 | 16 | Standard high-quality ambisonics |
+| 4th Order Ambi | 4 | 25 | High-resolution ambisonics |
+| 5th Order Ambi | 5 | 36 | Very high resolution |
+| 6th Order Ambi | 6 | 49 | Maximum resolution |
+
+Higher orders provide sharper spatial imaging but require more channels. 3rd order (16 channels) is the most common for production work.
+
+> **Note:** When an Ambisonics format is selected, the Algorithm dropdown shows "Ambisonics Encode" and is disabled -- there is no algorithm choice for Ambisonics output since encoding is a fixed mathematical operation.
+
+## Format Quick Pick Guide
+
+| I want to... | Choose | Algorithm | Notes |
+|---|---|---|---|
+| Monitor on headphones with 3D | Binaural | (hidden) | Select an HRTF profile |
+| Quick headphone check (low CPU) | Binaural | (hidden) | Select "Simple (Low CPU)" profile |
+| Mix on stereo speakers | Stereo | Equal Power | Or try XY/Blumlein for character |
+| Mix in 5.1 | 5.1 Surround | VBAP | Industry standard |
+| Mix in Dolby Atmos | 7.1.4 Atmos | VBAP | Standard Atmos bed |
+| Feed an Atmos renderer | 7.1.4 Atmos | VBAP | Or use Ambisonics for object-based |
+| Feed an Ambisonics decoder | 3rd Order Ambi | (disabled) | 16 channels, good balance of resolution and efficiency |
+| Work in VR / 360 video | 1st Order Ambi | (disabled) | Widely supported FOA format |
+| Non-standard speaker layout | Any surround | DBAP | Works with any geometry |
+| Research / art installation | Octaphonic | KNN or DBAP | 8 equidistant speakers |
+| SML multi-use room | SpatialMediaLab 13.1 | VBAP | Custom 13-speaker layout derived from IEM AllRADecoder |
+
+## Changing Formats
+
+Select the output format from the dropdown in the header bar. The format change takes effect immediately -- you do not need to reload the plugin.
+
+> **Important:** Your DAW track must be configured with enough output channels for the selected format. If the track has fewer channels than the format requires, the extra channels will be silent. Check the "Channels" column in the surround formats table above.
+
+Output format is intentionally **not saved in presets**. This allows you to load any preset regardless of your monitoring setup -- the spatial positions and delay settings translate naturally across all formats.

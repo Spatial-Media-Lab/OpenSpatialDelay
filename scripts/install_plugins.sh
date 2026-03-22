@@ -2,7 +2,7 @@
 # Post-build plugin installer for macOS
 # Called automatically by CMake after each build
 
-PLUGIN_NAME="OpenSpatialDelay v0.6"
+PLUGIN_NAME="OpenSpatialDelay v1.0"
 BUILD_DIR="$1"
 AU_SRC="${BUILD_DIR}/OpenSpatialDelay_artefacts/Release/AU/${PLUGIN_NAME}.component"
 VST3_SRC="${BUILD_DIR}/OpenSpatialDelay_artefacts/Release/VST3/${PLUGIN_NAME}.vst3"
@@ -29,3 +29,6 @@ if [ -d "$VST3_SRC" ]; then
         echo "  sudo chown -R $(whoami):staff $VST3_DIR"
     fi
 fi
+
+# v1.0: Factory presets are now compiled into the plugin binary.
+# No disk-based preset installation needed.

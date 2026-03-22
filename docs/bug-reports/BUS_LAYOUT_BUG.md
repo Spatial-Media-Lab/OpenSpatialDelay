@@ -50,7 +50,7 @@ if (outputSet == juce::AudioChannelSet::discreteChannels(8))   return true;  // 
 return false;
 ```
 
-New formats (5.0, 7.0, 5.1.2, 5.1.4, 7.0.2, 7.1.2, 7.1.6, Ambisonics FOA/SOA/HOA)
+New formats (5.0, 7.0, 5.1.2, 5.1.4, 7.1.2, 7.1.6, Ambisonics FOA/SOA/HOA)
 are all available via the **output format dropdown**. The plugin renders internally
 to whatever channels the bus provides:
 

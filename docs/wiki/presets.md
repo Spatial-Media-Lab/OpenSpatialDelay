@@ -1,100 +1,161 @@
 # Presets
 
-OpenSpatialDelay includes 8 factory presets and supports saving/loading user presets as JSON files.
+OpenSpatialDelay includes 60 factory presets across 9 categories, plus a user preset system for saving and loading your own settings.
 
 ## Factory Presets
 
-### Default
-- **Taps:** 4, at -45, +45, -135, +135 degrees azimuth (diagonal cross)
-- **Delay:** 500 ms | **Feedback:** 30% | **Algorithm:** VBAP
-- **Pitch:** 0 st | **Filters:** HP 20 Hz, LP 20 kHz
+### Categories
 
-### Stereo Ping-Pong
-- **Taps:** 2, at -90 and +90 degrees azimuth (hard left/right)
-- **Delay:** 350 ms | **Feedback:** 50% | **Algorithm:** VBAP
-- **Pitch:** 0 st | **Filters:** HP 20 Hz, LP 18 kHz
+| Category | Count | Description |
+|---|---|---|
+| Classic Delays | 8 | Traditional delay effects adapted for spatial audio -- ping-pong, slapback, dotted eighth, tape echo, dub, and more |
+| Spatial Movement | 7 | Taps with trajectories and spatial animation -- orbits, spirals, figure-8 weaves, bouncing patterns |
+| Ambient + Texture | 8 | Atmospheric, evolving textures -- shimmer, frozen cascades, dark matter, grain clouds, cathedral spaces |
+| Height + 3D | 6 | Presets that emphasize vertical movement and 3D positioning -- falling cascades, ascending stairs, dome rings, vertical ping-pong |
+| Surround Production | 5 | Designed for surround speaker layouts -- 5.1, 7.1, 7.1.4 Atmos, quad swirl, and wide stereo |
+| Wobble + Modulated | 6 | Tape-inspired and LFO-modulated delay effects -- tape wow, flutter, warped echo, chorus delay, seasick, subtle motion |
+| Creative + Experimental | 8 | Extreme and unusual effects -- self-oscillation, reverse spirals, stereo split, pitch ladders, Doppler storms |
+| Rhythmic | 10 | Rhythmically patterned delays -- tresillo, cinquillo, polyrhythms, clave patterns, Morse code, Fibonacci spacing |
 
-### Circle (Quad)
-- **Taps:** 4, at 0, +90, +180, -90 degrees azimuth (equidistant ring)
-- **Delay:** 250 ms | **Feedback:** 40% | **Algorithm:** VBAP
-- **Pitch:** 0 st | **Filters:** HP 20 Hz, LP 20 kHz
+### Full Preset List
 
-### Surround 5.1
-- **Taps:** 5, at 0 (C), -30 (L), +30 (R), -110 (Ls), +110 (Rs) degrees
-- **Delay:** 300 ms | **Feedback:** 35% | **Algorithm:** VBAP
-- **Pitch:** 0 st | **Filters:** HP 20 Hz, LP 20 kHz
+**Classic Delays:** Default, Stereo Ping-Pong, Slapback, Dotted Eighth, Tape Echo, Dub Delay, Quarter Note Bounce, Multi-Tap Cascade
 
-### Surround 7.1
-- **Taps:** 7, at 0 (C), -30 (L), +30 (R), -90 (Ls), +90 (Rs), -135 (Lrs), +135 (Rrs) degrees
-- **Delay:** 250 ms | **Feedback:** 35% | **Algorithm:** VBAP
-- **Pitch:** 0 st | **Filters:** HP 20 Hz, LP 20 kHz
+**Spatial Movement:** Circle (Quad), Rising Spiral, Orbit Dance, Figure-8 Weave, Bouncing Ball, Spiral Descent, Random Walk, Pendulum
 
-### Atmos 7.1.4
-- **Taps:** 11 total
-  - 7 ear-level: 0, -30, +30, -90, +90, -135, +135 degrees at 0 elevation
-  - 4 height: -45, +45, -135, +135 degrees at +45 elevation
-- **Delay:** 200 ms | **Feedback:** 30% | **Algorithm:** VBAP
-- **Pitch:** 0 st | **Filters:** HP 20 Hz, LP 20 kHz
+**Ambient + Texture:** Shimmer, Frozen Cascade, Dark Matter, Ethereal Wash, Grain Cloud, Cathedral, Drift, Fifth Ghost
 
-### Rising Spiral
-- **Taps:** 8, spiraling upward from -20 to +50 degrees elevation with increasing azimuth
-- **Trajectory:** Orbit on all taps, speeds from 1.5 to 3.2
-- **Delay:** 200 ms | **Feedback:** 40% | **Algorithm:** VBAP
-- **Pitch:** +2 st | **Doppler:** 0.2 on all taps | **Filters:** HP 40 Hz, LP 16 kHz
+**Height + 3D:** Falling Cascade, Rain, Hemisphere Spread, Ascending Staircase, Dome Ring, Vertical Ping-Pong
 
-### Falling Cascade
-- **Taps:** 6, descending from +40 to -35 degrees elevation at increasing distance
-- **Delay:** 350 ms | **Feedback:** 45% | **Algorithm:** VBAP
-- **Pitch:** -1 st | **Doppler:** 0.1 on all taps | **Filters:** HP 30 Hz, LP 14 kHz
+**Surround Production:** Surround 5.1, Surround 7.1, Atmos 7.1.4, Quad Swirl, Wide Stereo
 
-## User Presets
+**Wobble + Modulated:** Tape Wow, Tape Flutter, Warped Echo, Chorus Delay, Seasick, Subtle Motion
 
-### Saving
+**Creative + Experimental:** Self-Oscillation, Reverse Spiral, Stereo Split, Pitch Ladder, Doppler Storm, Micro Delay, Wide Scatter, Broken Record
 
-1. Click the **Save** button in the header bar.
-2. Enter a name in the dialog.
-3. The preset is saved as a JSON file.
+**Rhythmic:** Tresillo, Cinquillo, Offbeat Pong, West African Bell, Son Clave 3-2, Paradiddle Pong, Polyrhythm 3v4, Morse SOS, Fibonacci Scatter, Dotted Gallop
 
-### File Location
+## Browsing Presets
+
+### Dropdown Menu
+
+Click the preset name in the header bar to open the preset browser. Presets are organized into category submenus. Click a category to expand it, then click a preset to load it.
+
+### Previous / Next Navigation
+
+Use the arrow buttons on either side of the preset name to step through presets sequentially. This cycles through all presets across all categories in order.
+
+### Preset Indicator
+
+The preset name in the header shows the currently loaded preset. If you modify any parameter after loading a preset, the name remains displayed but the settings may differ from the stored preset.
+
+## Saving Presets
+
+### Save Overlay
+
+Click the **Save** button in the header bar to open the preset save overlay. This appears as a modal dialog within the plugin window.
+
+| Field | Description |
+|---|---|
+| Name | The preset name. Pre-filled with the current preset name (with "Copy" appended for factory presets). |
+| Category | The category folder for the preset. Defaults to "User". You can select any existing category or type a new one. |
+
+Click **Save** to write the preset to disk. Click **Cancel** to close without saving.
+
+### What Gets Saved
+
+A preset stores all parameters except the output format:
+
+- All global parameters (delay time, sync settings, feedback, filters, pitch, mix, wobble)
+- All per-tap parameters (enabled state, position, pitch, Doppler, trajectory, input channel)
+- Filter resonance values (HP Q, LP Q)
+- Filter and air absorption toggle states
+
+### What Does NOT Get Saved
+
+- **Output format** -- intentionally excluded so presets work regardless of your monitoring setup
+- **OSC settings** -- port, IP, and enable states are session-specific
+- **HRTF profile** -- monitoring preference, not a creative setting
+- **Algorithm** -- determined by output format context
+
+> **Tip:** Because output format is not saved in presets, you can load a "Surround 5.1" preset while monitoring in Binaural -- the spatial positions translate naturally.
+
+## File Format
+
+Presets are saved as `.osdpreset` files in JSON format. Each file contains all parameter values in a human-readable structure.
+
+### File Locations
+
+| Platform | Path |
+|---|---|
+| macOS | `~/Library/Audio/Presets/OpenSpatialDelay/` |
+| Windows | `%APPDATA%\OpenSpatialDelay\Presets\` |
+
+Within the preset directory, presets are organized into subdirectories by category:
 
 ```
-~/Library/Application Support/OpenSpatialDelay/Presets/{name}.json
+~/Library/Audio/Presets/OpenSpatialDelay/
+  Classic Delays/
+    Default.osdpreset
+    Stereo Ping-Pong.osdpreset
+    ...
+  Spatial Movement/
+    Circle (Quad).osdpreset
+    Rising Spiral.osdpreset
+    ...
+  User/
+    My Custom Preset.osdpreset
+    ...
 ```
 
-### Browsing
+### Factory vs. User Presets
 
-- Use the **ComboBox dropdown** in the header bar to see all available presets.
-- Use the **Prev** and **Next** arrow buttons to step through presets sequentially.
-- Factory presets appear first in the list, followed by user presets sorted alphabetically.
+- **Factory presets** are installed during the build process (macOS) or on first launch (Windows). They are regenerated on each update and should not be manually edited -- your changes will be overwritten on the next update.
+- **User presets** are stored in the "User" category subdirectory (or any custom category you create). These are never touched by updates.
 
-## What Presets Store
+> **Tip:** If you want to customize a factory preset, load it, modify the settings, then save it with a new name in the "User" category.
 
-Presets capture and restore **all** of the following:
+### JSON Structure
 
-**Global parameters:**
-- Delay Time, Tempo Sync, Note Division, Sync Mode
-- Feedback
-- LP Filter, HP Filter
-- Pitch Shift
-- Dry/Wet, Input Gain, Output Gain
-- Air Absorption toggle
-- Algorithm, HRTF Profile
+The `.osdpreset` file format is a simple JSON object:
 
-**Per-tap parameters (x12):**
-- Enabled state
-- Azimuth, Elevation, Distance
-- Doppler Amount
-- Trajectory Shape, Trajectory Speed
+```json
+{
+  "name": "My Preset",
+  "category": "User",
+  "delayTime": 500.0,
+  "tempoSync": false,
+  "noteDivision": 4.0,
+  "syncMode": 0,
+  "feedback": 0.3,
+  "filterLP": 5000.0,
+  "filterHP": 50.0,
+  "filterLPQ": 0.707,
+  "filterHPQ": 0.707,
+  "pitchShift": 0.0,
+  "dryWet": 0.5,
+  "inputGain": 0.0,
+  "outputGain": 0.0,
+  "airAbsorption": false,
+  "filterEnabled": false,
+  "wobbleEnabled": false,
+  "wobbleAmount": 0.0,
+  "wobbleMorph": 0.0,
+  "taps": [
+    {
+      "enabled": true,
+      "azimuth": -45.0,
+      "elevation": 0.0,
+      "distance": 0.5,
+      "doppler": 0.0,
+      "pitchShift": 0.0,
+      "trajectory": "none",
+      "speed": 1.0,
+      "direction": 0,
+      "inputChannel": 0
+    }
+  ]
+}
+```
 
-## What Presets Do NOT Store
-
-The following are excluded from presets and persist independently:
-
-- **Output Format** -- tied to DAW bus configuration
-- **ADM-OSC Enabled** state
-- **OSC Receive Port**
-
-## See Also
-
-- [Getting Started](getting-started.md) -- using presets in your first session
-- [Parameter Reference](parameters-reference.md) -- full parameter list with IDs and ranges
+This format is designed for both machine parsing and manual editing. You can create presets by hand or generate them with scripts if needed.

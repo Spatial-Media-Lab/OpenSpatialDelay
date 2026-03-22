@@ -1,2 +1,0 @@
-# exclude .gitignore and similar from the generated tarball
-.git*       export-ignore

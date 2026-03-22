@@ -13,7 +13,7 @@ rendered to binaural stereo via ITD+ILD head model.
 - Tempo sync with note divisions (Notes, Triplet, Dotted, 16th)
 - Cumulative pitch shifting per object
 - Mono feedback with LP/HP filters and soft clipping
-- Ableton 12-inspired dark UI with 2D spatial map
+- Observatory v6 dark UI with 2D spatial map
 - ROYGBIV HSB gradient object colors
 
 ### Files
@@ -213,7 +213,7 @@ trajectory/ADM-OSC parameter stubs for v0.6+.
 - 22 output formats ordered by category, then ascending channel count:
   - Binaural (1): Binaural (default)
   - Stereo (1): Stereo (5 sub-modes via algorithm parameter)
-  - Surround (13): Quad, 5.0, 5.1, 7.0, 5.1.2, 7.1, Oct, 7.0.2, 5.1.4, 7.1.2, 7.1.4, 7.1.6, 9.1.6
+  - Surround (13): Quad, 5.0, 5.1, 7.0, 7.1, Oct, 5.1.2, 5.1.4, 7.1.2, 7.1.4, 7.1.6, 9.1.4, 9.1.6
   - Ambisonics (6): FOA, SOA, HOA, 4OA, 5OA, 6OA
 - `OutputFormatInfo` struct gains `isStereoVariant` field
 - Parameter migration in `setStateInformation` maps v0.4 indices (17 formats) → v0.5 indices (21 formats)
@@ -283,107 +283,398 @@ Frozen snapshot in `Archive/v0.5/`:
 
 ---
 
-## v0.6 (2026-03-13)
-**ADM-OSC Receive, Trajectory Animation, Elevation Visualization, Preset System**
+## v0.6 (2026-03-13) — FROZEN
+**ADM-OSC Receive + Trajectory Animation + Preset System + UI Polish**
 
-Major feature release activating the ADM-OSC receiver and trajectory animation stubs from v0.5,
-adding IEM-standard elevation visualization to the spatial map, and introducing a full preset
-system with 8 factory presets and user-saveable JSON presets.
+Major feature release adding ADM-OSC Receive for external position control, per-object
+trajectory animation (6 shapes), a complete preset system with factory presets and user
+save/load, a 6th HRTF profile, IEM-faithful elevation visualization, and comprehensive
+UI polish across 10 targeted fixes.
 
 ### ADM-OSC Receive
-- `juce::OSCReceiver` with `MessageLoopCallback` listener on port 4002 (editable, range 1024-65535)
-- `/adm/obj/N/` namespace (N = 1-12, 1-based ADM-OSC object IDs mapped to 0-based internal indices)
-- 8 message types:
-  - `/azim` (float, degrees)
-  - `/elev` (float, degrees)
-  - `/dist` (float, 0-1)
-  - `/aed` (3 floats: azimuth degrees, elevation degrees, distance 0-1)
-  - `/xyz` (3 floats: Cartesian x, y, z)
-  - `/x` (float, individual Cartesian axis — accumulated with cached `/y`, `/z`)
-  - `/y` (float, individual Cartesian axis — accumulated with cached `/x`, `/z`)
-  - `/z` (float, individual Cartesian axis — accumulated with cached `/x`, `/y`)
-- Cartesian-to-Polar conversion per ITU-R BS.2127-0:
-  `az = atan2(-x, y)`, `el = atan2(z, sqrt(x^2 + y^2))`, `dist = clamp(sqrt(x^2 + y^2 + z^2), 0, 1)`
-- Per-object OSC override flag: receiving any OSC message sets `oscOverrideActive[obj]`, which pauses
-  trajectory animation for that object; 500 ms timeout after last receive releases the override
-  and resumes trajectory
-- `admOscEnabled` global parameter controls receiver (edge-detected: OFF-to-ON connects, ON-to-OFF
-  disconnects and clears all overrides)
+- `juce::OSCReceiver` with `MessageLoopCallback` listener (message thread, safe for APVTS updates)
+- Parses `/adm/obj/N/` namespace: `azim`, `elev`, `dist`, `aed`, `xyz`, `x`, `y`, `z`
+- Cartesian→Polar conversion per ITU-R BS.2127-0: `azDeg = atan2(-x,y)*(180/pi)`, `elDeg = atan2(z,sqrt(x²+y²))*(180/pi)`
+- 500ms override timeout: OSC takes priority over trajectory, auto-releases after timeout
+- Partial Cartesian accumulation for individual `/x`, `/y`, `/z` messages
+- Default port 4002, persisted in state XML as non-APVTS ValueTree property
+- Connection managed by `admOscEnabled` toggle parameter
+- Edge-detect enable/disable transitions in timer callback for auto-reconnect
 
 ### Trajectory Animation
-- 6 shapes: None, Spiral, Orbit, Bounce, Figure-8, Random
-- Per-object `trajectoryShape` (`AudioParameterChoice`, 6 choices) and
-  `trajectorySpeed` (`AudioParameterFloat`, 0.0-10.0, default 1.0)
-- Phase accumulation at ~60 Hz timer rate: `phase += speed * dt` (dt = 1/60), wraps at 1.0
-- Base position (azimuth, elevation, distance) captured when shape transitions from None to active
-  or when shape changes
-- Shape details (from `computeTrajectory()`):
-  - **Spiral:** 360-degree azimuth sweep, +/-45-degree elevation sine, distance pulse 0.3-1.0
-    (`dist = 0.3 + 0.7 * (0.5 + 0.5 * cos(phase * 2pi))`)
-  - **Orbit:** 360-degree azimuth sweep at constant base elevation and distance
-  - **Bounce:** triangle wave +/-90-degree azimuth, +/-30-degree elevation, constant distance
-  - **Figure-8:** Lissajous 1:2 ratio, +/-90-degree azimuth, +/-45-degree elevation, constant distance
-  - **Random:** irrational-frequency sine sums (e, pi, sqrt(2), sqrt(3), sqrt(5) as frequency
-    multipliers) — pseudo-random but deterministic and smooth
-- Output azimuth wrapped to -180..+180, elevation clamped to -90..+90, distance clamped to 0..1
-
-### Elevation Visualization (IEM-Standard)
-- Dot size encodes elevation: `baseDiam + 3 * sin(elevRad)` — above horizon = larger, below = smaller
-- Base diameter: 18 px selected, 14 px unselected
-- Hemisphere-dependent opacity: 1.0 above ear level, 0.3 below
-- Selection halo alpha: 0.3 above, 0.15 below
-- Dot outline always drawn at full colour (visible regardless of hemisphere)
-- Elevation degree label shown for selected object when |elevation| > 1-degree
-  (positioned above dot if positive, below if negative)
-- Number label colour adapts to dot brightness: black text above horizon, object colour below
-- No stems — matches IEM StereoEncoder / Nuendo / Pro Tools industry standard
+- 6 trajectory shapes per object: None, Spiral, Orbit, Bounce, Figure-8, Random
+- `computeTrajectory()` pure static function (stateless, testable)
+- 60Hz message-thread timer advances phase, writes to APVTS via `setValueNotifyingHost()`
+- Base position captured on shape change (None→active transition)
+- OSC override takes priority — trajectory paused during external control
+- Per-object `trajectoryShape` (0-5) and `trajectorySpeed` (0.1-10.0x) APVTS parameters
 
 ### Preset System
-- 8 factory presets:
-  1. Default — 4 taps in diagonal cross pattern
-  2. Stereo Ping-Pong — 2 taps at +/-90-degree
-  3. Circle (Quad) — 4 taps in equidistant ring
-  4. Surround 5.1 — 5 taps at standard 5.1 positions
-  5. Surround 7.1 — 7 taps at standard 7.1 positions
-  6. Atmos 7.1.4 — 11 taps (ear-level 7.1 + 4 height at 45-degree elevation)
-  7. Rising Spiral — 8 taps spiraling upward with Orbit trajectory (speeds 1.5-3.2)
-  8. Falling Cascade — 6 taps descending with pitch drop (-1 st)
-- User presets: individual JSON files in `~/Library/Application Support/OpenSpatialDelay/Presets/`
-- Preset data captures all global + per-tap parameters (delayTime, tempoSync, noteDivision,
-  syncMode, feedback, filterLP, filterHP, pitchShift, dryWet, inputGain, outputGain,
-  airAbsorption, algorithm, hrtfProfile, and per-tap enabled/azimuth/elevation/distance/
-  dopplerAmount/trajectoryShape/trajectorySpeed)
-- Presets do NOT store: `outputFormat`, `admOscEnabled`, `oscReceivePort`
-- JSON serialization via `juce::JSON` (DynamicObject tree with "taps" array)
-- User presets loaded from disk at startup, sorted alphabetically
+- 8 factory presets: Default plus 7 specialized spatial delay configurations
+- `PresetData` struct with 28 parameters (global + per-tap × 12)
+- User presets: save/load from `~/Library/Application Support/OpenSpatialDelay/Presets/` (JSON)
+- API: `loadPreset()`, `saveUserPreset()`, `loadNextPreset()`, `loadPreviousPreset()`
+- Header UI: ComboBox dropdown + prev/next navigation buttons + Save button
+- Current preset index persisted in state XML
 
-### Preset Browser (UI)
-- Header bar: ComboBox listing all factory + user presets
-- Prev/Next buttons (`<` / `>`) for sequential preset stepping (wraps around)
-- Save button opens AlertWindow with text editor for preset name input
-- ComboBox auto-refreshes after save
+### 6th HRTF Profile
+- Bernschuetz KU100 Full2Deg (CC BY 3.0) — "Spatial" preset
+- 6 HRTF profiles total: Simple (Woodworth), MIT KEMAR, SADIE II D2, CIPIC Subject003, HUTUBS PP2, Bernschuetz KU100
 
-### Per-Object Parameters (New in v0.6)
-- `object{N}_trajectoryShape` (Choice: None / Spiral / Orbit / Bounce / Figure-8 / Random)
-- `object{N}_trajectorySpeed` (Float 0.0-10.0, default 1.0)
-- Parameter IDs established in v0.5 stubs, now fully active
+### IEM-Faithful Elevation Visualization
+- Hemisphere alpha: objects above horizon render solid/opaque, below render transparent (0.3 alpha)
+- Selection halo: translucent ring around selected object, alpha varies by hemisphere
+- Asymmetric dot scaling: +5px upward (z > 0), -3px downward (z < 0) — preserves 11px minimum at -90°
+- Path-based faux bold number labels: `GlyphArrangement::createPath()` + `fillPath()` + `strokePath(0.8f)` for guaranteed visual weight regardless of font system
+- Pixel-grid snapping for HiDPI: `std::round()` on dot positions + `juce::roundToInt()` on all compass labels
+- Object outline stroke (1.2px) at full colour for visibility in both hemispheres
 
-### UI Updates
-- Header bar: Preset browser (ComboBox + Prev/Next buttons + Save button)
-- Header bar: OSC toggle button (green when active) + editable port label (double-click to edit,
-  valid range 1024-65535, reverts on invalid input)
-- Spatial map: OSC override indicator ("OSC" label in cyan on actively-controlled objects,
-  collision-aware positioning relative to elevation label)
-- Per-object panel: Trajectory Shape dropdown + Speed slider
+### UI Polish (10 Fixes)
+- OSC section relocated from header bar to right panel below MIX (new "OSC" section with `drawSectionHeader`)
+- ELEV slider height matched to adjacent rotary knobs (50×80px, shifted up for alignment)
+- Bottom panel spacing tightened: inter-control gaps compressed (90→84, 70→64, 50→46) to prevent speed knob overflow
+- Preset dropdown height matched to Output Format/Algorithm dropdowns (full 24px `boxH`)
+- HiDPI pixel snapping with `juce::roundToInt()` replacing `(int)` casts throughout
+- OSC port field styled with background (`#151525`) and border (`#334155`) matching ComboBox appearance
+- Elevation label "+90°" offset increased from -10px to -14px for clearance from halo
+- Redundant OSC connection status dot removed (button colour already indicates state)
+- Compass labels (F/B/L/R) pixel-snapped for HiDPI clarity
+- "Port:" label painted between OSC toggle and editable port field in right panel
 
-### State Format
-- `pluginStateVersion = 10`
-- Persists `oscReceivePort` and `currentPresetIndex` in state XML alongside APVTS tree
-- v0.4-to-v0.5 output format migration preserved in `setStateInformation`
+### Testing Tool
+- `scripts/adm_osc_test.py` — Python CLI using `python-osc` library
+- 7 test modes: `--manual`, `--orbit`, `--sweep`, `--multi`, `--xyz`, `--aed`, `--axes`
+- Configurable port (default 4002), send rate (default 60 Hz), object selection
+- Real-time animation modes with Ctrl+C interruption
+
+### Timer Consolidation
+- Single 60Hz message-thread timer handles 4 responsibilities:
+  1. HRTF profile loading (background → double-buffered renderer)
+  2. OSC connection management (edge-detect enable, reconnect on port change)
+  3. OSC override timeout (per-object 500ms release)
+  4. Trajectory animation (phase advance, APVTS update)
+
+### State Persistence
+- `pluginStateVersion = 10` (v0.5 was version 9)
+- State migration from v0.5 in `setStateInformation()`: v0.5 output format indices mapped to v0.6
+- `oscReceivePort` persisted as non-APVTS ValueTree property
+- `currentPresetIndex` persisted in state XML
 
 ### Files
-- v0.6 is current HEAD (no archived snapshot yet)
-- `scripts/adm_osc_test.py` — ADM-OSC test tool for sending OSC messages to the plugin
+Frozen snapshot in `Archive/v0.6/`:
+- `PluginProcessor_v0.6.h`
+- `PluginProcessor_v0.6.cpp`
+- `PluginEditor_v0.6.h`
+- `PluginEditor_v0.6.cpp`
+- `CMakeLists_v0.6.txt`
 
 ### Output
-- 21 output formats (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
+- 21 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
+
+---
+
+## v0.7 (2026-03-16) — FROZEN
+**ADM-OSC Send + Output Limiter + Doppler Fix + UI Refinement**
+
+Feature release adding ADM-OSC Send for broadcasting tap positions to external renderers,
+an output limiter to prevent DAW speaker protection muting during self-oscillation, Doppler
+effect fix for orbit trajectories, and continued UI polish.
+
+### ADM-OSC Send
+- `juce::OSCSender` broadcasting `/adm/obj/N/aed` messages to external renderers (SPAT Revolution, L-ISA, Dolby Atmos Renderer)
+- New parameters: `admOscSendEnabled` (bool toggle), non-APVTS: `oscSendIP` (string, default `"127.0.0.1"`), `oscSendPort` (int, default 4003)
+- 30Hz send rate (every 2nd tick of 60Hz timer) per ADM-OSC best practice
+- Position-change gating: only sends when position changes (>0.1° azimuth/elevation, >0.001 distance threshold)
+- UI: SEND toggle + IP field + send port field in OSC section of right panel
+- State persistence: IP and port persisted in state XML
+
+### Output Limiter
+- Musical +2dB ceiling (`outputLimiter()`) prevents DAW speaker protection muting during self-oscillation with high filter resonance
+- Rational approximation soft saturator: linear passthrough below threshold, soft saturation above
+- Soft saturator output protection approach
+- Applied in all 5 rendering paths: Direct Binaural HRTF, Simple Binaural Woodworth, Stereo Variants, Ambisonics Output, Discrete Surround
+
+### Doppler Effect Fix
+- **Virtual ear offset:** Replaced scalar 3D distance (which is constant during orbit due to trigonometric identity) with distance-to-virtual-ear calculation. 2.5m x-axis offset breaks the symmetry for audible binaural Doppler from orbiting sources
+- **Varispeed threshold lowered:** `readVarispeed()` early-return threshold reduced from 0.05 semitones (~5 cents) to 0.001 (~0.1 cents), eliminating silent gaps at zero-crossings during orbit oscillation
+- **EMA alpha increased:** Exponential moving average smoothing alpha increased from 0.1 to 0.2 for 2x faster velocity tracking of 1Hz orbit oscillation
+
+### Testing Tool Update
+- `scripts/adm_osc_test.py` updated to v0.7 with new `--listen` mode
+- Receives and prints incoming ADM-OSC messages from plugin's OSC Send
+- Configurable listen port (default 4003)
+- Handler for `/adm/obj/*/aed` with formatted output (object ID, azimuth, elevation, distance)
+- Default handler for all other ADM-OSC messages
+- 8 test modes total: `--manual`, `--orbit`, `--sweep`, `--multi`, `--xyz`, `--aed`, `--axes`, `--listen`
+
+### UI Refinements
+- OSC section expanded with SEND toggle, IP field, and send port field
+- Custom font system with DM Sans + JetBrains Mono binary resources
+- Continued UI polish from v0.6 design review
+
+### State Persistence
+- `pluginStateVersion = 11` (v0.6 was version 10)
+- `oscSendIP` and `oscSendPort` persisted as non-APVTS ValueTree properties
+- `admOscSendEnabled` persisted as APVTS parameter
+
+### Files
+Frozen snapshot in `Archive/v0.7/`:
+- `PluginProcessor_v0.7.h`
+- `PluginProcessor_v0.7.cpp`
+- `PluginEditor_v0.7.h`
+- `PluginEditor_v0.7.cpp`
+- `CMakeLists_v0.7.txt`
+
+### Output
+- 21 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
+
+---
+
+## v0.8 (2026-03-17) — FROZEN
+**Stereo Input + Wobble Modulation + Per-Tap Pitch + UI Redesign**
+
+Feature release adding stereo input routing with per-tap channel selection, wobble
+modulation (delay-time LFO), per-tap additive pitch shift, trajectory direction
+control, and comprehensive UI redesign with new button components and color system.
+
+### Stereo Input Routing
+- Dual delay lines (`delayBufferL`, `delayBufferR`) for independent L/R input processing
+- Per-tap input channel selection: L+R (summed), L only, R only
+- New APVTS parameter: `object{N}_inputChannel` (choice: 0=L+R, 1=L, 2=R)
+- INPUT button in bottom panel cycles through modes with color coding (white=L+R, blue=L, red=R)
+
+### Wobble Modulation
+- Delay time LFO with morphable waveform (sine → triangle → square)
+- 3 new APVTS parameters: `wobbleEnabled` (bool), `wobbleAmount` (0–100), `wobbleMorph` (0–100)
+- LFO frequency auto-syncs to delay time for musical modulation
+- MOD section in right panel with enable toggle + AMOUNT and MORPH knobs
+- Rose/pink accent color for modulation controls
+
+### Per-Tap Pitch Shift (Additive)
+- Changed from override mode (v0.7) to additive: per-tap pitch adds on top of global cumulative pitch
+- Formula: `totalSemitones = (k × globalPitch / 100) + perTapPitch + dopplerSemitones`
+- Existing `object{N}_pitchShift` parameter, behavior changed
+
+### Trajectory Direction Control
+- New `object{N}_trajectoryDirection` parameter (choice: 0=Forward, 1=Reverse)
+- Phase flip in `computeTrajectory()` for reverse playback
+- Forward/Reverse arrow buttons (← →) in bottom panel trajectory section
+
+### UI: New Button Components
+- `IndicatorToggle` — reusable toggle pill with 5px indicator dot + uppercase label
+- `StyledButton` — centred-text button with no indicator dot, same visual language
+- Applied to: tap ON/OFF, tempo sync, OSC toggles, air absorption, FLT/MOD headers, input channel, trajectory direction
+
+### UI: Color System Overhaul
+- Lifted backgrounds (12–16% lightness) replacing flat black
+- Increased border visibility with subtle warm-grey strokes
+- Gold sync accent for tempo sync buttons
+- Rose/pink accent for modulation controls
+- L/R channel colors: blue (left), red (right) for input channel button
+- Consistent `Colours_OSD` namespace throughout
+
+### UI: Spatial Map Refinements
+- Thinner distance rings (0.7f stroke matching center reticle weight)
+- Brighter crosshair dashed lines (0.6f alpha matching rings)
+- Centered F/B cardinal labels using float-precision bounding rectangles
+
+### State Persistence
+- `pluginStateVersion = 12` (v0.7 was version 11)
+- New parameters: `wobbleEnabled`, `wobbleAmount`, `wobbleMorph`, `object{N}_trajectoryDirection`, `object{N}_inputChannel`
+
+### Files
+Frozen snapshot in `Archive/v0.8/`:
+- `PluginProcessor_v0.8.h`
+- `PluginProcessor_v0.8.cpp`
+- `PluginEditor_v0.8.h`
+- `PluginEditor_v0.8.cpp`
+- `CMakeLists_v0.8.txt`
+
+### Output
+- 21 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
+
+## v0.9 (2026-03-19) — FROZEN
+**Trajectory System Rewrite + Preset Overhaul + WSOLA Per-Tap Pitch + SML Branding + 22 Issues Closed**
+
+Major release: complete trajectory system rewrite (13 shapes with origin-point architecture),
+60-preset factory suite with build-time installer, WSOLA-lite per-tap pitch shifting,
+Spatial Media Lab branding, spatial map distance labels, and 22 GitHub issues resolved.
+Also includes UI polish, recurring bug fixes, and preset save overlay.
+
+### Bug Fixes
+- **Input gain leak (recurring):** Fixed `inputGain` applying to both dry and wet paths — now only applies to delay write (Stage 1). Root cause documented in `docs/bug-reports/RECURRING_INPUT_GAIN_LEAK.md`
+- **Filter defaults:** Changed HP default from 20Hz to 50Hz, LP default from 20kHz to 5kHz, resonance defaults to 0.71. Disabled filter visualization now matches enabled state (WYSIWYG)
+- **Filter toggle default:** Filter now defaults to OFF (was incorrectly defaulting to ON)
+
+### WSOLA-lite Per-Tap Pitch Shifting
+- New `WSOLAProcessor` struct: per-tap time-domain pitch shifting that preserves delay timing
+- Split architecture: varispeed for global pitch (warm character), WSOLA-lite for per-tap pitch (rhythm-preserving)
+- Eliminates the timing disruption that occurred with the previous dual-head crossfade approach for per-tap pitch
+- Each of 12 taps has an independent WSOLA processor instance
+
+### Preset Save Overlay
+- Replaced `juce::AlertWindow` (separate OS window) with `PresetSaveOverlay` custom component
+- In-plugin modal overlay: semi-transparent backdrop + centered card, cannot float to other screens
+- Observatory v6 design: `bgPanel` card, `borderSubtle` outline, 6px rounded corners
+- Smart name pre-fill: user presets pre-fill the name field, factory presets show empty field
+- Save button: filled cyan (`accentStellar`), Cancel button: unfilled red-tinted with red text
+- Keyboard: Return to save, Escape to cancel, backdrop click to dismiss
+- Both buttons have proper hover (+12% brightness) and click (+15% brightness) states
+
+### UI: Text Input Field Styling
+- Knob text editors: thin 1px rounded-rectangle outline in section accent color when editing
+- OSC input fields: thin 1px sharp-rectangle outline in cyan when editing
+- Text selection highlight: accent-matched per section (cyan for DELAY/OSC, rose for MOD, amber for MIX, violet for TONE)
+- Consistent text centering across all input fields
+
+### UI: Dropdown Fixes
+- Fixed text alignment regression: restored `getLabelBorderSize()` padding in custom `drawLabel` override (was drawing text edge-to-edge after sharp-rect outline change)
+- Added `positionComboBoxText` override: reserves 20px for arrow (not JUCE default 30px), fixing "Figure-8" truncation in trajectory dropdown
+- All dropdown text now has proper left padding matching v0.8 appearance
+
+### Output Limiter
+- Ceiling remains at +2dB rational approximation soft saturator
+- Fixed interaction with input gain to prevent exceeding limiter ceiling during self-oscillation
+
+### State Persistence
+- `pluginStateVersion = 13` (v0.8 was version 12)
+- Filter defaults updated: HP 50Hz, LP 5kHz, Res 0.71
+- Filter enabled default: OFF
+
+### Preset System Overhaul (v0.9, 2026-03-18)
+- **60 factory presets** across 9 categories: Classic Delays, Spatial Movement, Ambient + Texture, Height + 3D, Surround Production, Wobble + Modulated, Creative + Experimental, Rhythmic, User
+- **PresetData extracted** to shared `PresetData.h`/`PresetData.cpp` for use by both plugin and build-time `install_presets` CLI tool
+- **Build-time preset installation:** `install_presets` CLI binary generates `.osdpreset` JSON files from C++ source. CMake `add_dependencies(OpenSpatialDelay_VST3 install_presets)` ensures correct build ordering. Factory presets always overwritten from source; user presets untouched.
+- **Industry-standard preset location:** `~/Library/Audio/Presets/OpenSpatialDelay/` (was `~/Library/Application Support/OpenSpatialDelay/Presets/`)
+- **User folder** created automatically for user-generated presets
+- **Filter resonance in presets:** `filterLPQ` and `filterHPQ` fields added to PresetData struct. Backward-compatible JSON parsing (defaults to 0.707f Butterworth if missing from old files).
+- **SMPTE channel ordering** for surround presets: 5.1 (L,R,C,Ls,Rs), 7.1 (L,R,C,Lss,Rss,Lrs,Rrs), 7.1.4 Atmos (adds Tfl,Tfr,Trl,Trr at +45° elevation)
+- **Per-tap pitch presets:** Ascending Staircase (+1/+2/+3st), Falling Cascade (-1 to -5st), Fifth Ghost (tap3 -5st)
+- **Bug fix:** `writeFactoryPresetsToDisk()` had `if (file.existsAsFile()) continue;` that prevented source changes from reaching disk. Rhythmic presets (new in v0.9) worked while older presets had stale data. Root cause: disk caching, not source values.
+
+### Preset Dropdown Styling Fix (v0.9, 2026-03-18)
+- **Root cause:** `showPresetMenu()` never called `setLookAndFeel()` on the PopupMenu, causing it to use the default system LookAndFeel instead of `OSDLookAndFeel`
+- **Fix:** Added `mainMenu.setLookAndFeel(&osdLookAndFeel)` before `showMenuAsync()`
+- Custom `drawPopupMenuItem()` override ensures consistent rendering: 24px item height, DM Sans Regular 13px, compact 4×6px submenu arrows matching ComboBox dropdown arrow size
+
+### AIR Absorption True Bypass + Perceptual Curve (v0.9, 2026-03-18)
+- **Bug fix:** Position-change gating prevented AIR toggle from taking immediate effect on static taps. Loading a preset with AIR enabled showed no effect; turning AIR off left the effect active.
+- **True bypass:** `readObjectSample()` now skips the filter entirely when AIR is off (zero CPU cost vs previous always-running 20kHz passthrough)
+- **Edge detection:** `airStateChanged` flag detects toggle transitions, forcing coefficient update even on static taps
+- **Perceptual distance curve:** Replaced linear `dist` with quadratic `dist²` mapping (coeff=3.1). 0.5 ≈ 5m (8.6kHz, natural warmth), 1.0 ≈ 20m (900Hz, very dark). Minimum cutoff 500Hz.
+
+### Trajectory System Rewrite (v0.9, 2026-03-18/19)
+- **13 shapes:** None, Bounce, Cross, Figure-8, Heart, Helix, Infinity, Line, Orbit, Random, Spiral, Square, Triangle
+- **Origin-point architecture:** Knobs = live origin position, trajectory computes animated position stored in internal `trajectoryFinalAz/El/Dist[]` arrays. `processBlock` reads from arrays when `trajectoryActive[]` is true. Knobs never overwritten — user can reposition running trajectories.
+- **Cartesian shapes** (Figure-8, Square, Triangle) rotate by baseAz and offset by baseDist
+- **Spiral/Heart** use origin-relative distance scaling
+- **Random:** Multi-sine noise with randomized frequencies/phases/signs per instance, non-wrapping time accumulator (never repeats). Runs at half base speed.
+- **Direction control:** Forward/Reverse per object via `object{N}_trajectoryDirection`
+- **OSC integration:** OSC Receive sets origin when trajectory active; OSC Send broadcasts animated position
+
+### Trajectory Visualization (v0.9, 2026-03-18/19)
+- Glow trail on spatial map for selected tap — brightens near animated dot, dims away
+- Elevation encoded as opacity (0.3–1.0) + line thickness (1.0–5.5px)
+- Crosshair origin marker at knob position when trajectory active
+- Spiral skips wrap-back segment for clean visual
+- Random uses 2s look-ahead trail via `evaluateRandomNoise()`
+- **Known regression:** Glow trail visual quality degraded during trajectory rewrite; deferred to future version. See `docs/bug-reports/GLOW_TRAIL_REGRESSION.md`.
+
+### Test Infrastructure (v0.9, 2026-03-18)
+- Catch2 v3.7.1 via CMake FetchContent
+- 33 unit tests, 102 assertions
+- Covers all 13 trajectory shapes, origin-relative behavior, control flags, wrapping, clamping, reverse mode
+- Run: `cmake --build build --target OpenSpatialDelayTests && ./build/OpenSpatialDelayTests`
+
+### SML Branding (v0.9, 2026-03-19)
+- SML badge button in header bar linking to spatialmedialab.org
+- Custom SVG icon (spatial node graph) at 9px
+- Roboto Medium 11.5f font, button height 17px matching title visual weight
+- Width computed from actual content (icon + gap + text + matched horizontal padding)
+
+### Spatial Map: Distance Labels (v0.9, 2026-03-19)
+- Meter distance labels (1m, 2m, 5m, 10m, 20m) drawn on distance rings
+- Styled with `textDim` color, JetBrains Mono 9px
+
+### GitHub Issues Resolved (22 total, all closed)
+- **#1:** Azimuth knob double-click reset to default instead of 0°
+- **#2:** User Presets folder missing after build
+- **#3:** Trajectories scale inversely with distance from origin
+- **#4:** Distance labels added to spatial map rings
+- **#5–#8:** Figure-8, Heart, Infinity, Spiral shape corrections
+- **#9:** Random trajectory made truly random (was deterministic)
+- **#10:** Line trajectory amplitude corrected (0.75 both sides)
+- **#11:** Trajectory path visualization realtime redraw
+- **#12:** SML button icon added
+- **#13:** Figure-8 direction fix
+- **#14:** Helix clockwise direction fix
+- **#15:** Spiral outward direction fix
+- **#16:** Square trajectory speed halved
+- **#17:** SML button text/icon scaling to match title height
+- **#18:** Circle shape request (closed — Orbit covers this)
+- **#19:** Glow trail visual quality regression (deferred)
+- **#20:** Line trajectory azimuth rotation
+- **#21:** Spiral clockwise direction
+- **#22:** Bounce left-to-right default direction
+
+### Files
+Active source in `Source/`:
+- `PluginProcessor.h` (~33 KB)
+- `PluginProcessor.cpp` (~175 KB)
+- `PluginEditor.h` (~14 KB)
+- `PluginEditor.cpp` (~45 KB)
+- `PresetData.h` (shared preset struct, ~2 KB)
+- `PresetData.cpp` (60 factory presets, serialization, install function, ~40 KB)
+- `Tests/TrajectoryTests.cpp` (Catch2 test suite, 33 tests)
+
+### Output
+- 21 output formats unchanged (1 binaural + 1 stereo + 13 surround + 6 Ambisonics)
+
+---
+
+## v1.0 (2026-03-19) — Active Development
+**Real-World Testing Release**
+
+Starting point for real-world testing. Carries forward all v0.9 features.
+Plugin identity: `Os10` (PLUGIN_CODE).
+
+### New Features
+- **SpatialMediaLab 13.1 output format:** Custom 13-speaker room layout (8 ear-level + 4 height + 1 zenith + LFE). Derived from IEM AllRADecoder config. 14-channel discrete bus support added.
+- **Wobble modulation reverted to v0.8 design:** Single-oscillator with morphable waveform (sine→triangle→rounded square→irregular). LFO rate tied to delay time for natural pitch coupling.
+- **Quad layout corrected:** Speakers now at symmetric 90° spacing (±45°/±135°) instead of 30°/110°.
+- **Default preset selection:** Fresh instances start on "Default" preset by name (not alphabetical first).
+- **Full OSC control (Issue #32):** All parameters controllable via OSC using hybrid namespace. ADM-OSC `/adm/obj/N/` for position (standard interop). Custom `/osd/obj/N/` for per-tap params (enabled, doppler, pitch, trajectory, speed, direction, input) + position aliases. `/osd/global/` for all global params (delayTime, feedback, filters, dryWet, algorithm, etc.). Send broadcasts all changed values with change-gating. `handleOSCParam()` generic helper for APVTS parameter setting from denormalized OSC values.
+- **Dead code cleanup:** Removed unused `trajParam_elevation`/`trajParam_distance` member variables, unused `CMAKE_POLICY_VERSION_MINIMUM` CMake variable. Clarified discarded smoothing calls in binaural render path.
+- **Music notation sync icons (Issue #26):** Replaced Unicode text labels (`♪.` / `♪³`) on dotted/triplet sync mode buttons with proper music notation SVG icons — dotted eighth note and beamed eighth note triplet. Added icon-only rendering path to `StyledButton::paintButton()`. Icons tinted by existing accent color logic (gold when active, dim when inactive).
+- **Global tap controls (Issue #25):** Collapsible mini-drawer on left edge of spatial map with 6 global offset knobs (AZIM, ELEV, DIST, DOPPLER, PITCH, SPEED). Turning a global knob offsets every enabled tap's matching parameter by the same delta, preserving the spatial arrangement (IEM MultiEncoder-style). Azimuth wraps at ±180°, all others clamp. Value readouts with unit suffixes (°, st, Hz). Silver/ice accent color. Drawer open/close state persisted in DAW session via ValueTree. Preset load resets all offsets to 0. OSC control via 6 new `/osd/global/tap*` addresses (receive with clamping + change-gated send at 30Hz). UI-only knobs — not APVTS parameters, not DAW-automatable. 7 new Catch2 tests (12 assertions).
+
+### Bug Fixes
+- **Issue #24 (7.1/7.1.4 rear speakers):** Investigated with diagnostic instrumentation — confirmed plugin computes correct gains. Root cause was Reaper project routing configuration. Closed.
+- **Height speaker elevation routing guard:** Added defensive guard preventing 2D VBAP fallback on 3D layouts with height speakers. If VBAP triplets are ever empty at runtime on a height layout, uses 3D nearest-speaker fallback instead of 2D azimuth-only panning (which would incorrectly route signal to height speakers). Guards applied to VBAP, VBIP, and MDAP (4 dispatch points). Diagnostic `jassert` in `activateLayout()` catches height layouts with empty triplets in debug builds. Issue #23 (SML 13.1) closed.
+- **Global pitch removal cleanup (Issue #30 follow-up):** Deleted 60 stale on-disk factory preset files that contained ghost `"pitchShift"` keys from the old `install_presets` tool. 9 presets had non-zero values (e.g., Shimmer: 12.0). Files were inert (v1.0 loads from compiled array) but confusing. Removed dead `tools/install_presets.cpp`.
+- **Doppler transient on preset load:** `loadPreset()` now resets Doppler tracking arrays (`prevAzimuth`, `prevElevation`, `prevDistance`, `dopplerSemitones`, `smoothedRadialVelocity`) to match the new preset positions, eliminating a spurious pitch artifact on the first audio block after switching presets.
+- **HRTF binaural glitch fix (Issue #36):** Three-layer fix for audio clicking/popping during rapid position changes (e.g., Global AZIM/ELEV knob sweeps): (1) per-sample gain interpolation in all 5 rendering paths eliminates block-boundary amplitude discontinuities, (2) non-restarting dual-convolver crossfade ensures equal-power fade always completes, (3) ITD-free HRIR interpolation removes inter-aural time difference before loading into convolver, with ITD applied separately as smoothly-interpolated fractional-sample delay.
+- **Metal GPU crash fix (Issue #37):** Fixed Reaper crash on macOS when using Metal GPU rendering by disabling OpenGL context in plugin editor.
+
+### Infrastructure
+- **22 output formats** — added SpatialMediaLab 13.1 (was 21 in v0.9)
+- **14-channel discrete bus** added to `isBusesLayoutSupported()` for SML 13.1 / 7.1.6
+- **162 Catch2 tests** — trajectory shapes (40), surround output (54), OSC receive/send (47), convolver glitch (21). Includes 8 elevation/height isolation tests.
+- **State migration v15→v16:** Handles outputFormat parameter shift for SML 13.1 insertion
+- **Diagnostic cleanup:** Removed all #24 diagnostic instrumentation from production code
+
+### Files
+Active source in `Source/`:
+- `PluginProcessor.h` (~51 KB)
+- `PluginProcessor.cpp` (~276 KB)
+- `PluginEditor.h` (~30 KB)
+- `PluginEditor.cpp` (~170 KB)
+- `PresetData.h` (shared preset struct, ~3 KB)
+- `PresetData.cpp` (70 factory presets, serialization, ~61 KB)
+- `Tests/TrajectoryTests.cpp` (40 Catch2 trajectory tests)
+- `Tests/SurroundOutputTests.cpp` (54 Catch2 surround output tests)
+- `Tests/OscTests.cpp` (47 Catch2 OSC receive/send tests)
+- `Tests/ConvolverGlitchTests.cpp` (21 Catch2 convolver glitch tests)
+
+### Output
+- 22 output formats (1 binaural + 1 stereo + 14 surround + 6 Ambisonics)
