@@ -31,9 +31,6 @@ Controls the core delay engine.
 | NOTE | 1/32 - 2/1 | 1/4 | Note division for tempo sync. Available values: 1/32, 1/16, 1/8, 1/4, 1/2, 1/1, 2/1. Only active when SYNC is on. |
 | MODE | Straight / Dotted / Triplet | Straight | Modifies the note division. Dotted = 1.5x duration. Triplet = 2/3 duration. Only active when SYNC is on. |
 | FEEDBACK | 0 - 100% | 30% | Amount of output fed back into the delay input. Higher values = more repeats. Values above 95% produce self-oscillation (safe -- output limiter prevents clipping). |
-| PITCH | -200 - +200 ct | 0 ct | Global pitch shift in cents applied cumulatively across taps. Tap 1 shifts by P, tap 2 by 2P, tap 3 by 3P. Pitch continues to accumulate through the feedback loop. |
-
-> **Tip:** Cumulative pitch shifting is what makes OpenSpatialDelay a powerful sound design tool. Even small pitch values (e.g., +5 cents) create evolving tonal movement as feedback cycles accumulate.
 
 ## MOD Section (Right Panel)
 
@@ -113,16 +110,40 @@ The bottom panel includes numbered buttons (1-12) for selecting taps. Each numbe
 
 All rotary knobs support double-click to enter a precise value. Click on the knob, type the number, and press Enter to confirm.
 
+## Global Tap Controls (Spatial Map Drawer)
+
+A collapsible panel on the left edge of the spatial map provides 6 global offset knobs. Turning a global knob adjusts the matching parameter on **all enabled taps simultaneously** by the same delta, preserving their spatial arrangement.
+
+**Example:** If taps are at AZ -45, +45, -135, +135 and the global AZ knob is turned +10, all taps shift to -35, +55, -125, +145.
+
+### Opening the Drawer
+
+Click the handle strip labeled **GLOBAL** on the left edge of the spatial map. The drawer slides open with a smooth animation. Click the handle again to close it. The open/close state is saved with your DAW session.
+
+### Global Knobs
+
+| Knob | Affects | Range | Behavior |
+|---|---|---|---|
+| AZIM | Azimuth | +/-180 deg | Wraps continuously at +/-180 (no hard stop) |
+| ELEV | Elevation | +/-90 deg | Clamps at +/-90 |
+| DIST | Distance | +/-1.0 | Clamps at parameter limits |
+| DOPPLER | Doppler Amount | +/-1.0 | Clamps at parameter limits |
+| PITCH | Pitch Shift | +/-24 st | Clamps at +/-24 semitones |
+| SPEED | Trajectory Speed | +/-5.0 Hz | Clamps at parameter limits |
+
+### Important Details
+
+- **Enabled taps only** -- global knobs only affect taps that are currently enabled. Disabled taps are not modified.
+- **Value readout** -- each knob displays its current offset value below the knob, with unit suffixes (deg, st, Hz).
+- **Preset reset** -- all global offsets snap to 0 whenever a preset is loaded (via the menu, prev/next buttons, or save overlay). Per-tap knob values show the final result -- the offset is baked in.
+- **Not automatable** -- global knobs are UI-only controls, not DAW parameters. They are not saved in presets and cannot be automated. Use [OSC control](adm-osc.md) for external automation.
+- **Double-click** -- double-click any global knob to reset it to 0.
+
 ## Parameter Interaction Notes
 
-### Cumulative vs. Additive Pitch
+### Per-Tap Pitch Shift
 
-OpenSpatialDelay has two pitch shift systems that work together:
-
-- **Global pitch (PITCH in DELAY section):** Applied cumulatively. Tap k gets k times the pitch value. Measured in cents.
-- **Per-tap pitch (PITCH in bottom panel):** Applied additively. Each tap gets exactly the specified offset. Measured in semitones.
-
-The total pitch for tap k is: `(k * global_pitch_cents / 100) + per_tap_semitones`
+Each tap has an independent pitch shift (+/-24 semitones) using WSOLA time-stretching. This preserves the delay rhythm -- the tap's timing stays locked regardless of pitch shift amount. The global PITCH knob in the drawer offsets all enabled taps simultaneously.
 
 ### Feedback Read Position
 

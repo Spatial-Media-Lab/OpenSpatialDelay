@@ -50,6 +50,8 @@ namespace Colours_OSD
     static const juce::Colour accentSyncDim    (0xff8b7a36);  // oklch(58% 0.09 95)
     static const juce::Colour accentChannelL   (0xff4499ff);  // standard audio blue — Left channel
     static const juce::Colour accentChannelR   (0xffff4444);  // standard audio red — Right channel
+    static const juce::Colour accentGlobal     (0xffc8d8e8);  // silver/ice — global tap drawer
+    static const juce::Colour accentGlobalDim  (0xff7d8894);  // dimmed variant
 
     // === Text (browser canvas-verified OKLCH→sRGB) ===
     static const juce::Colour textPrimary   (0xffe1e5ea);  // oklch(92% 0.008 260)
@@ -95,6 +97,56 @@ static juce::Path createSMLIconPath()
     addCircle ( 98.5f, 213.5f,   20.5f);     // bottom
     addCircle ( 55.0f,  75.0f,   16.0f);     // top-left (small)
     addCircle (176.0f,  80.0f,   12.0f);     // top-right (small)
+    return p;
+}
+
+// Helper: create dotted eighth note icon path (viewBox 0 0 32 36)
+static juce::Path createDottedNoteIconPath()
+{
+    juce::Path p;
+    // ViewBox anchors — extend bounding box to match SVG viewBox for correct scaling
+    p.startNewSubPath (0.0f, 0.0f);
+    p.startNewSubPath (32.0f, 36.0f);
+    // Flag (cubic bezier)
+    p.startNewSubPath (16.5f, 6.0f);
+    p.cubicTo (16.5f, 6.0f, 20.0f, 9.0f, 20.0f, 13.5f);
+    p.cubicTo (20.0f, 16.0f, 17.5f, 17.0f, 16.5f, 15.0f);
+    p.lineTo (16.5f, 6.0f);
+    p.closeSubPath();
+    // Stem
+    p.addRectangle (15.5f, 6.0f, 1.2f, 20.0f);
+    // Note head (rotated ellipse)
+    juce::Path head;
+    head.addEllipse (11.0f - 5.0f, 26.0f - 3.5f, 10.0f, 7.0f);
+    p.addPath (head, juce::AffineTransform::rotation (juce::degreesToRadians (-20.0f), 11.0f, 26.0f));
+    // Augmentation dot
+    p.addEllipse (24.5f - 2.5f, 26.0f - 2.5f, 5.0f, 5.0f);
+    return p;
+}
+
+// Helper: create triplet beamed eighth notes icon path (viewBox 0 0 30 34)
+static juce::Path createTripletNoteIconPath()
+{
+    juce::Path p;
+    // ViewBox anchors — extend bounding box to match SVG viewBox for correct scaling
+    p.startNewSubPath (0.0f, 0.0f);
+    p.startNewSubPath (30.0f, 34.0f);
+    // Stems
+    p.addRectangle (7.0f, 5.0f, 1.1f, 18.0f);
+    p.addRectangle (17.0f, 5.0f, 1.1f, 18.0f);
+    p.addRectangle (27.0f, 5.0f, 1.1f, 18.0f);
+    // Beam
+    p.addRoundedRectangle (7.0f, 4.0f, 21.1f, 2.2f, 0.4f);
+    // Note heads (rotated ellipses)
+    auto addRotatedHead = [&] (float cx, float cy)
+    {
+        juce::Path head;
+        head.addEllipse (cx - 4.2f, cy - 3.0f, 8.4f, 6.0f);
+        p.addPath (head, juce::AffineTransform::rotation (juce::degreesToRadians (-20.0f), cx, cy));
+    };
+    addRotatedHead (5.0f, 23.5f);
+    addRotatedHead (15.0f, 23.5f);
+    addRotatedHead (25.0f, 23.5f);
     return p;
 }
 
@@ -203,30 +255,40 @@ void StyledButton::paintButton (juce::Graphics& g, bool isMouseOverButton, bool 
 
     if (iconScale > 0.0f)
     {
-        // Icon + text: compute combined width, centre both
         auto pathBounds = iconPath.getBounds();
         float iconH = (fixedIconHeight > 0.0f) ? fixedIconHeight : (bounds.getHeight() - 6.0f);
         float s = iconH / pathBounds.getHeight();
         float iconW = pathBounds.getWidth() * s;
-        constexpr float gap = 3.0f;
 
-        juce::GlyphArrangement gl;
-        auto font = makeFont (typeface, fontSize, kKerning);
-        gl.addLineOfText (font, label, 0.0f, 0.0f);
-        float textW = gl.getBoundingBox (0, gl.getNumGlyphs(), true).getWidth();
-        float totalW = iconW + gap + textW;
-        float startX = bounds.getCentreX() - totalW * 0.5f;
+        if (label.isEmpty())
+        {
+            // Icon-only: centre the icon
+            float startX = bounds.getCentreX() - iconW * 0.5f;
+            g.fillPath (iconPath,
+                        juce::AffineTransform::translation (-pathBounds.getX(), -pathBounds.getY())
+                            .scaled (s)
+                            .translated (startX, bounds.getCentreY() - iconH * 0.5f));
+        }
+        else
+        {
+            // Icon + text: compute combined width, centre both
+            constexpr float gap = 3.0f;
+            juce::GlyphArrangement gl;
+            auto font = makeFont (typeface, fontSize, kKerning);
+            gl.addLineOfText (font, label, 0.0f, 0.0f);
+            float textW = gl.getBoundingBox (0, gl.getNumGlyphs(), true).getWidth();
+            float totalW = iconW + gap + textW;
+            float startX = bounds.getCentreX() - totalW * 0.5f;
 
-        // Draw icon
-        g.fillPath (iconPath,
-                    juce::AffineTransform::translation (-pathBounds.getX(), -pathBounds.getY())
-                        .scaled (s)
-                        .translated (startX, bounds.getCentreY() - iconH * 0.5f));
+            g.fillPath (iconPath,
+                        juce::AffineTransform::translation (-pathBounds.getX(), -pathBounds.getY())
+                            .scaled (s)
+                            .translated (startX, bounds.getCentreY() - iconH * 0.5f));
 
-        // Draw text
-        auto textRect = juce::Rectangle<float> (startX + iconW + gap, bounds.getY(),
-                                                 textW + 2.0f, bounds.getHeight());
-        g.drawText (label, textRect.toNearestInt(), juce::Justification::centredLeft);
+            auto textRect = juce::Rectangle<float> (startX + iconW + gap, bounds.getY(),
+                                                     textW + 2.0f, bounds.getHeight());
+            g.drawText (label, textRect.toNearestInt(), juce::Justification::centredLeft);
+        }
     }
     else
     {
@@ -235,12 +297,15 @@ void StyledButton::paintButton (juce::Graphics& g, bool isMouseOverButton, bool 
 }
 
 //==============================================================================
-// PresetSaveOverlay — in-plugin modal overlay for saving presets
+// PresetSaveOverlay — native popup window for saving presets
+// Uses addToDesktop() to bypass host keyboard interception (Issue #35)
 //==============================================================================
 PresetSaveOverlay::PresetSaveOverlay()
 {
     setWantsKeyboardFocus (true);
-    setVisible (false);
+    // v1.0: Do NOT mark opaque — rounded rectangle leaves corner pixels unpainted.
+    // Opaque flag with unpainted regions causes corrupted CoreAnimation backing store
+    // → Metal GPU crash (EXC_BAD_ACCESS in AGXMetalG16X). See issue #37.
 
     // Name editor — DM Sans Regular 13px, recessed bg, cyan focus outline
     nameEditor.setMultiLine (false);
@@ -258,20 +323,11 @@ PresetSaveOverlay::PresetSaveOverlay()
         auto name = nameEditor.getText().trim();
         if (name.isNotEmpty() && onSave)
         {
-            onSave (name, categoryBox.getText());
+            onSave (name);
             dismiss();
         }
     };
     addAndMakeVisible (nameEditor);
-
-    // v0.9: Category picker — styled to match theme
-    categoryBox.setColour (juce::ComboBox::backgroundColourId, Colours_OSD::bgRecessed);
-    categoryBox.setColour (juce::ComboBox::textColourId, juce::Colours::white);
-    categoryBox.setColour (juce::ComboBox::outlineColourId, Colours_OSD::borderDim);
-    for (int i = 0; i < NUM_PRESET_CATEGORIES; ++i)
-        categoryBox.addItem (presetCategoryNames[i], i + 1);
-    categoryBox.setSelectedId (NUM_PRESET_CATEGORIES, juce::dontSendNotification);  // default: User
-    addAndMakeVisible (categoryBox);
 
     // Save button — filled cyan, dark text (primary action)
     saveBtn.setColour (juce::TextButton::buttonColourId, Colours_OSD::accentStellar);
@@ -281,110 +337,95 @@ PresetSaveOverlay::PresetSaveOverlay()
         auto name = nameEditor.getText().trim();
         if (name.isNotEmpty() && onSave)
         {
-            onSave (name, categoryBox.getText());
+            onSave (name);
             dismiss();
         }
     };
     addAndMakeVisible (saveBtn);
 
     // Cancel button — unfilled, dark red-tinted bg, red text (destructive/dismiss action)
-    // Uses a near-black red tint so drawButtonBackground hover/click states register
     cancelBtn.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff120508));
-    cancelBtn.setColour (juce::TextButton::textColourOffId, juce::Colour (0xffed5e5e));  // red from object palette
+    cancelBtn.setColour (juce::TextButton::textColourOffId, juce::Colour (0xffed5e5e));
     cancelBtn.onClick = [this] { dismiss(); };
     addAndMakeVisible (cancelBtn);
 }
 
-void PresetSaveOverlay::show (const juce::String& existingName,
-                              const juce::String& existingCategory)
+void PresetSaveOverlay::show (const juce::String& existingName, juce::Component* parentEditor)
 {
     nameEditor.setText (existingName, false);
 
-    // Set category box to matching category if provided
-    if (existingCategory.isNotEmpty())
+    // Inherit LookAndFeel from parent editor for consistent styling
+    if (parentEditor != nullptr)
+        setLookAndFeel (&parentEditor->getLookAndFeel());
+
+    // Set bounds BEFORE addToDesktop — ensures valid peer creation (Issue #35 fix)
+    setSize (cardW, cardH);
+    if (parentEditor != nullptr)
     {
-        for (int i = 0; i < categoryBox.getNumItems(); ++i)
-        {
-            if (categoryBox.getItemText (i) == existingCategory)
-            {
-                categoryBox.setSelectedItemIndex (i, juce::dontSendNotification);
-                break;
-            }
-        }
+        auto editorBounds = parentEditor->getScreenBounds();
+        int x = editorBounds.getX() + (editorBounds.getWidth()  - cardW) / 2;
+        int y = editorBounds.getY() + (editorBounds.getHeight() - cardH) / 2;
+        setTopLeftPosition (x, y);
     }
 
+    // Create native OS window — bypasses host keyboard interception
+    addToDesktop (juce::ComponentPeer::windowIsTemporary
+                | juce::ComponentPeer::windowHasDropShadow);
+
+    setAlwaysOnTop (true);  // prevent z-order issues in some hosts (Issue #35 fix)
     setVisible (true);
     toFront (true);
+    enterModalState (true);  // non-blocking modal; inputAttemptWhenModal() fires on outside clicks
     nameEditor.grabKeyboardFocus();
-    // Select all text for easy overwrite
     nameEditor.setHighlightedRegion ({ 0, nameEditor.getText().length() });
 }
 
 void PresetSaveOverlay::dismiss()
 {
-    setVisible (false);
-    nameEditor.clear();
-}
+    if (isCurrentlyModal())
+        exitModalState (0);
 
-juce::Rectangle<int> PresetSaveOverlay::getCardBounds() const
-{
-    auto area = getLocalBounds();
-    return { (area.getWidth() - cardW) / 2,
-             (area.getHeight() - cardH) / 2,
-             cardW, cardH };
+    if (isOnDesktop())
+        removeFromDesktop();
+
+    nameEditor.clear();
 }
 
 void PresetSaveOverlay::paint (juce::Graphics& g)
 {
-    // Semi-transparent backdrop
-    g.setColour (Colours_OSD::bgVoid.withAlpha (0.75f));
-    g.fillRect (getLocalBounds());
+    auto bounds = getLocalBounds().toFloat();
 
-    // Card
-    auto card = getCardBounds().toFloat();
+    // Fill entire bounds first for CoreAnimation safety (issue #37)
+    g.fillAll (Colours_OSD::bgPanel);
+
+    // Card background (rounded corners painted over the fill)
     g.setColour (Colours_OSD::bgPanel);
-    g.fillRoundedRectangle (card, 6.0f);
-    g.setColour (Colours_OSD::borderSubtle);
-    g.drawRoundedRectangle (card.reduced (0.5f), 6.0f, 1.0f);
+    g.fillRoundedRectangle (bounds, 6.0f);
 
-    // Title — SAVE PRESET (section header style)
+    // Card border
+    g.setColour (Colours_OSD::borderSubtle);
+    g.drawRoundedRectangle (bounds.reduced (0.5f), 6.0f, 1.0f);
+
+    // Title — SAVE PRESET
     g.setColour (Colours_OSD::textDim);
     auto titleFont = juce::Font (juce::FontOptions (13.0f).withStyle ("Bold"));
     g.setFont (titleFont);
-    auto titleArea = card.withHeight (32.0f).translated (0.0f, 8.0f);
+    auto titleArea = bounds.withHeight (28.0f).translated (0.0f, 10.0f);
     g.drawText ("SAVE PRESET", titleArea.toNearestInt(), juce::Justification::centred);
-
-    // v0.9: Field labels — NAME / CATEGORY
-    auto labelFont = juce::Font (juce::FontOptions (10.0f).withStyle ("Bold"));
-    g.setFont (labelFont);
-    float pad = 16.0f;
-    float labelX = card.getX() + pad;
-    g.drawText ("NAME", juce::Rectangle<float> (labelX, card.getY() + 36.0f, 100.0f, 14.0f).toNearestInt(),
-                juce::Justification::centredLeft);
-    g.drawText ("CATEGORY", juce::Rectangle<float> (labelX, card.getY() + 86.0f, 100.0f, 14.0f).toNearestInt(),
-                juce::Justification::centredLeft);
 }
 
 void PresetSaveOverlay::resized()
 {
-    auto card = getCardBounds();
-    int pad = 16;
+    int pad = 24;
 
-    // Name editor — below NAME label
-    int editorY = card.getY() + 52;
-    nameEditor.setBounds (card.getX() + pad, editorY,
-                          card.getWidth() - pad * 2, 26);
+    // Name editor
+    nameEditor.setBounds (pad, 42, getWidth() - pad * 2, 26);
 
-    // v0.9: Category picker — below CATEGORY label
-    int catY = card.getY() + 102;
-    categoryBox.setBounds (card.getX() + pad, catY,
-                           card.getWidth() - pad * 2, 26);
-
-    // Buttons — centred at bottom of card
-    int btnW = 80, btnH = 28, btnGap = 12;
+    // Buttons
+    int btnW = 76, btnH = 26, btnGap = 10;
     int totalBtnW = btnW * 2 + btnGap;
-    int btnX = card.getX() + (card.getWidth() - totalBtnW) / 2;
-    int btnY = card.getBottom() - btnH - 16;
+    int btnX = (getWidth() - totalBtnW) / 2;
+    int btnY = getHeight() - btnH - 14;
     saveBtn.setBounds (btnX, btnY, btnW, btnH);
     cancelBtn.setBounds (btnX + btnW + btnGap, btnY, btnW, btnH);
 }
@@ -399,11 +440,10 @@ bool PresetSaveOverlay::keyPressed (const juce::KeyPress& key)
     return false;
 }
 
-void PresetSaveOverlay::mouseDown (const juce::MouseEvent& e)
+void PresetSaveOverlay::inputAttemptWhenModal()
 {
-    // Click outside card → dismiss
-    if (! getCardBounds().contains (e.getPosition()))
-        dismiss();
+    // Click outside the native window → dismiss without saving
+    dismiss();
 }
 
 //==============================================================================
@@ -1563,10 +1603,300 @@ void FilterGraphComponent::mouseUp (const juce::MouseEvent&)
 }
 
 //==============================================================================
+// GlobalTapDrawerComponent — collapsible left-edge mini-drawer (v1.0)
+// Architecture: outer component = handle + clipping viewport for the knob panel.
+// KnobPanel is always full-sized; the outer component clips it by setting
+// the panel's visible bounds, creating a natural slide-in/out effect.
+//==============================================================================
+GlobalTapDrawerComponent::GlobalTapDrawerComponent (OSDLookAndFeel& lf)
+    : lookAndFeel (lf)
+{
+    setLookAndFeel (&lf);
+
+    // KnobPanel is a child that holds all knobs. We clip it by setting its bounds
+    // to only the visible portion of the panel area — this creates natural slide-in/out.
+    addAndMakeVisible (knobPanel);
+
+    setupKnob (azSlider,      azLabel,      "AZIM",    -180.0f, 180.0f, 0.1f, kAzimuth);
+    azSlider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);  // match per-tap AZIM drag style
+    azSlider.setRotaryParameters (juce::MathConstants<float>::pi,
+                                  3.0f * juce::MathConstants<float>::pi, false);  // continuous wrap
+    azSlider.setReversed (true);  // IEM convention: clockwise knob = clockwise on map
+    azSlider.setTextValueSuffix (juce::CharPointer_UTF8 ("\xc2\xb0"));  // °
+    setupKnob (elSlider,      elLabel,      "ELEV",    -90.0f,  90.0f,  0.1f, kElevation);
+    elSlider.setRotaryParameters (juce::MathConstants<float>::pi,
+                                  juce::MathConstants<float>::twoPi, true);  // 0° at 9 o'clock, +90° at 12, -90° at 6
+    elSlider.setTextValueSuffix (juce::CharPointer_UTF8 ("\xc2\xb0"));  // °
+    setupKnob (distSlider,    distLabel,    "DIST",    -1.0f,   1.0f,   0.01f, kDistance);
+    setupKnob (dopplerSlider, dopplerLabel, "DOPPLER", -100.0f, 100.0f, 1.0f,  kDoppler);
+    dopplerSlider.setTextValueSuffix ("%");
+    setupKnob (pitchSlider,   pitchLabel,   "PITCH",   -24.0f,  24.0f,  1.0f,  kPitch);
+    pitchSlider.setTextValueSuffix (" st");
+    setupKnob (speedSlider,   speedLabel,   "SPEED",   -5.0f,   5.0f,   0.01f, kSpeed);
+    speedSlider.setTextValueSuffix (" Hz");
+}
+
+void GlobalTapDrawerComponent::setupKnob (juce::Slider& s, juce::Label& l,
+                                           const juce::String& name,
+                                           float min, float max, float step, int knobIdx)
+{
+    s.setSliderStyle (juce::Slider::RotaryVerticalDrag);
+    s.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 58, 11);
+    s.setRange (min, max, step);
+    s.setValue (0.0);
+    s.setColour (juce::Slider::thumbColourId, Colours_OSD::accentGlobal);
+    s.setColour (juce::Slider::textBoxTextColourId, Colours_OSD::accentGlobalDim);
+    s.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
+    s.setColour (juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
+    s.setDoubleClickReturnValue (true, 0.0);
+    knobPanel.addAndMakeVisible (s);  // add to knobPanel, not directly to drawer
+
+    s.onValueChange = [this, knobIdx, &s] {
+        if (suppressCallbacks) return;
+        float val = static_cast<float> (s.getValue());
+        float delta = val - prevValues[knobIdx];
+        if (knobIdx == kAzimuth)
+        {
+            if (delta > 180.0f)  delta -= 360.0f;
+            if (delta < -180.0f) delta += 360.0f;
+        }
+        prevValues[knobIdx] = val;
+        if (onGlobalDelta && std::abs (delta) > 1e-6f)
+            onGlobalDelta (knobIdx, delta);
+    };
+    prevValues[knobIdx] = static_cast<float> (s.getValue());  // sync tracking to initial value
+
+    l.setText (name, juce::dontSendNotification);
+    l.setJustificationType (juce::Justification::centred);
+    l.setColour (juce::Label::textColourId, Colours_OSD::accentGlobal);
+    if (lookAndFeel.jetbrainsMedium)
+        l.setFont (juce::Font (juce::FontOptions (lookAndFeel.jetbrainsMedium).withHeight (9.0f)));
+    knobPanel.addAndMakeVisible (l);  // add to knobPanel
+}
+
+void GlobalTapDrawerComponent::setOpen (bool shouldBeOpen, bool animate)
+{
+    if (open == shouldBeOpen) return;
+    open = shouldBeOpen;
+    targetWidth = open ? kOpenWidth : kClosedWidth;
+
+    if (animate)
+    {
+        startTimerHz (60);
+    }
+    else
+    {
+        currentWidth = targetWidth;
+        if (onToggle) onToggle();
+    }
+    repaint();
+}
+
+void GlobalTapDrawerComponent::timerCallback()
+{
+    int diff = targetWidth - currentWidth;
+    if (std::abs (diff) <= 1)
+    {
+        currentWidth = targetWidth;
+        stopTimer();
+    }
+    else
+    {
+        // Ease-out: 25% of remaining distance per frame (60fps ≈ 200ms settle)
+        currentWidth += static_cast<int> (std::ceil (diff * 0.25f));
+    }
+    if (onToggle) onToggle();  // triggers parent resized() to update bounds
+}
+
+void GlobalTapDrawerComponent::resetToCenter()
+{
+    suppressCallbacks = true;
+    azSlider.setValue (0.0, juce::dontSendNotification);
+    elSlider.setValue (0.0, juce::dontSendNotification);
+    distSlider.setValue (0.0, juce::dontSendNotification);
+    dopplerSlider.setValue (0.0, juce::dontSendNotification);
+    pitchSlider.setValue (0.0, juce::dontSendNotification);
+    speedSlider.setValue (0.0, juce::dontSendNotification);
+    std::fill (std::begin (prevValues), std::end (prevValues), 0.0f);
+    suppressCallbacks = false;
+}
+
+float GlobalTapDrawerComponent::getKnobValue (int knobIdx) const
+{
+    const juce::Slider* sliders[] = { &azSlider, &elSlider, &distSlider,
+                                       &dopplerSlider, &pitchSlider, &speedSlider };
+    if (knobIdx < 0 || knobIdx >= kNumKnobs) return 0.0f;
+    return static_cast<float> (sliders[knobIdx]->getValue());
+}
+
+void GlobalTapDrawerComponent::setKnobValueSilent (int knobIdx, float value)
+{
+    juce::Slider* sliders[] = { &azSlider, &elSlider, &distSlider,
+                                 &dopplerSlider, &pitchSlider, &speedSlider };
+    if (knobIdx < 0 || knobIdx >= kNumKnobs) return;
+    suppressCallbacks = true;
+    sliders[knobIdx]->setValue (value, juce::dontSendNotification);
+    prevValues[knobIdx] = value;
+    suppressCallbacks = false;
+}
+
+// KnobPanel paint — draws the panel background and divider
+void GlobalTapDrawerComponent::KnobPanel::paint (juce::Graphics& g)
+{
+    g.setColour (Colours_OSD::bgPanel.withAlpha (0.92f));
+    g.fillAll();
+
+    // Group divider between position (AZIM/ELEV/DIST) and effect (DOPPLER/PITCH/SPEED)
+    int knobUnit = (getHeight() - 10) / 6;
+    int dividerY = 3 * knobUnit + 5;
+    g.setColour (Colours_OSD::borderSubtle);
+    g.drawHorizontalLine (dividerY, 4.0f, static_cast<float> (getWidth() - 4));
+}
+
+void GlobalTapDrawerComponent::paint (juce::Graphics& g)
+{
+    // Draw the handle strip (rightmost portion of drawer, or the whole thing when closed)
+    int handleX = getWidth() - kHandleWidth;
+    if (handleX < 0) handleX = 0;
+    int handleW = getWidth() - handleX;
+    auto handleBounds = juce::Rectangle<int> (handleX, 0, handleW, getHeight());
+
+    g.setColour (juce::Colour (0xff10141c).withAlpha (0.6f));
+    g.fillRect (handleBounds);
+    g.setColour (Colours_OSD::borderDim);
+    g.drawVerticalLine (handleX, 0.0f, static_cast<float> (getHeight()));
+    if (handleX + handleW < getWidth())
+        g.drawVerticalLine (handleX + handleW - 1, 0.0f, static_cast<float> (getHeight()));
+
+    // "GLOBAL" text + arrow triangles
+    auto hoverCol = handleHover ? Colours_OSD::accentGlobal : Colours_OSD::accentGlobalDim;
+    g.setColour (hoverCol);
+
+    auto font = lookAndFeel.dmSansBold
+                    ? juce::Font (juce::FontOptions (lookAndFeel.dmSansBold).withHeight (12.5f))
+                    : juce::Font (juce::FontOptions (12.5f).withStyle ("Bold"));
+    g.setFont (font);
+
+    float cx = handleX + handleW * 0.5f;
+    float cy = getHeight() * 0.5f;
+
+    g.saveState();
+    g.addTransform (juce::AffineTransform::rotation (-juce::MathConstants<float>::halfPi, cx, cy));
+    g.drawText ("GLOBAL", static_cast<int> (cx - 32), static_cast<int> (cy - 6), 64, 12,
+                juce::Justification::centred, false);
+    g.restoreState();
+
+    // Arrow triangles above and below text (symmetric spacing)
+    float arrowSize = 5.0f;
+    float arrowGap  = 30.0f;
+    float topArrowY = cy - arrowGap;
+    float botArrowY = cy + arrowGap;
+    bool pointRight = ! open;
+
+    // Center arrow horizontally: shift tip so arrow midpoint aligns with handle center
+    float arrowCx = cx + (pointRight ? arrowSize * 0.5f : -arrowSize * 0.5f);
+
+    auto drawArrow = [&] (float tipX, float tipY, bool pr) {
+        juce::Path arrow;
+        float halfH = arrowSize * 0.55f;
+        if (pr)
+            arrow.addTriangle (tipX - arrowSize, tipY - halfH,
+                               tipX - arrowSize, tipY + halfH, tipX, tipY);
+        else
+            arrow.addTriangle (tipX + arrowSize, tipY - halfH,
+                               tipX + arrowSize, tipY + halfH, tipX, tipY);
+        g.fillPath (arrow);
+    };
+    drawArrow (arrowCx, topArrowY, pointRight);
+    drawArrow (arrowCx, botArrowY, pointRight);
+}
+
+void GlobalTapDrawerComponent::layoutKnobs()
+{
+    // Layout knobs inside the knobPanel (always at full panel size)
+    int knobSize = 38;
+    int textBoxH = 11;
+    int labelH = 12;
+    int dividerGap = 10;
+    int totalH = knobPanel.getHeight();
+    if (totalH <= 0) return;
+    int knobUnit = (totalH - dividerGap) / 6;
+    int panelW = knobPanel.getWidth();
+    int contentH = labelH + knobSize + textBoxH;  // total content per knob slot
+
+    juce::Slider* sliders[] = { &azSlider, &elSlider, &distSlider, &dopplerSlider, &pitchSlider, &speedSlider };
+    juce::Label* labels[] = { &azLabel, &elLabel, &distLabel, &dopplerLabel, &pitchLabel, &speedLabel };
+
+    for (int i = 0; i < kNumKnobs; ++i)
+    {
+        int yOffset = i * knobUnit;
+        if (i >= 3) yOffset += dividerGap;
+        int labelY = yOffset + (knobUnit - contentH) / 2;
+        // Slider fills full panel width so TextBoxBelow has room for value text
+        labels[i]->setBounds (0, labelY, panelW, labelH);
+        sliders[i]->setBounds (0, labelY + labelH, panelW, knobSize + textBoxH);
+    }
+}
+
+void GlobalTapDrawerComponent::resized()
+{
+    // The knobPanel is clipped to the visible panel area (left of handle).
+    // Its internal size is always kPanelWidth × height, but we set its BOUNDS
+    // to only show the visible portion, creating natural clipping.
+    int visiblePanelW = getWidth() - kHandleWidth;
+    if (visiblePanelW < 0) visiblePanelW = 0;
+
+    // Position knobPanel so its RIGHT edge aligns with the handle's left edge.
+    // When closing, the panel slides LEFT (negative x), hiding knobs progressively.
+    int panelX = visiblePanelW - kPanelWidth;  // negative when partially closed
+    knobPanel.setBounds (panelX, 0, kPanelWidth, getHeight());
+    layoutKnobs();
+}
+
+void GlobalTapDrawerComponent::mouseDown (const juce::MouseEvent& e)
+{
+    // Handle click area: everything to the right of the knob panel
+    int handleX = getWidth() - kHandleWidth;
+    if (handleX < 0) handleX = 0;
+    if (e.getPosition().x >= handleX)
+        setOpen (! open, true);
+}
+
+void GlobalTapDrawerComponent::mouseEnter (const juce::MouseEvent& e)
+{
+    int handleX = juce::jmax (0, getWidth() - kHandleWidth);
+    if (e.getPosition().x >= handleX && ! handleHover)
+    {
+        handleHover = true;
+        repaint();
+    }
+}
+
+void GlobalTapDrawerComponent::mouseExit (const juce::MouseEvent&)
+{
+    if (handleHover)
+    {
+        handleHover = false;
+        repaint();
+    }
+}
+
+void GlobalTapDrawerComponent::mouseMove (const juce::MouseEvent& e)
+{
+    int handleX = juce::jmax (0, getWidth() - kHandleWidth);
+    bool newHover = e.getPosition().x >= handleX;
+    if (newHover != handleHover)
+    {
+        handleHover = newHover;
+        repaint();
+    }
+}
+
+//==============================================================================
 // Editor constructor
 //==============================================================================
 OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
-    : AudioProcessorEditor (&p), processorRef (p)
+    : AudioProcessorEditor (&p), processorRef (p), globalTapDrawer (osdLookAndFeel)
 {
     setLookAndFeel (&osdLookAndFeel);
     setSize (kWindowWidth, kWindowHeight);
@@ -1575,6 +1905,26 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     addAndMakeVisible (spatialMap);
     spatialMap.addListener (this);
     spatialMap.setProcessor (&processorRef);
+
+    // --- Global tap drawer (overlays left edge of spatial map) ---------------
+    addAndMakeVisible (globalTapDrawer);
+    globalTapDrawer.toFront (false);
+    globalTapDrawer.setOpen (processorRef.getGlobalDrawerOpen());
+    globalTapDrawer.onGlobalDelta = [this] (int idx, float delta) {
+        applyGlobalTapDelta (idx, delta);
+        // Sync to processor atomics for OSC Send broadcast
+        processorRef.globalTapOffset[idx].store (
+            static_cast<float> (globalTapDrawer.getKnobValue (idx)), std::memory_order_relaxed);
+    };
+    globalTapDrawer.onToggle = [this] {
+        processorRef.setGlobalDrawerOpen (globalTapDrawer.isOpen());
+        // v1.0: Only update drawer bounds during animation — calling full resized()
+        // at 60Hz causes CoreAnimation layout thrashing → Metal GPU crash (issue #37).
+        int drawerW = globalTapDrawer.getCurrentWidth();
+        auto mapBounds = spatialMap.getBounds();
+        globalTapDrawer.setBounds (mapBounds.getX(), mapBounds.getY(), drawerW, mapBounds.getHeight());
+        globalTapDrawer.repaint();
+    };
 
     // --- Global knobs --------------------------------------------------------
     auto addKnob = [&](juce::Slider& s, juce::Label& l, const juce::String& name,
@@ -1590,7 +1940,6 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     addKnob (delayTimeSlider,  delayTimeLabel,  "TIME",     "delayTime",  delayTimeAttach);
     addKnob (noteDivisionSlider, delayTimeLabel, "TIME",    "noteDivision", noteDivisionAttach);
     addKnob (feedbackSlider,   feedbackLabel,   "FEEDBACK", "feedback",   feedbackAttach);
-    addKnob (pitchShiftSlider, pitchShiftLabel, "PITCH",    "pitchShift", pitchShiftAttach);
     addKnob (filterHPSlider,   filterHPLabel,   "HP",       "filterHP",   filterHPAttach);
     addKnob (filterLPSlider,   filterLPLabel,   "LP",       "filterLP",   filterLPAttach);
     addKnob (dryWetSlider,     dryWetLabel,     "DRY/WET",  "dryWet",     dryWetAttach);
@@ -1602,7 +1951,6 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     delayTimeSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentStellar);
     noteDivisionSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentStellar);
     feedbackSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentStellar);
-    pitchShiftSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentStellar);
     // TONE section — filter handles are violet (handled in FilterGraphComponent)
     filterHPSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentViolet);
     filterLPSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentViolet);
@@ -1725,15 +2073,15 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     tempoSyncButton->onStateChange = updateSyncUI;
 
     // v0.7: Dotted/Triplet toggle buttons (mutually exclusive, radio-style)
-    syncDottedButton = std::make_unique<StyledButton> (juce::String::fromUTF8 ("\xe2\x99\xaa."),
-                                                        Colours_OSD::accentSync,
+    syncDottedButton = std::make_unique<StyledButton> ("", Colours_OSD::accentSync,
                                                         osdLookAndFeel.jetbrainsMedium);
+    syncDottedButton->setIcon (createDottedNoteIconPath(), 1.0f);
     syncDottedButton->setClickingTogglesState (false);
     addAndMakeVisible (*syncDottedButton);
 
-    syncTripletButton = std::make_unique<StyledButton> (juce::String::fromUTF8 ("\xe2\x99\xaa\xc2\xb3"),
-                                                         Colours_OSD::accentSync,
+    syncTripletButton = std::make_unique<StyledButton> ("", Colours_OSD::accentSync,
                                                          osdLookAndFeel.jetbrainsMedium);
+    syncTripletButton->setIcon (createTripletNoteIconPath(), 1.0f);
     syncTripletButton->setClickingTogglesState (false);
     addAndMakeVisible (*syncTripletButton);
 
@@ -2131,6 +2479,9 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     stylePresetButton (presetPrevButton, "<");
     presetPrevButton.onClick = [this]
     {
+        globalTapDrawer.resetToCenter();
+        for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
+            processorRef.globalTapOffset[i].store (0.0f, std::memory_order_relaxed);
         processorRef.loadPreviousPreset();
         updatePresetButtonText();
     };
@@ -2138,44 +2489,38 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     stylePresetButton (presetNextButton, ">");
     presetNextButton.onClick = [this]
     {
+        globalTapDrawer.resetToCenter();
+        for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
+            processorRef.globalTapOffset[i].store (0.0f, std::memory_order_relaxed);
         processorRef.loadNextPreset();
         updatePresetButtonText();
     };
 
     stylePresetButton (presetSaveButton, "Save");
-    addChildComponent (presetSaveOverlay);  // initially hidden
     presetSaveButton.onClick = [this]
     {
-        // Pre-fill name + category if current preset is user-made
+        // Pre-fill name if current preset is user-made
         int currentIdx = processorRef.getCurrentPresetIndex();
         auto cats = processorRef.getCategorizedPresets();
-        bool isUserPreset = false;
-        juce::String existingName, existingCategory;
+        juce::String existingName;
         for (const auto& cp : cats)
         {
             if (cp.originalIndex == currentIdx && ! cp.isFactory)
-            { isUserPreset = true; break; }
-        }
-        if (isUserPreset)
-        {
-            auto names = processorRef.getPresetNames();
-            if (currentIdx < names.size())
-                existingName = names[currentIdx];
-            for (const auto& cp : cats)
             {
-                if (cp.originalIndex == currentIdx)
-                { existingCategory = cp.category; break; }
+                auto names = processorRef.getPresetNames();
+                if (currentIdx < names.size())
+                    existingName = names[currentIdx];
+                break;
             }
         }
 
-        presetSaveOverlay.onSave = [this] (const juce::String& name, const juce::String& category)
+        presetSaveOverlay.onSave = [this] (const juce::String& name)
         {
-            processorRef.saveUserPreset (name, category);
+            processorRef.saveUserPreset (name);
             updatePresetButtonText();
         };
 
-        presetSaveOverlay.setBounds (getLocalBounds());
-        presetSaveOverlay.show (existingName, existingCategory);
+        presetSaveOverlay.show (existingName, this);  // native popup window
     };
 
     // --- SML badge button (header branding link) ---
@@ -2196,6 +2541,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
 OpenSpatialDelayEditor::~OpenSpatialDelayEditor()
 {
+    presetSaveOverlay.dismiss();  // tear down native window before editor destruction
     spatialMap.removeListener (this);
     setLookAndFeel (nullptr);
     stopTimer();
@@ -2271,6 +2617,9 @@ void OpenSpatialDelayEditor::showPresetMenu()
         {
             if (result > 0)
             {
+                globalTapDrawer.resetToCenter();
+                for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
+                    processorRef.globalTapOffset[i].store (0.0f, std::memory_order_relaxed);
                 processorRef.loadPreset (result - 1);
                 updatePresetButtonText();
             }
@@ -2427,6 +2776,87 @@ void OpenSpatialDelayEditor::objectPositionChanged (int objectIndex, float azimu
 }
 
 void OpenSpatialDelayEditor::objectSelected (int objectIndex) { selectObject (objectIndex); }
+
+//==============================================================================
+// v1.0: Global Tap Delta Application (IEM MultiEncoder pattern)
+//==============================================================================
+void OpenSpatialDelayEditor::applyGlobalTapDelta (int knobIndex, float delta)
+{
+    static const char* suffixes[] = {
+        "azimuth", "elevation", "distance",
+        "dopplerAmount", "pitchShift", "trajectorySpeed"
+    };
+    if (knobIndex < 0 || knobIndex >= 6) return;
+    const bool wraps = (knobIndex == GlobalTapDrawerComponent::kAzimuth);
+
+    // Scale factors: knob display range → APVTS denormalized range
+    // Doppler: knob shows -100..+100 (%), APVTS is 0..1 → scale by 0.01
+    static const float scaleFactors[] = { 1.0f, 1.0f, 1.0f, 0.01f, 1.0f, 1.0f };
+    float scaledDelta = delta * scaleFactors[knobIndex];
+
+    for (int i = 0; i < SpatialMapComponent::MAX_OBJECTS; ++i)
+    {
+        // Only affect enabled taps
+        auto enabledId = "object" + juce::String (i + 1) + "_enabled";
+        if (processorRef.apvts.getRawParameterValue (enabledId)->load() < 0.5f)
+            continue;
+
+        auto paramId = "object" + juce::String (i + 1) + "_" + suffixes[knobIndex];
+        auto* param = processorRef.apvts.getParameter (paramId);
+        if (param == nullptr) continue;
+
+        // Read current denormalized value, add delta
+        float current = param->convertFrom0to1 (param->getValue());
+        float newVal = current + scaledDelta;
+
+        // Azimuth wrapping
+        if (wraps)
+        {
+            while (newVal >  180.0f) newVal -= 360.0f;
+            while (newVal < -180.0f) newVal += 360.0f;
+        }
+
+        // convertTo0to1 handles NormalisableRange clamping for non-wrapping params
+        param->setValueNotifyingHost (param->convertTo0to1 (newVal));
+    }
+}
+
+void OpenSpatialDelayEditor::syncGlobalTapOffsetsFromOSC()
+{
+    for (int i = 0; i < GlobalTapDrawerComponent::kNumKnobs; ++i)
+    {
+        float oscVal = processorRef.globalTapOffset[i].load (std::memory_order_relaxed);
+        float curVal = globalTapDrawer.getKnobValue (i);
+        float delta  = oscVal - curVal;
+
+        // Azimuth wrapping
+        if (i == GlobalTapDrawerComponent::kAzimuth)
+        {
+            if (delta >  180.0f) delta -= 360.0f;
+            if (delta < -180.0f) delta += 360.0f;
+        }
+
+        if (std::abs (delta) > 1e-6f)
+        {
+            applyGlobalTapDelta (i, delta);
+            globalTapDrawer.setKnobValueSilent (i, oscVal);
+        }
+    }
+}
+
+void OpenSpatialDelayEditor::syncForScreenshot()
+{
+    updateMapFromParameters();
+    timerCallback();
+}
+
+void OpenSpatialDelayEditor::configureGlobalDrawer (bool open, const float* knobValues, int numKnobs)
+{
+    globalTapDrawer.setOpen (open);
+    processorRef.setGlobalDrawerOpen (open);
+    for (int i = 0; i < numKnobs && i < GlobalTapDrawerComponent::kNumKnobs; ++i)
+        globalTapDrawer.setKnobValueSilent (i, knobValues[i]);
+}
 
 void OpenSpatialDelayEditor::updateMapFromParameters()
 {
@@ -2674,6 +3104,12 @@ void OpenSpatialDelayEditor::timerCallback()
         if (syncTripletButton) syncTripletButton->setToggleState (mode == 2, juce::dontSendNotification);
     }
 
+    // v1.0: Sync global tap offset knobs from OSC receive (processor → editor)
+    if (processorRef.globalTapOffsetChanged.exchange (false, std::memory_order_relaxed))
+    {
+        syncGlobalTapOffsetsFromOSC();
+    }
+
     repaint();
 }
 
@@ -2779,11 +3215,11 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         g.drawText (titleText, titleX, 0, (int) titleTextW + 4, kHeaderHeight,
                     juce::Justification::centredLeft);
 
-        // "v0.8" dim version tag — JetBrains Mono 9px
+        // "v1.0" dim version tag — JetBrains Mono 9px
         int versionX = titleX + (int) titleTextW + 4;
         g.setColour (Colours_OSD::textDim);
         g.setFont (makeFont (osdLookAndFeel.jetbrainsRegular, 11.0f));
-        g.drawText ("v0.9", versionX, 0, 40, kHeaderHeight,
+        g.drawText ("v1.0", versionX, 0, 40, kHeaderHeight,
                     juce::Justification::centredLeft);
     }
 
@@ -3025,10 +3461,6 @@ void OpenSpatialDelayEditor::resized()
     if (syncTripletButton) syncTripletButton->setVisible (isSynced);
     syncModeBox.setVisible (false);  // hidden — replaced by toggle buttons
 
-    // Hide pitchShift knob — parameter stays connected for automation/preset compatibility
-    pitchShiftSlider.setVisible (false);
-    pitchShiftLabel.setVisible (false);
-
     curY += 66 + 22 + 20 + 2;  // knob row + sync row + modifier row + gap
 
     // --- MOD section (v0.8: Wobble modulation) ---
@@ -3212,6 +3644,13 @@ void OpenSpatialDelayEditor::resized()
 
     // === SPATIAL MAP (fills remaining area) ===================================
     spatialMap.setBounds (area);
+
+    // === GLOBAL TAP DRAWER (overlays left edge of spatial map) ================
+    {
+        int drawerW = globalTapDrawer.getCurrentWidth();
+        globalTapDrawer.setBounds (area.getX(), area.getY(), drawerW, area.getHeight());
+        globalTapDrawer.toFront (false);
+    }
 }
 
 //==============================================================================

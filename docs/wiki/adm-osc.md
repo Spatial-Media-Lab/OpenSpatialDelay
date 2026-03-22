@@ -59,6 +59,68 @@ When a tap has an active trajectory and OSC receive is active:
 - During active OSC reception, the trajectory animation is paused and the OSC position is used directly
 - When OSC messages stop (after the 500ms timeout), the trajectory resumes from the last OSC-set origin
 
+## Custom `/osd/` Namespace
+
+In addition to the ADM-OSC standard namespace, OpenSpatialDelay provides a custom `/osd/` namespace for full parameter control.
+
+### Per-Object Parameters (`/osd/obj/N/`)
+
+Where `N` is the object number (1-12):
+
+| Message | Arguments | Description |
+|---|---|---|
+| `/osd/obj/N/azim` | float (degrees) | Set azimuth (alias for `/adm/obj/N/azim`). |
+| `/osd/obj/N/elev` | float (degrees) | Set elevation (alias for `/adm/obj/N/elev`). |
+| `/osd/obj/N/dist` | float | Set distance (alias for `/adm/obj/N/dist`). |
+| `/osd/obj/N/aed` | float, float, float | Set position (alias for `/adm/obj/N/aed`). |
+| `/osd/obj/N/enabled` | float (0/1) | Enable or disable the tap. |
+| `/osd/obj/N/doppler` | float (0-1) | Set Doppler amount. |
+| `/osd/obj/N/pitch` | float (-24 to 24) | Set per-tap pitch shift in semitones. |
+| `/osd/obj/N/trajectory` | float (0-13) | Set trajectory shape index. |
+| `/osd/obj/N/speed` | float (0-5) | Set trajectory speed in Hz. |
+| `/osd/obj/N/direction` | float (0/1) | Set trajectory direction (0 = Forward, 1 = Reverse). |
+| `/osd/obj/N/input` | float (0-2) | Set input channel (0 = L+R, 1 = L, 2 = R). |
+
+### Global Parameters (`/osd/global/`)
+
+| Message | Arguments | Description |
+|---|---|---|
+| `/osd/global/delaytime` | float (1-2000) | Set delay time in ms. |
+| `/osd/global/temposync` | float (0/1) | Enable/disable tempo sync. |
+| `/osd/global/notedivision` | float | Set note division. |
+| `/osd/global/syncmode` | float (0-2) | Set sync mode (0=Straight, 1=Dotted, 2=Triplet). |
+| `/osd/global/feedback` | float (0-1) | Set feedback amount. |
+| `/osd/global/filterlp` | float (200-20000) | Set LP filter frequency. |
+| `/osd/global/filterhp` | float (20-5000) | Set HP filter frequency. |
+| `/osd/global/filterlpq` | float (0.5-8) | Set LP filter resonance. |
+| `/osd/global/filterhpq` | float (0.5-8) | Set HP filter resonance. |
+| `/osd/global/filterenabled` | float (0/1) | Enable/disable feedback filters. |
+| `/osd/global/drywet` | float (0-1) | Set dry/wet mix. |
+| `/osd/global/inputgain` | float (dB) | Set input gain. |
+| `/osd/global/outputgain` | float (dB) | Set output gain. |
+| `/osd/global/algorithm` | float (0-10) | Set spatialization algorithm. |
+| `/osd/global/hrtfprofile` | float (0-5) | Set HRTF profile. |
+| `/osd/global/outputformat` | float (0-21) | Set output format. |
+| `/osd/global/air` | float (0/1) | Enable/disable air absorption. |
+| `/osd/global/wobble` | float (0/1) | Enable/disable wobble modulation. |
+| `/osd/global/wobbleamount` | float (0-1) | Set wobble depth. |
+| `/osd/global/wobblemorph` | float (0-1) | Set wobble waveform. |
+
+### Global Tap Offsets (`/osd/global/tap*`)
+
+These control the global tap offset knobs (the collapsible drawer on the spatial map). Each message sets the absolute offset value -- the plugin computes and applies the delta to all enabled taps.
+
+| Message | Arguments | Description |
+|---|---|---|
+| `/osd/global/tapazimuth` | float (-180 to 180) | Set global azimuth offset in degrees. |
+| `/osd/global/tapelevation` | float (-90 to 90) | Set global elevation offset in degrees. |
+| `/osd/global/tapdistance` | float (-1 to 1) | Set global distance offset. |
+| `/osd/global/tapdoppler` | float (-1 to 1) | Set global Doppler offset. |
+| `/osd/global/tappitch` | float (-24 to 24) | Set global pitch offset in semitones. |
+| `/osd/global/tapspeed` | float (-5 to 5) | Set global trajectory speed offset in Hz. |
+
+> **Note:** Global tap offsets are not saved in presets. Loading a preset resets all offsets to 0.
+
 ## OSC Send
 
 When enabled, OpenSpatialDelay broadcasts the current position of all taps over OSC.
@@ -86,9 +148,11 @@ To minimize network traffic, OSC send uses position-change gating: messages are 
 
 ### What Gets Broadcast
 
-- When a trajectory is active, the **animated position** is sent (not the origin)
-- When no trajectory is active, the **knob position** is sent
-- Only enabled taps are broadcast
+- **Positions:** `/adm/obj/N/aed` -- animated position when trajectory is active, knob position otherwise
+- **Per-object params:** `/osd/obj/N/` -- enabled, doppler, pitch, trajectory, speed, direction, input
+- **Global params:** `/osd/global/` -- all global parameters (delay time, feedback, filters, etc.)
+- **Global tap offsets:** `/osd/global/tap*` -- all 6 tap offset knob values
+- All messages are **change-gated** -- only sent when the value has actually changed
 
 ## Use Cases
 
@@ -124,11 +188,19 @@ python3 scripts/adm_osc_test.py --aed 1 45.0 0.0 0.5
 # Orbit object 1 around the listener
 python3 scripts/adm_osc_test.py --orbit 1
 
+# Set per-object params
+python3 scripts/adm_osc_test.py --obj 1 pitch -12
+python3 scripts/adm_osc_test.py --obj 1 doppler 0.8
+
+# Set global params
+python3 scripts/adm_osc_test.py --global feedback 0.8
+python3 scripts/adm_osc_test.py --global tapazimuth 45
+
 # Listen for outgoing OSC messages
 python3 scripts/adm_osc_test.py --listen 9000
 ```
 
-This script supports 8 modes for testing and automation. You can also write your own OSC scripts using any OSC library (e.g., `python-osc`, `liblo`, `oscpack`).
+This script supports position modes, per-object params, global params, and listen mode. You can also write your own OSC scripts using any OSC library (e.g., `python-osc`, `liblo`, `oscpack`).
 
 ### DAW Automation Recording
 

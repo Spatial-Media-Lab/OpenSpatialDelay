@@ -65,13 +65,14 @@ Surround formats output discrete speaker signals. The plugin computes per-speake
 | 5.0 Surround | 5 | No | No | Music surround without LFE |
 | 5.1 Surround | 6 | Yes | No | Standard film/broadcast surround |
 | 7.0 Surround | 7 | No | No | Extended surround without LFE |
-| 5.1.2 Atmos | 8 | Yes | Yes | Entry-level Atmos with 2 height speakers |
 | 7.1 Surround | 8 | Yes | No | Standard high-channel surround |
 | Octaphonic | 8 | No | No | 8 equidistant speakers (ring), art/research |
+| 5.1.2 Atmos | 8 | Yes | Yes | Entry-level Atmos with 2 height speakers |
 | 5.1.4 Atmos | 10 | Yes | Yes | Atmos with 4 height speakers |
 | 7.1.2 Atmos | 10 | Yes | Yes | Atmos with 2 height speakers on 7.1 bed |
 | 7.1.4 Atmos | 12 | Yes | Yes | Full Dolby Atmos home cinema |
 | 7.1.6 Atmos | 14 | Yes | Yes | Extended Atmos with 6 height speakers |
+| 9.1.4 Atmos | 14 | Yes | Yes | Atmos with 9-speaker bed + 4 height speakers |
 | 9.1.6 Atmos | 16 | Yes | Yes | Maximum Atmos configuration |
 | SpatialMediaLab 13.1 | 14 | Yes | Yes | SpatialMediaLab multi-use room -- 8 ear-level + 4 height + 1 zenith |
 

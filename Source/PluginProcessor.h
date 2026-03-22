@@ -812,6 +812,10 @@ public:
     static TrajectoryResult computeTrajectory (int shape, float phase,
                                                float baseAz, float baseEl, float baseDist,
                                                bool reverse = false);
+
+    // v1.0: Doppler pitch accessor for automated latency measurement tests
+    float getDopplerSemitones (int objectIndex) const { return dopplerSemitones[objectIndex]; }
+
 private:
 
     //--- DELAY-SPECIFIC: DSP state --------------------------------------------

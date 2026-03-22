@@ -672,3 +672,753 @@ TEST_CASE ("Stereo — azimuth sweep has no glitches (regression guard)", "[ster
     REQUIRE (glitchesL.empty());
     REQUIRE (glitchesR.empty());
 }
+
+// ============================================================================
+// Section 5: Issue #36 Interaction Tests — Multi-System Glitch Detection
+// ============================================================================
+
+// Create a multi-tap binaural processor with configurable Doppler/AIR/feedback
+static std::unique_ptr<Proc> createMultiTapBinauralProcessor (int numTaps, float dopplerAmount,
+                                                               bool airAbsorption, float feedback,
+                                                               int hrtfProfile = 1)
+{
+    auto proc = std::make_unique<Proc>();
+    setParam (*proc, "outputFormat", 0.0f);   // Binaural
+    setParam (*proc, "hrtfProfile", static_cast<float> (hrtfProfile));
+    setParam (*proc, "delayTime", 50.0f);
+    setParam (*proc, "feedback", feedback);
+    setParam (*proc, "dryWet", 1.0f);
+    setParam (*proc, "inputGain", 1.0f);
+    setParam (*proc, "outputGain", 1.0f);
+    setParam (*proc, "airAbsorption", airAbsorption ? 1.0f : 0.0f);
+
+    // Distribute taps evenly around azimuth
+    float azStep = 360.0f / static_cast<float> (std::max (numTaps, 1));
+    for (int i = 0; i < 12; ++i)
+    {
+        auto idx = juce::String (i + 1);
+        setParam (*proc, "object" + idx + "_enabled", (i < numTaps) ? 1.0f : 0.0f);
+        if (i < numTaps)
+        {
+            float az = -180.0f + azStep * static_cast<float> (i);
+            float el = (i % 2 == 0) ? 0.0f : ((i % 4 == 1) ? 15.0f : -10.0f);
+            setParam (*proc, "object" + idx + "_azimuth", az);
+            setParam (*proc, "object" + idx + "_elevation", el);
+            setParam (*proc, "object" + idx + "_distance", 0.4f + 0.03f * static_cast<float> (i));
+            setParam (*proc, "object" + idx + "_dopplerAmount", dopplerAmount);
+        }
+    }
+
+    proc->prepareToPlay (kSampleRate, kBlockSize);
+    return proc;
+}
+
+// Sweep all enabled taps' azimuth by delta per block, capturing output
+static std::pair<std::vector<float>, std::vector<float>>
+sweepAllTapsAzimuth (Proc& proc, float deltaPerBlock, int numBlocks, int numTaps,
+                     const float* baseAz, float inputLevel = 0.5f)
+{
+    std::vector<float> allL, allR;
+    allL.reserve (static_cast<size_t> (numBlocks * kBlockSize));
+    allR.reserve (static_cast<size_t> (numBlocks * kBlockSize));
+    juce::MidiBuffer midi;
+
+    for (int b = 0; b < numBlocks; ++b)
+    {
+        float offset = deltaPerBlock * static_cast<float> (b);
+        for (int t = 0; t < numTaps; ++t)
+        {
+            auto idx = juce::String (t + 1);
+            float az = baseAz[t] + offset;
+            // Wrap to [-180, 180]
+            while (az > 180.0f) az -= 360.0f;
+            while (az < -180.0f) az += 360.0f;
+            setParam (proc, "object" + idx + "_azimuth", az);
+        }
+
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, inputLevel);
+            buffer.setSample (1, s, inputLevel);
+        }
+        proc.processBlock (buffer, midi);
+
+        const float* outL = buffer.getReadPointer (0);
+        const float* outR = buffer.getReadPointer (1);
+        allL.insert (allL.end(), outL, outL + kBlockSize);
+        allR.insert (allR.end(), outR, outR + kBlockSize);
+    }
+    return { allL, allR };
+}
+
+// Compute per-block RMS from a flat sample vector
+static std::vector<float> measurePerBlockRMS (const std::vector<float>& samples, int blockSize)
+{
+    std::vector<float> rmsVec;
+    int numBlocks = static_cast<int> (samples.size()) / blockSize;
+    for (int b = 0; b < numBlocks; ++b)
+        rmsVec.push_back (computeRMS (samples.data() + b * blockSize, blockSize));
+    return rmsVec;
+}
+
+// T1: Doppler + HRTF interaction test
+TEST_CASE ("Binaural HRTF + Doppler — azimuth sweep interaction", "[binaural][doppler][interaction]")
+{
+    auto proc = createBinauralProcessor (1);  // MIT KEMAR
+
+    // Enable Doppler on all 3 taps
+    setParam (*proc, "object1_dopplerAmount", 0.8f);
+    setParam (*proc, "object2_dopplerAmount", 0.8f);
+    setParam (*proc, "object3_dopplerAmount", 0.8f);
+    setParam (*proc, "feedback", 0.5f);
+
+    // Stabilize
+    processBlocksCapturingAll (*proc, 60);
+
+    // Sweep object 1 azimuth -180 to +180 over 100 blocks
+    constexpr int sweepBlocks = 100;
+    std::vector<float> allL, allR;
+    allL.reserve (static_cast<size_t> (sweepBlocks * kBlockSize));
+    allR.reserve (static_cast<size_t> (sweepBlocks * kBlockSize));
+    juce::MidiBuffer midi;
+
+    for (int b = 0; b < sweepBlocks; ++b)
+    {
+        float az = -180.0f + 360.0f * static_cast<float> (b) / static_cast<float> (sweepBlocks);
+        setParam (*proc, "object1_azimuth", az);
+
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+
+        const float* outL = buffer.getReadPointer (0);
+        const float* outR = buffer.getReadPointer (1);
+        allL.insert (allL.end(), outL, outL + kBlockSize);
+        allR.insert (allR.end(), outR, outR + kBlockSize);
+    }
+
+    // Skip first 5 blocks — sweep starts at az=-180 while stabilization was at az=-45,
+    // creating a legitimate 135° spatial repositioning transient
+    int skipSamples = 5 * kBlockSize;
+    int checkSamples = static_cast<int> (allL.size()) - skipSamples;
+    auto glitchesL = detectGlitches (allL.data() + skipSamples, checkSamples);
+    auto glitchesR = detectGlitches (allR.data() + skipSamples, checkSamples);
+
+    INFO ("Doppler+HRTF L glitches: " << glitchesL.size() << ", R: " << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+// T2: High feedback amplification test
+TEST_CASE ("Binaural HRTF — high feedback does not amplify crossfade artifacts", "[binaural][feedback][glitch]")
+{
+    auto proc = createBinauralProcessor (1);
+    setParam (*proc, "feedback", 0.95f);
+    setParam (*proc, "delayTime", 30.0f);
+
+    // Stabilize with high feedback (needs more blocks to reach steady state)
+    processBlocksCapturingAll (*proc, 80);
+
+    // Sweep object 1 azimuth 0→180 then hold
+    constexpr int sweepBlocks = 50;
+    constexpr int holdBlocks = 100;
+    std::vector<float> allL, allR;
+    allL.reserve (static_cast<size_t> ((sweepBlocks + holdBlocks) * kBlockSize));
+    allR.reserve (static_cast<size_t> ((sweepBlocks + holdBlocks) * kBlockSize));
+    juce::MidiBuffer midi;
+
+    for (int b = 0; b < sweepBlocks + holdBlocks; ++b)
+    {
+        if (b < sweepBlocks)
+        {
+            float az = 180.0f * static_cast<float> (b) / static_cast<float> (sweepBlocks);
+            setParam (*proc, "object1_azimuth", az);
+        }
+        // else: hold at az=180
+
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+
+        const float* outL = buffer.getReadPointer (0);
+        const float* outR = buffer.getReadPointer (1);
+        allL.insert (allL.end(), outL, outL + kBlockSize);
+        allR.insert (allR.end(), outR, outR + kBlockSize);
+    }
+
+    // Check the HOLD phase for glitches (feedback tail should be clean)
+    int holdStartSample = sweepBlocks * kBlockSize;
+    int holdSamples = holdBlocks * kBlockSize;
+    auto glitchesL = detectGlitches (allL.data() + holdStartSample, holdSamples);
+    auto glitchesR = detectGlitches (allR.data() + holdStartSample, holdSamples);
+
+    INFO ("High feedback hold phase L glitches: " << glitchesL.size() << ", R: " << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+// T3: Global AZIM sweep — the actual issue #36 scenario
+TEST_CASE ("Binaural HRTF — global azimuth sweep (issue #36)", "[binaural][global][glitch]")
+{
+    auto proc = createMultiTapBinauralProcessor (6, 0.0f, false, 0.85f);
+
+    // Stabilize
+    processBlocksCapturingAll (*proc, 60);
+
+    // Record base azimuth positions
+    float baseAz[6];
+    float azStep = 360.0f / 6.0f;
+    for (int i = 0; i < 6; ++i)
+        baseAz[i] = -180.0f + azStep * static_cast<float> (i);
+
+    // Sweep ALL 6 taps simultaneously — 3.6 deg/block for 100 blocks
+    auto [allL, allR] = sweepAllTapsAzimuth (*proc, 3.6f, 100, 6, baseAz);
+
+    auto glitchesL = detectGlitches (allL.data(), static_cast<int> (allL.size()));
+    auto glitchesR = detectGlitches (allR.data(), static_cast<int> (allR.size()));
+
+    INFO ("Global AZIM sweep L glitches: " << glitchesL.size() << ", R: " << glitchesR.size());
+    for (size_t g = 0; g < std::min (glitchesL.size(), size_t (5)); ++g)
+    {
+        int idx = glitchesL[g];
+        float diff = std::abs (allL[static_cast<size_t> (idx)] - allL[static_cast<size_t> (idx - 1)]);
+        WARN ("Global AZIM L glitch at sample " << idx << " (block " << idx / kBlockSize
+              << "), diff=" << diff);
+    }
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+// T4: 12-tap simultaneous sweep stress test
+TEST_CASE ("Binaural HRTF — 12-tap simultaneous sweep stress", "[binaural][multitap][stress]")
+{
+    auto proc = createMultiTapBinauralProcessor (12, 0.0f, false, 0.7f);
+
+    // Stabilize (12 taps need more blocks — last tap at 12*50ms = 600ms)
+    processBlocksCapturingAll (*proc, 80);
+
+    float baseAz[12];
+    float azStep = 360.0f / 12.0f;
+    for (int i = 0; i < 12; ++i)
+        baseAz[i] = -180.0f + azStep * static_cast<float> (i);
+
+    // Sweep all 12 taps — 5 deg/block for 72 blocks (full 360° rotation)
+    auto [allL, allR] = sweepAllTapsAzimuth (*proc, 5.0f, 72, 12, baseAz);
+
+    auto glitchesL = detectGlitches (allL.data(), static_cast<int> (allL.size()));
+    auto glitchesR = detectGlitches (allR.data(), static_cast<int> (allR.size()));
+
+    INFO ("12-tap stress L glitches: " << glitchesL.size() << ", R: " << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+// T5: Doppler velocity response latency characterization
+TEST_CASE ("Doppler — velocity response latency characterization", "[doppler][latency]")
+{
+    auto proc = std::make_unique<Proc>();
+    setParam (*proc, "outputFormat", 0.0f);   // Binaural
+    setParam (*proc, "hrtfProfile", 0.0f);    // Simple/Woodworth (no HRTF convolver variable)
+    setParam (*proc, "delayTime", 100.0f);
+    setParam (*proc, "feedback", 0.0f);       // Single pass
+    setParam (*proc, "dryWet", 1.0f);
+    setParam (*proc, "inputGain", 1.0f);
+    setParam (*proc, "outputGain", 1.0f);
+
+    for (int i = 0; i < 12; ++i)
+    {
+        auto idx = juce::String (i + 1);
+        setParam (*proc, "object" + idx + "_enabled", (i == 0) ? 1.0f : 0.0f);
+    }
+    setParam (*proc, "object1_azimuth", 0.0f);
+    setParam (*proc, "object1_elevation", 0.0f);
+    setParam (*proc, "object1_distance", 0.5f);
+    setParam (*proc, "object1_dopplerAmount", 1.0f);
+
+    proc->prepareToPlay (kSampleRate, kBlockSize);
+
+    // Stabilize (static position)
+    juce::MidiBuffer midi;
+    for (int b = 0; b < 60; ++b)
+    {
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s) buffer.setSample (0, s, 0.5f);
+        proc->processBlock (buffer, midi);
+    }
+
+    CHECK (std::abs (proc->getDopplerSemitones (0)) < 0.01f);
+
+    // Phase 1: Rise — constant velocity sweep (+10 deg/block)
+    std::vector<float> pitchCurve;
+    for (int b = 0; b < 50; ++b)
+    {
+        float az = 10.0f * static_cast<float> (b);
+        while (az > 180.0f) az -= 360.0f;
+        setParam (*proc, "object1_azimuth", az);
+
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s) buffer.setSample (0, s, 0.5f);
+        proc->processBlock (buffer, midi);
+        pitchCurve.push_back (proc->getDopplerSemitones (0));
+    }
+
+    // Find steady-state (average of last 10 blocks)
+    float steadyState = 0.0f;
+    for (int i = 40; i < 50; ++i)
+        steadyState += std::abs (pitchCurve[static_cast<size_t> (i)]);
+    steadyState /= 10.0f;
+
+    // Find rise time (blocks to reach 90% of steady state)
+    int riseTime90 = 50;  // default if never reached
+    for (int i = 0; i < 50; ++i)
+    {
+        if (std::abs (pitchCurve[static_cast<size_t> (i)]) >= 0.9f * steadyState)
+        {
+            riseTime90 = i;
+            break;
+        }
+    }
+
+    INFO ("Doppler rise time (90%): " << riseTime90 << " blocks ("
+          << riseTime90 * kBlockSize * 1000.0 / kSampleRate << " ms)");
+    INFO ("Steady-state Doppler: " << steadyState << " semitones");
+
+    // Rise time should be < 15 blocks with alpha=0.35
+    CHECK (riseTime90 < 15);
+
+    // Phase 2: Stop — velocity decay
+    float lastAz = 10.0f * 49.0f;
+    while (lastAz > 180.0f) lastAz -= 360.0f;
+    setParam (*proc, "object1_azimuth", lastAz);
+
+    int decayBlocks = 50;
+    for (int b = 0; b < decayBlocks; ++b)
+    {
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s) buffer.setSample (0, s, 0.5f);
+        proc->processBlock (buffer, midi);
+        pitchCurve.push_back (proc->getDopplerSemitones (0));
+    }
+
+    // Check decay — should reach < 0.1 semitones within 20 blocks
+    int decayTime = decayBlocks;
+    for (int b = 0; b < decayBlocks; ++b)
+    {
+        if (std::abs (pitchCurve[static_cast<size_t> (50 + b)]) < 0.1f)
+        {
+            decayTime = b;
+            break;
+        }
+    }
+
+    INFO ("Doppler decay time (to <0.1st): " << decayTime << " blocks ("
+          << decayTime * kBlockSize * 1000.0 / kSampleRate << " ms)");
+    CHECK (decayTime < 20);
+}
+
+// T6: Air absorption + rapid distance sweep
+TEST_CASE ("Air absorption — distance sweep produces no glitches", "[air][distance][glitch]")
+{
+    auto proc = createBinauralProcessor (1);
+    setParam (*proc, "airAbsorption", 1.0f);
+    setParam (*proc, "feedback", 0.5f);
+
+    // Stabilize with AIR ON
+    processBlocksCapturingAll (*proc, 60);
+
+    // Phase 1: Slow distance sweep 0.1→0.9 over 100 blocks
+    constexpr int slowBlocks = 100;
+    // Phase 2: Rapid sweep 0.9→0.1 over 10 blocks
+    constexpr int rapidBlocks = 10;
+    // Phase 3: Step change 0.1→0.9 instantaneously
+    constexpr int postStepBlocks = 30;
+
+    int totalBlocks = slowBlocks + rapidBlocks + postStepBlocks;
+    std::vector<float> allL, allR;
+    allL.reserve (static_cast<size_t> (totalBlocks * kBlockSize));
+    allR.reserve (static_cast<size_t> (totalBlocks * kBlockSize));
+    juce::MidiBuffer midi;
+
+    for (int b = 0; b < totalBlocks; ++b)
+    {
+        float dist;
+        if (b < slowBlocks)
+            dist = 0.1f + 0.8f * static_cast<float> (b) / static_cast<float> (slowBlocks);
+        else if (b < slowBlocks + rapidBlocks)
+            dist = 0.9f - 0.8f * static_cast<float> (b - slowBlocks) / static_cast<float> (rapidBlocks);
+        else if (b == slowBlocks + rapidBlocks)
+            dist = 0.9f;  // Step change
+        else
+            dist = 0.9f;  // Hold after step
+
+        setParam (*proc, "object1_distance", dist);
+
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+
+        const float* outL = buffer.getReadPointer (0);
+        const float* outR = buffer.getReadPointer (1);
+        allL.insert (allL.end(), outL, outL + kBlockSize);
+        allR.insert (allR.end(), outR, outR + kBlockSize);
+    }
+
+    auto glitchesL = detectGlitches (allL.data(), static_cast<int> (allL.size()));
+    auto glitchesR = detectGlitches (allR.data(), static_cast<int> (allR.size()));
+
+    INFO ("AIR distance sweep L glitches: " << glitchesL.size() << ", R: " << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+// T7: Surround VBAP azimuth sweep
+TEST_CASE ("Surround VBAP — azimuth sweep has no glitches", "[surround][glitch][sweep]")
+{
+    auto proc = std::make_unique<Proc>();
+
+    // Surround 5.1 = format index 4, VBAP = algorithm index 4
+    setParam (*proc, "outputFormat", 4.0f);
+    setParam (*proc, "algorithm", 4.0f);
+    setParam (*proc, "delayTime", 50.0f);
+    setParam (*proc, "feedback", 0.85f);
+    setParam (*proc, "dryWet", 1.0f);
+
+    for (int i = 0; i < 12; ++i)
+    {
+        auto idx = juce::String (i + 1);
+        setParam (*proc, "object" + idx + "_enabled", (i < 3) ? 1.0f : 0.0f);
+        setParam (*proc, "object" + idx + "_dopplerAmount", 0.0f);
+    }
+    setParam (*proc, "object1_azimuth", -45.0f);
+    setParam (*proc, "object1_elevation", 0.0f);
+    setParam (*proc, "object1_distance", 0.5f);
+    setParam (*proc, "object2_azimuth", 45.0f);
+    setParam (*proc, "object2_distance", 0.5f);
+    setParam (*proc, "object3_azimuth", 0.0f);
+    setParam (*proc, "object3_distance", 0.5f);
+
+    // Set up surround bus layout
+    juce::AudioProcessor::BusesLayout layout;
+    layout.inputBuses.add (juce::AudioChannelSet::stereo());
+    layout.outputBuses.add (juce::AudioChannelSet::create5point1());
+    proc->setBusesLayout (layout);
+    proc->prepareToPlay (kSampleRate, 512);
+
+    constexpr int surBlockSize = 512;
+
+    // Stabilize
+    juce::MidiBuffer midi;
+    for (int b = 0; b < 60; ++b)
+    {
+        juce::AudioBuffer<float> buffer (6, surBlockSize);
+        buffer.clear();
+        for (int s = 0; s < surBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+    }
+
+    // Sweep azimuth on object 1
+    constexpr int sweepBlocks = 100;
+    std::vector<std::vector<float>> allChannels (6);
+    for (auto& ch : allChannels)
+        ch.reserve (static_cast<size_t> (sweepBlocks * surBlockSize));
+
+    for (int b = 0; b < sweepBlocks; ++b)
+    {
+        float az = -180.0f + 360.0f * static_cast<float> (b) / static_cast<float> (sweepBlocks);
+        setParam (*proc, "object1_azimuth", az);
+
+        juce::AudioBuffer<float> buffer (6, surBlockSize);
+        buffer.clear();
+        for (int s = 0; s < surBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+
+        for (int ch = 0; ch < 6; ++ch)
+        {
+            const float* out = buffer.getReadPointer (ch);
+            allChannels[static_cast<size_t> (ch)].insert (
+                allChannels[static_cast<size_t> (ch)].end(), out, out + surBlockSize);
+        }
+    }
+
+    // Check all 6 channels with higher threshold (surround + feedback)
+    for (int ch = 0; ch < 6; ++ch)
+    {
+        auto glitches = detectGlitches (allChannels[static_cast<size_t> (ch)].data(),
+                                        static_cast<int> (allChannels[static_cast<size_t> (ch)].size()), 0.25f);
+        INFO ("Surround ch" << ch << " glitches: " << glitches.size());
+        REQUIRE (glitches.empty());
+    }
+}
+
+// T8: Combined 3-axis sweep (worst case)
+TEST_CASE ("Binaural HRTF — combined az+el+dist sweep with Doppler+AIR", "[binaural][combined][stress]")
+{
+    auto proc = createMultiTapBinauralProcessor (6, 0.5f, true, 0.85f);
+
+    // Stabilize
+    processBlocksCapturingAll (*proc, 80);
+
+    constexpr int sweepBlocks = 100;
+    std::vector<float> allL, allR;
+    allL.reserve (static_cast<size_t> (sweepBlocks * kBlockSize));
+    allR.reserve (static_cast<size_t> (sweepBlocks * kBlockSize));
+    juce::MidiBuffer midi;
+
+    for (int b = 0; b < sweepBlocks; ++b)
+    {
+        float t = static_cast<float> (b) / static_cast<float> (sweepBlocks);
+
+        for (int tap = 0; tap < 6; ++tap)
+        {
+            auto idx = juce::String (tap + 1);
+            float baseAz = -180.0f + 60.0f * static_cast<float> (tap);
+
+            // Azimuth: linear sweep 360 degrees
+            float az = baseAz + 360.0f * t;
+            while (az > 180.0f) az -= 360.0f;
+
+            // Elevation: sinusoidal oscillation, period=50 blocks
+            float el = 30.0f * std::sin (2.0f * kPi * static_cast<float> (b) / 50.0f);
+
+            // Distance: sinusoidal oscillation, period=33 blocks
+            float dist = 0.5f + 0.3f * std::sin (2.0f * kPi * static_cast<float> (b) / 33.0f);
+
+            setParam (*proc, "object" + idx + "_azimuth", az);
+            setParam (*proc, "object" + idx + "_elevation", el);
+            setParam (*proc, "object" + idx + "_distance", dist);
+        }
+
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+
+        const float* outL = buffer.getReadPointer (0);
+        const float* outR = buffer.getReadPointer (1);
+        allL.insert (allL.end(), outL, outL + kBlockSize);
+        allR.insert (allR.end(), outR, outR + kBlockSize);
+    }
+
+    // Skip first 5 blocks — sweep start repositions all 6 taps simultaneously,
+    // and Doppler+AIR+HRTF all begin transitioning from static state
+    int skipSamples = 5 * kBlockSize;
+    int checkSamples = static_cast<int> (allL.size()) - skipSamples;
+    auto glitchesL = detectGlitches (allL.data() + skipSamples, checkSamples);
+    auto glitchesR = detectGlitches (allR.data() + skipSamples, checkSamples);
+
+    INFO ("Combined 3-axis L glitches: " << glitchesL.size() << ", R: " << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+// T9: Block size sensitivity
+TEST_CASE ("Doppler — block size sensitivity", "[doppler][blocksize]")
+{
+    constexpr int blockSizes[] = { 128, 256, 512, 1024 };
+
+    for (int bs : blockSizes)
+    {
+        SECTION ("Block size " + std::to_string (bs))
+        {
+            auto proc = std::make_unique<Proc>();
+            setParam (*proc, "outputFormat", 0.0f);
+            setParam (*proc, "hrtfProfile", 0.0f);  // Simple
+            setParam (*proc, "delayTime", 100.0f);
+            setParam (*proc, "feedback", 0.5f);
+            setParam (*proc, "dryWet", 1.0f);
+
+            for (int i = 0; i < 12; ++i)
+            {
+                auto idx = juce::String (i + 1);
+                setParam (*proc, "object" + idx + "_enabled", (i == 0) ? 1.0f : 0.0f);
+            }
+            setParam (*proc, "object1_azimuth", 0.0f);
+            setParam (*proc, "object1_distance", 0.5f);
+            setParam (*proc, "object1_dopplerAmount", 1.0f);
+
+            proc->prepareToPlay (kSampleRate, bs);
+
+            juce::MidiBuffer midi;
+
+            // Stabilize
+            for (int b = 0; b < 60; ++b)
+            {
+                juce::AudioBuffer<float> buffer (2, bs);
+                buffer.clear();
+                for (int s = 0; s < bs; ++s) buffer.setSample (0, s, 0.5f);
+                proc->processBlock (buffer, midi);
+            }
+
+            // Sweep azimuth — same wall-clock duration (~500ms) at each block size
+            // Start from stabilization position (0°) to avoid discontinuous jump at sweep start
+            float wallClockSweep = 0.5f;  // 500ms
+            float blockDuration = static_cast<float> (bs) / static_cast<float> (kSampleRate);
+            int sweepBlocks = static_cast<int> (wallClockSweep / blockDuration);
+            float azPerBlock = 360.0f / static_cast<float> (sweepBlocks);
+
+            std::vector<float> allL, allR;
+            allL.reserve (static_cast<size_t> (sweepBlocks * bs));
+            allR.reserve (static_cast<size_t> (sweepBlocks * bs));
+
+            for (int b = 0; b < sweepBlocks; ++b)
+            {
+                float az = azPerBlock * static_cast<float> (b);  // Start from 0° (stabilization position)
+                while (az > 180.0f) az -= 360.0f;
+                setParam (*proc, "object1_azimuth", az);
+
+                juce::AudioBuffer<float> buffer (2, bs);
+                buffer.clear();
+                for (int s = 0; s < bs; ++s)
+                {
+                    buffer.setSample (0, s, 0.5f);
+                    buffer.setSample (1, s, 0.5f);
+                }
+                proc->processBlock (buffer, midi);
+
+                const float* outL = buffer.getReadPointer (0);
+                const float* outR = buffer.getReadPointer (1);
+                allL.insert (allL.end(), outL, outL + bs);
+                allR.insert (allR.end(), outR, outR + bs);
+            }
+
+            auto glitchesL = detectGlitches (allL.data(), static_cast<int> (allL.size()));
+            auto glitchesR = detectGlitches (allR.data(), static_cast<int> (allR.size()));
+
+            // Skip first few blocks of sweep — transition from static to moving produces
+            // legitimate amplitude changes as Woodworth ITD/ILD gains reposition.
+            // Check remaining sweep blocks for actual glitches.
+            int settleSkip = 5 * bs;  // Skip 5 blocks of sweep onset settling
+            int checkSamples = static_cast<int> (allL.size()) - settleSkip;
+            if (checkSamples > 0)
+            {
+                // Doppler + Woodworth binaural creates legitimate amplitude variation — use 0.25 threshold
+                auto glitchesLpost = detectGlitches (allL.data() + settleSkip, checkSamples, 0.25f);
+                auto glitchesRpost = detectGlitches (allR.data() + settleSkip, checkSamples, 0.25f);
+
+                for (size_t g = 0; g < glitchesLpost.size(); ++g)
+                {
+                    int idx = glitchesLpost[g];
+                    int absIdx = idx + settleSkip;
+                    float diff = std::abs (allL[static_cast<size_t> (absIdx)] - allL[static_cast<size_t> (absIdx - 1)]);
+                    WARN ("Block size " << bs << " L glitch at abs sample " << absIdx << " (block "
+                          << absIdx / bs << ", offset " << absIdx % bs << "), diff=" << diff);
+                }
+
+                INFO ("Block size " << bs << " (post-settle): L glitches=" << glitchesLpost.size()
+                      << ", R=" << glitchesRpost.size());
+                REQUIRE (glitchesLpost.empty());
+                REQUIRE (glitchesRpost.empty());
+            }
+        }
+    }
+}
+
+// T10: WSOLA grain boundary under Doppler
+TEST_CASE ("WSOLA — grain boundary under Doppler is glitch-free", "[wsola][doppler][grain]")
+{
+    auto proc = std::make_unique<Proc>();
+    setParam (*proc, "outputFormat", 0.0f);
+    setParam (*proc, "hrtfProfile", 0.0f);  // Simple/Woodworth (isolate WSOLA)
+    setParam (*proc, "delayTime", 100.0f);
+    setParam (*proc, "feedback", 0.0f);     // Single pass
+    setParam (*proc, "dryWet", 1.0f);
+
+    for (int i = 0; i < 12; ++i)
+    {
+        auto idx = juce::String (i + 1);
+        setParam (*proc, "object" + idx + "_enabled", (i == 0) ? 1.0f : 0.0f);
+    }
+    setParam (*proc, "object1_azimuth", 0.0f);
+    setParam (*proc, "object1_distance", 0.5f);
+    setParam (*proc, "object1_dopplerAmount", 1.0f);
+
+    proc->prepareToPlay (kSampleRate, kBlockSize);
+
+    // Stabilize
+    juce::MidiBuffer midi;
+    for (int b = 0; b < 40; ++b)
+    {
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s) buffer.setSample (0, s, 0.5f);
+        proc->processBlock (buffer, midi);
+    }
+
+    // Phase 1: Moderate Doppler — 5 deg/block sweep
+    std::vector<float> allL, allR;
+    for (int b = 0; b < 100; ++b)
+    {
+        float az = 5.0f * static_cast<float> (b);
+        while (az > 180.0f) az -= 360.0f;
+        while (az < -180.0f) az += 360.0f;
+        setParam (*proc, "object1_azimuth", az);
+
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s) buffer.setSample (0, s, 0.5f);
+        proc->processBlock (buffer, midi);
+
+        const float* outL = buffer.getReadPointer (0);
+        const float* outR = buffer.getReadPointer (1);
+        allL.insert (allL.end(), outL, outL + kBlockSize);
+        allR.insert (allR.end(), outR, outR + kBlockSize);
+    }
+
+    // Phase 2: Oscillating (worst case) — reverse every 5 blocks
+    for (int b = 0; b < 50; ++b)
+    {
+        float direction = ((b / 5) % 2 == 0) ? 20.0f : -20.0f;
+        float az = direction * static_cast<float> (b % 5);
+        setParam (*proc, "object1_azimuth", az);
+
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s) buffer.setSample (0, s, 0.5f);
+        proc->processBlock (buffer, midi);
+
+        const float* outL = buffer.getReadPointer (0);
+        const float* outR = buffer.getReadPointer (1);
+        allL.insert (allL.end(), outL, outL + kBlockSize);
+        allR.insert (allR.end(), outR, outR + kBlockSize);
+    }
+
+    // Use relaxed threshold — WSOLA grain crossfades may produce small bumps
+    auto glitchesL = detectGlitches (allL.data(), static_cast<int> (allL.size()), 0.30f);
+    auto glitchesR = detectGlitches (allR.data(), static_cast<int> (allR.size()), 0.30f);
+
+    INFO ("WSOLA Doppler L glitches: " << glitchesL.size() << ", R: " << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
