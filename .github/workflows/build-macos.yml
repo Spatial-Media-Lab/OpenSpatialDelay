@@ -17,7 +17,7 @@ jobs:
           submodules: recursive  # JUCE is a git submodule
 
       - name: Configure CMake
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DBUILD_OSD_TESTS=OFF
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DBUILD_OSD_TESTS=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 
       - name: Build Release
         run: cmake --build build --config Release
