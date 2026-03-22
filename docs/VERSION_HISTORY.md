@@ -651,12 +651,13 @@ Plugin identity: `Os10` (PLUGIN_CODE).
 ### Bug Fixes
 - **Issue #24 (7.1/7.1.4 rear speakers):** Investigated with diagnostic instrumentation — confirmed plugin computes correct gains. Root cause was Reaper project routing configuration. Closed.
 - **Height speaker elevation routing guard:** Added defensive guard preventing 2D VBAP fallback on 3D layouts with height speakers. If VBAP triplets are ever empty at runtime on a height layout, uses 3D nearest-speaker fallback instead of 2D azimuth-only panning (which would incorrectly route signal to height speakers). Guards applied to VBAP, VBIP, and MDAP (4 dispatch points). Diagnostic `jassert` in `activateLayout()` catches height layouts with empty triplets in debug builds. Issue #23 (SML 13.1) closed.
-- **Global pitch zeroed in 9 presets:** Removed stale non-zero pitchShift values from factory presets.
+- **Global pitch removal cleanup (Issue #30 follow-up):** Deleted 60 stale on-disk factory preset files that contained ghost `"pitchShift"` keys from the old `install_presets` tool. 9 presets had non-zero values (e.g., Shimmer: 12.0). Files were inert (v1.0 loads from compiled array) but confusing. Removed dead `tools/install_presets.cpp`.
+- **Doppler transient on preset load:** `loadPreset()` now resets Doppler tracking arrays (`prevAzimuth`, `prevElevation`, `prevDistance`, `dopplerSemitones`, `smoothedRadialVelocity`) to match the new preset positions, eliminating a spurious pitch artifact on the first audio block after switching presets.
 
 ### Infrastructure
 - **22 output formats** — added SpatialMediaLab 13.1 (was 21 in v0.9)
 - **14-channel discrete bus** added to `isBusesLayoutSupported()` for SML 13.1 / 7.1.6
-- **141 Catch2 tests, 1204 assertions** — expanded surround output test suite with 8 new elevation/height isolation tests + 47 OSC receive tests covering ADM-OSC position, /osd/ aliases, per-object params, global params, global tap offsets, and edge cases
+- **162 Catch2 tests, 1255 assertions** — expanded surround output test suite with 8 new elevation/height isolation tests + 47 OSC receive tests + 21 convolver glitch tests
 - **State migration v15→v16:** Handles outputFormat parameter shift for SML 13.1 insertion
 - **Diagnostic cleanup:** Removed all #24 diagnostic instrumentation from production code
 
@@ -667,10 +668,11 @@ Active source in `Source/`:
 - `PluginEditor.h` (~14 KB)
 - `PluginEditor.cpp` (~45 KB)
 - `PresetData.h` (shared preset struct, ~2 KB)
-- `PresetData.cpp` (60 factory presets, serialization, install function, ~40 KB)
+- `PresetData.cpp` (70 factory presets, serialization, ~45 KB)
 - `Tests/TrajectoryTests.cpp` (Catch2 trajectory tests)
 - `Tests/SurroundOutputTests.cpp` (Catch2 surround output tests)
 - `Tests/OscTests.cpp` (Catch2 OSC receive tests)
+- `Tests/ConvolverGlitchTests.cpp` (Catch2 convolver glitch tests)
 
 ### Output
 - 22 output formats (1 binaural + 1 stereo + 14 surround + 6 Ambisonics)
