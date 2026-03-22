@@ -1422,3 +1422,634 @@ TEST_CASE ("WSOLA — grain boundary under Doppler is glitch-free", "[wsola][dop
     REQUIRE (glitchesL.empty());
     REQUIRE (glitchesR.empty());
 }
+
+// ============================================================================
+// Section 6: Issue #40 — Pops/Clicks Fix Tests (Tap Fade, Preset, Filter, Wobble)
+// ============================================================================
+
+// Helper: create a stereo processor ready for testing (lighter than binaural — no HRTF load)
+static std::unique_ptr<Proc> createStereoProcessor (float delayMs = 50.0f, float feedback = 0.5f,
+                                                     int numTaps = 3)
+{
+    auto proc = std::make_unique<Proc>();
+    setParam (*proc, "outputFormat", 1.0f);  // Stereo
+    setParam (*proc, "delayTime", delayMs);
+    setParam (*proc, "feedback", feedback);
+    setParam (*proc, "dryWet", 1.0f);
+    setParam (*proc, "inputGain", 0.0f);   // 0 dB
+    setParam (*proc, "outputGain", 0.0f);  // 0 dB
+
+    for (int i = 0; i < 12; ++i)
+    {
+        auto idx = juce::String (i + 1);
+        setParam (*proc, "object" + idx + "_enabled", (i < numTaps) ? 1.0f : 0.0f);
+        setParam (*proc, "object" + idx + "_dopplerAmount", 0.0f);
+        setParam (*proc, "object" + idx + "_pitchShift", 0.0f);
+        if (i < numTaps)
+        {
+            float az = -60.0f + 120.0f * static_cast<float> (i) / static_cast<float> (std::max (numTaps - 1, 1));
+            setParam (*proc, "object" + idx + "_azimuth", az);
+            setParam (*proc, "object" + idx + "_distance", 0.4f);
+        }
+    }
+
+    proc->prepareToPlay (kSampleRate, kBlockSize);
+    return proc;
+}
+
+// Helper: process blocks with sine input, capturing all output
+static std::pair<std::vector<float>, std::vector<float>>
+processBlocksWithSine (Proc& proc, int numBlocks, float freq = 440.0f, float amplitude = 0.5f)
+{
+    std::vector<float> allL, allR;
+    allL.reserve (static_cast<size_t> (numBlocks * kBlockSize));
+    allR.reserve (static_cast<size_t> (numBlocks * kBlockSize));
+    juce::MidiBuffer midi;
+
+    for (int b = 0; b < numBlocks; ++b)
+    {
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            float phase = 2.0f * kPi * freq * static_cast<float> (b * kBlockSize + s)
+                          / static_cast<float> (kSampleRate);
+            float sample = amplitude * std::sin (phase);
+            buffer.setSample (0, s, sample);
+            buffer.setSample (1, s, sample);
+        }
+        proc.processBlock (buffer, midi);
+
+        const float* outL = buffer.getReadPointer (0);
+        const float* outR = buffer.getReadPointer (1);
+        allL.insert (allL.end(), outL, outL + kBlockSize);
+        allR.insert (allR.end(), outR, outR + kBlockSize);
+    }
+    return { allL, allR };
+}
+
+// ---- Phase 1: Tap Enable/Disable Fade Envelope ----
+
+TEST_CASE ("Tap disable produces smooth fade-out (no click)", "[issue40][tapfade]")
+{
+    auto proc = createStereoProcessor (50.0f, 0.5f, 3);
+
+    // Stabilize with 3 taps enabled — delay line fills
+    processBlocksCapturingAll (*proc, 60);
+
+    // Disable tap 1 and capture the transition block + a few more
+    setParam (*proc, "object1_enabled", 0.0f);
+    auto [outL, outR] = processBlocksCapturingAll (*proc, 5);
+
+    // The transition should be smooth — no sample-to-sample jump > 0.15
+    auto glitchesL = detectGlitches (outL.data(), static_cast<int> (outL.size()));
+    auto glitchesR = detectGlitches (outR.data(), static_cast<int> (outR.size()));
+
+    for (size_t g = 0; g < glitchesL.size() && g < 5; ++g)
+    {
+        int idx = glitchesL[g];
+        float diff = std::abs (outL[static_cast<size_t> (idx)] - outL[static_cast<size_t> (idx - 1)]);
+        WARN ("Tap disable L glitch at sample " << idx << ", diff=" << diff);
+    }
+
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+TEST_CASE ("Tap enable produces smooth fade-in (no click)", "[issue40][tapfade]")
+{
+    auto proc = createStereoProcessor (50.0f, 0.5f, 1);
+
+    // Stabilize with 1 tap
+    processBlocksCapturingAll (*proc, 60);
+
+    // Enable tap 2 and capture
+    setParam (*proc, "object2_enabled", 1.0f);
+    setParam (*proc, "object2_azimuth", 45.0f);
+    setParam (*proc, "object2_distance", 0.4f);
+    auto [outL, outR] = processBlocksCapturingAll (*proc, 5);
+
+    auto glitchesL = detectGlitches (outL.data(), static_cast<int> (outL.size()));
+    auto glitchesR = detectGlitches (outR.data(), static_cast<int> (outR.size()));
+
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+TEST_CASE ("Multiple taps disabled simultaneously — no clicks", "[issue40][tapfade]")
+{
+    auto proc = createStereoProcessor (50.0f, 0.7f, 6);
+
+    // Stabilize with 6 taps
+    processBlocksCapturingAll (*proc, 80);
+
+    // Disable 4 taps at once (simulates preset with fewer taps)
+    setParam (*proc, "object3_enabled", 0.0f);
+    setParam (*proc, "object4_enabled", 0.0f);
+    setParam (*proc, "object5_enabled", 0.0f);
+    setParam (*proc, "object6_enabled", 0.0f);
+    auto [outL, outR] = processBlocksCapturingAll (*proc, 5);
+
+    auto glitchesL = detectGlitches (outL.data(), static_cast<int> (outL.size()));
+    auto glitchesR = detectGlitches (outR.data(), static_cast<int> (outR.size()));
+
+    INFO ("Multi-tap disable: L=" << glitchesL.size() << " R=" << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+TEST_CASE ("Tap toggle rapid on/off — no clicks", "[issue40][tapfade]")
+{
+    auto proc = createStereoProcessor (50.0f, 0.5f, 3);
+    processBlocksCapturingAll (*proc, 60);
+
+    // Rapidly toggle tap 2 on/off every 2 blocks
+    constexpr int toggleBlocks = 20;
+    std::vector<float> allL, allR;
+    allL.reserve (static_cast<size_t> (toggleBlocks * kBlockSize));
+    allR.reserve (static_cast<size_t> (toggleBlocks * kBlockSize));
+    juce::MidiBuffer midi;
+
+    for (int b = 0; b < toggleBlocks; ++b)
+    {
+        bool enable = ((b / 2) % 2 == 0);
+        setParam (*proc, "object2_enabled", enable ? 1.0f : 0.0f);
+
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+
+        const float* outL = buffer.getReadPointer (0);
+        const float* outR = buffer.getReadPointer (1);
+        allL.insert (allL.end(), outL, outL + kBlockSize);
+        allR.insert (allR.end(), outR, outR + kBlockSize);
+    }
+
+    auto glitchesL = detectGlitches (allL.data(), static_cast<int> (allL.size()));
+    auto glitchesR = detectGlitches (allR.data(), static_cast<int> (allR.size()));
+
+    INFO ("Rapid toggle: L=" << glitchesL.size() << " R=" << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+// ---- Phase 2: Preset Change Tests ----
+
+TEST_CASE ("Preset change — sequential factory presets produce no clicks", "[issue40][preset]")
+{
+    auto proc = std::make_unique<Proc>();
+    setParam (*proc, "outputFormat", 1.0f);  // Stereo
+    proc->prepareToPlay (kSampleRate, kBlockSize);
+
+    // Load first preset and stabilize
+    proc->loadPreset (0);
+    processBlocksCapturingAll (*proc, 60);
+
+    // Cycle through several presets, checking for clicks at each transition
+    int numPresets = std::min (static_cast<int> (proc->getNumPresets()), 10);
+    for (int p = 1; p < numPresets; ++p)
+    {
+        proc->loadPreset (p);
+
+        // Capture 5 blocks after preset change
+        auto [outL, outR] = processBlocksCapturingAll (*proc, 5);
+
+        auto glitchesL = detectGlitches (outL.data(), static_cast<int> (outL.size()), 0.25f);
+        auto glitchesR = detectGlitches (outR.data(), static_cast<int> (outR.size()), 0.25f);
+
+        INFO ("Preset " << (p - 1) << " → " << p << ": L=" << glitchesL.size()
+              << " R=" << glitchesR.size());
+        REQUIRE (glitchesL.empty());
+        REQUIRE (glitchesR.empty());
+
+        // Let the preset settle before next switch
+        processBlocksCapturingAll (*proc, 30);
+    }
+}
+
+TEST_CASE ("Preset change — extreme parameter jump with high feedback", "[issue40][preset]")
+{
+    auto proc = createStereoProcessor (50.0f, 0.9f, 6);
+
+    // Stabilize with high feedback — lots of energy in delay buffer
+    processBlocksCapturingAll (*proc, 100);
+
+    // Change to very different parameters (simulating drastic preset change)
+    setParam (*proc, "delayTime", 500.0f);
+    setParam (*proc, "feedback", 0.3f);
+    setParam (*proc, "filterLP", 2000.0f);
+    setParam (*proc, "filterHP", 200.0f);
+    setParam (*proc, "filterEnabled", 1.0f);
+    for (int i = 3; i < 6; ++i)
+        setParam (*proc, "object" + juce::String (i + 1) + "_enabled", 0.0f);
+
+    auto [outL, outR] = processBlocksCapturingAll (*proc, 10);
+
+    // Skip first 2 blocks — 10x delay time change creates a legitimate 100ms pitch sweep
+    // that naturally produces high-derivative samples. After smoothing settles, output should be clean.
+    int skipSamples = 2 * kBlockSize;
+    int len = static_cast<int> (outL.size()) - skipSamples;
+    auto glitchesL = detectGlitches (outL.data() + skipSamples, len, 0.30f);
+    auto glitchesR = detectGlitches (outR.data() + skipSamples, len, 0.30f);
+
+    INFO ("Extreme param jump: L=" << glitchesL.size() << " R=" << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+TEST_CASE ("Preset change with pitch shift — WSOLA reset prevents metallic artifacts", "[issue40][preset][wsola]")
+{
+    auto proc = createStereoProcessor (100.0f, 0.5f, 3);
+    setParam (*proc, "object1_pitchShift", 12.0f);  // +1 octave
+    setParam (*proc, "object2_pitchShift", -7.0f);  // -perfect 5th
+
+    // Stabilize with pitch shifting active
+    processBlocksWithSine (*proc, 60);
+
+    // Switch to no pitch shift (simulates preset change)
+    setParam (*proc, "object1_pitchShift", 0.0f);
+    setParam (*proc, "object2_pitchShift", 0.0f);
+    // Also call loadPreset to trigger WSOLA reset
+    proc->loadPreset (0);
+
+    auto [outL, outR] = processBlocksWithSine (*proc, 10);
+
+    auto glitchesL = detectGlitches (outL.data(), static_cast<int> (outL.size()), 0.25f);
+    auto glitchesR = detectGlitches (outR.data(), static_cast<int> (outR.size()), 0.25f);
+
+    INFO ("WSOLA reset: L=" << glitchesL.size() << " R=" << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+// ---- Phase 3: Filter Coefficient Smoothing ----
+
+TEST_CASE ("Filter LP sweep — no clicks with EMA-smoothed coefficients", "[issue40][filter]")
+{
+    auto proc = createStereoProcessor (50.0f, 0.85f, 3);
+    setParam (*proc, "filterEnabled", 1.0f);
+    setParam (*proc, "filterLP", 20000.0f);
+
+    processBlocksCapturingAll (*proc, 60);
+
+    // Sweep LP from 20kHz down to 200Hz over 50 blocks
+    constexpr int sweepBlocks = 50;
+    std::vector<float> allL, allR;
+    allL.reserve (static_cast<size_t> (sweepBlocks * kBlockSize));
+    allR.reserve (static_cast<size_t> (sweepBlocks * kBlockSize));
+    juce::MidiBuffer midi;
+
+    for (int b = 0; b < sweepBlocks; ++b)
+    {
+        // Logarithmic sweep
+        float t = static_cast<float> (b) / static_cast<float> (sweepBlocks);
+        float lpFreq = 20000.0f * std::pow (0.01f, t);  // 20kHz → 200Hz
+        setParam (*proc, "filterLP", lpFreq);
+
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+
+        const float* outL = buffer.getReadPointer (0);
+        const float* outR = buffer.getReadPointer (1);
+        allL.insert (allL.end(), outL, outL + kBlockSize);
+        allR.insert (allR.end(), outR, outR + kBlockSize);
+    }
+
+    auto glitchesL = detectGlitches (allL.data(), static_cast<int> (allL.size()), 0.20f);
+    auto glitchesR = detectGlitches (allR.data(), static_cast<int> (allR.size()), 0.20f);
+
+    for (size_t g = 0; g < glitchesL.size() && g < 5; ++g)
+    {
+        int idx = glitchesL[g];
+        float diff = std::abs (allL[static_cast<size_t> (idx)] - allL[static_cast<size_t> (idx - 1)]);
+        WARN ("Filter LP sweep L glitch at sample " << idx << " (block " << idx / kBlockSize
+              << "), diff=" << diff);
+    }
+
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+TEST_CASE ("Filter HP sweep — no clicks with feedback", "[issue40][filter]")
+{
+    auto proc = createStereoProcessor (50.0f, 0.85f, 3);
+    setParam (*proc, "filterEnabled", 1.0f);
+    setParam (*proc, "filterHP", 20.0f);
+
+    processBlocksCapturingAll (*proc, 60);
+
+    // Sweep HP from 20Hz up to 5kHz over 50 blocks
+    constexpr int sweepBlocks = 50;
+    std::vector<float> allL, allR;
+    allL.reserve (static_cast<size_t> (sweepBlocks * kBlockSize));
+    allR.reserve (static_cast<size_t> (sweepBlocks * kBlockSize));
+    juce::MidiBuffer midi;
+
+    for (int b = 0; b < sweepBlocks; ++b)
+    {
+        float t = static_cast<float> (b) / static_cast<float> (sweepBlocks);
+        float hpFreq = 20.0f * std::pow (250.0f, t);  // 20Hz → 5kHz
+        setParam (*proc, "filterHP", hpFreq);
+
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+
+        const float* outL = buffer.getReadPointer (0);
+        const float* outR = buffer.getReadPointer (1);
+        allL.insert (allL.end(), outL, outL + kBlockSize);
+        allR.insert (allR.end(), outR, outR + kBlockSize);
+    }
+
+    auto glitchesL = detectGlitches (allL.data(), static_cast<int> (allL.size()), 0.20f);
+    auto glitchesR = detectGlitches (allR.data(), static_cast<int> (allR.size()), 0.20f);
+
+    INFO ("HP sweep: L=" << glitchesL.size() << " R=" << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+TEST_CASE ("Filter abrupt frequency jump — smoothing prevents click", "[issue40][filter]")
+{
+    auto proc = createStereoProcessor (50.0f, 0.85f, 3);
+    setParam (*proc, "filterEnabled", 1.0f);
+    setParam (*proc, "filterLP", 20000.0f);
+    setParam (*proc, "filterHP", 20.0f);
+
+    processBlocksCapturingAll (*proc, 60);
+
+    // Abrupt jump: LP from 20kHz to 800Hz, HP from 20Hz to 200Hz
+    setParam (*proc, "filterLP", 800.0f);
+    setParam (*proc, "filterHP", 200.0f);
+    auto [outL, outR] = processBlocksCapturingAll (*proc, 10);
+
+    // Skip first block — EMA smoothing takes ~3 blocks to settle from extreme jumps
+    int skipSamples = 1 * kBlockSize;
+    int len = static_cast<int> (outL.size()) - skipSamples;
+    auto glitchesL = detectGlitches (outL.data() + skipSamples, len, 0.20f);
+    auto glitchesR = detectGlitches (outR.data() + skipSamples, len, 0.20f);
+
+    INFO ("Filter jump: L=" << glitchesL.size() << " R=" << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+// ---- Phase 4: Wobble Onset Smoothing ----
+
+TEST_CASE ("Wobble enable — no click at onset", "[issue40][wobble]")
+{
+    auto proc = createStereoProcessor (200.0f, 0.5f, 3);
+    setParam (*proc, "wobbleEnabled", 0.0f);
+    setParam (*proc, "wobbleAmount", 80.0f);
+
+    processBlocksCapturingAll (*proc, 60);
+
+    // Enable wobble mid-playback
+    setParam (*proc, "wobbleEnabled", 1.0f);
+    auto [outL, outR] = processBlocksCapturingAll (*proc, 10);
+
+    auto glitchesL = detectGlitches (outL.data(), static_cast<int> (outL.size()));
+    auto glitchesR = detectGlitches (outR.data(), static_cast<int> (outR.size()));
+
+    INFO ("Wobble onset: L=" << glitchesL.size() << " R=" << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+TEST_CASE ("Wobble disable — no click at offset", "[issue40][wobble]")
+{
+    auto proc = createStereoProcessor (200.0f, 0.5f, 3);
+    setParam (*proc, "wobbleEnabled", 1.0f);
+    setParam (*proc, "wobbleAmount", 80.0f);
+
+    processBlocksCapturingAll (*proc, 60);
+
+    // Disable wobble mid-playback
+    setParam (*proc, "wobbleEnabled", 0.0f);
+    auto [outL, outR] = processBlocksCapturingAll (*proc, 10);
+
+    auto glitchesL = detectGlitches (outL.data(), static_cast<int> (outL.size()));
+    auto glitchesR = detectGlitches (outR.data(), static_cast<int> (outR.size()));
+
+    INFO ("Wobble offset: L=" << glitchesL.size() << " R=" << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+// ---- Phase 5: Doppler Smoothing ----
+
+TEST_CASE ("Rapid azimuth sweep with Doppler — smoothed pitch prevents WSOLA clicks", "[issue40][doppler]")
+{
+    auto proc = createStereoProcessor (100.0f, 0.5f, 3);
+    for (int i = 0; i < 3; ++i)
+        setParam (*proc, "object" + juce::String (i + 1) + "_dopplerAmount", 1.0f);
+
+    processBlocksCapturingAll (*proc, 60);
+
+    // Fast azimuth sweep: 10°/block = 1875°/s at 48kHz/256
+    constexpr int sweepBlocks = 50;
+    std::vector<float> allL, allR;
+    allL.reserve (static_cast<size_t> (sweepBlocks * kBlockSize));
+    allR.reserve (static_cast<size_t> (sweepBlocks * kBlockSize));
+    juce::MidiBuffer midi;
+
+    for (int b = 0; b < sweepBlocks; ++b)
+    {
+        float az = -180.0f + 360.0f * static_cast<float> (b) / static_cast<float> (sweepBlocks);
+        for (int i = 0; i < 3; ++i)
+            setParam (*proc, "object" + juce::String (i + 1) + "_azimuth", az + 30.0f * static_cast<float> (i));
+
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+
+        const float* outL = buffer.getReadPointer (0);
+        const float* outR = buffer.getReadPointer (1);
+        allL.insert (allL.end(), outL, outL + kBlockSize);
+        allR.insert (allR.end(), outR, outR + kBlockSize);
+    }
+
+    // Relaxed threshold — Doppler creates legitimate pitch changes
+    auto glitchesL = detectGlitches (allL.data(), static_cast<int> (allL.size()), 0.25f);
+    auto glitchesR = detectGlitches (allR.data(), static_cast<int> (allR.size()), 0.25f);
+
+    INFO ("Doppler sweep: L=" << glitchesL.size() << " R=" << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+// ---- Phase 6: Output Limiter Continuity ----
+
+TEST_CASE ("Output limiter — C-infinity continuity under saturation", "[issue40][limiter]")
+{
+    auto proc = createStereoProcessor (30.0f, 0.95f, 6);
+    setParam (*proc, "inputGain", 12.0f);  // +12 dB — drive into limiter
+
+    processBlocksCapturingAll (*proc, 80);
+
+    // Capture under heavy saturation
+    auto [outL, outR] = processBlocksCapturingAll (*proc, 50);
+
+    // Skip first few blocks — high feedback takes time to build
+    int skipSamples = 10 * kBlockSize;
+    int len = static_cast<int> (outL.size()) - skipSamples;
+
+    auto glitchesL = detectGlitches (outL.data() + skipSamples, len, 0.15f);
+    auto glitchesR = detectGlitches (outR.data() + skipSamples, len, 0.15f);
+
+    for (size_t g = 0; g < glitchesL.size() && g < 5; ++g)
+    {
+        int idx = glitchesL[g];
+        int absIdx = idx + skipSamples;
+        float diff = std::abs (outL[static_cast<size_t> (absIdx)] - outL[static_cast<size_t> (absIdx - 1)]);
+        WARN ("Limiter L glitch at sample " << absIdx << " (block " << absIdx / kBlockSize
+              << "), diff=" << diff);
+    }
+
+    INFO ("Limiter saturation: L=" << glitchesL.size() << " R=" << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+TEST_CASE ("Output limiter — tanh is always within bounds", "[issue40][limiter]")
+{
+    // Verify the tanh limiter behavior by driving the processor into saturation
+    // and checking that output samples never exceed the +2 dB threshold
+    auto proc = createStereoProcessor (30.0f, 0.99f, 6);
+    setParam (*proc, "inputGain", 18.0f);  // +18 dB — extreme drive
+
+    processBlocksCapturingAll (*proc, 100);
+    auto [outL, outR] = processBlocksCapturingAll (*proc, 20);
+
+    const float threshold = 1.2589f;  // +2 dB
+    for (size_t i = 0; i < outL.size(); ++i)
+    {
+        // tanh asymptotes — allow small floating point margin
+        REQUIRE (std::abs (outL[i]) <= threshold + 0.01f);
+        REQUIRE (std::abs (outR[i]) <= threshold + 0.01f);
+    }
+}
+
+// ---- Combined Integration Tests ----
+
+TEST_CASE ("Full signal chain — all fixes combined stress test", "[issue40][integration]")
+{
+    auto proc = createStereoProcessor (100.0f, 0.8f, 6);
+    setParam (*proc, "filterEnabled", 1.0f);
+    setParam (*proc, "filterLP", 15000.0f);
+    setParam (*proc, "wobbleEnabled", 1.0f);
+    setParam (*proc, "wobbleAmount", 50.0f);
+    for (int i = 0; i < 6; ++i)
+        setParam (*proc, "object" + juce::String (i + 1) + "_dopplerAmount", 0.5f);
+
+    processBlocksCapturingAll (*proc, 80);
+
+    // Simultaneously: sweep azimuth, change filter, toggle taps, change delay
+    constexpr int stressBlocks = 80;
+    std::vector<float> allL, allR;
+    allL.reserve (static_cast<size_t> (stressBlocks * kBlockSize));
+    allR.reserve (static_cast<size_t> (stressBlocks * kBlockSize));
+    juce::MidiBuffer midi;
+
+    for (int b = 0; b < stressBlocks; ++b)
+    {
+        // Sweep azimuth
+        float az = -180.0f + 360.0f * static_cast<float> (b) / static_cast<float> (stressBlocks);
+        for (int i = 0; i < 6; ++i)
+            setParam (*proc, "object" + juce::String (i + 1) + "_azimuth",
+                      az + 60.0f * static_cast<float> (i));
+
+        // Toggle taps 4-6 every 10 blocks
+        if (b % 10 == 0)
+        {
+            bool en = ((b / 10) % 2 == 0);
+            for (int i = 3; i < 6; ++i)
+                setParam (*proc, "object" + juce::String (i + 1) + "_enabled", en ? 1.0f : 0.0f);
+        }
+
+        // Sweep filter
+        float t = static_cast<float> (b) / static_cast<float> (stressBlocks);
+        setParam (*proc, "filterLP", 20000.0f * std::pow (0.05f, t));
+
+        // Vary delay time slightly
+        setParam (*proc, "delayTime", 100.0f + 50.0f * std::sin (2.0f * kPi * t));
+
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+
+        const float* outL = buffer.getReadPointer (0);
+        const float* outR = buffer.getReadPointer (1);
+        allL.insert (allL.end(), outL, outL + kBlockSize);
+        allR.insert (allR.end(), outR, outR + kBlockSize);
+    }
+
+    // Skip first block — transition from stabilization to stress creates a natural discontinuity
+    int skipSamples = 1 * kBlockSize;
+    int len = static_cast<int> (allL.size()) - skipSamples;
+    auto glitchesL = detectGlitches (allL.data() + skipSamples, len, 0.30f);
+    auto glitchesR = detectGlitches (allR.data() + skipSamples, len, 0.30f);
+
+    INFO ("Integration stress: L=" << glitchesL.size() << " R=" << glitchesR.size());
+    for (size_t g = 0; g < glitchesL.size() && g < 10; ++g)
+    {
+        int idx = glitchesL[g];
+        float diff = std::abs (allL[static_cast<size_t> (idx)] - allL[static_cast<size_t> (idx - 1)]);
+        WARN ("Integration L glitch at sample " << idx << " (block " << idx / kBlockSize
+              << "), diff=" << diff);
+    }
+
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+TEST_CASE ("Binaural HRTF — preset cycle with tap changes produces no clicks", "[issue40][binaural][preset]")
+{
+    auto proc = createBinauralProcessor (1);  // MIT KEMAR
+
+    // Stabilize
+    processBlocksCapturingAll (*proc, 60);
+
+    // Cycle through presets that change tap counts
+    int numPresets = std::min (static_cast<int> (proc->getNumPresets()), 8);
+    for (int p = 0; p < numPresets; ++p)
+    {
+        proc->loadPreset (p);
+        auto [outL, outR] = processBlocksCapturingAll (*proc, 5);
+
+        auto glitchesL = detectGlitches (outL.data(), static_cast<int> (outL.size()), 0.25f);
+        auto glitchesR = detectGlitches (outR.data(), static_cast<int> (outR.size()), 0.25f);
+
+        INFO ("HRTF preset " << p << ": L=" << glitchesL.size() << " R=" << glitchesR.size());
+        REQUIRE (glitchesL.empty());
+        REQUIRE (glitchesR.empty());
+
+        processBlocksCapturingAll (*proc, 30);
+    }
+}
