@@ -653,26 +653,28 @@ Plugin identity: `Os10` (PLUGIN_CODE).
 - **Height speaker elevation routing guard:** Added defensive guard preventing 2D VBAP fallback on 3D layouts with height speakers. If VBAP triplets are ever empty at runtime on a height layout, uses 3D nearest-speaker fallback instead of 2D azimuth-only panning (which would incorrectly route signal to height speakers). Guards applied to VBAP, VBIP, and MDAP (4 dispatch points). Diagnostic `jassert` in `activateLayout()` catches height layouts with empty triplets in debug builds. Issue #23 (SML 13.1) closed.
 - **Global pitch removal cleanup (Issue #30 follow-up):** Deleted 60 stale on-disk factory preset files that contained ghost `"pitchShift"` keys from the old `install_presets` tool. 9 presets had non-zero values (e.g., Shimmer: 12.0). Files were inert (v1.0 loads from compiled array) but confusing. Removed dead `tools/install_presets.cpp`.
 - **Doppler transient on preset load:** `loadPreset()` now resets Doppler tracking arrays (`prevAzimuth`, `prevElevation`, `prevDistance`, `dopplerSemitones`, `smoothedRadialVelocity`) to match the new preset positions, eliminating a spurious pitch artifact on the first audio block after switching presets.
+- **HRTF binaural glitch fix (Issue #36):** Three-layer fix for audio clicking/popping during rapid position changes (e.g., Global AZIM/ELEV knob sweeps): (1) per-sample gain interpolation in all 5 rendering paths eliminates block-boundary amplitude discontinuities, (2) non-restarting dual-convolver crossfade ensures equal-power fade always completes, (3) ITD-free HRIR interpolation removes inter-aural time difference before loading into convolver, with ITD applied separately as smoothly-interpolated fractional-sample delay.
+- **Metal GPU crash fix (Issue #37):** Fixed Reaper crash on macOS when using Metal GPU rendering by disabling OpenGL context in plugin editor.
 
 ### Infrastructure
 - **22 output formats** — added SpatialMediaLab 13.1 (was 21 in v0.9)
 - **14-channel discrete bus** added to `isBusesLayoutSupported()` for SML 13.1 / 7.1.6
-- **162 Catch2 tests, 1255 assertions** — expanded surround output test suite with 8 new elevation/height isolation tests + 47 OSC receive tests + 21 convolver glitch tests
+- **162 Catch2 tests** — trajectory shapes (40), surround output (54), OSC receive/send (47), convolver glitch (21). Includes 8 elevation/height isolation tests.
 - **State migration v15→v16:** Handles outputFormat parameter shift for SML 13.1 insertion
 - **Diagnostic cleanup:** Removed all #24 diagnostic instrumentation from production code
 
 ### Files
 Active source in `Source/`:
-- `PluginProcessor.h` (~33 KB)
-- `PluginProcessor.cpp` (~175 KB)
-- `PluginEditor.h` (~14 KB)
-- `PluginEditor.cpp` (~45 KB)
-- `PresetData.h` (shared preset struct, ~2 KB)
-- `PresetData.cpp` (70 factory presets, serialization, ~45 KB)
-- `Tests/TrajectoryTests.cpp` (Catch2 trajectory tests)
-- `Tests/SurroundOutputTests.cpp` (Catch2 surround output tests)
-- `Tests/OscTests.cpp` (Catch2 OSC receive tests)
-- `Tests/ConvolverGlitchTests.cpp` (Catch2 convolver glitch tests)
+- `PluginProcessor.h` (~51 KB)
+- `PluginProcessor.cpp` (~276 KB)
+- `PluginEditor.h` (~30 KB)
+- `PluginEditor.cpp` (~170 KB)
+- `PresetData.h` (shared preset struct, ~3 KB)
+- `PresetData.cpp` (70 factory presets, serialization, ~61 KB)
+- `Tests/TrajectoryTests.cpp` (40 Catch2 trajectory tests)
+- `Tests/SurroundOutputTests.cpp` (54 Catch2 surround output tests)
+- `Tests/OscTests.cpp` (47 Catch2 OSC receive/send tests)
+- `Tests/ConvolverGlitchTests.cpp` (21 Catch2 convolver glitch tests)
 
 ### Output
 - 22 output formats (1 binaural + 1 stereo + 14 surround + 6 Ambisonics)
