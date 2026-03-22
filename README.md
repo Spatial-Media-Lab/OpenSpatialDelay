@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/AndrewRahman/OpenSpatialDelay/releases">Download</a> &middot;
+  <a href="https://github.com/Spatial-Media-Lab/OpenSpatialDelay/releases">Download</a> &middot;
   <a href="https://spatialmedialab.org">Spatial Media Lab</a> &middot;
   <a href="docs/OpenSpatialDelay_Manual_v1.0.pdf">User Manual</a>
 </p>
@@ -60,9 +60,9 @@ OpenSpatialDelay is the first plugin in the **Spatial Media Library** — an ope
 
 ### Download (recommended)
 
-Grab the latest release from the [Releases page](https://github.com/AndrewRahman/OpenSpatialDelay/releases).
+Grab the latest release from the [Releases page](https://github.com/Spatial-Media-Lab/OpenSpatialDelay/releases).
 
-- **macOS:** Download the AU and VST3 plugins and copy them to `~/Library/Audio/Plug-Ins/Components/` (AU) and `~/Library/Audio/Plug-Ins/VST3/` (VST3).
+- **macOS:** Download the AU and VST3 plugins and copy them to `~/Library/Audio/Plug-Ins/Components/` (AU) and `~/Library/Audio/Plug-Ins/VST3/` (VST3). Then remove the macOS quarantine flag — see [macOS security note](#macos-security-note) below.
 - **Windows:** Download the VST3 plugin and copy it to `C:\Program Files\Common Files\VST3\`.
 
 ### Build from source
@@ -70,7 +70,7 @@ Grab the latest release from the [Releases page](https://github.com/AndrewRahman
 Requires CMake 3.22+, a C++17 compiler, and zlib.
 
 ```bash
-git clone --recursive https://github.com/AndrewRahman/OpenSpatialDelay.git
+git clone --recursive https://github.com/Spatial-Media-Lab/OpenSpatialDelay.git
 cd OpenSpatialDelay
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
@@ -82,6 +82,17 @@ On macOS, the post-build script automatically copies the AU and VST3 plugins to 
 - [JUCE 8](https://juce.com/) (git submodule)
 - [libmysofa](https://github.com/hoene/libmysofa) v1.3.2 (CMake FetchContent)
 - zlib (system on macOS, [vcpkg](https://vcpkg.io/) on Windows)
+
+### macOS security note
+
+OpenSpatialDelay is not yet notarized with Apple. macOS will block the plugin on first launch with a "cannot be verified" warning. To fix this, open Terminal and run:
+
+```bash
+xattr -cr ~/Library/Audio/Plug-Ins/VST3/OpenSpatialDelay*.vst3
+xattr -cr ~/Library/Audio/Plug-Ins/Components/OpenSpatialDelay*.component
+```
+
+Then restart your DAW. You only need to do this once per download.
 
 ## Quick start
 
@@ -116,7 +127,7 @@ OpenSpatialDelay is open source and contributions are welcome. If you'd like to 
 2. Create a feature branch
 3. Submit a pull request
 
-For bug reports and feature requests, please [open an issue](https://github.com/AndrewRahman/OpenSpatialDelay/issues).
+For bug reports and feature requests, please [open an issue](https://github.com/Spatial-Media-Lab/OpenSpatialDelay/issues).
 
 ## License
 

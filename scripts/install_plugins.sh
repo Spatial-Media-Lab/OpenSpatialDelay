@@ -14,6 +14,7 @@ if [ -d "$AU_SRC" ]; then
     mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
     rm -rf "$AU_DEST"
     cp -R "$AU_SRC" "$AU_DEST"
+    xattr -cr "$AU_DEST" 2>/dev/null
     echo "AU installed to $AU_DEST"
 fi
 
@@ -23,6 +24,7 @@ if [ -d "$VST3_SRC" ]; then
     if [ -w "$VST3_DIR" ]; then
         rm -rf "$VST3_DEST"
         cp -R "$VST3_SRC" "$VST3_DEST"
+        xattr -cr "$VST3_DEST" 2>/dev/null
         echo "VST3 installed to $VST3_DEST"
     else
         echo "WARNING: VST3 dir not writable. Run once:"
