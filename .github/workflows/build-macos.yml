@@ -1,0 +1,42 @@
+name: Build macOS AU + VST3
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  build-macos:
+    name: macOS arm64 AU + VST3
+    runs-on: macos-14  # Apple Silicon runner
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive  # JUCE is a git submodule
+
+      - name: Configure CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 -DBUILD_OSD_TESTS=OFF
+
+      - name: Build Release
+        run: cmake --build build --config Release
+
+      - name: Remove quarantine flags
+        run: |
+          xattr -cr build/OpenSpatialDelay_artefacts/Release/AU/ 2>/dev/null || true
+          xattr -cr build/OpenSpatialDelay_artefacts/Release/VST3/ 2>/dev/null || true
+
+      - name: Upload macOS AU
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenSpatialDelay-macOS-AU
+          path: build/OpenSpatialDelay_artefacts/Release/AU/
+          retention-days: 90
+
+      - name: Upload macOS VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: OpenSpatialDelay-macOS-VST3
+          path: build/OpenSpatialDelay_artefacts/Release/VST3/
+          retention-days: 90
