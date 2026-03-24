@@ -1651,41 +1651,39 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
         setChoice (prefix + "inputChannel",        tap.inputChannel);
     }
 
-    // Reset Doppler tracking to prevent transient pitch artifact on preset change.
-    // Without this, the first processBlock sees a fake "velocity" between old and new
-    // positions, producing a spurious Doppler pitch shift.
+    // v1.0.1: Reset trajectory state FIRST so processBlock doesn't read stale
+    // animated positions from the old preset while prevAzimuth already points to
+    // the new preset's static positions — that mismatch caused huge fake velocities
+    // and Doppler transient spikes (issue #42, bug 3).
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+    {
+        trajectoryActive[i].store (false, std::memory_order_relaxed);
+        trajectoryFinalAz[i]   = preset->taps[i].azimuthDeg;
+        trajectoryFinalEl[i]   = preset->taps[i].elevationDeg;
+        trajectoryFinalDist[i] = preset->taps[i].distance;
+        trajectoryPhase[i]     = 0.0f;
+        prevTrajectoryShape[i] = 0;   // forces shape-change detection on next timer tick
+        randomTime[i]          = 0.0f;
+        randomNoise[i].initialized = false;
+    }
+
+    // v1.0.1: Defer WSOLA/Doppler/filter reset to the audio thread via atomic flag.
+    // loadPreset() runs on the message thread — writing non-atomic audio state here
+    // races with processBlock(), causing lost resets and inconsistent WSOLA state
+    // (issue #42, bug 3). Store the target prevAzimuth values; processBlock will
+    // apply the full reset atomically on its own thread.
     for (int i = 0; i < MAX_OBJECTS; ++i)
     {
         const auto& tap = preset->taps[i];
-        prevAzimuth[i]   = juce::degreesToRadians (tap.azimuthDeg);
-        prevElevation[i] = juce::degreesToRadians (tap.elevationDeg);
-        prevDistance[i]   = tap.distance;
-        dopplerSemitones[i] = 0.0f;
-        smoothedDopplerSemitones[i] = 0.0f;
-        smoothedRadialVelocity[i] = 0.0f;
+        pendingReset.prevAz[i]   = juce::degreesToRadians (tap.azimuthDeg);
+        pendingReset.prevEl[i]   = juce::degreesToRadians (tap.elevationDeg);
+        pendingReset.prevDist[i] = tap.distance;
     }
-
-    // v1.0: Reset WSOLA state to prevent stale grain artifacts on preset change
-    for (auto& ws : wsolaState)
-    {
-        std::fill (std::begin (ws.buffer), std::end (ws.buffer), 0.0f);
-        ws.writePos = 0;
-        ws.readPhase = 0.0f;
-        ws.fadingPhase = 0.0f;
-        ws.crossfadeRemaining = 0;
-    }
-
-    // v1.0: Reset filter state to prevent coefficient-state mismatch transient
-    for (int t = 0; t < MAX_OBJECTS; ++t)
-    {
-        tapLPFilter[t].reset();
-        tapHPFilter[t].reset();
-        airAbsorptionFilter[t].reset();
-    }
-    feedbackLPFilter.reset();
-    feedbackHPFilter.reset();
+    presetResetPending.store (true, std::memory_order_release);
 
     // v1.0: Reset smoothed filter frequencies to prevent stale ramps
+    // (These are only read on the audio thread after coefficient threshold check,
+    // so writing from message thread is safe — no concurrent read-modify-write.)
     smoothedLPFreq = preset->filterLP;
     smoothedHPFreq = preset->filterHP;
     smoothedFilterLPQ = preset->filterLPQ;
@@ -2551,6 +2549,28 @@ float OpenSpatialDelayProcessor::wsolaProcess (int objectIndex, float inputSampl
     // Write incoming sample into circular buffer
     ws.buffer[ws.writePos & WSOLAState::kBufMask] = inputSample;
     ws.writePos++;
+
+    // Cold-start bypass: pass through unpitched signal until buffer has enough
+    // real audio data for a full grain. Without this, pitch UP races readPhase
+    // into zero-filled regions, producing ~21ms silence after init/preset load.
+    if (ws.writePos <= WSOLAState::kGrainSize)
+    {
+        ws.readPhase = 0.0f;
+        return inputSample;
+    }
+
+    // Normalize writePos to prevent float precision decay over long sessions.
+    // After ~87s @ 48kHz, writePos > 2^22 and readPhase (float) starts losing
+    // sub-sample precision needed for Catmull-Rom interpolation and drift detection.
+    constexpr int kNormThreshold = 1 << 22;  // 4,194,304 samples
+    if (ws.writePos > kNormThreshold)
+    {
+        int excess = ws.writePos & ~WSOLAState::kBufMask;  // buffer-size aligned
+        ws.writePos -= excess;
+        ws.readPhase -= static_cast<float> (excess);
+        if (ws.crossfadeRemaining > 0)
+            ws.fadingPhase -= static_cast<float> (excess);
+    }
 
     const float ratio = std::pow (2.0f, perTapSemitones / 12.0f);
 
@@ -3737,10 +3757,7 @@ float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDe
     // v0.9: Per-tap pitch via WSOLA-lite (timing-preserving)
     float perTapPitch = cachedObj[objectIndex].pitchShift->load (std::memory_order_relaxed);
 
-    // v1.0: Smooth Doppler pitch to prevent WSOLA grain boundary artifacts
-    constexpr float dopplerSmoothAlpha = 0.15f;  // ~3-block settling
-    smoothedDopplerSemitones[objectIndex] += dopplerSmoothAlpha
-        * (dopplerSemitones[objectIndex] - smoothedDopplerSemitones[objectIndex]);
+    // v1.0: Combined pitch = user pitch + Doppler (smoothed per-block in processBlock)
     float combinedPitch = perTapPitch + smoothedDopplerSemitones[objectIndex];
 
     // v0.8: Per-tap input channel routing
@@ -3752,9 +3769,42 @@ float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDe
     if (ch == DelayChannel::Left)       objMono = readDelayLineL (objDelaySamples);
     else if (ch == DelayChannel::Right) objMono = readDelayLineR (objDelaySamples);
 
-    // v0.9: Per-tap pitch via WSOLA-lite — applies user pitch + Doppler combined
-    if (std::abs (combinedPitch) >= 0.001f)
+    // v0.9: Per-tap pitch via WSOLA-lite — applies user pitch + Doppler combined.
+    // v1.0: Hysteresis prevents rapid gate toggling when Doppler oscillates near
+    // the user's pitch setting. Activate at 0.05 st, deactivate at 0.001 st.
+    // v1.0.1: Gate uses USER pitch only (not combinedPitch) so Doppler cannot
+    // close the gate when the user has explicitly set a pitch shift. This fixes
+    // pitch becoming non-functional on trajectory presets where Doppler partially
+    // cancels the user's pitch setting (issue #42, bug 3).
+    // Else branch keeps WSOLA buffer populated during bypass so reactivation
+    // reads fresh audio, not stale/zero data.
+    {
+        float absPitch = std::abs (perTapPitch);
+        if (! wsolaGateOpen[objectIndex])
+            wsolaGateOpen[objectIndex] = (absPitch >= 0.05f);   // wider activation
+        else if (absPitch < 0.001f)
+            wsolaGateOpen[objectIndex] = false;                  // narrow deactivation
+    }
+
+    if (wsolaGateOpen[objectIndex])
+    {
         objMono = wsolaProcess (objectIndex, objMono, combinedPitch);
+    }
+    else
+    {
+        auto& ws = wsolaState[objectIndex];
+        ws.buffer[ws.writePos & WSOLAState::kBufMask] = objMono;
+        ws.writePos++;
+        ws.readPhase = static_cast<float> (ws.writePos);
+        // Normalize writePos in bypass path too (mirrors wsolaProcess normalization)
+        constexpr int kNormThreshold = 1 << 22;
+        if (ws.writePos > kNormThreshold)
+        {
+            int excess = ws.writePos & ~WSOLAState::kBufMask;
+            ws.writePos -= excess;
+            ws.readPhase = static_cast<float> (ws.writePos);
+        }
+    }
     // v0.9: True bypass — skip filter entirely when AIR is off (saves 12 IIR evals/sample)
     float result = airAbsorptionActive
                  ? airAbsorptionFilter[objectIndex].processSample (objMono)
@@ -3807,6 +3857,43 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     if (delayBufferL.empty() || numSamples <= 0)
         return;
+
+    // v1.0.1: Apply deferred preset reset on the audio thread (thread-safe).
+    // loadPreset() sets the flag; we do the actual WSOLA/Doppler/filter reset here
+    // so there's no race between message thread writes and audio thread reads.
+    if (presetResetPending.load (std::memory_order_acquire))
+    {
+        for (int i = 0; i < MAX_OBJECTS; ++i)
+        {
+            prevAzimuth[i]   = pendingReset.prevAz[i];
+            prevElevation[i] = pendingReset.prevEl[i];
+            prevDistance[i]   = pendingReset.prevDist[i];
+            dopplerSemitones[i] = 0.0f;
+            smoothedDopplerSemitones[i] = 0.0f;
+            smoothedRadialVelocity[i] = 0.0f;
+        }
+
+        for (auto& ws : wsolaState)
+        {
+            std::fill (std::begin (ws.buffer), std::end (ws.buffer), 0.0f);
+            ws.writePos = 0;
+            ws.readPhase = 0.0f;
+            ws.fadingPhase = 0.0f;
+            ws.crossfadeRemaining = 0;
+        }
+        std::fill (std::begin (wsolaGateOpen), std::end (wsolaGateOpen), false);
+
+        for (int t = 0; t < MAX_OBJECTS; ++t)
+        {
+            tapLPFilter[t].reset();
+            tapHPFilter[t].reset();
+            airAbsorptionFilter[t].reset();
+        }
+        feedbackLPFilter.reset();
+        feedbackHPFilter.reset();
+
+        presetResetPending.store (false, std::memory_order_release);
+    }
 
     // v0.7: Reset per-tap peak accumulators for this block
     for (int i = 0; i < MAX_OBJECTS; ++i)
@@ -4101,6 +4188,14 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             prevAzimuth[t]   = azRad;
             prevElevation[t] = elRad;
             prevDistance[t]   = dist;
+
+            // v1.0: Smooth Doppler pitch per-BLOCK for actual inter-block settling.
+            // alpha=0.15 per block → ~3-block settling time (~16ms @ 256/48k).
+            // Previously this was per-sample in readObjectSample(), where
+            // (1-0.15)^256 ≈ 0 gave NO cross-block smoothing at all.
+            constexpr float dopplerSmoothAlpha = 0.15f;
+            smoothedDopplerSemitones[t] += dopplerSmoothAlpha
+                * (dopplerSemitones[t] - smoothedDopplerSemitones[t]);
 
             // --- Air absorption filter coefficient update ---
             // v0.9: Update on position change OR AIR toggle state change (true bypass fix).
