@@ -107,6 +107,7 @@ target_sources(OpenSpatialDelay
         Source/PresetData.cpp
         Source/WSOLAPitcher.cpp
         Source/DopplerVelocity.cpp
+        Source/TrajectoryEngine.cpp
 )
 
 target_compile_definitions(OpenSpatialDelay
@@ -193,6 +194,7 @@ if(BUILD_OSD_TESTS)
         Source/PresetData.cpp
         Source/WSOLAPitcher.cpp
         Source/DopplerVelocity.cpp
+        Source/TrajectoryEngine.cpp
     )
 
     target_link_libraries(OpenSpatialDelayTests

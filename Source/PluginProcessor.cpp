@@ -1124,129 +1124,23 @@ void OpenSpatialDelayProcessor::timerCallback()
         }
     }
 
-    // --- v0.9: Origin-point trajectory animation engine ---
-    // Knobs = live origin. Trajectory computes animated position stored in internal arrays.
-    // processBlock reads trajectoryFinalAz/El/Dist instead of APVTS when active.
-    // Knobs are never overwritten — user can move the origin while trajectory runs.
+    // v1.0.1: Trajectory animation — delegated to TrajectoryEngine class
     {
-        constexpr float dt = 1.0f / 60.0f;  // Timer runs at ~60Hz
-
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
-            int shape = juce::roundToInt (cachedParam_trajectoryShape[t] != nullptr
-                                          ? cachedParam_trajectoryShape[t]->load() : 0.0f);
+            TrajectoryEngine::ObjectInput input;
+            input.shape     = juce::roundToInt (cachedParam_trajectoryShape[t] != nullptr
+                                                ? cachedParam_trajectoryShape[t]->load() : 0.0f);
+            input.speed     = cachedParam_trajectorySpeed[t] != nullptr
+                              ? cachedParam_trajectorySpeed[t]->load() : 1.0f;
+            input.reverse   = (cachedParam_trajectoryDirection[t] == nullptr
+                               || cachedParam_trajectoryDirection[t]->load() < 0.5f);
+            input.originAz   = cachedObj[t].azimuth->load();
+            input.originEl   = cachedObj[t].elevation->load();
+            input.originDist = cachedObj[t].distance->load();
+            input.oscOverride = oscOverrideActive[t].load (std::memory_order_relaxed);
 
-            if (shape == 0)
-            {
-                // None — no trajectory active, processBlock reads from APVTS directly
-                trajectoryActive[t].store (false, std::memory_order_relaxed);
-                prevTrajectoryShape[t] = 0;
-                continue;
-            }
-
-            // Skip animation if OSC is controlling this object (but keep trajectoryActive true
-            // so processBlock reads the last computed position, and OSC updates the origin)
-            if (oscOverrideActive[t].load (std::memory_order_relaxed))
-                continue;
-
-            float speed = cachedParam_trajectorySpeed[t] != nullptr
-                          ? cachedParam_trajectorySpeed[t]->load() : 1.0f;
-
-            // Detect shape change: reset phase (origin is always live from APVTS knobs)
-            if (prevTrajectoryShape[t] == 0 || prevTrajectoryShape[t] != shape)
-            {
-                trajectoryPhase[t] = 0.0f;
-                randomNoise[t].initialized = false;  // re-randomize on shape change
-                randomTime[t] = 0.0f;
-                // Capture base for getTrajectoryState() visualization (used by editor)
-                baseAzimuth[t]   = cachedObj[t].azimuth->load();
-                baseElevation[t] = cachedObj[t].elevation->load();
-                baseDistance[t]   = cachedObj[t].distance->load();
-            }
-            prevTrajectoryShape[t] = shape;
-
-            // Advance phase for this object
-            // Spiral (shape 11), Random (shape 10), and Square (shape 12) run at half base speed
-            float effectiveSpeed = (shape == 10 || shape == 11 || shape == 12) ? speed * 0.5f : speed;
-            trajectoryPhase[t] += effectiveSpeed * dt;
-            if (trajectoryPhase[t] >= 1.0f)
-                trajectoryPhase[t] -= std::floor (trajectoryPhase[t]);
-
-            // v0.8: Read trajectory direction (0=Forward, 1=Reverse)
-            // Invert: natural phase progression is CCW on map; Forward should be CW
-            bool reverse = (cachedParam_trajectoryDirection[t] == nullptr
-                            || cachedParam_trajectoryDirection[t]->load() < 0.5f);
-
-            // Read LIVE origin from APVTS knobs (not captured base)
-            float originAz   = cachedObj[t].azimuth->load();
-            float originEl   = cachedObj[t].elevation->load();
-            float originDist = cachedObj[t].distance->load();
-
-            if (shape == 10)  // Random — multi-sine noise with randomized parameters (Issue #9)
-            {
-                auto& rn = randomNoise[t];
-                if (! rn.initialized)
-                {
-                    // Generate unique frequencies, phases, and amplitudes per instance
-                    auto randSign = [&]() { return randomRng.nextBool() ? 1.0f : -1.0f; };
-                    float azAmps[]   = { 50.0f, 27.0f, 19.0f, 11.0f };
-                    float elAmps[]   = { 30.0f, 16.0f, 12.0f, 8.0f };
-                    float distAmps[] = { 0.50f, 0.30f, 0.20f };
-                    for (int k = 0; k < 4; ++k)
-                    {
-                        rn.freqAz[k]  = 0.15f + randomRng.nextFloat() * 1.75f;
-                        rn.phaseAz[k] = randomRng.nextFloat() * juce::MathConstants<float>::twoPi;
-                        rn.ampAz[k]   = azAmps[k] * randSign();
-                        rn.freqEl[k]  = 0.15f + randomRng.nextFloat() * 1.75f;
-                        rn.phaseEl[k] = randomRng.nextFloat() * juce::MathConstants<float>::twoPi;
-                        rn.ampEl[k]   = elAmps[k] * randSign();
-                    }
-                    for (int k = 0; k < 3; ++k)
-                    {
-                        rn.freqDist[k]  = 0.15f + randomRng.nextFloat() * 1.25f;
-                        rn.phaseDist[k] = randomRng.nextFloat() * juce::MathConstants<float>::twoPi;
-                        rn.ampDist[k]   = distAmps[k] * randSign();
-                    }
-                    rn.initialized = true;
-                }
-
-                // Use ever-increasing time (not wrapping phase) so pattern never repeats
-                randomTime[t] += effectiveSpeed * dt;
-                float p = randomTime[t] * juce::MathConstants<float>::twoPi;
-                float az = 0.0f, el = 0.0f, dist = 0.0f;
-                for (int k = 0; k < 4; ++k)
-                {
-                    az += rn.ampAz[k] * std::sin (p * rn.freqAz[k] + rn.phaseAz[k]);
-                    el += rn.ampEl[k] * std::sin (p * rn.freqEl[k] + rn.phaseEl[k]);
-                }
-                for (int k = 0; k < 3; ++k)
-                    dist += rn.ampDist[k] * std::sin (p * rn.freqDist[k] + rn.phaseDist[k]);
-
-                trajectoryFinalAz[t] = originAz + az;
-                trajectoryFinalEl[t] = juce::jlimit (-90.0f, 90.0f, originEl + el);
-                float distScaleR = 1.0f - originDist;
-                trajectoryFinalDist[t] = juce::jlimit (0.0f, 1.0f, originDist + dist * distScaleR);
-
-                while (trajectoryFinalAz[t] > 180.0f)  trajectoryFinalAz[t] -= 360.0f;
-                while (trajectoryFinalAz[t] < -180.0f) trajectoryFinalAz[t] += 360.0f;
-            }
-            else
-            {
-                auto result = computeTrajectory (shape, trajectoryPhase[t],
-                                                 originAz, originEl, originDist,
-                                                 reverse);
-
-                trajectoryFinalAz[t]   = result.azDeg;
-                trajectoryFinalEl[t]   = result.elDeg;
-                trajectoryFinalDist[t] = result.dist;
-            }
-
-            trajectoryActive[t].store (true, std::memory_order_relaxed);
-
-            // Update base for getTrajectoryState() visualization
-            baseAzimuth[t]   = originAz;
-            baseElevation[t] = originEl;
-            baseDistance[t]   = originDist;
+            trajectory.tick (t, input);
         }
     }
 
@@ -1262,11 +1156,11 @@ void OpenSpatialDelayProcessor::timerCallback()
 
             // v0.9: Send animated position when trajectory active, origin otherwise
             float az, el, dist;
-            if (trajectoryActive[t].load (std::memory_order_relaxed))
+            if (trajectory.isActive (t))
             {
-                az   = trajectoryFinalAz[t];
-                el   = trajectoryFinalEl[t];
-                dist = trajectoryFinalDist[t];
+                az   = trajectory.getFinalAz (t);
+                el   = trajectory.getFinalEl (t);
+                dist = trajectory.getFinalDist (t);
             }
             else
             {
@@ -1656,16 +1550,7 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
     // the new preset's static positions — that mismatch caused huge fake velocities
     // and Doppler transient spikes (issue #42, bug 3).
     for (int i = 0; i < MAX_OBJECTS; ++i)
-    {
-        trajectoryActive[i].store (false, std::memory_order_relaxed);
-        trajectoryFinalAz[i]   = preset->taps[i].azimuthDeg;
-        trajectoryFinalEl[i]   = preset->taps[i].elevationDeg;
-        trajectoryFinalDist[i] = preset->taps[i].distance;
-        trajectoryPhase[i]     = 0.0f;
-        prevTrajectoryShape[i] = 0;   // forces shape-change detection on next timer tick
-        randomTime[i]          = 0.0f;
-        randomNoise[i].initialized = false;
-    }
+        trajectory.reset (i, preset->taps[i].azimuthDeg, preset->taps[i].elevationDeg, preset->taps[i].distance);
 
     // v1.0.1: Defer WSOLA/Doppler/filter reset to the audio thread via atomic flag.
     // loadPreset() runs on the message thread — writing non-atomic audio state here
@@ -3527,11 +3412,11 @@ ObjectState OpenSpatialDelayProcessor::getObjectState (int objectIndex) const
         state.delayTimeMs = p->load();
 
     // v0.9: When trajectory is active, return the animated position (not the origin/knob values)
-    if (trajectoryActive[objectIndex].load (std::memory_order_relaxed))
+    if (trajectory.isActive (objectIndex))
     {
-        state.azimuthDeg   = trajectoryFinalAz[objectIndex];
-        state.elevationDeg = trajectoryFinalEl[objectIndex];
-        state.distance     = trajectoryFinalDist[objectIndex];
+        state.azimuthDeg   = trajectory.getFinalAz (objectIndex);
+        state.elevationDeg = trajectory.getFinalEl (objectIndex);
+        state.distance     = trajectory.getFinalDist (objectIndex);
     }
     else
     {
@@ -3548,40 +3433,24 @@ ObjectState OpenSpatialDelayProcessor::getObjectState (int objectIndex) const
 
 TrajectoryState OpenSpatialDelayProcessor::getTrajectoryState (int objectIndex) const
 {
-    TrajectoryState ts;
-    if (objectIndex < 0 || objectIndex >= MAX_OBJECTS)
-        return ts;
-
-    ts.originAzDeg = baseAzimuth[objectIndex];
-    ts.originElDeg = baseElevation[objectIndex];
-    ts.originDist  = baseDistance[objectIndex];
-    ts.shape       = prevTrajectoryShape[objectIndex];
-    ts.phase       = trajectoryPhase[objectIndex];
-    ts.reverse     = (cachedParam_trajectoryDirection[objectIndex] == nullptr
-                      || cachedParam_trajectoryDirection[objectIndex]->load() < 0.5f);
-    ts.randomTime  = randomTime[objectIndex];
-    return ts;
+    auto ts = trajectory.getState (objectIndex);
+    TrajectoryState result;
+    result.originAzDeg = ts.originAzDeg;
+    result.originElDeg = ts.originElDeg;
+    result.originDist  = ts.originDist;
+    result.shape       = ts.shape;
+    result.phase       = ts.phase;
+    result.reverse     = (cachedParam_trajectoryDirection[objectIndex] == nullptr
+                          || cachedParam_trajectoryDirection[objectIndex]->load() < 0.5f);
+    result.randomTime  = ts.randomTime;
+    return result;
 }
 
 OpenSpatialDelayProcessor::RandomPosition
 OpenSpatialDelayProcessor::evaluateRandomNoise (int objectIndex, float time) const
 {
-    RandomPosition rp { 0.0f, 0.0f, 0.0f };
-    if (objectIndex < 0 || objectIndex >= MAX_OBJECTS || ! randomNoise[objectIndex].initialized)
-        return rp;
-
-    auto& rn = randomNoise[objectIndex];
-    float p = time * juce::MathConstants<float>::twoPi;
-
-    for (int k = 0; k < 4; ++k)
-    {
-        rp.azDeg += rn.ampAz[k] * std::sin (p * rn.freqAz[k] + rn.phaseAz[k]);
-        rp.elDeg += rn.ampEl[k] * std::sin (p * rn.freqEl[k] + rn.phaseEl[k]);
-    }
-    for (int k = 0; k < 3; ++k)
-        rp.dist += rn.ampDist[k] * std::sin (p * rn.freqDist[k] + rn.phaseDist[k]);
-
-    return rp;
+    auto rp = trajectory.evaluateRandomNoise (objectIndex, time);
+    return { rp.azDeg, rp.elDeg, rp.dist };
 }
 
 // #############################################################################
@@ -3879,11 +3748,11 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
         // v0.9: When trajectory is active, read animated position from internal arrays
         // (the knobs/APVTS hold the origin; the internal arrays hold origin + trajectory offset)
-        if (trajectoryActive[t].load (std::memory_order_relaxed))
+        if (trajectory.isActive (t))
         {
-            objects[t].azimuthDeg   = trajectoryFinalAz[t];
-            objects[t].elevationDeg = trajectoryFinalEl[t];
-            objects[t].distance     = trajectoryFinalDist[t];
+            objects[t].azimuthDeg   = trajectory.getFinalAz (t);
+            objects[t].elevationDeg = trajectory.getFinalEl (t);
+            objects[t].distance     = trajectory.getFinalDist (t);
         }
         else
         {
@@ -4895,7 +4764,7 @@ void OpenSpatialDelayProcessor::handleOSCPosition (int objIdx, float azDeg, floa
     // v0.9: When trajectory is active, OSC sets the origin (knobs/APVTS) —
     // trajectory continues running around the new origin. No override needed.
     // When NO trajectory is active, OSC overrides position directly (existing behavior).
-    if (! trajectoryActive[objIdx].load (std::memory_order_relaxed))
+    if (! trajectory.isActive (objIdx))
     {
         oscOverrideActive[objIdx].store (true, std::memory_order_relaxed);
         oscLastReceiveTime[objIdx] = juce::Time::getMillisecondCounterHiRes();
@@ -4907,24 +4776,10 @@ void OpenSpatialDelayProcessor::handleOSCPosition (int objIdx, float azDeg, floa
 // Per-plugin modulation — each SML plugin implements its own trajectory shapes.
 // #############################################################################
 
-//==============================================================================
-// Trajectory shape computation — pure function, no side effects
-//==============================================================================
-OpenSpatialDelayProcessor::TrajectoryResult
-OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
-                                               float baseAz, float baseEl, float baseDist,
-                                               bool reverse)
+// v1.0.1: computeTrajectory() moved to TrajectoryEngine.cpp
+// PluginProcessor.h has inline delegation for backward compatibility.
+#if 0  // Original removed
 {
-    // v0.8: Reverse direction — flip phase so trajectory runs backwards
-    if (reverse)
-        phase = 1.0f - phase;
-
-    TrajectoryResult r;
-    r.controlsAz = false;
-    r.controlsEl = false;
-    r.controlsDist = false;
-
-    // Issue #3: distance amplitude scales inversely with origin distance
     const float distScale = 1.0f - baseDist;
 
     switch (shape)
@@ -5218,8 +5073,8 @@ OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
     r.elDeg = juce::jlimit (-90.0f, 90.0f, r.elDeg);
     r.dist  = juce::jlimit (0.0f, 1.0f, r.dist);
 
-    return r;
 }
+#endif
 
 // #############################################################################
 // MIXED — State serialization & JUCE plugin factory
