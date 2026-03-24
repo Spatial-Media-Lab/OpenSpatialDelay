@@ -3,6 +3,7 @@
 #include <array>
 #include <vector>
 #include "PresetData.h"
+#include "WSOLAPitcher.h"
 
 // libmysofa — SOFA file reader for HRTF data
 struct MYSOFA_EASY;  // Forward declaration (avoids including mysofa.h in header)
@@ -843,22 +844,8 @@ private:
     juce::dsp::IIR::Filter<float> tapLPFilter[MAX_OBJECTS];
     juce::dsp::IIR::Filter<float> tapHPFilter[MAX_OBJECTS];
 
-    // v0.9: WSOLA-lite per-tap pitch shifter — timing-preserving pitch shift
-    struct WSOLAState {
-        static constexpr int kBufSize = 2048;       // ~42ms at 48kHz, power of 2
-        static constexpr int kBufMask = kBufSize - 1;
-        static constexpr int kGrainSize = 1024;     // ~21ms grain
-        static constexpr int kCrossfadeLen = 512;   // ~10ms crossfade (50% overlap)
-
-        float buffer[kBufSize] = {};
-        int   writePos = 0;
-        float readPhase = 0.0f;      // fractional read position in buffer
-        float fadingPhase = 0.0f;    // fading grain read position
-        int   crossfadeRemaining = 0;
-    };
-    WSOLAState wsolaState[MAX_OBJECTS] = {};  // 12 objects (feedback uses direct delay read, no pitch shift)
-    bool wsolaGateOpen[MAX_OBJECTS] = {};    // v1.0: Hysteresis state for pitch gate (prevents rapid toggling from Doppler)
-    float wsolaProcess (int objectIndex, float inputSample, float perTapSemitones);
+    // v1.0.1: WSOLA pitch shifter — extracted to WSOLAPitcher class for testability
+    WSOLAPitcher wsola;
 
     // v1.0.1: Thread-safe preset reset — loadPreset() (message thread) stores pending
     // state here; processBlock() (audio thread) applies it, eliminating the data race

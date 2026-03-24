@@ -2334,15 +2334,8 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     smoothedWobbleAmount.setCurrentAndTargetValue (0.0f);
     blockWobbleMorph = 0.0f;
 
-    // v0.9: Reset all WSOLA-lite per-tap pitch states
-    for (auto& ws : wsolaState)
-    {
-        std::fill (std::begin (ws.buffer), std::end (ws.buffer), 0.0f);
-        ws.writePos = 0;
-        ws.readPhase = 0.0f;
-        ws.fadingPhase = 0.0f;
-        ws.crossfadeRemaining = 0;
-    }
+    // v1.0.1: Reset WSOLA pitch shifter
+    wsola.resetAll();
 
     // v1.0: Initialize tap fade envelopes
     for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -2537,102 +2530,7 @@ float OpenSpatialDelayProcessor::readDelayLineMono (float delaySamples) const
     return (readDelayLineL (delaySamples) + readDelayLineR (delaySamples)) * 0.5f;
 }
 
-//==============================================================================
-// v0.9: WSOLA-Lite Per-Tap Pitch Shifter — Timing-Preserving
-// Reads from a small per-tap circular buffer at the pitch ratio rate.
-// When read-write drift exceeds grain size, Hann crossfade resets to nominal.
-//==============================================================================
-float OpenSpatialDelayProcessor::wsolaProcess (int objectIndex, float inputSample,
-                                                 float perTapSemitones)
-{
-    auto& ws = wsolaState[objectIndex];
-
-    // Write incoming sample into circular buffer
-    ws.buffer[ws.writePos & WSOLAState::kBufMask] = inputSample;
-    ws.writePos++;
-
-    // Cold-start bypass: pass through unpitched signal until buffer has enough
-    // real audio data for a full grain. Without this, pitch UP races readPhase
-    // into zero-filled regions, producing ~21ms silence after init/preset load.
-    if (ws.writePos <= WSOLAState::kGrainSize)
-    {
-        ws.readPhase = 0.0f;
-        return inputSample;
-    }
-
-    // Normalize writePos to prevent float precision decay over long sessions.
-    // After ~87s @ 48kHz, writePos > 2^22 and readPhase (float) starts losing
-    // sub-sample precision needed for Catmull-Rom interpolation and drift detection.
-    constexpr int kNormThreshold = 1 << 22;  // 4,194,304 samples
-    if (ws.writePos > kNormThreshold)
-    {
-        int excess = ws.writePos & ~WSOLAState::kBufMask;  // buffer-size aligned
-        ws.writePos -= excess;
-        ws.readPhase -= static_cast<float> (excess);
-        if (ws.crossfadeRemaining > 0)
-            ws.fadingPhase -= static_cast<float> (excess);
-    }
-
-    const float ratio = std::pow (2.0f, perTapSemitones / 12.0f);
-
-    // Advance read phase by pitch ratio
-    ws.readPhase += ratio;
-
-    // Catmull-Rom interpolated read from WSOLA buffer
-    auto readBuf = [&](float phase) -> float {
-        float wrapped = std::fmod (phase, static_cast<float> (WSOLAState::kBufSize));
-        if (wrapped < 0.0f) wrapped += static_cast<float> (WSOLAState::kBufSize);
-
-        int   i1 = static_cast<int> (wrapped);
-        float f  = wrapped - static_cast<float> (i1);
-
-        int i0 = (i1 - 1) & WSOLAState::kBufMask;
-        int i2 = (i1 + 1) & WSOLAState::kBufMask;
-        int i3 = (i1 + 2) & WSOLAState::kBufMask;
-        i1 = i1 & WSOLAState::kBufMask;
-
-        float y0 = ws.buffer[i0], y1 = ws.buffer[i1];
-        float y2 = ws.buffer[i2], y3 = ws.buffer[i3];
-
-        return y1 + 0.5f * f * (y2 - y0 + f * (2.0f * y0 - 5.0f * y1 + 4.0f * y2 - y3
-                                                  + f * (3.0f * (y1 - y2) + y3 - y0)));
-    };
-
-    // During crossfade: blend fading grain with new primary grain
-    if (ws.crossfadeRemaining > 0)
-    {
-        float primary = readBuf (ws.readPhase);
-        float fading  = readBuf (ws.fadingPhase);
-        ws.fadingPhase += ratio;
-
-        float t = 1.0f - static_cast<float> (ws.crossfadeRemaining)
-                       / static_cast<float> (WSOLAState::kCrossfadeLen);
-        float halfPi = juce::MathConstants<float>::halfPi;
-        float gainNew = std::sin (t * halfPi);
-        float gainOld = std::cos (t * halfPi);
-
-        ws.crossfadeRemaining--;
-        return primary * gainNew + fading * gainOld;
-    }
-
-    // Check if read-write drift exceeds grain size → initiate crossfade
-    float drift = ws.readPhase - static_cast<float> (ws.writePos);
-    if (std::abs (drift) > static_cast<float> (WSOLAState::kGrainSize))
-    {
-        ws.fadingPhase = ws.readPhase;
-        // Reset read phase to just behind write position (nominal latency ~1 grain)
-        ws.readPhase = static_cast<float> (ws.writePos) - static_cast<float> (WSOLAState::kGrainSize);
-        ws.crossfadeRemaining = WSOLAState::kCrossfadeLen;
-
-        // First crossfade sample: fully on fading head
-        float fading = readBuf (ws.fadingPhase);
-        ws.fadingPhase += ratio;
-        ws.crossfadeRemaining--;
-        return fading;
-    }
-
-    return readBuf (ws.readPhase);
-}
+// v1.0.1: WSOLA pitch shifter moved to WSOLAPitcher.h/cpp
 
 // #############################################################################
 // SPATIAL MEDIA LIBRARY — Spatialization algorithm implementations
@@ -3770,42 +3668,14 @@ float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDe
     if (ch == DelayChannel::Left)       objMono = readDelayLineL (objDelaySamples);
     else if (ch == DelayChannel::Right) objMono = readDelayLineR (objDelaySamples);
 
-    // v0.9: Per-tap pitch via WSOLA-lite — applies user pitch + Doppler combined.
-    // v1.0: Hysteresis prevents rapid gate toggling when Doppler oscillates near
-    // the user's pitch setting. Activate at 0.05 st, deactivate at 0.001 st.
-    // v1.0.1: Gate uses USER pitch only (not combinedPitch) so Doppler cannot
-    // close the gate when the user has explicitly set a pitch shift. This fixes
-    // pitch becoming non-functional on trajectory presets where Doppler partially
-    // cancels the user's pitch setting (issue #42, bug 3).
-    // Else branch keeps WSOLA buffer populated during bypass so reactivation
-    // reads fresh audio, not stale/zero data.
-    {
-        float absPitch = std::abs (perTapPitch);
-        if (! wsolaGateOpen[objectIndex])
-            wsolaGateOpen[objectIndex] = (absPitch >= 0.05f);   // wider activation
-        else if (absPitch < 0.001f)
-            wsolaGateOpen[objectIndex] = false;                  // narrow deactivation
-    }
+    // v1.0.1: WSOLA gate + process via extracted WSOLAPitcher class.
+    // Gate uses USER pitch only so Doppler cannot close it (issue #42, bug 3).
+    wsola.updateGate (objectIndex, perTapPitch);
 
-    if (wsolaGateOpen[objectIndex])
-    {
-        objMono = wsolaProcess (objectIndex, objMono, combinedPitch);
-    }
+    if (wsola.isGateOpen (objectIndex))
+        objMono = wsola.process (objectIndex, objMono, combinedPitch);
     else
-    {
-        auto& ws = wsolaState[objectIndex];
-        ws.buffer[ws.writePos & WSOLAState::kBufMask] = objMono;
-        ws.writePos++;
-        ws.readPhase = static_cast<float> (ws.writePos);
-        // Normalize writePos in bypass path too (mirrors wsolaProcess normalization)
-        constexpr int kNormThreshold = 1 << 22;
-        if (ws.writePos > kNormThreshold)
-        {
-            int excess = ws.writePos & ~WSOLAState::kBufMask;
-            ws.writePos -= excess;
-            ws.readPhase = static_cast<float> (ws.writePos);
-        }
-    }
+        wsola.bypass (objectIndex, objMono);
     // v0.9: True bypass — skip filter entirely when AIR is off (saves 12 IIR evals/sample)
     float result = airAbsorptionActive
                  ? airAbsorptionFilter[objectIndex].processSample (objMono)
@@ -3874,15 +3744,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             smoothedRadialVelocity[i] = 0.0f;
         }
 
-        for (auto& ws : wsolaState)
-        {
-            std::fill (std::begin (ws.buffer), std::end (ws.buffer), 0.0f);
-            ws.writePos = 0;
-            ws.readPhase = 0.0f;
-            ws.fadingPhase = 0.0f;
-            ws.crossfadeRemaining = 0;
-        }
-        std::fill (std::begin (wsolaGateOpen), std::end (wsolaGateOpen), false);
+        wsola.resetAll();
 
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
