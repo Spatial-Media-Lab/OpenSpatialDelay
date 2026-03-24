@@ -957,6 +957,7 @@ private:
     static constexpr float NFC_REFERENCE_RADIUS = 1.5f;  // meters (typical studio monitoring distance)
     juce::dsp::IIR::Filter<float> nfcFilters[MAX_OBJECTS][MAX_AMBI_ORDER];  // 12 objects × 6 orders
     float prevNfcDistance[MAX_OBJECTS] = {};
+    float smoothedNfcDistance[MAX_OBJECTS] = {};  // v1.0.1: EMA-smoothed to prevent coefficient transients
 
     // v0.7: Cached max-rE weights (recomputed only when ambi order changes)
     int cachedMaxrEOrder = -1;

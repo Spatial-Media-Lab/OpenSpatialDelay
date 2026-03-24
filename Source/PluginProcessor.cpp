@@ -2441,6 +2441,7 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
                 *juce::dsp::IIR::Coefficients<float>::makeAllPass (sampleRate, 1000.0f);
         }
         prevNfcDistance[obj] = -1.0f;  // Force coefficient update on first block
+        smoothedNfcDistance[obj] = 0.0f;
     }
 
     // v0.4: Reset Doppler velocity tracking state
@@ -4682,17 +4683,26 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
     }
 
     // --- NFC-HOA: Update filter coefficients when distance changes (block-rate) ---
+    // v1.0.1: EMA-smooth distance to prevent IIR coefficient transients on rapid
+    // distance changes. 72 filters (12 objects × 6 orders) updating without smoothing
+    // can cause audible artifacts. Alpha 0.15 gives ~3-block settling.
     for (int t = 0; t < MAX_OBJECTS; ++t)
     {
         if (! objects[t].enabled && tapFadeGain[t] <= 0.0f) continue;
         float distMeters = objects[t].distance * 10.0f;  // 0..1 → 0..10m
-        if (std::abs (distMeters - prevNfcDistance[t]) > 0.01f)
+
+        // Always track smoothed distance (even below coefficient update threshold)
+        constexpr float nfcSmoothAlpha = 0.15f;
+        smoothedNfcDistance[t] += nfcSmoothAlpha * (distMeters - smoothedNfcDistance[t]);
+
+        // Only recompute coefficients when smoothed distance differs enough
+        if (std::abs (smoothedNfcDistance[t] - prevNfcDistance[t]) > 0.01f)
         {
             for (int ord = 0; ord < ambiOrder && ord < MAX_AMBI_ORDER; ++ord)
             {
                 int n = ord + 1;  // SH order (1-based)
                 constexpr float c = 343.0f;  // speed of sound, m/s
-                float r = std::max (0.05f, distMeters);
+                float r = std::max (0.05f, smoothedNfcDistance[t]);
                 float fPole = static_cast<float> (n) * c / (2.0f * juce::MathConstants<float>::pi * r);
                 float fZero = static_cast<float> (n) * c / (2.0f * juce::MathConstants<float>::pi * NFC_REFERENCE_RADIUS);
                 float maxFreq = static_cast<float> (currentSampleRate) * 0.25f;
@@ -4707,7 +4717,7 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
                 *nfcFilters[t][ord].coefficients =
                     juce::dsp::IIR::Coefficients<float> (b0 / a0, b1 / a0, 1.0f, a1 / a0);
             }
-            prevNfcDistance[t] = distMeters;
+            prevNfcDistance[t] = smoothedNfcDistance[t];
         }
     }
 
