@@ -2437,16 +2437,8 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
         smoothedNfcDistance[obj] = 0.0f;
     }
 
-    // v0.4: Reset Doppler velocity tracking state
-    for (int i = 0; i < MAX_OBJECTS; ++i)
-    {
-        prevAzimuth[i]   = 0.0f;
-        prevElevation[i] = 0.0f;
-        prevDistance[i]   = 0.5f;
-        dopplerSemitones[i] = 0.0f;
-        smoothedDopplerSemitones[i] = 0.0f;
-        smoothedRadialVelocity[i] = 0.0f;
-    }
+    // v1.0.1: Reset Doppler velocity tracking
+    doppler.resetAll();
 
     // HRTF convolution: prepare both renderers (double-buffered)
     binauralRenderers[0].prepare (sampleRate, samplesPerBlock);
@@ -3657,7 +3649,7 @@ float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDe
     float perTapPitch = cachedObj[objectIndex].pitchShift->load (std::memory_order_relaxed);
 
     // v1.0: Combined pitch = user pitch + Doppler (smoothed per-block in processBlock)
-    float combinedPitch = perTapPitch + smoothedDopplerSemitones[objectIndex];
+    float combinedPitch = perTapPitch + doppler.getSmoothedSemitones (objectIndex);
 
     // v0.8: Per-tap input channel routing
     int inputCh = static_cast<int> (cachedObj[objectIndex].inputChannel->load (std::memory_order_relaxed));
@@ -3735,14 +3727,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     if (presetResetPending.load (std::memory_order_acquire))
     {
         for (int i = 0; i < MAX_OBJECTS; ++i)
-        {
-            prevAzimuth[i]   = pendingReset.prevAz[i];
-            prevElevation[i] = pendingReset.prevEl[i];
-            prevDistance[i]   = pendingReset.prevDist[i];
-            dopplerSemitones[i] = 0.0f;
-            smoothedDopplerSemitones[i] = 0.0f;
-            smoothedRadialVelocity[i] = 0.0f;
-        }
+            doppler.reset (i, pendingReset.prevAz[i], pendingReset.prevEl[i], pendingReset.prevDist[i]);
 
         wsola.resetAll();
 
@@ -3940,19 +3925,16 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         }
     }
 
-    // --- v0.4: Per-block Doppler velocity computation + air absorption filter update ---
+    // --- v1.0.1: Per-block Doppler velocity + air absorption filter update ---
+    // Doppler tracking extracted to DopplerVelocity class for testability.
     {
         float blockDuration = static_cast<float> (numSamples) / static_cast<float> (currentSampleRate);
-        constexpr float speedOfSound = 343.0f;   // m/s at 20°C
-        constexpr float emaAlpha = 0.35f;         // Smoothing factor for velocity (0.35 = ~40ms settling @ 256/48k — responsive without single-block noise)
-        constexpr float maxDopplerSemitones = 12.0f;
 
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
             if (! objects[t].enabled && tapFadeGain[t] <= 0.0f)
             {
-                dopplerSemitones[t] = 0.0f;
-                // v1.0: Use pre-computed transparent coefficients (no heap allocation)
+                doppler.clearDisabled (t);
                 *airAbsorptionFilter[t].coefficients = airTransparentCoeffs;
                 continue;
             }
@@ -3961,104 +3943,11 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             float elRad = juce::degreesToRadians (objects[t].elevationDeg);
             float dist  = objects[t].distance;
 
-            // Check if position has changed since last block (skip expensive math when static)
-            bool positionChanged = (std::abs (azRad - prevAzimuth[t]) > 1e-5f)
-                                || (std::abs (elRad - prevElevation[t]) > 1e-5f)
-                                || (std::abs (dist  - prevDistance[t])  > 1e-5f);
-
-            // --- Doppler velocity tracking (per-object amount: 0=off, >0=on) ---
             float objDopplerAmount = cachedObj[t].dopplerAmount->load();
+            doppler.update (t, azRad, elRad, dist, objDopplerAmount, blockDuration);
+            doppler.smooth (t);
 
-            if (objDopplerAmount > 0.001f && blockDuration > 0.0f)
-            {
-                if (positionChanged)
-                {
-                    // Convert current and previous positions to Cartesian (physical scale: 0..10m)
-                    float physDist     = dist * 10.0f;
-                    float prevPhysDist = prevDistance[t] * 10.0f;
-
-                    float cx = physDist     * std::cos (elRad) * std::sin (azRad);
-                    float cy = physDist     * std::cos (elRad) * std::cos (azRad);
-                    float cz = physDist     * std::sin (elRad);
-                    float px = prevPhysDist * std::cos (prevElevation[t]) * std::sin (prevAzimuth[t]);
-                    float py = prevPhysDist * std::cos (prevElevation[t]) * std::cos (prevAzimuth[t]);
-                    float pz = prevPhysDist * std::sin (prevElevation[t]);
-
-                    // Virtual ear Doppler — offset listener position for audible
-                    // binaural Doppler from orbiting/tangentially moving sources.
-                    // Anatomical ear offset is ~0.085m; exaggerated for creative effect.
-                    constexpr float earOffset = 2.5f;   // virtual ear x-offset (meters, exaggerated for creative effect)
-                    float dxC = cx - earOffset;
-                    float dxP = px - earOffset;
-                    float distToEarCur  = std::sqrt (dxC * dxC + cy * cy + cz * cz);
-                    float distToEarPrev = std::sqrt (dxP * dxP + py * py + pz * pz);
-                    float rawRadialVelocity = (distToEarCur - distToEarPrev) / blockDuration;
-
-                    // v1.0: Clamp velocity to prevent extreme pitch transients from rapid azimuth sweeps
-                    // 50 m/s produces ~1.7 semitones of Doppler — more than enough for creative effect
-                    rawRadialVelocity = juce::jlimit (-50.0f, 50.0f, rawRadialVelocity);
-
-                    // Exponential moving average smoothing to avoid clicks
-                    smoothedRadialVelocity[t] = emaAlpha * rawRadialVelocity
-                                              + (1.0f - emaAlpha) * smoothedRadialVelocity[t];
-
-                    // Doppler pitch: semitones = 12 * log2(c / (c + v * amount))
-                    float v = smoothedRadialVelocity[t] * objDopplerAmount;
-                    float denominator = speedOfSound + v;
-                    if (denominator > 1.0f)  // Prevent extreme values
-                    {
-                        float ratio = speedOfSound / denominator;
-                        dopplerSemitones[t] = 12.0f * std::log2 (ratio);
-                        dopplerSemitones[t] = juce::jlimit (-maxDopplerSemitones, maxDopplerSemitones,
-                                                             dopplerSemitones[t]);
-                    }
-                    else
-                    {
-                        dopplerSemitones[t] = -maxDopplerSemitones;
-                    }
-                }
-                else
-                {
-                    // Position static: decay velocity smoothly toward zero
-                    smoothedRadialVelocity[t] *= (1.0f - emaAlpha);
-                    if (std::abs (smoothedRadialVelocity[t]) < 1e-6f)
-                    {
-                        smoothedRadialVelocity[t] = 0.0f;
-                        dopplerSemitones[t] = 0.0f;
-                    }
-                    else
-                    {
-                        float v = smoothedRadialVelocity[t] * objDopplerAmount;
-                        float denominator = speedOfSound + v;
-                        if (denominator > 1.0f)
-                        {
-                            dopplerSemitones[t] = 12.0f * std::log2 (speedOfSound / denominator);
-                            dopplerSemitones[t] = juce::jlimit (-maxDopplerSemitones, maxDopplerSemitones,
-                                                                 dopplerSemitones[t]);
-                        }
-                        else
-                            dopplerSemitones[t] = -maxDopplerSemitones;
-                    }
-                }
-            }
-            else
-            {
-                dopplerSemitones[t] = 0.0f;
-                smoothedRadialVelocity[t] = 0.0f;
-            }
-
-            // Store current position for next block's velocity computation
-            prevAzimuth[t]   = azRad;
-            prevElevation[t] = elRad;
-            prevDistance[t]   = dist;
-
-            // v1.0: Smooth Doppler pitch per-BLOCK for actual inter-block settling.
-            // alpha=0.15 per block → ~3-block settling time (~16ms @ 256/48k).
-            // Previously this was per-sample in readObjectSample(), where
-            // (1-0.15)^256 ≈ 0 gave NO cross-block smoothing at all.
-            constexpr float dopplerSmoothAlpha = 0.15f;
-            smoothedDopplerSemitones[t] += dopplerSmoothAlpha
-                * (dopplerSemitones[t] - smoothedDopplerSemitones[t]);
+            bool positionChanged = doppler.positionChanged (t);
 
             // --- Air absorption filter coefficient update ---
             // v0.9: Update on position change OR AIR toggle state change (true bypass fix).

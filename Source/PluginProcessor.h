@@ -4,6 +4,7 @@
 #include <vector>
 #include "PresetData.h"
 #include "WSOLAPitcher.h"
+#include "DopplerVelocity.h"
 
 // libmysofa — SOFA file reader for HRTF data
 struct MYSOFA_EASY;  // Forward declaration (avoids including mysofa.h in header)
@@ -814,8 +815,8 @@ public:
                                                float baseAz, float baseEl, float baseDist,
                                                bool reverse = false);
 
-    // v1.0: Doppler pitch accessor for automated latency measurement tests
-    float getDopplerSemitones (int objectIndex) const { return dopplerSemitones[objectIndex]; }
+    // v1.0.1: Doppler pitch accessor — delegates to extracted DopplerVelocity module
+    float getDopplerSemitones (int objectIndex) const { return doppler.getRawSemitones (objectIndex); }
 
 private:
 
@@ -1004,13 +1005,8 @@ private:
     float prevSHCoeffs[MAX_OBJECTS][MAX_AMBI_CHANNELS] = {};
     float prevDistGain[MAX_OBJECTS] = {};
 
-    // v0.4: Doppler effect — per-object checkbox, global amount, velocity tracking
-    float prevAzimuth[MAX_OBJECTS]   = {};   // radians, previous block
-    float prevElevation[MAX_OBJECTS] = {};   // radians, previous block
-    float prevDistance[MAX_OBJECTS]   = {};   // normalized 0..1, previous block
-    float dopplerSemitones[MAX_OBJECTS] = {};  // computed per-block
-    float smoothedDopplerSemitones[MAX_OBJECTS] = {};  // v1.0: EMA-smoothed for WSOLA grain stability
-    float smoothedRadialVelocity[MAX_OBJECTS] = {};  // EMA-smoothed velocity
+    // v1.0.1: Doppler velocity tracking — extracted to DopplerVelocity class
+    DopplerVelocity doppler;
 
     // v0.7: Per-tap activity for UI glow (written in processBlock, read by editor timer)
     std::atomic<float> tapActivityRMS[MAX_OBJECTS] = {};
