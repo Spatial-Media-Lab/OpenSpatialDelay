@@ -5,6 +5,7 @@
 #include "PresetData.h"
 #include "WSOLAPitcher.h"
 #include "DopplerVelocity.h"
+#include "TrajectoryEngine.h"
 
 // libmysofa — SOFA file reader for HRTF data
 struct MYSOFA_EASY;  // Forward declaration (avoids including mysofa.h in header)
@@ -782,38 +783,18 @@ private:
     // Pre-built OSC address strings for ADM-OSC Send (avoids per-tick string allocation)
     juce::String oscSendAddress[MAX_OBJECTS];
 
-    float trajectoryPhase[MAX_OBJECTS] = {};            // 0..1 animation progress per object
-    float baseAzimuth[MAX_OBJECTS]   = {};              // Legacy: captured origin (used by getTrajectoryState)
-    float baseElevation[MAX_OBJECTS] = {};
-    float baseDistance[MAX_OBJECTS]   = {};
-    int   prevTrajectoryShape[MAX_OBJECTS] = {};        // Detect shape changes (None→active)
-
-    // v0.9: Origin-point trajectory architecture — computed animated positions
-    // Timer callback writes here; processBlock reads here when trajectory is active
-    float trajectoryFinalAz[MAX_OBJECTS]   = {};        // Animated azimuth (origin + offset)
-    float trajectoryFinalEl[MAX_OBJECTS]   = {};        // Animated elevation
-    float trajectoryFinalDist[MAX_OBJECTS] = {};        // Animated distance
-    std::atomic<bool> trajectoryActive[MAX_OBJECTS] = {};  // True when shape != None
-
-    // v0.9: Random trajectory noise system (Issue #9)
-    // Randomized multi-sine frequencies/phases per instance — smooth, all axes simultaneous
-    struct RandomNoiseState {
-        float freqAz[4]  = {}, phaseAz[4]  = {}, ampAz[4]  = {};
-        float freqEl[4]  = {}, phaseEl[4]  = {}, ampEl[4]  = {};
-        float freqDist[3]= {}, phaseDist[3]= {}, ampDist[3]= {};
-        bool initialized = false;
-    };
-    RandomNoiseState randomNoise[MAX_OBJECTS] = {};
-    float randomTime[MAX_OBJECTS] = {};  // ever-increasing time (never wraps) for non-repeating motion
-    juce::Random randomRng;  // seeded per-instance (timer thread only)
+    // v1.0.1: Trajectory animation — extracted to TrajectoryEngine class
+    TrajectoryEngine trajectory;
 
 public:
-    // Trajectory shape computation (pure functions) — public for editor path sampling
-    // controlsAz/El/Dist flags indicate which axes the shape actively modifies
-    struct TrajectoryResult { float azDeg, elDeg, dist; bool controlsAz, controlsEl, controlsDist; };
+    // v1.0.1: Trajectory types — delegated to TrajectoryEngine
+    using TrajectoryResult = TrajectoryEngine::TrajectoryResult;
     static TrajectoryResult computeTrajectory (int shape, float phase,
                                                float baseAz, float baseEl, float baseDist,
-                                               bool reverse = false);
+                                               bool reverse = false)
+    {
+        return TrajectoryEngine::computeTrajectory (shape, phase, baseAz, baseEl, baseDist, reverse);
+    }
 
     // v1.0.1: Doppler pitch accessor — delegates to extracted DopplerVelocity module
     float getDopplerSemitones (int objectIndex) const { return doppler.getRawSemitones (objectIndex); }
