@@ -565,6 +565,70 @@ void HRTFDatabase::unload()
 }
 
 //==============================================================================
+// v1.0.4: Minimum-phase HRIR conversion via cepstral decomposition (issue #47).
+// Converts a raw HRIR to its minimum-phase equivalent in-place.
+// Preserves magnitude spectrum but removes excess phase, enabling smooth
+// time-domain EMA interpolation between adjacent HRIRs without comb filtering.
+//==============================================================================
+void HRTFDatabase::convertToMinPhase (float* ir, int irLength, int fftOrder, float* workBuf)
+{
+    if (irLength <= 0 || fftOrder <= 0) return;
+
+    const int N = 1 << fftOrder;  // FFT size (must be >= 2 * irLength)
+    juce::dsp::FFT fft (fftOrder);
+
+    // workBuf layout: N Complex<float> = N * 2 floats
+    auto* cBuf = reinterpret_cast<std::complex<float>*> (workBuf);
+
+    // Step 1: Copy IR into complex buffer, zero-pad
+    for (int i = 0; i < N; ++i)
+        cBuf[i] = (i < irLength) ? std::complex<float> (ir[i], 0.0f) : std::complex<float> (0.0f, 0.0f);
+
+    // Step 2: Forward FFT
+    fft.perform (cBuf, cBuf, false);
+
+    // Step 3: Compute log-magnitude (real cepstrum input)
+    for (int k = 0; k < N; ++k)
+    {
+        float mag = std::abs (cBuf[k]);
+        float logMag = std::log (std::max (mag, 1e-20f));  // epsilon for -ffast-math safety
+        cBuf[k] = std::complex<float> (logMag, 0.0f);
+    }
+
+    // Step 4: IFFT to get real cepstrum
+    fft.perform (cBuf, cBuf, true);
+
+    // Step 5: Apply minimum-phase window to cepstrum
+    // c_mp[0] unchanged, c_mp[1..N/2-1] doubled, c_mp[N/2] unchanged, c_mp[N/2+1..N-1] zeroed
+    int halfN = N / 2;
+    for (int n = 1; n < halfN; ++n)
+        cBuf[n] *= 2.0f;
+    for (int n = halfN + 1; n < N; ++n)
+        cBuf[n] = std::complex<float> (0.0f, 0.0f);
+
+    // Step 6: Forward FFT
+    fft.perform (cBuf, cBuf, false);
+
+    // Step 7: Exponentiate to get minimum-phase spectrum
+    for (int k = 0; k < N; ++k)
+    {
+        float re = cBuf[k].real();
+        float im = cBuf[k].imag();
+        // Clamp to prevent exp() overflow under -ffast-math
+        re = std::max (-80.0f, std::min (80.0f, re));
+        float mag = std::exp (re);
+        cBuf[k] = std::complex<float> (mag * std::cos (im), mag * std::sin (im));
+    }
+
+    // Step 8: IFFT to get minimum-phase IR
+    fft.perform (cBuf, cBuf, true);
+
+    // Step 9: Copy first irLength samples back (real part only)
+    for (int i = 0; i < irLength; ++i)
+        ir[i] = cBuf[i].real();
+}
+
+//==============================================================================
 // PartitionedConvolver implementation — overlap-save FFT convolution
 //==============================================================================
 void PartitionedConvolver::prepare (int maxBlockSize, int irLength_)
@@ -588,10 +652,12 @@ void PartitionedConvolver::prepare (int maxBlockSize, int irLength_)
     fftWorkBuf.resize (static_cast<size_t> (fftSize * 2), 0.0f);
     overlapBuf.resize (static_cast<size_t> (fftSize), 0.0f);
 
-    // v1.0: Dual-convolver crossfade buffers
-    prevIrFreqDomain.resize (static_cast<size_t> (fftSize * 2), 0.0f);
-    prevFftWorkBuf.resize (static_cast<size_t> (fftSize * 2), 0.0f);
-    prevOverlapBuf.resize (static_cast<size_t> (fftSize), 0.0f);
+    // v1.0.4: Spectral envelope EMA buffers (frequency domain, per-bin mag+phase)
+    int numBins = fftSize / 2 + 1;
+    currentMagnitude.resize (static_cast<size_t> (numBins), 0.0f);
+    targetMagnitude.resize (static_cast<size_t> (numBins), 0.0f);
+    currentPhase.resize (static_cast<size_t> (numBins), 0.0f);
+    targetPhase.resize (static_cast<size_t> (numBins), 0.0f);
 
     reset();
 }
@@ -600,36 +666,42 @@ void PartitionedConvolver::setIR (const float* ir, int length)
 {
     if (fftSize == 0) return;
 
-    // v1.0: Non-restarting dual-convolver crossfade.
-    // Key behavior: if called during active crossfade, only update the new IR
-    // (irFreqDomain) without resetting crossfade progress. This ensures the
-    // fade always completes during continuous movement, rather than perpetually
-    // restarting at 0%.
+    // v1.0.4: Spectral envelope EMA smoothing.
+    // Compute target's magnitude and phase in frequency domain.
+    // Only the magnitude is EMA-smoothed; phase always comes from the target.
+    // This prevents comb filtering from blending IRs with misaligned phase.
 
-    if (irLen > 0 && crossfadeRemaining <= 0)
-    {
-        // No crossfade active — start a new one.
-        // Save current IR + overlap as crossfade source.
-        std::copy (irFreqDomain.begin(), irFreqDomain.end(), prevIrFreqDomain.begin());
-        std::copy (overlapBuf.begin(), overlapBuf.end(), prevOverlapBuf.begin());
-        // v1.0.2: Zero overlapBuf so new convolver starts with clean overlap state.
-        // Without this, both old and new outputs include the same overlap buffer during
-        // crossfade, and the equal-power blend (cos+sin peaks at 1.414) amplifies the
-        // shared overlap by up to 41%, producing audible pops (issue #47).
-        std::fill (overlapBuf.begin(), overlapBuf.end(), 0.0f);
-        crossfadeTotalLength = blockSize * kCrossfadeBlocks;
-        crossfadeRemaining = crossfadeTotalLength;
-    }
-    // else: crossfade already active — don't restart, don't touch prevIrFreqDomain
-    // or prevOverlapBuf. The crossfade continues from where it is, blending from
-    // the original source toward whatever the latest IR is.
-
-    // Always update the "new" IR (target of crossfade)
+    // FFT the new IR to get its spectrum
     std::fill (irFreqDomain.begin(), irFreqDomain.end(), 0.0f);
     for (int i = 0; i < std::min (length, fftSize); ++i)
         irFreqDomain[static_cast<size_t> (i)] = ir[i];
-
     fft.performRealOnlyForwardTransform (irFreqDomain.data(), true);
+
+    // Extract magnitude and phase from the target spectrum
+    // JUCE real FFT stores: [re0, im0, re1, im1, ..., reN/2, imN/2] (fftSize+1 values)
+    int numBins = fftSize / 2 + 1;
+    for (int k = 0; k < numBins; ++k)
+    {
+        float re = irFreqDomain[static_cast<size_t> (k * 2)];
+        float im = irFreqDomain[static_cast<size_t> (k * 2 + 1)];
+        targetMagnitude[static_cast<size_t> (k)] = std::sqrt (re * re + im * im);
+        targetPhase[static_cast<size_t> (k)] = std::atan2 (im, re);
+    }
+
+    if (! irInitialized)
+    {
+        // First IR: snap both magnitude and phase immediately
+        std::copy (targetMagnitude.begin(), targetMagnitude.end(), currentMagnitude.begin());
+        std::copy (targetPhase.begin(), targetPhase.end(), currentPhase.begin());
+        // irFreqDomain is already correct from the FFT above
+        irInitialized = true;
+        irNeedsSmoothing = false;
+    }
+    else
+    {
+        irNeedsSmoothing = true;
+    }
+
     irLen = length;
 }
 
@@ -643,10 +715,51 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
         return;
     }
 
-    // Dual-convolver overlap-save with non-restarting crossfade:
-    // During crossfade, both old and new IRs convolve the same input.
-    // Outputs are blended via equal-power crossfade that always completes.
+    // v1.0.4: Spectral envelope EMA smoothing (issue #47).
+    // Smooth magnitude (linear EMA) and phase (circular EMA) SEPARATELY per bin.
+    // This avoids comb filtering from complex-coefficient blending (which cancels
+    // when phases oppose) while also preventing phase discontinuities.
+    if (irNeedsSmoothing)
+    {
+        constexpr float pi = juce::MathConstants<float>::pi;
+        constexpr float twoPi = juce::MathConstants<float>::twoPi;
+        bool stillSmoothing = false;
+        int numBins = fftSize / 2 + 1;
 
+        for (int k = 0; k < numBins; ++k)
+        {
+            // Magnitude: linear EMA
+            float magDiff = targetMagnitude[static_cast<size_t> (k)] - currentMagnitude[static_cast<size_t> (k)];
+            if (std::abs (magDiff) > kIRConvergenceEps)
+            {
+                currentMagnitude[static_cast<size_t> (k)] += kIRSmoothAlpha * magDiff;
+                stillSmoothing = true;
+            }
+
+            // Phase: circular EMA (wrap difference to [-π, π])
+            float phaseDiff = targetPhase[static_cast<size_t> (k)] - currentPhase[static_cast<size_t> (k)];
+            // Wrap to [-π, π]
+            phaseDiff = phaseDiff - twoPi * std::round (phaseDiff / twoPi);
+            if (std::abs (phaseDiff) > kIRConvergenceEps)
+            {
+                currentPhase[static_cast<size_t> (k)] += kIRSmoothAlpha * phaseDiff;
+                stillSmoothing = true;
+            }
+        }
+
+        // Reconstruct frequency-domain IR from smoothed magnitude + smoothed phase
+        for (int k = 0; k < numBins; ++k)
+        {
+            float mag = currentMagnitude[static_cast<size_t> (k)];
+            float phase = currentPhase[static_cast<size_t> (k)];
+            irFreqDomain[static_cast<size_t> (k * 2)]     = mag * std::cos (phase);
+            irFreqDomain[static_cast<size_t> (k * 2 + 1)] = mag * std::sin (phase);
+        }
+
+        irNeedsSmoothing = stillSmoothing;
+    }
+
+    // Single-convolver overlap-save (no crossfade needed — IR transitions smoothly)
     int samplesProcessed = 0;
 
     while (samplesProcessed < numSamples)
@@ -670,22 +783,7 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
             // Forward FFT of input
             fft.performRealOnlyForwardTransform (fftWorkBuf.data(), true);
 
-            // If crossfading, also convolve with previous (old) IR
-            bool doCrossfade = (crossfadeRemaining > 0);
-            if (doCrossfade)
-            {
-                std::copy (fftWorkBuf.begin(), fftWorkBuf.end(), prevFftWorkBuf.begin());
-                for (int i = 0; i < fftSize * 2; i += 2)
-                {
-                    float re1 = prevFftWorkBuf[static_cast<size_t> (i)],     im1 = prevFftWorkBuf[static_cast<size_t> (i + 1)];
-                    float re2 = prevIrFreqDomain[static_cast<size_t> (i)],   im2 = prevIrFreqDomain[static_cast<size_t> (i + 1)];
-                    prevFftWorkBuf[static_cast<size_t> (i)]     = re1 * re2 - im1 * im2;
-                    prevFftWorkBuf[static_cast<size_t> (i + 1)] = re1 * im2 + im1 * re2;
-                }
-                fft.performRealOnlyInverseTransform (prevFftWorkBuf.data());
-            }
-
-            // Complex multiply with new IR spectrum
+            // Complex multiply with smoothed IR spectrum
             for (int i = 0; i < fftSize * 2; i += 2)
             {
                 float re1 = fftWorkBuf[static_cast<size_t> (i)],     im1 = fftWorkBuf[static_cast<size_t> (i + 1)];
@@ -699,47 +797,13 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
             int outStart = samplesProcessed - blockSize;
             int outSamples = std::min (blockSize, numSamples - outStart);
 
-            if (doCrossfade)
+            for (int i = 0; i < outSamples; ++i)
             {
-                // Equal-power crossfade: sin²+cos² = 1 constant energy
-                float totalLen = static_cast<float> (crossfadeTotalLength);
-                float samplesCompleted = static_cast<float> (crossfadeTotalLength - crossfadeRemaining);
-                constexpr float halfPi = juce::MathConstants<float>::halfPi;
-
-                for (int i = 0; i < outSamples; ++i)
-                {
-                    float fadeProgress = (samplesCompleted + static_cast<float> (i)) / totalLen;
-                    fadeProgress = std::min (fadeProgress, 1.0f);
-                    float fadeNew = std::sin (fadeProgress * halfPi);
-                    float fadeOld = std::cos (fadeProgress * halfPi);
-
-                    float newOut = fftWorkBuf[static_cast<size_t> (i)]
-                                 + overlapBuf[static_cast<size_t> (i)];
-                    float oldOut = prevFftWorkBuf[static_cast<size_t> (i)]
-                                 + prevOverlapBuf[static_cast<size_t> (i)];
-                    out[outStart + i] = oldOut * fadeOld + newOut * fadeNew;
-                }
-
-                // Update old overlap for next crossfade block
-                int overlapLen = fftSize - blockSize;
-                for (int i = 0; i < overlapLen; ++i)
-                    prevOverlapBuf[static_cast<size_t> (i)] = prevFftWorkBuf[static_cast<size_t> (blockSize + i)];
-                for (int i = overlapLen; i < fftSize; ++i)
-                    prevOverlapBuf[static_cast<size_t> (i)] = 0.0f;
-
-                crossfadeRemaining -= outSamples;
-                if (crossfadeRemaining < 0) crossfadeRemaining = 0;
-            }
-            else
-            {
-                for (int i = 0; i < outSamples; ++i)
-                {
-                    out[outStart + i] = fftWorkBuf[static_cast<size_t> (i)]
-                                      + overlapBuf[static_cast<size_t> (i)];
-                }
+                out[outStart + i] = fftWorkBuf[static_cast<size_t> (i)]
+                                  + overlapBuf[static_cast<size_t> (i)];
             }
 
-            // Save new-IR overlap for next block
+            // Save overlap for next block
             int overlapLen = fftSize - blockSize;
             for (int i = 0; i < overlapLen; ++i)
                 overlapBuf[static_cast<size_t> (i)] = fftWorkBuf[static_cast<size_t> (blockSize + i)];
@@ -756,10 +820,13 @@ void PartitionedConvolver::reset()
     std::fill (inputAccum.begin(), inputAccum.end(), 0.0f);
     std::fill (overlapBuf.begin(), overlapBuf.end(), 0.0f);
     std::fill (fftWorkBuf.begin(), fftWorkBuf.end(), 0.0f);
-    std::fill (prevOverlapBuf.begin(), prevOverlapBuf.end(), 0.0f);
-    std::fill (prevFftWorkBuf.begin(), prevFftWorkBuf.end(), 0.0f);
-    crossfadeRemaining = 0;
-    crossfadeTotalLength = 0;
+    std::fill (irFreqDomain.begin(), irFreqDomain.end(), 0.0f);
+    std::fill (currentMagnitude.begin(), currentMagnitude.end(), 0.0f);
+    std::fill (targetMagnitude.begin(), targetMagnitude.end(), 0.0f);
+    std::fill (currentPhase.begin(), currentPhase.end(), 0.0f);
+    std::fill (targetPhase.begin(), targetPhase.end(), 0.0f);
+    irNeedsSmoothing = false;
+    irInitialized = false;
     inputAccumPos = 0;
 }
 
@@ -833,6 +900,19 @@ void BinauralRenderer::setProfile (int profileIndex, HRTFDatabase& hrtfDb)
     const float targetRMS = 1.0f / std::sqrt ((float) irLen);
     const double avgRMS   = std::sqrt (totalEnergy / (double) (NUM_REF_DIRS * 2 * irLen));
     storedNormGain = (avgRMS > 1e-8) ? (float) (targetRMS / avgRMS) : 1.0f;
+
+    // =========================================================================
+    // v1.0.4: Pre-allocate minimum-phase extraction buffer.
+    // Use 4× IR length for FFT to preserve stopband magnitude after truncation.
+    // =========================================================================
+    {
+        int mpSize = 4 * irLen;
+        minPhaseFFTOrder = 1;
+        while ((1 << minPhaseFFTOrder) < mpSize)
+            ++minPhaseFFTOrder;
+        int mpFFTSize = 1 << minPhaseFFTOrder;
+        minPhaseWorkBuf.resize (static_cast<size_t> (mpFFTSize * 2), 0.0f);
+    }
 
     // =========================================================================
     // Prepare per-source convolvers (allocate FFT buffers for irLength).
