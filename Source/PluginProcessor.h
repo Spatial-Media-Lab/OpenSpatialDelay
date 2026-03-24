@@ -6,6 +6,7 @@
 #include "WSOLAPitcher.h"
 #include "DopplerVelocity.h"
 #include "TrajectoryEngine.h"
+#include "FilterBank.h"
 
 // libmysofa — SOFA file reader for HRTF data
 struct MYSOFA_EASY;  // Forward declaration (avoids including mysofa.h in header)
@@ -819,12 +820,9 @@ private:
 
     // Feedback state
     float feedbackSample = 0.0f;
-    juce::dsp::IIR::Filter<float> feedbackLPFilter;
-    juce::dsp::IIR::Filter<float> feedbackHPFilter;
 
-    // Per-tap output filters (same coefficients as feedback, independent state per tap)
-    juce::dsp::IIR::Filter<float> tapLPFilter[MAX_OBJECTS];
-    juce::dsp::IIR::Filter<float> tapHPFilter[MAX_OBJECTS];
+    // v1.0.1: Filter management — extracted to FilterBank class
+    FilterBank filters;
 
     // v1.0.1: WSOLA pitch shifter — extracted to WSOLAPitcher class for testability
     WSOLAPitcher wsola;
@@ -915,10 +913,8 @@ private:
     juce::SmoothedValue<float> smoothedOutputGain;
 
     // v0.4: Air absorption — global toggle, per-object LP filter driven by distance
-    juce::dsp::IIR::Filter<float> airAbsorptionFilter[MAX_OBJECTS];
-    juce::dsp::IIR::Coefficients<float> airTransparentCoeffs; // v1.0: pre-computed 20kHz LP (avoids heap alloc in processBlock)
-    float smoothedAirCutoff[MAX_OBJECTS] = {};  // v1.0: smoothed air absorption cutoff to prevent IIR coefficient transients
-    bool airAbsorptionActive = false;       // v0.9: block-rate true bypass (set in processBlock)
+    // v1.0.1: Air absorption state — now managed by FilterBank
+    bool airAbsorptionActive = false;       // v0.9: block-rate true bypass (read by processBlock for coefficient path)
     bool prevAirAbsorptionActive = false;   // v0.9: edge detection for AIR toggle state changes
 
     // v0.5: NFC-HOA — per-order shelf filters for near-field compensation (Ambisonics output only)
@@ -966,17 +962,7 @@ private:
     std::atomic<float>* cachedParam_algorithm       = nullptr;
 
     // v0.5: Cached feedback filter frequencies + Q (skip recalculation when unchanged)
-    float cachedFeedbackLPFreq = -1.0f;
-    float cachedFeedbackHPFreq = -1.0f;
-    float cachedFilterHPQ = -1.0f;
-    float cachedFilterLPQ = -1.0f;
-    bool  filterBypassed = true;   // v0.9: true when filterEnabled param is OFF (default)
-
-    // v1.0: EMA-smoothed filter frequencies for click-free coefficient updates
-    float smoothedLPFreq = 20000.0f;
-    float smoothedHPFreq = 20.0f;
-    float smoothedFilterLPQ = 0.707f;
-    float smoothedFilterHPQ = 0.707f;
+    // v1.0.1: Filter smoothing/cache state moved to FilterBank class
 
     // v1.0: Previous-block gains for per-sample interpolation (prevent clicks on rapid position changes)
     float prevStereoGainL[MAX_OBJECTS] = {};

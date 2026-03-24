@@ -1569,12 +1569,9 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
     // v1.0: Reset smoothed filter frequencies to prevent stale ramps
     // (These are only read on the audio thread after coefficient threshold check,
     // so writing from message thread is safe — no concurrent read-modify-write.)
-    smoothedLPFreq = preset->filterLP;
-    smoothedHPFreq = preset->filterHP;
-    smoothedFilterLPQ = preset->filterLPQ;
-    smoothedFilterHPQ = preset->filterHPQ;
-    cachedFeedbackLPFreq = -1.0f;  // Force coefficient recalculation
-    cachedFeedbackHPFreq = -1.0f;
+    filters.setSmoothedFrequencies (preset->filterLP, preset->filterHP,
+                                     preset->filterLPQ, preset->filterHPQ);
+    filters.invalidateCoefficients();
 
     currentPresetIndex = index;
 }
@@ -2237,23 +2234,12 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
 
     // Initialize filters
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock, 1 };
-    feedbackLPFilter.prepare (spec);
-    feedbackHPFilter.prepare (spec);
-    feedbackLPFilter.reset();
-    feedbackHPFilter.reset();
+    filters.prepare (sampleRate, samplesPerBlock);
     for (int t = 0; t < MAX_OBJECTS; ++t)
     {
-        tapLPFilter[t].prepare (spec);
-        tapHPFilter[t].prepare (spec);
-        tapLPFilter[t].reset();
-        tapHPFilter[t].reset();
+        // v1.0.1: tap filters now prepared via filters.prepare() above
     }
-    cachedFeedbackLPFreq = -1.0f;  // Force recalculation on first block
-    cachedFeedbackHPFreq = -1.0f;
-    smoothedLPFreq = 20000.0f;
-    smoothedHPFreq = 20.0f;
-    smoothedFilterLPQ = 0.707f;
-    smoothedFilterHPQ = 0.707f;
+    filters.invalidateCoefficients();
 
     // Initialize smoothed values — setCurrentAndTargetValue prevents stale ramps
     // after mid-session prepareToPlay calls (e.g., bus renegotiation)
@@ -2299,13 +2285,10 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
 
     // v0.4: Prepare air absorption filters (per-object LP, distance-driven cutoff)
     // v1.0: Pre-compute transparent coefficients to avoid heap allocation in processBlock
-    airTransparentCoeffs = *juce::dsp::IIR::Coefficients<float>::makeLowPass (sampleRate, 20000.0f);
+    // v1.0.1: air absorption filters now prepared via filters.prepare() above
     for (int i = 0; i < MAX_OBJECTS; ++i)
     {
-        airAbsorptionFilter[i].prepare (spec);
-        airAbsorptionFilter[i].reset();
-        *airAbsorptionFilter[i].coefficients = airTransparentCoeffs;
-        smoothedAirCutoff[i] = 20000.0f;
+        // v1.0.1: air absorption filters now prepared via filters.prepare()
     }
 
     // v0.5: Prepare NFC-HOA filters (per-object, per-SH-order, Ambisonics output only)
@@ -3537,16 +3520,9 @@ float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDe
         objMono = wsola.process (objectIndex, objMono, combinedPitch);
     else
         wsola.bypass (objectIndex, objMono);
-    // v0.9: True bypass — skip filter entirely when AIR is off (saves 12 IIR evals/sample)
-    float result = airAbsorptionActive
-                 ? airAbsorptionFilter[objectIndex].processSample (objMono)
-                 : objMono;
-
-    // v0.7: Per-tap output filter (same coefficients as feedback filter)
-    // Ensures first cycle of taps is filtered, not just feedback repeats
-    if (! filterBypassed)
-        result = tapHPFilter[objectIndex].processSample (
-                     tapLPFilter[objectIndex].processSample (result));
+    // v1.0.1: Air absorption + tap filters via FilterBank class
+    float result = filters.processAirSample (objectIndex, objMono);
+    result = filters.processTapSample (objectIndex, result);
 
     // v0.7: Accumulate per-tap peak for UI activity glow
     float absVal = std::abs (result);
@@ -3564,15 +3540,13 @@ void OpenSpatialDelayProcessor::processFeedbackSample (float currentLoopMult,
     fbDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), fbDelaySamples);
 
     float feedbackRaw = readDelayLineMono (fbDelaySamples);
-    float filtered = filterBypassed ? feedbackRaw
-        : feedbackHPFilter.processSample (feedbackLPFilter.processSample (feedbackRaw));
+    float filtered = filters.processFeedbackSample (feedbackRaw);
     const float makeupGain = 1.0f + (fb * fb * kMakeupGainCoeff);
     feedbackSample = softClip (filtered * makeupGain);
     if (! std::isfinite (feedbackSample))
     {
         feedbackSample = 0.0f;
-        feedbackLPFilter.reset();
-        feedbackHPFilter.reset();
+        filters.resetAll();
     }
 }
 
@@ -3600,14 +3574,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
         wsola.resetAll();
 
-        for (int t = 0; t < MAX_OBJECTS; ++t)
-        {
-            tapLPFilter[t].reset();
-            tapHPFilter[t].reset();
-            airAbsorptionFilter[t].reset();
-        }
-        feedbackLPFilter.reset();
-        feedbackHPFilter.reset();
+        filters.resetAll();
 
         presetResetPending.store (false, std::memory_order_release);
     }
@@ -3624,7 +3591,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     float filterHPQ       = cachedParam_filterHPQ->load();
     float filterLPQ       = cachedParam_filterLPQ->load();
     // v0.9: Filter bypass driven by dedicated parameter (not threshold inference)
-    filterBypassed  = cachedParam_filterEnabled->load() < 0.5f;
+    bool filterEnabled = cachedParam_filterEnabled->load() > 0.5f;
     int   profileIndex    = static_cast<int> (cachedParam_hrtfProfile->load());
 
     // v0.4: Air absorption — true bypass with edge detection for immediate toggle response
@@ -3661,37 +3628,8 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     smoothedInputGain.setTargetValue  (juce::Decibels::decibelsToGain (inGainDb));
     smoothedOutputGain.setTargetValue (juce::Decibels::decibelsToGain (outGainDb));
 
-    // --- Update feedback filters (EMA-smoothed coefficients for click-free sweeps) ---
-    {
-        constexpr float filterSmoothAlpha = 0.3f;  // ~3-block settling — smooth enough to prevent transients
-        smoothedLPFreq += filterSmoothAlpha * (lpFreq - smoothedLPFreq);
-        smoothedHPFreq += filterSmoothAlpha * (hpFreq - smoothedHPFreq);
-        smoothedFilterLPQ += filterSmoothAlpha * (filterLPQ - smoothedFilterLPQ);
-        smoothedFilterHPQ += filterSmoothAlpha * (filterHPQ - smoothedFilterHPQ);
-
-        bool lpChanged = std::abs (smoothedLPFreq - cachedFeedbackLPFreq) > 0.01f
-                      || std::abs (smoothedFilterLPQ - cachedFilterLPQ) > 0.0001f;
-        bool hpChanged = std::abs (smoothedHPFreq - cachedFeedbackHPFreq) > 0.01f
-                      || std::abs (smoothedFilterHPQ - cachedFilterHPQ) > 0.0001f;
-        if (lpChanged)
-        {
-            auto lpCoeffs = juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, smoothedLPFreq, smoothedFilterLPQ);
-            feedbackLPFilter.coefficients = lpCoeffs;
-            for (int t = 0; t < MAX_OBJECTS; ++t)
-                tapLPFilter[t].coefficients = lpCoeffs;
-            cachedFeedbackLPFreq = smoothedLPFreq;
-            cachedFilterLPQ = smoothedFilterLPQ;
-        }
-        if (hpChanged)
-        {
-            auto hpCoeffs = juce::dsp::IIR::Coefficients<float>::makeHighPass (currentSampleRate, smoothedHPFreq, smoothedFilterHPQ);
-            feedbackHPFilter.coefficients = hpCoeffs;
-            for (int t = 0; t < MAX_OBJECTS; ++t)
-                tapHPFilter[t].coefficients = hpCoeffs;
-            cachedFeedbackHPFreq = smoothedHPFreq;
-            cachedFilterHPQ = smoothedFilterHPQ;
-        }
-    }
+    // v1.0.1: Filter coefficient update — delegated to FilterBank class
+    filters.updateCoefficients (currentSampleRate, lpFreq, hpFreq, filterLPQ, filterHPQ, filterEnabled);
 
     // --- Block-rate constant: ms → samples conversion factor -------------------
     blockMsToSamples = 0.001f * static_cast<float> (currentSampleRate);
@@ -3804,7 +3742,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             if (! objects[t].enabled && tapFadeGain[t] <= 0.0f)
             {
                 doppler.clearDisabled (t);
-                *airAbsorptionFilter[t].coefficients = airTransparentCoeffs;
+                filters.clearAirAbsorption (t);
                 continue;
             }
 
@@ -3818,27 +3756,9 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
             bool positionChanged = doppler.positionChanged (t);
 
-            // --- Air absorption filter coefficient update ---
-            // v0.9: Update on position change OR AIR toggle state change (true bypass fix).
-            // When AIR is OFF, readObjectSample() skips the filter entirely (zero CPU).
-            if (airAbsorptionActive && (positionChanged || airStateChanged))
-            {
-                // Quadratic distance mapping: gentle near (0–0.5 ≈ 0–5m), steep far (0.5–1.0 ≈ 5–20m)
-                // dist² compresses the near range and expands the far range perceptually.
-                float mappedDist = dist * dist;
-                constexpr float absorbCoeff = 3.1f;
-                float targetCutoff = 20000.0f * std::exp (-absorbCoeff * mappedDist);
-                targetCutoff = juce::jlimit (500.0f, 20000.0f, targetCutoff);
-
-                // v1.0: EMA-smooth the cutoff to prevent IIR coefficient transients
-                // on rapid distance changes. Alpha 0.3 ≈ 3-block settling time.
-                constexpr float airSmoothAlpha = 0.2f;  // EMA smoothing for IIR cutoff — 0.2 gives ~80ms settling, aligns with Doppler tracking speed
-                smoothedAirCutoff[t] = smoothedAirCutoff[t]
-                                     + airSmoothAlpha * (targetCutoff - smoothedAirCutoff[t]);
-
-                *airAbsorptionFilter[t].coefficients =
-                    *juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, smoothedAirCutoff[t]);
-            }
+            // v1.0.1: Air absorption — delegated to FilterBank class
+            filters.updateAirAbsorption (t, currentSampleRate, dist,
+                                          airAbsorptionActive, positionChanged, airStateChanged);
         }
     }
 
