@@ -612,6 +612,11 @@ void PartitionedConvolver::setIR (const float* ir, int length)
         // Save current IR + overlap as crossfade source.
         std::copy (irFreqDomain.begin(), irFreqDomain.end(), prevIrFreqDomain.begin());
         std::copy (overlapBuf.begin(), overlapBuf.end(), prevOverlapBuf.begin());
+        // v1.0.2: Zero overlapBuf so new convolver starts with clean overlap state.
+        // Without this, both old and new outputs include the same overlap buffer during
+        // crossfade, and the equal-power blend (cos+sin peaks at 1.414) amplifies the
+        // shared overlap by up to 41%, producing audible pops (issue #47).
+        std::fill (overlapBuf.begin(), overlapBuf.end(), 0.0f);
         crossfadeTotalLength = blockSize * kCrossfadeBlocks;
         crossfadeRemaining = crossfadeTotalLength;
     }
@@ -854,8 +859,9 @@ void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elR
     if (sourceIndex < 0 || sourceIndex >= MAX_SOURCES || storedIRLength <= 0)
         return;
 
-    // ~2° threshold — skip update if position hasn't changed significantly
-    constexpr float THRESHOLD = 0.035f;  // ~2 degrees in radians — balances HRIR update frequency vs CPU (non-restarting crossfade handles rapid updates)
+    // v1.0.2: ~1° threshold (reduced from ~2°) — more frequent, smaller HRIR changes
+    // produce less audible spectral transitions during azimuth/elevation sweeps (issue #47)
+    constexpr float THRESHOLD = 0.017f;  // ~1 degree in radians
     if (sourceConvReady[sourceIndex]
         && std::abs (azRad - cachedSourceAz[sourceIndex]) < THRESHOLD
         && std::abs (elRad - cachedSourceEl[sourceIndex]) < THRESHOLD)
@@ -3546,7 +3552,7 @@ void OpenSpatialDelayProcessor::processFeedbackSample (float currentLoopMult,
     if (! std::isfinite (feedbackSample))
     {
         feedbackSample = 0.0f;
-        filters.resetAll();
+        filters.resetFeedback();  // v1.0.2: only reset feedback filters, not all 38
     }
 }
 

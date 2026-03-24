@@ -40,6 +40,9 @@ public:
     /** Reset all filter states (e.g., after preset change). */
     void resetAll();
 
+    /** Reset only the feedback filters (for NaN recovery — avoids disrupting tap/air state). */
+    void resetFeedback();
+
     /** Reset a single object's tap + air filters. */
     void resetObject (int objectIndex);
 

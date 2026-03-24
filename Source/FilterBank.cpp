@@ -137,6 +137,12 @@ void FilterBank::resetAll()
     }
 }
 
+void FilterBank::resetFeedback()
+{
+    fbLP_.reset();
+    fbHP_.reset();
+}
+
 void FilterBank::resetObject (int objectIndex)
 {
     tapLP_[objectIndex].reset();

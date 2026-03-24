@@ -9,13 +9,19 @@ VST3_SRC="${BUILD_DIR}/OpenSpatialDelay_artefacts/Release/VST3/${PLUGIN_NAME}.vs
 AU_DEST="$HOME/Library/Audio/Plug-Ins/Components/${PLUGIN_NAME}.component"
 VST3_DEST="$HOME/Library/Audio/Plug-Ins/VST3/${PLUGIN_NAME}.vst3"
 
-# Install AU
-if [ -d "$AU_SRC" ]; then
+# v1.0.2: Validate AU binary exists before installing (not just the directory).
+# JUCE creates the .component directory at configure time, but the binary is only
+# written when the AU target finishes linking. Without this check, the script can
+# copy an empty bundle with Info.plist but no actual plugin binary.
+AU_BINARY="${AU_SRC}/Contents/MacOS/${PLUGIN_NAME}"
+if [ -f "$AU_BINARY" ]; then
     mkdir -p "$HOME/Library/Audio/Plug-Ins/Components"
     rm -rf "$AU_DEST"
     cp -R "$AU_SRC" "$AU_DEST"
     xattr -cr "$AU_DEST" 2>/dev/null
     echo "AU installed to $AU_DEST"
+else
+    echo "WARNING: AU binary not found at $AU_BINARY — skipping AU install"
 fi
 
 # Install VST3
