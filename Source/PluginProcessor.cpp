@@ -1124,129 +1124,23 @@ void OpenSpatialDelayProcessor::timerCallback()
         }
     }
 
-    // --- v0.9: Origin-point trajectory animation engine ---
-    // Knobs = live origin. Trajectory computes animated position stored in internal arrays.
-    // processBlock reads trajectoryFinalAz/El/Dist instead of APVTS when active.
-    // Knobs are never overwritten — user can move the origin while trajectory runs.
+    // v1.0.1: Trajectory animation — delegated to TrajectoryEngine class
     {
-        constexpr float dt = 1.0f / 60.0f;  // Timer runs at ~60Hz
-
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
-            int shape = juce::roundToInt (cachedParam_trajectoryShape[t] != nullptr
-                                          ? cachedParam_trajectoryShape[t]->load() : 0.0f);
+            TrajectoryEngine::ObjectInput input;
+            input.shape     = juce::roundToInt (cachedParam_trajectoryShape[t] != nullptr
+                                                ? cachedParam_trajectoryShape[t]->load() : 0.0f);
+            input.speed     = cachedParam_trajectorySpeed[t] != nullptr
+                              ? cachedParam_trajectorySpeed[t]->load() : 1.0f;
+            input.reverse   = (cachedParam_trajectoryDirection[t] == nullptr
+                               || cachedParam_trajectoryDirection[t]->load() < 0.5f);
+            input.originAz   = cachedObj[t].azimuth->load();
+            input.originEl   = cachedObj[t].elevation->load();
+            input.originDist = cachedObj[t].distance->load();
+            input.oscOverride = oscOverrideActive[t].load (std::memory_order_relaxed);
 
-            if (shape == 0)
-            {
-                // None — no trajectory active, processBlock reads from APVTS directly
-                trajectoryActive[t].store (false, std::memory_order_relaxed);
-                prevTrajectoryShape[t] = 0;
-                continue;
-            }
-
-            // Skip animation if OSC is controlling this object (but keep trajectoryActive true
-            // so processBlock reads the last computed position, and OSC updates the origin)
-            if (oscOverrideActive[t].load (std::memory_order_relaxed))
-                continue;
-
-            float speed = cachedParam_trajectorySpeed[t] != nullptr
-                          ? cachedParam_trajectorySpeed[t]->load() : 1.0f;
-
-            // Detect shape change: reset phase (origin is always live from APVTS knobs)
-            if (prevTrajectoryShape[t] == 0 || prevTrajectoryShape[t] != shape)
-            {
-                trajectoryPhase[t] = 0.0f;
-                randomNoise[t].initialized = false;  // re-randomize on shape change
-                randomTime[t] = 0.0f;
-                // Capture base for getTrajectoryState() visualization (used by editor)
-                baseAzimuth[t]   = cachedObj[t].azimuth->load();
-                baseElevation[t] = cachedObj[t].elevation->load();
-                baseDistance[t]   = cachedObj[t].distance->load();
-            }
-            prevTrajectoryShape[t] = shape;
-
-            // Advance phase for this object
-            // Spiral (shape 11), Random (shape 10), and Square (shape 12) run at half base speed
-            float effectiveSpeed = (shape == 10 || shape == 11 || shape == 12) ? speed * 0.5f : speed;
-            trajectoryPhase[t] += effectiveSpeed * dt;
-            if (trajectoryPhase[t] >= 1.0f)
-                trajectoryPhase[t] -= std::floor (trajectoryPhase[t]);
-
-            // v0.8: Read trajectory direction (0=Forward, 1=Reverse)
-            // Invert: natural phase progression is CCW on map; Forward should be CW
-            bool reverse = (cachedParam_trajectoryDirection[t] == nullptr
-                            || cachedParam_trajectoryDirection[t]->load() < 0.5f);
-
-            // Read LIVE origin from APVTS knobs (not captured base)
-            float originAz   = cachedObj[t].azimuth->load();
-            float originEl   = cachedObj[t].elevation->load();
-            float originDist = cachedObj[t].distance->load();
-
-            if (shape == 10)  // Random — multi-sine noise with randomized parameters (Issue #9)
-            {
-                auto& rn = randomNoise[t];
-                if (! rn.initialized)
-                {
-                    // Generate unique frequencies, phases, and amplitudes per instance
-                    auto randSign = [&]() { return randomRng.nextBool() ? 1.0f : -1.0f; };
-                    float azAmps[]   = { 50.0f, 27.0f, 19.0f, 11.0f };
-                    float elAmps[]   = { 30.0f, 16.0f, 12.0f, 8.0f };
-                    float distAmps[] = { 0.50f, 0.30f, 0.20f };
-                    for (int k = 0; k < 4; ++k)
-                    {
-                        rn.freqAz[k]  = 0.15f + randomRng.nextFloat() * 1.75f;
-                        rn.phaseAz[k] = randomRng.nextFloat() * juce::MathConstants<float>::twoPi;
-                        rn.ampAz[k]   = azAmps[k] * randSign();
-                        rn.freqEl[k]  = 0.15f + randomRng.nextFloat() * 1.75f;
-                        rn.phaseEl[k] = randomRng.nextFloat() * juce::MathConstants<float>::twoPi;
-                        rn.ampEl[k]   = elAmps[k] * randSign();
-                    }
-                    for (int k = 0; k < 3; ++k)
-                    {
-                        rn.freqDist[k]  = 0.15f + randomRng.nextFloat() * 1.25f;
-                        rn.phaseDist[k] = randomRng.nextFloat() * juce::MathConstants<float>::twoPi;
-                        rn.ampDist[k]   = distAmps[k] * randSign();
-                    }
-                    rn.initialized = true;
-                }
-
-                // Use ever-increasing time (not wrapping phase) so pattern never repeats
-                randomTime[t] += effectiveSpeed * dt;
-                float p = randomTime[t] * juce::MathConstants<float>::twoPi;
-                float az = 0.0f, el = 0.0f, dist = 0.0f;
-                for (int k = 0; k < 4; ++k)
-                {
-                    az += rn.ampAz[k] * std::sin (p * rn.freqAz[k] + rn.phaseAz[k]);
-                    el += rn.ampEl[k] * std::sin (p * rn.freqEl[k] + rn.phaseEl[k]);
-                }
-                for (int k = 0; k < 3; ++k)
-                    dist += rn.ampDist[k] * std::sin (p * rn.freqDist[k] + rn.phaseDist[k]);
-
-                trajectoryFinalAz[t] = originAz + az;
-                trajectoryFinalEl[t] = juce::jlimit (-90.0f, 90.0f, originEl + el);
-                float distScaleR = 1.0f - originDist;
-                trajectoryFinalDist[t] = juce::jlimit (0.0f, 1.0f, originDist + dist * distScaleR);
-
-                while (trajectoryFinalAz[t] > 180.0f)  trajectoryFinalAz[t] -= 360.0f;
-                while (trajectoryFinalAz[t] < -180.0f) trajectoryFinalAz[t] += 360.0f;
-            }
-            else
-            {
-                auto result = computeTrajectory (shape, trajectoryPhase[t],
-                                                 originAz, originEl, originDist,
-                                                 reverse);
-
-                trajectoryFinalAz[t]   = result.azDeg;
-                trajectoryFinalEl[t]   = result.elDeg;
-                trajectoryFinalDist[t] = result.dist;
-            }
-
-            trajectoryActive[t].store (true, std::memory_order_relaxed);
-
-            // Update base for getTrajectoryState() visualization
-            baseAzimuth[t]   = originAz;
-            baseElevation[t] = originEl;
-            baseDistance[t]   = originDist;
+            trajectory.tick (t, input);
         }
     }
 
@@ -1262,11 +1156,11 @@ void OpenSpatialDelayProcessor::timerCallback()
 
             // v0.9: Send animated position when trajectory active, origin otherwise
             float az, el, dist;
-            if (trajectoryActive[t].load (std::memory_order_relaxed))
+            if (trajectory.isActive (t))
             {
-                az   = trajectoryFinalAz[t];
-                el   = trajectoryFinalEl[t];
-                dist = trajectoryFinalDist[t];
+                az   = trajectory.getFinalAz (t);
+                el   = trajectory.getFinalEl (t);
+                dist = trajectory.getFinalDist (t);
             }
             else
             {
@@ -1656,16 +1550,7 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
     // the new preset's static positions — that mismatch caused huge fake velocities
     // and Doppler transient spikes (issue #42, bug 3).
     for (int i = 0; i < MAX_OBJECTS; ++i)
-    {
-        trajectoryActive[i].store (false, std::memory_order_relaxed);
-        trajectoryFinalAz[i]   = preset->taps[i].azimuthDeg;
-        trajectoryFinalEl[i]   = preset->taps[i].elevationDeg;
-        trajectoryFinalDist[i] = preset->taps[i].distance;
-        trajectoryPhase[i]     = 0.0f;
-        prevTrajectoryShape[i] = 0;   // forces shape-change detection on next timer tick
-        randomTime[i]          = 0.0f;
-        randomNoise[i].initialized = false;
-    }
+        trajectory.reset (i, preset->taps[i].azimuthDeg, preset->taps[i].elevationDeg, preset->taps[i].distance);
 
     // v1.0.1: Defer WSOLA/Doppler/filter reset to the audio thread via atomic flag.
     // loadPreset() runs on the message thread — writing non-atomic audio state here
@@ -1684,12 +1569,9 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
     // v1.0: Reset smoothed filter frequencies to prevent stale ramps
     // (These are only read on the audio thread after coefficient threshold check,
     // so writing from message thread is safe — no concurrent read-modify-write.)
-    smoothedLPFreq = preset->filterLP;
-    smoothedHPFreq = preset->filterHP;
-    smoothedFilterLPQ = preset->filterLPQ;
-    smoothedFilterHPQ = preset->filterHPQ;
-    cachedFeedbackLPFreq = -1.0f;  // Force coefficient recalculation
-    cachedFeedbackHPFreq = -1.0f;
+    filters.setSmoothedFrequencies (preset->filterLP, preset->filterHP,
+                                     preset->filterLPQ, preset->filterHPQ);
+    filters.invalidateCoefficients();
 
     currentPresetIndex = index;
 }
@@ -2334,15 +2216,8 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     smoothedWobbleAmount.setCurrentAndTargetValue (0.0f);
     blockWobbleMorph = 0.0f;
 
-    // v0.9: Reset all WSOLA-lite per-tap pitch states
-    for (auto& ws : wsolaState)
-    {
-        std::fill (std::begin (ws.buffer), std::end (ws.buffer), 0.0f);
-        ws.writePos = 0;
-        ws.readPhase = 0.0f;
-        ws.fadingPhase = 0.0f;
-        ws.crossfadeRemaining = 0;
-    }
+    // v1.0.1: Reset WSOLA pitch shifter
+    wsola.resetAll();
 
     // v1.0: Initialize tap fade envelopes
     for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -2359,23 +2234,12 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
 
     // Initialize filters
     juce::dsp::ProcessSpec spec { sampleRate, (juce::uint32) samplesPerBlock, 1 };
-    feedbackLPFilter.prepare (spec);
-    feedbackHPFilter.prepare (spec);
-    feedbackLPFilter.reset();
-    feedbackHPFilter.reset();
+    filters.prepare (sampleRate, samplesPerBlock);
     for (int t = 0; t < MAX_OBJECTS; ++t)
     {
-        tapLPFilter[t].prepare (spec);
-        tapHPFilter[t].prepare (spec);
-        tapLPFilter[t].reset();
-        tapHPFilter[t].reset();
+        // v1.0.1: tap filters now prepared via filters.prepare() above
     }
-    cachedFeedbackLPFreq = -1.0f;  // Force recalculation on first block
-    cachedFeedbackHPFreq = -1.0f;
-    smoothedLPFreq = 20000.0f;
-    smoothedHPFreq = 20.0f;
-    smoothedFilterLPQ = 0.707f;
-    smoothedFilterHPQ = 0.707f;
+    filters.invalidateCoefficients();
 
     // Initialize smoothed values — setCurrentAndTargetValue prevents stale ramps
     // after mid-session prepareToPlay calls (e.g., bus renegotiation)
@@ -2421,13 +2285,10 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
 
     // v0.4: Prepare air absorption filters (per-object LP, distance-driven cutoff)
     // v1.0: Pre-compute transparent coefficients to avoid heap allocation in processBlock
-    airTransparentCoeffs = *juce::dsp::IIR::Coefficients<float>::makeLowPass (sampleRate, 20000.0f);
+    // v1.0.1: air absorption filters now prepared via filters.prepare() above
     for (int i = 0; i < MAX_OBJECTS; ++i)
     {
-        airAbsorptionFilter[i].prepare (spec);
-        airAbsorptionFilter[i].reset();
-        *airAbsorptionFilter[i].coefficients = airTransparentCoeffs;
-        smoothedAirCutoff[i] = 20000.0f;
+        // v1.0.1: air absorption filters now prepared via filters.prepare()
     }
 
     // v0.5: Prepare NFC-HOA filters (per-object, per-SH-order, Ambisonics output only)
@@ -2441,18 +2302,11 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
                 *juce::dsp::IIR::Coefficients<float>::makeAllPass (sampleRate, 1000.0f);
         }
         prevNfcDistance[obj] = -1.0f;  // Force coefficient update on first block
+        smoothedNfcDistance[obj] = 0.0f;
     }
 
-    // v0.4: Reset Doppler velocity tracking state
-    for (int i = 0; i < MAX_OBJECTS; ++i)
-    {
-        prevAzimuth[i]   = 0.0f;
-        prevElevation[i] = 0.0f;
-        prevDistance[i]   = 0.5f;
-        dopplerSemitones[i] = 0.0f;
-        smoothedDopplerSemitones[i] = 0.0f;
-        smoothedRadialVelocity[i] = 0.0f;
-    }
+    // v1.0.1: Reset Doppler velocity tracking
+    doppler.resetAll();
 
     // HRTF convolution: prepare both renderers (double-buffered)
     binauralRenderers[0].prepare (sampleRate, samplesPerBlock);
@@ -2536,102 +2390,7 @@ float OpenSpatialDelayProcessor::readDelayLineMono (float delaySamples) const
     return (readDelayLineL (delaySamples) + readDelayLineR (delaySamples)) * 0.5f;
 }
 
-//==============================================================================
-// v0.9: WSOLA-Lite Per-Tap Pitch Shifter — Timing-Preserving
-// Reads from a small per-tap circular buffer at the pitch ratio rate.
-// When read-write drift exceeds grain size, Hann crossfade resets to nominal.
-//==============================================================================
-float OpenSpatialDelayProcessor::wsolaProcess (int objectIndex, float inputSample,
-                                                 float perTapSemitones)
-{
-    auto& ws = wsolaState[objectIndex];
-
-    // Write incoming sample into circular buffer
-    ws.buffer[ws.writePos & WSOLAState::kBufMask] = inputSample;
-    ws.writePos++;
-
-    // Cold-start bypass: pass through unpitched signal until buffer has enough
-    // real audio data for a full grain. Without this, pitch UP races readPhase
-    // into zero-filled regions, producing ~21ms silence after init/preset load.
-    if (ws.writePos <= WSOLAState::kGrainSize)
-    {
-        ws.readPhase = 0.0f;
-        return inputSample;
-    }
-
-    // Normalize writePos to prevent float precision decay over long sessions.
-    // After ~87s @ 48kHz, writePos > 2^22 and readPhase (float) starts losing
-    // sub-sample precision needed for Catmull-Rom interpolation and drift detection.
-    constexpr int kNormThreshold = 1 << 22;  // 4,194,304 samples
-    if (ws.writePos > kNormThreshold)
-    {
-        int excess = ws.writePos & ~WSOLAState::kBufMask;  // buffer-size aligned
-        ws.writePos -= excess;
-        ws.readPhase -= static_cast<float> (excess);
-        if (ws.crossfadeRemaining > 0)
-            ws.fadingPhase -= static_cast<float> (excess);
-    }
-
-    const float ratio = std::pow (2.0f, perTapSemitones / 12.0f);
-
-    // Advance read phase by pitch ratio
-    ws.readPhase += ratio;
-
-    // Catmull-Rom interpolated read from WSOLA buffer
-    auto readBuf = [&](float phase) -> float {
-        float wrapped = std::fmod (phase, static_cast<float> (WSOLAState::kBufSize));
-        if (wrapped < 0.0f) wrapped += static_cast<float> (WSOLAState::kBufSize);
-
-        int   i1 = static_cast<int> (wrapped);
-        float f  = wrapped - static_cast<float> (i1);
-
-        int i0 = (i1 - 1) & WSOLAState::kBufMask;
-        int i2 = (i1 + 1) & WSOLAState::kBufMask;
-        int i3 = (i1 + 2) & WSOLAState::kBufMask;
-        i1 = i1 & WSOLAState::kBufMask;
-
-        float y0 = ws.buffer[i0], y1 = ws.buffer[i1];
-        float y2 = ws.buffer[i2], y3 = ws.buffer[i3];
-
-        return y1 + 0.5f * f * (y2 - y0 + f * (2.0f * y0 - 5.0f * y1 + 4.0f * y2 - y3
-                                                  + f * (3.0f * (y1 - y2) + y3 - y0)));
-    };
-
-    // During crossfade: blend fading grain with new primary grain
-    if (ws.crossfadeRemaining > 0)
-    {
-        float primary = readBuf (ws.readPhase);
-        float fading  = readBuf (ws.fadingPhase);
-        ws.fadingPhase += ratio;
-
-        float t = 1.0f - static_cast<float> (ws.crossfadeRemaining)
-                       / static_cast<float> (WSOLAState::kCrossfadeLen);
-        float halfPi = juce::MathConstants<float>::halfPi;
-        float gainNew = std::sin (t * halfPi);
-        float gainOld = std::cos (t * halfPi);
-
-        ws.crossfadeRemaining--;
-        return primary * gainNew + fading * gainOld;
-    }
-
-    // Check if read-write drift exceeds grain size → initiate crossfade
-    float drift = ws.readPhase - static_cast<float> (ws.writePos);
-    if (std::abs (drift) > static_cast<float> (WSOLAState::kGrainSize))
-    {
-        ws.fadingPhase = ws.readPhase;
-        // Reset read phase to just behind write position (nominal latency ~1 grain)
-        ws.readPhase = static_cast<float> (ws.writePos) - static_cast<float> (WSOLAState::kGrainSize);
-        ws.crossfadeRemaining = WSOLAState::kCrossfadeLen;
-
-        // First crossfade sample: fully on fading head
-        float fading = readBuf (ws.fadingPhase);
-        ws.fadingPhase += ratio;
-        ws.crossfadeRemaining--;
-        return fading;
-    }
-
-    return readBuf (ws.readPhase);
-}
+// v1.0.1: WSOLA pitch shifter moved to WSOLAPitcher.h/cpp
 
 // #############################################################################
 // SPATIAL MEDIA LIBRARY — Spatialization algorithm implementations
@@ -3636,11 +3395,11 @@ ObjectState OpenSpatialDelayProcessor::getObjectState (int objectIndex) const
         state.delayTimeMs = p->load();
 
     // v0.9: When trajectory is active, return the animated position (not the origin/knob values)
-    if (trajectoryActive[objectIndex].load (std::memory_order_relaxed))
+    if (trajectory.isActive (objectIndex))
     {
-        state.azimuthDeg   = trajectoryFinalAz[objectIndex];
-        state.elevationDeg = trajectoryFinalEl[objectIndex];
-        state.distance     = trajectoryFinalDist[objectIndex];
+        state.azimuthDeg   = trajectory.getFinalAz (objectIndex);
+        state.elevationDeg = trajectory.getFinalEl (objectIndex);
+        state.distance     = trajectory.getFinalDist (objectIndex);
     }
     else
     {
@@ -3657,40 +3416,24 @@ ObjectState OpenSpatialDelayProcessor::getObjectState (int objectIndex) const
 
 TrajectoryState OpenSpatialDelayProcessor::getTrajectoryState (int objectIndex) const
 {
-    TrajectoryState ts;
-    if (objectIndex < 0 || objectIndex >= MAX_OBJECTS)
-        return ts;
-
-    ts.originAzDeg = baseAzimuth[objectIndex];
-    ts.originElDeg = baseElevation[objectIndex];
-    ts.originDist  = baseDistance[objectIndex];
-    ts.shape       = prevTrajectoryShape[objectIndex];
-    ts.phase       = trajectoryPhase[objectIndex];
-    ts.reverse     = (cachedParam_trajectoryDirection[objectIndex] == nullptr
-                      || cachedParam_trajectoryDirection[objectIndex]->load() < 0.5f);
-    ts.randomTime  = randomTime[objectIndex];
-    return ts;
+    auto ts = trajectory.getState (objectIndex);
+    TrajectoryState result;
+    result.originAzDeg = ts.originAzDeg;
+    result.originElDeg = ts.originElDeg;
+    result.originDist  = ts.originDist;
+    result.shape       = ts.shape;
+    result.phase       = ts.phase;
+    result.reverse     = (cachedParam_trajectoryDirection[objectIndex] == nullptr
+                          || cachedParam_trajectoryDirection[objectIndex]->load() < 0.5f);
+    result.randomTime  = ts.randomTime;
+    return result;
 }
 
 OpenSpatialDelayProcessor::RandomPosition
 OpenSpatialDelayProcessor::evaluateRandomNoise (int objectIndex, float time) const
 {
-    RandomPosition rp { 0.0f, 0.0f, 0.0f };
-    if (objectIndex < 0 || objectIndex >= MAX_OBJECTS || ! randomNoise[objectIndex].initialized)
-        return rp;
-
-    auto& rn = randomNoise[objectIndex];
-    float p = time * juce::MathConstants<float>::twoPi;
-
-    for (int k = 0; k < 4; ++k)
-    {
-        rp.azDeg += rn.ampAz[k] * std::sin (p * rn.freqAz[k] + rn.phaseAz[k]);
-        rp.elDeg += rn.ampEl[k] * std::sin (p * rn.freqEl[k] + rn.phaseEl[k]);
-    }
-    for (int k = 0; k < 3; ++k)
-        rp.dist += rn.ampDist[k] * std::sin (p * rn.freqDist[k] + rn.phaseDist[k]);
-
-    return rp;
+    auto rp = trajectory.evaluateRandomNoise (objectIndex, time);
+    return { rp.azDeg, rp.elDeg, rp.dist };
 }
 
 // #############################################################################
@@ -3758,7 +3501,7 @@ float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDe
     float perTapPitch = cachedObj[objectIndex].pitchShift->load (std::memory_order_relaxed);
 
     // v1.0: Combined pitch = user pitch + Doppler (smoothed per-block in processBlock)
-    float combinedPitch = perTapPitch + smoothedDopplerSemitones[objectIndex];
+    float combinedPitch = perTapPitch + doppler.getSmoothedSemitones (objectIndex);
 
     // v0.8: Per-tap input channel routing
     int inputCh = static_cast<int> (cachedObj[objectIndex].inputChannel->load (std::memory_order_relaxed));
@@ -3769,52 +3512,17 @@ float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDe
     if (ch == DelayChannel::Left)       objMono = readDelayLineL (objDelaySamples);
     else if (ch == DelayChannel::Right) objMono = readDelayLineR (objDelaySamples);
 
-    // v0.9: Per-tap pitch via WSOLA-lite — applies user pitch + Doppler combined.
-    // v1.0: Hysteresis prevents rapid gate toggling when Doppler oscillates near
-    // the user's pitch setting. Activate at 0.05 st, deactivate at 0.001 st.
-    // v1.0.1: Gate uses USER pitch only (not combinedPitch) so Doppler cannot
-    // close the gate when the user has explicitly set a pitch shift. This fixes
-    // pitch becoming non-functional on trajectory presets where Doppler partially
-    // cancels the user's pitch setting (issue #42, bug 3).
-    // Else branch keeps WSOLA buffer populated during bypass so reactivation
-    // reads fresh audio, not stale/zero data.
-    {
-        float absPitch = std::abs (perTapPitch);
-        if (! wsolaGateOpen[objectIndex])
-            wsolaGateOpen[objectIndex] = (absPitch >= 0.05f);   // wider activation
-        else if (absPitch < 0.001f)
-            wsolaGateOpen[objectIndex] = false;                  // narrow deactivation
-    }
+    // v1.0.1: WSOLA gate + process via extracted WSOLAPitcher class.
+    // Gate uses USER pitch only so Doppler cannot close it (issue #42, bug 3).
+    wsola.updateGate (objectIndex, perTapPitch);
 
-    if (wsolaGateOpen[objectIndex])
-    {
-        objMono = wsolaProcess (objectIndex, objMono, combinedPitch);
-    }
+    if (wsola.isGateOpen (objectIndex))
+        objMono = wsola.process (objectIndex, objMono, combinedPitch);
     else
-    {
-        auto& ws = wsolaState[objectIndex];
-        ws.buffer[ws.writePos & WSOLAState::kBufMask] = objMono;
-        ws.writePos++;
-        ws.readPhase = static_cast<float> (ws.writePos);
-        // Normalize writePos in bypass path too (mirrors wsolaProcess normalization)
-        constexpr int kNormThreshold = 1 << 22;
-        if (ws.writePos > kNormThreshold)
-        {
-            int excess = ws.writePos & ~WSOLAState::kBufMask;
-            ws.writePos -= excess;
-            ws.readPhase = static_cast<float> (ws.writePos);
-        }
-    }
-    // v0.9: True bypass — skip filter entirely when AIR is off (saves 12 IIR evals/sample)
-    float result = airAbsorptionActive
-                 ? airAbsorptionFilter[objectIndex].processSample (objMono)
-                 : objMono;
-
-    // v0.7: Per-tap output filter (same coefficients as feedback filter)
-    // Ensures first cycle of taps is filtered, not just feedback repeats
-    if (! filterBypassed)
-        result = tapHPFilter[objectIndex].processSample (
-                     tapLPFilter[objectIndex].processSample (result));
+        wsola.bypass (objectIndex, objMono);
+    // v1.0.1: Air absorption + tap filters via FilterBank class
+    float result = filters.processAirSample (objectIndex, objMono);
+    result = filters.processTapSample (objectIndex, result);
 
     // v0.7: Accumulate per-tap peak for UI activity glow
     float absVal = std::abs (result);
@@ -3832,15 +3540,13 @@ void OpenSpatialDelayProcessor::processFeedbackSample (float currentLoopMult,
     fbDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), fbDelaySamples);
 
     float feedbackRaw = readDelayLineMono (fbDelaySamples);
-    float filtered = filterBypassed ? feedbackRaw
-        : feedbackHPFilter.processSample (feedbackLPFilter.processSample (feedbackRaw));
+    float filtered = filters.processFeedbackSample (feedbackRaw);
     const float makeupGain = 1.0f + (fb * fb * kMakeupGainCoeff);
     feedbackSample = softClip (filtered * makeupGain);
     if (! std::isfinite (feedbackSample))
     {
         feedbackSample = 0.0f;
-        feedbackLPFilter.reset();
-        feedbackHPFilter.reset();
+        filters.resetAll();
     }
 }
 
@@ -3864,33 +3570,11 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     if (presetResetPending.load (std::memory_order_acquire))
     {
         for (int i = 0; i < MAX_OBJECTS; ++i)
-        {
-            prevAzimuth[i]   = pendingReset.prevAz[i];
-            prevElevation[i] = pendingReset.prevEl[i];
-            prevDistance[i]   = pendingReset.prevDist[i];
-            dopplerSemitones[i] = 0.0f;
-            smoothedDopplerSemitones[i] = 0.0f;
-            smoothedRadialVelocity[i] = 0.0f;
-        }
+            doppler.reset (i, pendingReset.prevAz[i], pendingReset.prevEl[i], pendingReset.prevDist[i]);
 
-        for (auto& ws : wsolaState)
-        {
-            std::fill (std::begin (ws.buffer), std::end (ws.buffer), 0.0f);
-            ws.writePos = 0;
-            ws.readPhase = 0.0f;
-            ws.fadingPhase = 0.0f;
-            ws.crossfadeRemaining = 0;
-        }
-        std::fill (std::begin (wsolaGateOpen), std::end (wsolaGateOpen), false);
+        wsola.resetAll();
 
-        for (int t = 0; t < MAX_OBJECTS; ++t)
-        {
-            tapLPFilter[t].reset();
-            tapHPFilter[t].reset();
-            airAbsorptionFilter[t].reset();
-        }
-        feedbackLPFilter.reset();
-        feedbackHPFilter.reset();
+        filters.resetAll();
 
         presetResetPending.store (false, std::memory_order_release);
     }
@@ -3907,7 +3591,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     float filterHPQ       = cachedParam_filterHPQ->load();
     float filterLPQ       = cachedParam_filterLPQ->load();
     // v0.9: Filter bypass driven by dedicated parameter (not threshold inference)
-    filterBypassed  = cachedParam_filterEnabled->load() < 0.5f;
+    bool filterEnabled = cachedParam_filterEnabled->load() > 0.5f;
     int   profileIndex    = static_cast<int> (cachedParam_hrtfProfile->load());
 
     // v0.4: Air absorption — true bypass with edge detection for immediate toggle response
@@ -3944,37 +3628,8 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     smoothedInputGain.setTargetValue  (juce::Decibels::decibelsToGain (inGainDb));
     smoothedOutputGain.setTargetValue (juce::Decibels::decibelsToGain (outGainDb));
 
-    // --- Update feedback filters (EMA-smoothed coefficients for click-free sweeps) ---
-    {
-        constexpr float filterSmoothAlpha = 0.3f;  // ~3-block settling — smooth enough to prevent transients
-        smoothedLPFreq += filterSmoothAlpha * (lpFreq - smoothedLPFreq);
-        smoothedHPFreq += filterSmoothAlpha * (hpFreq - smoothedHPFreq);
-        smoothedFilterLPQ += filterSmoothAlpha * (filterLPQ - smoothedFilterLPQ);
-        smoothedFilterHPQ += filterSmoothAlpha * (filterHPQ - smoothedFilterHPQ);
-
-        bool lpChanged = std::abs (smoothedLPFreq - cachedFeedbackLPFreq) > 0.01f
-                      || std::abs (smoothedFilterLPQ - cachedFilterLPQ) > 0.0001f;
-        bool hpChanged = std::abs (smoothedHPFreq - cachedFeedbackHPFreq) > 0.01f
-                      || std::abs (smoothedFilterHPQ - cachedFilterHPQ) > 0.0001f;
-        if (lpChanged)
-        {
-            auto lpCoeffs = juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, smoothedLPFreq, smoothedFilterLPQ);
-            feedbackLPFilter.coefficients = lpCoeffs;
-            for (int t = 0; t < MAX_OBJECTS; ++t)
-                tapLPFilter[t].coefficients = lpCoeffs;
-            cachedFeedbackLPFreq = smoothedLPFreq;
-            cachedFilterLPQ = smoothedFilterLPQ;
-        }
-        if (hpChanged)
-        {
-            auto hpCoeffs = juce::dsp::IIR::Coefficients<float>::makeHighPass (currentSampleRate, smoothedHPFreq, smoothedFilterHPQ);
-            feedbackHPFilter.coefficients = hpCoeffs;
-            for (int t = 0; t < MAX_OBJECTS; ++t)
-                tapHPFilter[t].coefficients = hpCoeffs;
-            cachedFeedbackHPFreq = smoothedHPFreq;
-            cachedFilterHPQ = smoothedFilterHPQ;
-        }
-    }
+    // v1.0.1: Filter coefficient update — delegated to FilterBank class
+    filters.updateCoefficients (currentSampleRate, lpFreq, hpFreq, filterLPQ, filterHPQ, filterEnabled);
 
     // --- Block-rate constant: ms → samples conversion factor -------------------
     blockMsToSamples = 0.001f * static_cast<float> (currentSampleRate);
@@ -4031,11 +3686,11 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
         // v0.9: When trajectory is active, read animated position from internal arrays
         // (the knobs/APVTS hold the origin; the internal arrays hold origin + trajectory offset)
-        if (trajectoryActive[t].load (std::memory_order_relaxed))
+        if (trajectory.isActive (t))
         {
-            objects[t].azimuthDeg   = trajectoryFinalAz[t];
-            objects[t].elevationDeg = trajectoryFinalEl[t];
-            objects[t].distance     = trajectoryFinalDist[t];
+            objects[t].azimuthDeg   = trajectory.getFinalAz (t);
+            objects[t].elevationDeg = trajectory.getFinalEl (t);
+            objects[t].distance     = trajectory.getFinalDist (t);
         }
         else
         {
@@ -4077,20 +3732,17 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         }
     }
 
-    // --- v0.4: Per-block Doppler velocity computation + air absorption filter update ---
+    // --- v1.0.1: Per-block Doppler velocity + air absorption filter update ---
+    // Doppler tracking extracted to DopplerVelocity class for testability.
     {
         float blockDuration = static_cast<float> (numSamples) / static_cast<float> (currentSampleRate);
-        constexpr float speedOfSound = 343.0f;   // m/s at 20°C
-        constexpr float emaAlpha = 0.35f;         // Smoothing factor for velocity (0.35 = ~40ms settling @ 256/48k — responsive without single-block noise)
-        constexpr float maxDopplerSemitones = 12.0f;
 
         for (int t = 0; t < MAX_OBJECTS; ++t)
         {
             if (! objects[t].enabled && tapFadeGain[t] <= 0.0f)
             {
-                dopplerSemitones[t] = 0.0f;
-                // v1.0: Use pre-computed transparent coefficients (no heap allocation)
-                *airAbsorptionFilter[t].coefficients = airTransparentCoeffs;
+                doppler.clearDisabled (t);
+                filters.clearAirAbsorption (t);
                 continue;
             }
 
@@ -4098,126 +3750,15 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             float elRad = juce::degreesToRadians (objects[t].elevationDeg);
             float dist  = objects[t].distance;
 
-            // Check if position has changed since last block (skip expensive math when static)
-            bool positionChanged = (std::abs (azRad - prevAzimuth[t]) > 1e-5f)
-                                || (std::abs (elRad - prevElevation[t]) > 1e-5f)
-                                || (std::abs (dist  - prevDistance[t])  > 1e-5f);
-
-            // --- Doppler velocity tracking (per-object amount: 0=off, >0=on) ---
             float objDopplerAmount = cachedObj[t].dopplerAmount->load();
+            doppler.update (t, azRad, elRad, dist, objDopplerAmount, blockDuration);
+            doppler.smooth (t);
 
-            if (objDopplerAmount > 0.001f && blockDuration > 0.0f)
-            {
-                if (positionChanged)
-                {
-                    // Convert current and previous positions to Cartesian (physical scale: 0..10m)
-                    float physDist     = dist * 10.0f;
-                    float prevPhysDist = prevDistance[t] * 10.0f;
+            bool positionChanged = doppler.positionChanged (t);
 
-                    float cx = physDist     * std::cos (elRad) * std::sin (azRad);
-                    float cy = physDist     * std::cos (elRad) * std::cos (azRad);
-                    float cz = physDist     * std::sin (elRad);
-                    float px = prevPhysDist * std::cos (prevElevation[t]) * std::sin (prevAzimuth[t]);
-                    float py = prevPhysDist * std::cos (prevElevation[t]) * std::cos (prevAzimuth[t]);
-                    float pz = prevPhysDist * std::sin (prevElevation[t]);
-
-                    // Virtual ear Doppler — offset listener position for audible
-                    // binaural Doppler from orbiting/tangentially moving sources.
-                    // Anatomical ear offset is ~0.085m; exaggerated for creative effect.
-                    constexpr float earOffset = 2.5f;   // virtual ear x-offset (meters, exaggerated for creative effect)
-                    float dxC = cx - earOffset;
-                    float dxP = px - earOffset;
-                    float distToEarCur  = std::sqrt (dxC * dxC + cy * cy + cz * cz);
-                    float distToEarPrev = std::sqrt (dxP * dxP + py * py + pz * pz);
-                    float rawRadialVelocity = (distToEarCur - distToEarPrev) / blockDuration;
-
-                    // v1.0: Clamp velocity to prevent extreme pitch transients from rapid azimuth sweeps
-                    // 50 m/s produces ~1.7 semitones of Doppler — more than enough for creative effect
-                    rawRadialVelocity = juce::jlimit (-50.0f, 50.0f, rawRadialVelocity);
-
-                    // Exponential moving average smoothing to avoid clicks
-                    smoothedRadialVelocity[t] = emaAlpha * rawRadialVelocity
-                                              + (1.0f - emaAlpha) * smoothedRadialVelocity[t];
-
-                    // Doppler pitch: semitones = 12 * log2(c / (c + v * amount))
-                    float v = smoothedRadialVelocity[t] * objDopplerAmount;
-                    float denominator = speedOfSound + v;
-                    if (denominator > 1.0f)  // Prevent extreme values
-                    {
-                        float ratio = speedOfSound / denominator;
-                        dopplerSemitones[t] = 12.0f * std::log2 (ratio);
-                        dopplerSemitones[t] = juce::jlimit (-maxDopplerSemitones, maxDopplerSemitones,
-                                                             dopplerSemitones[t]);
-                    }
-                    else
-                    {
-                        dopplerSemitones[t] = -maxDopplerSemitones;
-                    }
-                }
-                else
-                {
-                    // Position static: decay velocity smoothly toward zero
-                    smoothedRadialVelocity[t] *= (1.0f - emaAlpha);
-                    if (std::abs (smoothedRadialVelocity[t]) < 1e-6f)
-                    {
-                        smoothedRadialVelocity[t] = 0.0f;
-                        dopplerSemitones[t] = 0.0f;
-                    }
-                    else
-                    {
-                        float v = smoothedRadialVelocity[t] * objDopplerAmount;
-                        float denominator = speedOfSound + v;
-                        if (denominator > 1.0f)
-                        {
-                            dopplerSemitones[t] = 12.0f * std::log2 (speedOfSound / denominator);
-                            dopplerSemitones[t] = juce::jlimit (-maxDopplerSemitones, maxDopplerSemitones,
-                                                                 dopplerSemitones[t]);
-                        }
-                        else
-                            dopplerSemitones[t] = -maxDopplerSemitones;
-                    }
-                }
-            }
-            else
-            {
-                dopplerSemitones[t] = 0.0f;
-                smoothedRadialVelocity[t] = 0.0f;
-            }
-
-            // Store current position for next block's velocity computation
-            prevAzimuth[t]   = azRad;
-            prevElevation[t] = elRad;
-            prevDistance[t]   = dist;
-
-            // v1.0: Smooth Doppler pitch per-BLOCK for actual inter-block settling.
-            // alpha=0.15 per block → ~3-block settling time (~16ms @ 256/48k).
-            // Previously this was per-sample in readObjectSample(), where
-            // (1-0.15)^256 ≈ 0 gave NO cross-block smoothing at all.
-            constexpr float dopplerSmoothAlpha = 0.15f;
-            smoothedDopplerSemitones[t] += dopplerSmoothAlpha
-                * (dopplerSemitones[t] - smoothedDopplerSemitones[t]);
-
-            // --- Air absorption filter coefficient update ---
-            // v0.9: Update on position change OR AIR toggle state change (true bypass fix).
-            // When AIR is OFF, readObjectSample() skips the filter entirely (zero CPU).
-            if (airAbsorptionActive && (positionChanged || airStateChanged))
-            {
-                // Quadratic distance mapping: gentle near (0–0.5 ≈ 0–5m), steep far (0.5–1.0 ≈ 5–20m)
-                // dist² compresses the near range and expands the far range perceptually.
-                float mappedDist = dist * dist;
-                constexpr float absorbCoeff = 3.1f;
-                float targetCutoff = 20000.0f * std::exp (-absorbCoeff * mappedDist);
-                targetCutoff = juce::jlimit (500.0f, 20000.0f, targetCutoff);
-
-                // v1.0: EMA-smooth the cutoff to prevent IIR coefficient transients
-                // on rapid distance changes. Alpha 0.3 ≈ 3-block settling time.
-                constexpr float airSmoothAlpha = 0.2f;  // EMA smoothing for IIR cutoff — 0.2 gives ~80ms settling, aligns with Doppler tracking speed
-                smoothedAirCutoff[t] = smoothedAirCutoff[t]
-                                     + airSmoothAlpha * (targetCutoff - smoothedAirCutoff[t]);
-
-                *airAbsorptionFilter[t].coefficients =
-                    *juce::dsp::IIR::Coefficients<float>::makeLowPass (currentSampleRate, smoothedAirCutoff[t]);
-            }
+            // v1.0.1: Air absorption — delegated to FilterBank class
+            filters.updateAirAbsorption (t, currentSampleRate, dist,
+                                          airAbsorptionActive, positionChanged, airStateChanged);
         }
     }
 
@@ -4682,17 +4223,26 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
     }
 
     // --- NFC-HOA: Update filter coefficients when distance changes (block-rate) ---
+    // v1.0.1: EMA-smooth distance to prevent IIR coefficient transients on rapid
+    // distance changes. 72 filters (12 objects × 6 orders) updating without smoothing
+    // can cause audible artifacts. Alpha 0.15 gives ~3-block settling.
     for (int t = 0; t < MAX_OBJECTS; ++t)
     {
         if (! objects[t].enabled && tapFadeGain[t] <= 0.0f) continue;
         float distMeters = objects[t].distance * 10.0f;  // 0..1 → 0..10m
-        if (std::abs (distMeters - prevNfcDistance[t]) > 0.01f)
+
+        // Always track smoothed distance (even below coefficient update threshold)
+        constexpr float nfcSmoothAlpha = 0.15f;
+        smoothedNfcDistance[t] += nfcSmoothAlpha * (distMeters - smoothedNfcDistance[t]);
+
+        // Only recompute coefficients when smoothed distance differs enough
+        if (std::abs (smoothedNfcDistance[t] - prevNfcDistance[t]) > 0.01f)
         {
             for (int ord = 0; ord < ambiOrder && ord < MAX_AMBI_ORDER; ++ord)
             {
                 int n = ord + 1;  // SH order (1-based)
                 constexpr float c = 343.0f;  // speed of sound, m/s
-                float r = std::max (0.05f, distMeters);
+                float r = std::max (0.05f, smoothedNfcDistance[t]);
                 float fPole = static_cast<float> (n) * c / (2.0f * juce::MathConstants<float>::pi * r);
                 float fZero = static_cast<float> (n) * c / (2.0f * juce::MathConstants<float>::pi * NFC_REFERENCE_RADIUS);
                 float maxFreq = static_cast<float> (currentSampleRate) * 0.25f;
@@ -4707,7 +4257,7 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
                 *nfcFilters[t][ord].coefficients =
                     juce::dsp::IIR::Coefficients<float> (b0 / a0, b1 / a0, 1.0f, a1 / a0);
             }
-            prevNfcDistance[t] = distMeters;
+            prevNfcDistance[t] = smoothedNfcDistance[t];
         }
     }
 
@@ -5134,7 +4684,7 @@ void OpenSpatialDelayProcessor::handleOSCPosition (int objIdx, float azDeg, floa
     // v0.9: When trajectory is active, OSC sets the origin (knobs/APVTS) —
     // trajectory continues running around the new origin. No override needed.
     // When NO trajectory is active, OSC overrides position directly (existing behavior).
-    if (! trajectoryActive[objIdx].load (std::memory_order_relaxed))
+    if (! trajectory.isActive (objIdx))
     {
         oscOverrideActive[objIdx].store (true, std::memory_order_relaxed);
         oscLastReceiveTime[objIdx] = juce::Time::getMillisecondCounterHiRes();
@@ -5146,319 +4696,8 @@ void OpenSpatialDelayProcessor::handleOSCPosition (int objIdx, float azDeg, floa
 // Per-plugin modulation — each SML plugin implements its own trajectory shapes.
 // #############################################################################
 
-//==============================================================================
-// Trajectory shape computation — pure function, no side effects
-//==============================================================================
-OpenSpatialDelayProcessor::TrajectoryResult
-OpenSpatialDelayProcessor::computeTrajectory (int shape, float phase,
-                                               float baseAz, float baseEl, float baseDist,
-                                               bool reverse)
-{
-    // v0.8: Reverse direction — flip phase so trajectory runs backwards
-    if (reverse)
-        phase = 1.0f - phase;
+// v1.0.1: computeTrajectory() (~300 lines) moved to TrajectoryEngine.cpp
 
-    TrajectoryResult r;
-    r.controlsAz = false;
-    r.controlsEl = false;
-    r.controlsDist = false;
-
-    // Issue #3: distance amplitude scales inversely with origin distance
-    const float distScale = 1.0f - baseDist;
-
-    switch (shape)
-    {
-        case 1: // Bounce — azimuth ping-pongs ±90°, elevation bounces ±30°
-        {
-            float tri = 1.0f - std::abs (2.0f * phase - 1.0f);
-            r.azDeg = baseAz - 90.0f * (2.0f * tri - 1.0f);
-            r.elDeg = baseEl - 30.0f * (2.0f * tri - 1.0f);
-            r.dist  = baseDist;
-            r.controlsAz = r.controlsEl = true;
-            break;
-        }
-
-        case 2: // Circle — circular path around origin (Cartesian→polar)
-        {
-            const float circleR = 1.0f * distScale;
-            float p = phase * juce::MathConstants<float>::twoPi;
-            float localX = circleR * std::sin (p);
-            float localY = circleR * std::cos (p);
-            // Rotate by baseAz and offset by baseDist
-            float baseAzRad = juce::degreesToRadians (baseAz);
-            float baseCx = baseDist * std::sin (baseAzRad);
-            float baseCy = baseDist * std::cos (baseAzRad);
-            float cosA = std::cos (baseAzRad);
-            float sinA = std::sin (baseAzRad);
-            float mapX = baseCx + localX * cosA + localY * sinA;
-            float mapY = baseCy - localX * sinA + localY * cosA;
-            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
-            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
-            r.elDeg = baseEl;
-            r.controlsAz = r.controlsDist = true;
-            break;
-        }
-
-        case 3: // Cross — plus-sign pattern, 4 cardinal sweeps (az ↔ el)
-        {
-            float p = phase * 4.0f;
-            int segment = juce::jlimit (0, 3, static_cast<int> (p));
-            float t = p - static_cast<float> (segment);
-            float tri = 1.0f - std::abs (2.0f * t - 1.0f); // 0→1→0 within segment
-            if (segment == 0)      { r.azDeg = baseAz;                       r.elDeg = baseEl + 60.0f * tri; }
-            else if (segment == 1) { r.azDeg = baseAz + 90.0f * tri;         r.elDeg = baseEl; }
-            else if (segment == 2) { r.azDeg = baseAz;                       r.elDeg = baseEl - 60.0f * tri; }
-            else                   { r.azDeg = baseAz - 90.0f * tri;         r.elDeg = baseEl; }
-            r.dist = baseDist;
-            r.controlsAz = r.controlsEl = true;
-            break;
-        }
-
-        case 4: // Figure-8 — front CCW, back CW, origin-relative (Cartesian→polar)
-        {
-            const float loopR = 0.5f * distScale;
-            constexpr float halfPi = juce::MathConstants<float>::halfPi;
-            constexpr float twoPi  = juce::MathConstants<float>::twoPi;
-            // Invert phase for Figure-8 so Forward button = correct traversal direction (#13)
-            float fig8Phase = 1.0f - phase;
-            float localX, localY;
-            if (fig8Phase < 0.5f)
-            {
-                float t = fig8Phase * 2.0f;
-                float theta = -halfPi + twoPi * t;
-                localX = loopR * std::cos (theta);
-                localY = loopR + loopR * std::sin (theta);
-            }
-            else
-            {
-                float t = (fig8Phase - 0.5f) * 2.0f;
-                float theta = halfPi - twoPi * t;
-                localX = loopR * std::cos (theta);
-                localY = -loopR + loopR * std::sin (theta);
-            }
-            // Rotate local shape by baseAz and offset by baseDist (like Line shape)
-            float baseAzRad = juce::degreesToRadians (baseAz);
-            float baseCx = baseDist * std::sin (baseAzRad);
-            float baseCy = baseDist * std::cos (baseAzRad);
-            // Rotate local coords by baseAz
-            float cosA = std::cos (baseAzRad);
-            float sinA = std::sin (baseAzRad);
-            float rotX = localX * cosA + localY * sinA;
-            float rotY = -localX * sinA + localY * cosA;
-            float mapX = baseCx + rotX;
-            float mapY = baseCy + rotY;
-            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
-            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
-            r.elDeg = baseEl;
-            r.controlsAz = r.controlsEl = r.controlsDist = true;
-            break;
-        }
-
-        case 5: // Heart — parametric heart curve (Cartesian→polar), origin-relative
-        {
-            float p = phase * juce::MathConstants<float>::twoPi;
-            // Standard parametric heart: x = 16sin³(t), y = 13cos(t) - 5cos(2t) - 2cos(3t) - cos(4t)
-            float sinP = std::sin (p);
-            float hx = 16.0f * sinP * sinP * sinP;
-            float hy = 13.0f * std::cos (p) - 5.0f * std::cos (2.0f * p)
-                      - 2.0f * std::cos (3.0f * p) - std::cos (4.0f * p);
-            // Normalize to ~0.35 radius (heart spans roughly -16..16 x, -17..15 y)
-            const float scale = (1.0f / 17.0f) * distScale;
-            float localX = hx * scale;
-            float localY = hy * scale;  // point-down orientation (Y+ = front)
-            // Rotate by baseAz and offset by baseDist
-            float baseAzRad = juce::degreesToRadians (baseAz);
-            float baseCx = baseDist * std::sin (baseAzRad);
-            float baseCy = baseDist * std::cos (baseAzRad);
-            float cosA = std::cos (baseAzRad);
-            float sinA = std::sin (baseAzRad);
-            float mapX = baseCx + localX * cosA + localY * sinA;
-            float mapY = baseCy - localX * sinA + localY * cosA;
-            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
-            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
-            r.elDeg = baseEl;
-            r.controlsAz = r.controlsDist = true;
-            break;
-        }
-
-        case 6: // Helix — orbit with cosine-eased elevation ramp (3D corkscrew)
-        {
-            r.azDeg = baseAz + 360.0f * phase;  // positive = CW on spatial map (with Forward→reverse phase inversion)
-            // Cosine easing: slows at -90° and +90° peaks (ease in/out)
-            float easedPhase = 0.5f * (1.0f - std::cos (phase * juce::MathConstants<float>::pi));
-            r.elDeg = 90.0f - 180.0f * easedPhase;  // inverted: bottom-to-top in Forward (#14)
-            r.dist  = baseDist;
-            r.controlsAz = r.controlsEl = true;
-            break;
-        }
-
-        case 7: // Infinity — Bernoulli lemniscate (Cartesian→polar), origin-relative
-        {
-            float p = phase * juce::MathConstants<float>::twoPi;
-            // Lemniscate of Bernoulli: x = a*cos(t)/(1+sin²(t)), y = a*sin(t)*cos(t)/(1+sin²(t))
-            const float a = 1.0f * distScale;
-            float sinP = std::sin (p);
-            float cosP = std::cos (p);
-            float denom = 1.0f + sinP * sinP;
-            float localX = a * cosP / denom;
-            float localY = a * sinP * cosP / denom;
-            // Rotate by baseAz and offset by baseDist
-            float baseAzRad = juce::degreesToRadians (baseAz);
-            float baseCx = baseDist * std::sin (baseAzRad);
-            float baseCy = baseDist * std::cos (baseAzRad);
-            float cosA = std::cos (baseAzRad);
-            float sinA = std::sin (baseAzRad);
-            float mapX = baseCx + localX * cosA + localY * sinA;
-            float mapY = baseCy - localX * sinA + localY * cosA;
-            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
-            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
-            r.elDeg = baseEl;
-            r.controlsAz = r.controlsDist = true;
-            break;
-        }
-
-        case 8: // Line — sweep rotated by baseAz (Cartesian→polar)
-        {
-            const float amplitude = 1.0f * distScale;
-            float baseAzRad = juce::degreesToRadians (baseAz);
-            float baseCx = baseDist * std::sin (baseAzRad);
-            float baseCy = baseDist * std::cos (baseAzRad);
-            // Local sweep along X axis, then rotate by baseAz
-            float p = phase * juce::MathConstants<float>::twoPi;
-            float localX = amplitude * std::cos (p);
-            float localY = 0.0f;
-            float cosA = std::cos (baseAzRad);
-            float sinA = std::sin (baseAzRad);
-            float mapX = baseCx + localX * cosA + localY * sinA;
-            float mapY = baseCy - localX * sinA + localY * cosA;
-            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
-            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
-            r.elDeg = baseEl;
-            r.controlsAz = r.controlsDist = true;
-            break;
-        }
-
-        case 9: // Orbit — circular orbit (azimuth only)
-            r.azDeg = baseAz + 360.0f * phase;
-            r.elDeg = baseEl;
-            r.dist  = baseDist;
-            r.controlsAz = true;
-            break;
-
-        case 10: // Random — multi-layer irrational-frequency oscillators (all axes, half-speed)
-        {
-            float p = phase * juce::MathConstants<float>::twoPi;
-            r.azDeg = baseAz + 50.0f * std::sin (p * 0.5f)
-                             + 35.0f * std::sin (p * 1.3592f + 0.7f)
-                             + 20.0f * std::sin (p * 2.3346f + 2.1f)
-                             + 12.0f * std::sin (p * 3.6946f + 4.3f);
-            r.elDeg = baseEl + 30.0f * std::sin (p * 0.7071f + 1.1f)
-                             + 20.0f * std::sin (p * 1.5708f + 3.5f)
-                             + 12.0f * std::sin (p * 2.9299f + 0.3f)
-                             +  8.0f * std::sin (p * 4.2699f + 5.7f);
-            r.dist  = juce::jlimit (0.0f, 1.0f,
-                                    baseDist + 0.50f * distScale * std::sin (p * 0.8661f + 2.3f)
-                                             + 0.30f * distScale * std::sin (p * 1.9365f + 4.9f)
-                                             + 0.20f * distScale * std::sin (p * 3.1416f + 1.6f));
-            r.controlsAz = r.controlsEl = r.controlsDist = true;
-            break;
-        }
-
-        case 11: // Spiral — Archimedean spiral from origin outward (Cartesian→polar)
-        {
-            constexpr float numTurns = 1.75f;
-            const float maxRadius = 1.0f * distScale;
-            // Phase 0→1 spirals outward (origin→edge), positive theta = CW on spatial map
-            float theta = juce::MathConstants<float>::twoPi * numTurns * (1.0f - phase);
-            float rLocal = maxRadius * (1.0f - phase);  // inverted: origin→outward (#15)
-            float localX = rLocal * std::cos (theta);
-            float localY = rLocal * std::sin (theta);
-            // Rotate by baseAz and offset by baseDist
-            float baseAzRad = juce::degreesToRadians (baseAz);
-            float baseCx = baseDist * std::sin (baseAzRad);
-            float baseCy = baseDist * std::cos (baseAzRad);
-            float cosA = std::cos (baseAzRad);
-            float sinA = std::sin (baseAzRad);
-            float mapX = baseCx + localX * cosA + localY * sinA;
-            float mapY = baseCy - localX * sinA + localY * cosA;
-            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
-            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
-            r.elDeg = baseEl;
-            r.controlsAz = r.controlsDist = true;
-            break;
-        }
-
-        case 12: // Square — 4-corner rectangular path, origin-relative (Cartesian→polar)
-        {
-            const float halfSide = 0.7071f * distScale;
-            const float lcx[4] = { -halfSide,  halfSide,  halfSide, -halfSide };
-            const float lcy[4] = {  halfSide,  halfSide, -halfSide, -halfSide };
-            float p = phase * 4.0f;
-            int edge = juce::jlimit (0, 3, static_cast<int> (p));
-            float t = p - static_cast<float> (edge);
-            float ease = 0.5f * (1.0f - std::cos (t * juce::MathConstants<float>::pi));
-            int next = (edge + 1) & 3;
-            float localX = lcx[edge] + (lcx[next] - lcx[edge]) * ease;
-            float localY = lcy[edge] + (lcy[next] - lcy[edge]) * ease;
-            // Rotate by baseAz and offset by baseDist
-            float baseAzRad = juce::degreesToRadians (baseAz);
-            float baseCx = baseDist * std::sin (baseAzRad);
-            float baseCy = baseDist * std::cos (baseAzRad);
-            float cosA = std::cos (baseAzRad);
-            float sinA = std::sin (baseAzRad);
-            float mapX = baseCx + localX * cosA + localY * sinA;
-            float mapY = baseCy - localX * sinA + localY * cosA;
-            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
-            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
-            r.elDeg = baseEl;
-            r.controlsAz = r.controlsEl = r.controlsDist = true;
-            break;
-        }
-
-        case 13: // Triangle — equilateral triangle, origin-relative (Cartesian→polar)
-        {
-            const float circumR = 1.0f * distScale;
-            const float lvx[3] = { 0.0f,  circumR * 0.8660254f, -circumR * 0.8660254f };
-            const float lvy[3] = { circumR, -circumR * 0.5f, -circumR * 0.5f };
-            float p = phase * 3.0f;
-            int side = juce::jlimit (0, 2, static_cast<int> (p));
-            float t = p - static_cast<float> (side);
-            float ease = 0.5f * (1.0f - std::cos (t * juce::MathConstants<float>::pi));
-            int next = (side + 1) % 3;
-            float localX = lvx[side] + (lvx[next] - lvx[side]) * ease;
-            float localY = lvy[side] + (lvy[next] - lvy[side]) * ease;
-            // Rotate by baseAz and offset by baseDist
-            float baseAzRad = juce::degreesToRadians (baseAz);
-            float baseCx = baseDist * std::sin (baseAzRad);
-            float baseCy = baseDist * std::cos (baseAzRad);
-            float cosA = std::cos (baseAzRad);
-            float sinA = std::sin (baseAzRad);
-            float mapX = baseCx + localX * cosA + localY * sinA;
-            float mapY = baseCy - localX * sinA + localY * cosA;
-            r.dist  = std::sqrt (mapX * mapX + mapY * mapY);
-            r.azDeg = juce::radiansToDegrees (std::atan2 (mapX, mapY));
-            r.elDeg = baseEl;
-            r.controlsAz = r.controlsEl = r.controlsDist = true;
-            break;
-        }
-
-        default: // None (0) or unknown
-            r.azDeg = baseAz;
-            r.elDeg = baseEl;
-            r.dist  = baseDist;
-            break;
-    }
-
-    // Wrap azimuth to -180..+180
-    while (r.azDeg > 180.0f)  r.azDeg -= 360.0f;
-    while (r.azDeg < -180.0f) r.azDeg += 360.0f;
-
-    // Clamp elevation and distance
-    r.elDeg = juce::jlimit (-90.0f, 90.0f, r.elDeg);
-    r.dist  = juce::jlimit (0.0f, 1.0f, r.dist);
-
-    return r;
-}
 
 // #############################################################################
 // MIXED — State serialization & JUCE plugin factory
