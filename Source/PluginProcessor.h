@@ -302,6 +302,12 @@ public:
     /** Unload current profile and free resources. */
     void unload();
 
+    /** Convert a raw HRIR to minimum-phase in-place using cepstral decomposition.
+        Preserves magnitude spectrum but removes excess phase, so time-domain
+        interpolation between adjacent HRIRs produces smooth spectral transitions
+        without comb filtering (issue #47). workBuf must be >= fftSize * 2 floats. */
+    static void convertToMinPhase (float* ir, int irLength, int fftOrder, float* workBuf);
+
 private:
     MYSOFA_EASY* easyHandle = nullptr;
     int irLength = 0;
@@ -321,10 +327,10 @@ public:
     /** Prepare the convolver for a given max block size and IR length. */
     void prepare (int maxBlockSize, int irLength);
 
-    /** Set or update the impulse response. Pre-computes FFT of IR.
-        v1.0: On IR change, initiates dual-convolver equal-power crossfade.
-        If called during active crossfade, updates target IR without restarting
-        the fade — ensures crossfade always completes during continuous movement. */
+    /** Set or update the impulse response.
+        v1.0.3: Uses EMA time-domain IR smoothing instead of dual-convolver crossfade.
+        On first call, IR is applied immediately. On subsequent calls, the IR
+        smoothly transitions towards the new target over ~20 blocks (issue #47). */
     void setIR (const float* ir, int length);
 
     /** Process one block: convolve input with IR, write to output.
@@ -343,23 +349,22 @@ private:
     int irLen = 0;
     int blockSize = 0;
 
-    std::vector<float> irFreqDomain;     // Current (new) IR in frequency domain
+    std::vector<float> irFreqDomain;     // Current smoothed IR in frequency domain
     std::vector<float> inputAccum;       // Input accumulator for FFT
     std::vector<float> fftWorkBuf;       // FFT work buffer
     std::vector<float> overlapBuf;       // Overlap-save tail buffer
     int inputAccumPos = 0;               // Current position in input accumulator
 
-    // v1.0: Dual-convolver crossfade with non-restarting state machine.
-    // When IR changes, old IR runs in parallel with new IR, outputs blended
-    // via equal-power crossfade over N blocks. If setIR() fires during active
-    // crossfade, only the new IR is updated — crossfade progress continues
-    // uninterrupted, ensuring the fade always completes.
-    std::vector<float> prevIrFreqDomain; // Previous IR in frequency domain (crossfade source)
-    std::vector<float> prevFftWorkBuf;   // Work buffer for old IR convolution
-    std::vector<float> prevOverlapBuf;   // Overlap tail from old IR
-    int crossfadeRemaining = 0;          // Samples remaining in crossfade (0 = inactive)
-    int crossfadeTotalLength = 0;        // Total crossfade duration in samples
-    static constexpr int kCrossfadeBlocks = 4; // Crossfade over 4 blocks (~21ms @ 256/48kHz)
+    // v1.0.3: EMA-smoothed IR transition (replaces dual-convolver crossfade).
+    // Instead of crossfading two convolution outputs, smoothly blend the IR
+    // itself in the time domain each block. This eliminates overlap discontinuities
+    // and spectral artifacts from the dual-convolver approach (issue #47).
+    std::vector<float> currentTimeDomainIR;  // Current smoothed IR (time domain)
+    std::vector<float> targetTimeDomainIR;   // Target IR from latest setIR() call
+    bool irNeedsSmoothing = false;           // True when current != target
+    bool irInitialized = false;              // False until first setIR()
+    static constexpr float kIRSmoothAlpha = 0.15f;      // EMA alpha: ~97% converged in 20 blocks (~107ms)
+    static constexpr float kIRConvergenceEps = 1e-8f;  // Smoothing stops when all samples converge within this
 };
 
 //==============================================================================
@@ -403,6 +408,18 @@ public:
     /** Reset all convolver states (e.g., on playback restart). */
     void reset();
 
+    /** Test-only: override ITD processing state for diagnostic isolation. */
+    void setITDEnabled (bool enabled) { itdActive = enabled; }
+
+    /** Test-only: read current ITD values for diagnostic logging. */
+    float getCurrentITDL (int src) const { return (src >= 0 && src < MAX_SOURCES) ? currentITDL[src] : 0.0f; }
+    float getCurrentITDR (int src) const { return (src >= 0 && src < MAX_SOURCES) ? currentITDR[src] : 0.0f; }
+    float getTargetITDL (int src) const { return (src >= 0 && src < MAX_SOURCES) ? targetITDL[src] : 0.0f; }
+    float getTargetITDR (int src) const { return (src >= 0 && src < MAX_SOURCES) ? targetITDR[src] : 0.0f; }
+
+    /** Test-only: enable/disable minimum-phase conversion for A/B comparison. */
+    void setMinPhaseEnabled (bool enabled) { minPhaseEnabled = enabled; }
+
 private:
     // v0.3: Per-source direct binaural convolvers
     PartitionedConvolver sourceConvL[MAX_SOURCES];
@@ -436,6 +453,13 @@ private:
     float itdBufferR[MAX_SOURCES][kITDBufferSize] = {};
     int itdWritePos[MAX_SOURCES] = {};
     bool itdActive = false;  // true when using aligned HRIRs (non-Simple profiles)
+
+    // v1.0.4: Minimum-phase HRIR conversion (issue #47).
+    // Converts raw HRIRs to minimum-phase before EMA smoothing to prevent
+    // comb filtering from time-domain interpolation of phase-misaligned IRs.
+    int minPhaseFFTOrder = 0;                // FFT order for min-phase extraction (>= 2*irLen)
+    std::vector<float> minPhaseWorkBuf;      // Pre-allocated work buffer for convertToMinPhase
+    bool minPhaseEnabled = true;             // Can be disabled for A/B testing
 };
 
 // #############################################################################
@@ -721,6 +745,12 @@ private:
 public:
     // v1.0: Public test entry point — forwards to oscMessageReceived
     void testProcessOSCMessage (const juce::OSCMessage& msg) { oscMessageReceived (msg); }
+
+    // v1.0.3: Test accessor for active binaural renderer (diagnostic isolation)
+    BinauralRenderer& getActiveRenderer() { return binauralRenderers[activeRendererIndex.load (std::memory_order_acquire)]; }
+
+    // v1.0.3: Synchronous HRTF profile load for tests (timer thread doesn't fire in test harness)
+    void testLoadHRTFProfile (int profileIndex) { loadHRTFProfile (profileIndex); }
 private:
 
     juce::OSCReceiver oscReceiver;
