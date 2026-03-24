@@ -328,9 +328,9 @@ public:
     void prepare (int maxBlockSize, int irLength);
 
     /** Set or update the impulse response.
-        v1.0.3: Uses EMA time-domain IR smoothing instead of dual-convolver crossfade.
-        On first call, IR is applied immediately. On subsequent calls, the IR
-        smoothly transitions towards the new target over ~20 blocks (issue #47). */
+        v1.0.4: Uses spectral envelope EMA smoothing — magnitude spectrum is
+        smoothly interpolated while phase always comes from the target IR.
+        This prevents comb filtering from phase-misaligned blending (issue #47). */
     void setIR (const float* ir, int length);
 
     /** Process one block: convolve input with IR, write to output.
@@ -355,16 +355,22 @@ private:
     std::vector<float> overlapBuf;       // Overlap-save tail buffer
     int inputAccumPos = 0;               // Current position in input accumulator
 
-    // v1.0.3: EMA-smoothed IR transition (replaces dual-convolver crossfade).
-    // Instead of crossfading two convolution outputs, smoothly blend the IR
-    // itself in the time domain each block. This eliminates overlap discontinuities
-    // and spectral artifacts from the dual-convolver approach (issue #47).
-    std::vector<float> currentTimeDomainIR;  // Current smoothed IR (time domain)
-    std::vector<float> targetTimeDomainIR;   // Target IR from latest setIR() call
-    bool irNeedsSmoothing = false;           // True when current != target
+    // v1.0.4: Spectral envelope EMA smoothing (issue #47).
+    // Smooths only the magnitude spectrum while always using the target's phase.
+    // This prevents comb filtering from phase-misaligned IR interpolation —
+    // the root cause of perceptual pops during HRTF transitions.
+    // Previous approaches that failed:
+    //   - Dual-convolver crossfade (v1.0): overlap contamination
+    //   - Time-domain EMA (v1.0.3): comb filtering from phase blending
+    //   - Minimum-phase conversion: increased spectral flux by 68%
+    std::vector<float> currentMagnitude;     // Current EMA-smoothed magnitude spectrum
+    std::vector<float> targetMagnitude;      // Target magnitude from latest setIR()
+    std::vector<float> currentPhase;         // Current EMA-smoothed phase (circular interpolation)
+    std::vector<float> targetPhase;          // Target phase from latest setIR()
+    bool irNeedsSmoothing = false;           // True when currentMag != targetMag
     bool irInitialized = false;              // False until first setIR()
-    static constexpr float kIRSmoothAlpha = 0.15f;      // EMA alpha: ~97% converged in 20 blocks (~107ms)
-    static constexpr float kIRConvergenceEps = 1e-8f;  // Smoothing stops when all samples converge within this
+    static constexpr float kIRSmoothAlpha = 0.12f;      // EMA alpha: ~97% converged in 25 blocks (~133ms)
+    static constexpr float kIRConvergenceEps = 1e-8f;   // Smoothing stops when all bins converge
 };
 
 //==============================================================================

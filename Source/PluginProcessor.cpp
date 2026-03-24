@@ -652,9 +652,12 @@ void PartitionedConvolver::prepare (int maxBlockSize, int irLength_)
     fftWorkBuf.resize (static_cast<size_t> (fftSize * 2), 0.0f);
     overlapBuf.resize (static_cast<size_t> (fftSize), 0.0f);
 
-    // v1.0.3: EMA-smoothed IR buffers (time domain)
-    currentTimeDomainIR.resize (static_cast<size_t> (fftSize), 0.0f);
-    targetTimeDomainIR.resize (static_cast<size_t> (fftSize), 0.0f);
+    // v1.0.4: Spectral envelope EMA buffers (frequency domain, per-bin mag+phase)
+    int numBins = fftSize / 2 + 1;
+    currentMagnitude.resize (static_cast<size_t> (numBins), 0.0f);
+    targetMagnitude.resize (static_cast<size_t> (numBins), 0.0f);
+    currentPhase.resize (static_cast<size_t> (numBins), 0.0f);
+    targetPhase.resize (static_cast<size_t> (numBins), 0.0f);
 
     reset();
 }
@@ -663,23 +666,34 @@ void PartitionedConvolver::setIR (const float* ir, int length)
 {
     if (fftSize == 0) return;
 
-    // v1.0.3: EMA-smoothed IR transition (replaces dual-convolver crossfade).
-    // Store target IR in time domain. Smoothing happens per-block in process().
-    std::fill (targetTimeDomainIR.begin(), targetTimeDomainIR.end(), 0.0f);
+    // v1.0.4: Spectral envelope EMA smoothing.
+    // Compute target's magnitude and phase in frequency domain.
+    // Only the magnitude is EMA-smoothed; phase always comes from the target.
+    // This prevents comb filtering from blending IRs with misaligned phase.
+
+    // FFT the new IR to get its spectrum
+    std::fill (irFreqDomain.begin(), irFreqDomain.end(), 0.0f);
     for (int i = 0; i < std::min (length, fftSize); ++i)
-        targetTimeDomainIR[static_cast<size_t> (i)] = ir[i];
+        irFreqDomain[static_cast<size_t> (i)] = ir[i];
+    fft.performRealOnlyForwardTransform (irFreqDomain.data(), true);
+
+    // Extract magnitude and phase from the target spectrum
+    // JUCE real FFT stores: [re0, im0, re1, im1, ..., reN/2, imN/2] (fftSize+1 values)
+    int numBins = fftSize / 2 + 1;
+    for (int k = 0; k < numBins; ++k)
+    {
+        float re = irFreqDomain[static_cast<size_t> (k * 2)];
+        float im = irFreqDomain[static_cast<size_t> (k * 2 + 1)];
+        targetMagnitude[static_cast<size_t> (k)] = std::sqrt (re * re + im * im);
+        targetPhase[static_cast<size_t> (k)] = std::atan2 (im, re);
+    }
 
     if (! irInitialized)
     {
-        // First IR: snap immediately (no smoothing from zero)
-        std::copy (targetTimeDomainIR.begin(), targetTimeDomainIR.end(), currentTimeDomainIR.begin());
-
-        // Compute frequency-domain IR
-        std::fill (irFreqDomain.begin(), irFreqDomain.end(), 0.0f);
-        for (int i = 0; i < std::min (length, fftSize); ++i)
-            irFreqDomain[static_cast<size_t> (i)] = ir[i];
-        fft.performRealOnlyForwardTransform (irFreqDomain.data(), true);
-
+        // First IR: snap both magnitude and phase immediately
+        std::copy (targetMagnitude.begin(), targetMagnitude.end(), currentMagnitude.begin());
+        std::copy (targetPhase.begin(), targetPhase.end(), currentPhase.begin());
+        // irFreqDomain is already correct from the FFT above
         irInitialized = true;
         irNeedsSmoothing = false;
     }
@@ -701,27 +715,46 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
         return;
     }
 
-    // v1.0.3: EMA-smooth the IR towards target before convolution.
-    // This replaces the dual-convolver crossfade with continuous IR blending,
-    // eliminating overlap discontinuities and spectral artifacts (issue #47).
+    // v1.0.4: Spectral envelope EMA smoothing (issue #47).
+    // Smooth magnitude (linear EMA) and phase (circular EMA) SEPARATELY per bin.
+    // This avoids comb filtering from complex-coefficient blending (which cancels
+    // when phases oppose) while also preventing phase discontinuities.
     if (irNeedsSmoothing)
     {
+        constexpr float pi = juce::MathConstants<float>::pi;
+        constexpr float twoPi = juce::MathConstants<float>::twoPi;
         bool stillSmoothing = false;
-        for (int i = 0; i < fftSize; ++i)
+        int numBins = fftSize / 2 + 1;
+
+        for (int k = 0; k < numBins; ++k)
         {
-            float diff = targetTimeDomainIR[static_cast<size_t> (i)] - currentTimeDomainIR[static_cast<size_t> (i)];
-            if (std::abs (diff) > kIRConvergenceEps)
+            // Magnitude: linear EMA
+            float magDiff = targetMagnitude[static_cast<size_t> (k)] - currentMagnitude[static_cast<size_t> (k)];
+            if (std::abs (magDiff) > kIRConvergenceEps)
             {
-                currentTimeDomainIR[static_cast<size_t> (i)] += kIRSmoothAlpha * diff;
+                currentMagnitude[static_cast<size_t> (k)] += kIRSmoothAlpha * magDiff;
+                stillSmoothing = true;
+            }
+
+            // Phase: circular EMA (wrap difference to [-π, π])
+            float phaseDiff = targetPhase[static_cast<size_t> (k)] - currentPhase[static_cast<size_t> (k)];
+            // Wrap to [-π, π]
+            phaseDiff = phaseDiff - twoPi * std::round (phaseDiff / twoPi);
+            if (std::abs (phaseDiff) > kIRConvergenceEps)
+            {
+                currentPhase[static_cast<size_t> (k)] += kIRSmoothAlpha * phaseDiff;
                 stillSmoothing = true;
             }
         }
 
-        // Recompute frequency-domain IR from smoothed time-domain IR
-        std::fill (irFreqDomain.begin(), irFreqDomain.end(), 0.0f);
-        for (int i = 0; i < fftSize; ++i)
-            irFreqDomain[static_cast<size_t> (i)] = currentTimeDomainIR[static_cast<size_t> (i)];
-        fft.performRealOnlyForwardTransform (irFreqDomain.data(), true);
+        // Reconstruct frequency-domain IR from smoothed magnitude + smoothed phase
+        for (int k = 0; k < numBins; ++k)
+        {
+            float mag = currentMagnitude[static_cast<size_t> (k)];
+            float phase = currentPhase[static_cast<size_t> (k)];
+            irFreqDomain[static_cast<size_t> (k * 2)]     = mag * std::cos (phase);
+            irFreqDomain[static_cast<size_t> (k * 2 + 1)] = mag * std::sin (phase);
+        }
 
         irNeedsSmoothing = stillSmoothing;
     }
@@ -787,8 +820,11 @@ void PartitionedConvolver::reset()
     std::fill (inputAccum.begin(), inputAccum.end(), 0.0f);
     std::fill (overlapBuf.begin(), overlapBuf.end(), 0.0f);
     std::fill (fftWorkBuf.begin(), fftWorkBuf.end(), 0.0f);
-    std::fill (currentTimeDomainIR.begin(), currentTimeDomainIR.end(), 0.0f);
-    std::fill (targetTimeDomainIR.begin(), targetTimeDomainIR.end(), 0.0f);
+    std::fill (irFreqDomain.begin(), irFreqDomain.end(), 0.0f);
+    std::fill (currentMagnitude.begin(), currentMagnitude.end(), 0.0f);
+    std::fill (targetMagnitude.begin(), targetMagnitude.end(), 0.0f);
+    std::fill (currentPhase.begin(), currentPhase.end(), 0.0f);
+    std::fill (targetPhase.begin(), targetPhase.end(), 0.0f);
     irNeedsSmoothing = false;
     irInitialized = false;
     inputAccumPos = 0;
