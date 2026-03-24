@@ -3,6 +3,10 @@
 #include <array>
 #include <vector>
 #include "PresetData.h"
+#include "WSOLAPitcher.h"
+#include "DopplerVelocity.h"
+#include "TrajectoryEngine.h"
+#include "FilterBank.h"
 
 // libmysofa — SOFA file reader for HRTF data
 struct MYSOFA_EASY;  // Forward declaration (avoids including mysofa.h in header)
@@ -780,41 +784,21 @@ private:
     // Pre-built OSC address strings for ADM-OSC Send (avoids per-tick string allocation)
     juce::String oscSendAddress[MAX_OBJECTS];
 
-    float trajectoryPhase[MAX_OBJECTS] = {};            // 0..1 animation progress per object
-    float baseAzimuth[MAX_OBJECTS]   = {};              // Legacy: captured origin (used by getTrajectoryState)
-    float baseElevation[MAX_OBJECTS] = {};
-    float baseDistance[MAX_OBJECTS]   = {};
-    int   prevTrajectoryShape[MAX_OBJECTS] = {};        // Detect shape changes (None→active)
-
-    // v0.9: Origin-point trajectory architecture — computed animated positions
-    // Timer callback writes here; processBlock reads here when trajectory is active
-    float trajectoryFinalAz[MAX_OBJECTS]   = {};        // Animated azimuth (origin + offset)
-    float trajectoryFinalEl[MAX_OBJECTS]   = {};        // Animated elevation
-    float trajectoryFinalDist[MAX_OBJECTS] = {};        // Animated distance
-    std::atomic<bool> trajectoryActive[MAX_OBJECTS] = {};  // True when shape != None
-
-    // v0.9: Random trajectory noise system (Issue #9)
-    // Randomized multi-sine frequencies/phases per instance — smooth, all axes simultaneous
-    struct RandomNoiseState {
-        float freqAz[4]  = {}, phaseAz[4]  = {}, ampAz[4]  = {};
-        float freqEl[4]  = {}, phaseEl[4]  = {}, ampEl[4]  = {};
-        float freqDist[3]= {}, phaseDist[3]= {}, ampDist[3]= {};
-        bool initialized = false;
-    };
-    RandomNoiseState randomNoise[MAX_OBJECTS] = {};
-    float randomTime[MAX_OBJECTS] = {};  // ever-increasing time (never wraps) for non-repeating motion
-    juce::Random randomRng;  // seeded per-instance (timer thread only)
+    // v1.0.1: Trajectory animation — extracted to TrajectoryEngine class
+    TrajectoryEngine trajectory;
 
 public:
-    // Trajectory shape computation (pure functions) — public for editor path sampling
-    // controlsAz/El/Dist flags indicate which axes the shape actively modifies
-    struct TrajectoryResult { float azDeg, elDeg, dist; bool controlsAz, controlsEl, controlsDist; };
+    // v1.0.1: Trajectory types — delegated to TrajectoryEngine
+    using TrajectoryResult = TrajectoryEngine::TrajectoryResult;
     static TrajectoryResult computeTrajectory (int shape, float phase,
                                                float baseAz, float baseEl, float baseDist,
-                                               bool reverse = false);
+                                               bool reverse = false)
+    {
+        return TrajectoryEngine::computeTrajectory (shape, phase, baseAz, baseEl, baseDist, reverse);
+    }
 
-    // v1.0: Doppler pitch accessor for automated latency measurement tests
-    float getDopplerSemitones (int objectIndex) const { return dopplerSemitones[objectIndex]; }
+    // v1.0.1: Doppler pitch accessor — delegates to extracted DopplerVelocity module
+    float getDopplerSemitones (int objectIndex) const { return doppler.getRawSemitones (objectIndex); }
 
 private:
 
@@ -836,29 +820,12 @@ private:
 
     // Feedback state
     float feedbackSample = 0.0f;
-    juce::dsp::IIR::Filter<float> feedbackLPFilter;
-    juce::dsp::IIR::Filter<float> feedbackHPFilter;
 
-    // Per-tap output filters (same coefficients as feedback, independent state per tap)
-    juce::dsp::IIR::Filter<float> tapLPFilter[MAX_OBJECTS];
-    juce::dsp::IIR::Filter<float> tapHPFilter[MAX_OBJECTS];
+    // v1.0.1: Filter management — extracted to FilterBank class
+    FilterBank filters;
 
-    // v0.9: WSOLA-lite per-tap pitch shifter — timing-preserving pitch shift
-    struct WSOLAState {
-        static constexpr int kBufSize = 2048;       // ~42ms at 48kHz, power of 2
-        static constexpr int kBufMask = kBufSize - 1;
-        static constexpr int kGrainSize = 1024;     // ~21ms grain
-        static constexpr int kCrossfadeLen = 512;   // ~10ms crossfade (50% overlap)
-
-        float buffer[kBufSize] = {};
-        int   writePos = 0;
-        float readPhase = 0.0f;      // fractional read position in buffer
-        float fadingPhase = 0.0f;    // fading grain read position
-        int   crossfadeRemaining = 0;
-    };
-    WSOLAState wsolaState[MAX_OBJECTS] = {};  // 12 objects (feedback uses direct delay read, no pitch shift)
-    bool wsolaGateOpen[MAX_OBJECTS] = {};    // v1.0: Hysteresis state for pitch gate (prevents rapid toggling from Doppler)
-    float wsolaProcess (int objectIndex, float inputSample, float perTapSemitones);
+    // v1.0.1: WSOLA pitch shifter — extracted to WSOLAPitcher class for testability
+    WSOLAPitcher wsola;
 
     // v1.0.1: Thread-safe preset reset — loadPreset() (message thread) stores pending
     // state here; processBlock() (audio thread) applies it, eliminating the data race
@@ -946,10 +913,8 @@ private:
     juce::SmoothedValue<float> smoothedOutputGain;
 
     // v0.4: Air absorption — global toggle, per-object LP filter driven by distance
-    juce::dsp::IIR::Filter<float> airAbsorptionFilter[MAX_OBJECTS];
-    juce::dsp::IIR::Coefficients<float> airTransparentCoeffs; // v1.0: pre-computed 20kHz LP (avoids heap alloc in processBlock)
-    float smoothedAirCutoff[MAX_OBJECTS] = {};  // v1.0: smoothed air absorption cutoff to prevent IIR coefficient transients
-    bool airAbsorptionActive = false;       // v0.9: block-rate true bypass (set in processBlock)
+    // v1.0.1: Air absorption state — now managed by FilterBank
+    bool airAbsorptionActive = false;       // v0.9: block-rate true bypass (read by processBlock for coefficient path)
     bool prevAirAbsorptionActive = false;   // v0.9: edge detection for AIR toggle state changes
 
     // v0.5: NFC-HOA — per-order shelf filters for near-field compensation (Ambisonics output only)
@@ -957,6 +922,7 @@ private:
     static constexpr float NFC_REFERENCE_RADIUS = 1.5f;  // meters (typical studio monitoring distance)
     juce::dsp::IIR::Filter<float> nfcFilters[MAX_OBJECTS][MAX_AMBI_ORDER];  // 12 objects × 6 orders
     float prevNfcDistance[MAX_OBJECTS] = {};
+    float smoothedNfcDistance[MAX_OBJECTS] = {};  // v1.0.1: EMA-smoothed to prevent coefficient transients
 
     // v0.7: Cached max-rE weights (recomputed only when ambi order changes)
     int cachedMaxrEOrder = -1;
@@ -996,17 +962,7 @@ private:
     std::atomic<float>* cachedParam_algorithm       = nullptr;
 
     // v0.5: Cached feedback filter frequencies + Q (skip recalculation when unchanged)
-    float cachedFeedbackLPFreq = -1.0f;
-    float cachedFeedbackHPFreq = -1.0f;
-    float cachedFilterHPQ = -1.0f;
-    float cachedFilterLPQ = -1.0f;
-    bool  filterBypassed = true;   // v0.9: true when filterEnabled param is OFF (default)
-
-    // v1.0: EMA-smoothed filter frequencies for click-free coefficient updates
-    float smoothedLPFreq = 20000.0f;
-    float smoothedHPFreq = 20.0f;
-    float smoothedFilterLPQ = 0.707f;
-    float smoothedFilterHPQ = 0.707f;
+    // v1.0.1: Filter smoothing/cache state moved to FilterBank class
 
     // v1.0: Previous-block gains for per-sample interpolation (prevent clicks on rapid position changes)
     float prevStereoGainL[MAX_OBJECTS] = {};
@@ -1016,13 +972,8 @@ private:
     float prevSHCoeffs[MAX_OBJECTS][MAX_AMBI_CHANNELS] = {};
     float prevDistGain[MAX_OBJECTS] = {};
 
-    // v0.4: Doppler effect — per-object checkbox, global amount, velocity tracking
-    float prevAzimuth[MAX_OBJECTS]   = {};   // radians, previous block
-    float prevElevation[MAX_OBJECTS] = {};   // radians, previous block
-    float prevDistance[MAX_OBJECTS]   = {};   // normalized 0..1, previous block
-    float dopplerSemitones[MAX_OBJECTS] = {};  // computed per-block
-    float smoothedDopplerSemitones[MAX_OBJECTS] = {};  // v1.0: EMA-smoothed for WSOLA grain stability
-    float smoothedRadialVelocity[MAX_OBJECTS] = {};  // EMA-smoothed velocity
+    // v1.0.1: Doppler velocity tracking — extracted to DopplerVelocity class
+    DopplerVelocity doppler;
 
     // v0.7: Per-tap activity for UI glow (written in processBlock, read by editor timer)
     std::atomic<float> tapActivityRMS[MAX_OBJECTS] = {};

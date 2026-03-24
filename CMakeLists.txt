@@ -105,6 +105,10 @@ target_sources(OpenSpatialDelay
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/PresetData.cpp
+        Source/WSOLAPitcher.cpp
+        Source/DopplerVelocity.cpp
+        Source/TrajectoryEngine.cpp
+        Source/FilterBank.cpp
 )
 
 target_compile_definitions(OpenSpatialDelay
@@ -150,9 +154,11 @@ endif()
 
 # =============================================================================
 # Post-build: install plugins (macOS only)
-# Runs scripts/install_plugins.sh after the final target (VST3) is built.
+# v1.0.1: Ensure AU is built before install script runs. The VST3 target
+# doesn't depend on AU, so without this the script copies an empty .component.
 # =============================================================================
 if(APPLE)
+    add_dependencies(OpenSpatialDelay_VST3 OpenSpatialDelay_AU)
     add_custom_command(TARGET OpenSpatialDelay_VST3 POST_BUILD
         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/scripts/install_plugins.sh" "${CMAKE_BINARY_DIR}"
         COMMENT "Installing AU and VST3 plugins..."
@@ -189,6 +195,10 @@ if(BUILD_OSD_TESTS)
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/PresetData.cpp
+        Source/WSOLAPitcher.cpp
+        Source/DopplerVelocity.cpp
+        Source/TrajectoryEngine.cpp
+        Source/FilterBank.cpp
     )
 
     target_link_libraries(OpenSpatialDelayTests
