@@ -154,9 +154,11 @@ endif()
 
 # =============================================================================
 # Post-build: install plugins (macOS only)
-# Runs scripts/install_plugins.sh after the final target (VST3) is built.
+# v1.0.1: Ensure AU is built before install script runs. The VST3 target
+# doesn't depend on AU, so without this the script copies an empty .component.
 # =============================================================================
 if(APPLE)
+    add_dependencies(OpenSpatialDelay_VST3 OpenSpatialDelay_AU)
     add_custom_command(TARGET OpenSpatialDelay_VST3 POST_BUILD
         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/scripts/install_plugins.sh" "${CMAKE_BINARY_DIR}"
         COMMENT "Installing AU and VST3 plugins..."
