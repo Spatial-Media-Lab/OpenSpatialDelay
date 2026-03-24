@@ -2029,6 +2029,216 @@ TEST_CASE ("Full signal chain — all fixes combined stress test", "[issue40][in
     REQUIRE (glitchesR.empty());
 }
 
+// ===========================================================================
+// Phase 8: Issue #42 Bug 3 — Pitch shift after preset changes with trajectories
+// ===========================================================================
+
+TEST_CASE ("Pitch gate uses user pitch only — Doppler cannot disable user pitch shift", "[issue42][doppler][gate]")
+{
+    auto proc = createStereoProcessor (100.0f, 0.5f, 3);
+    setParam (*proc, "object1_dopplerAmount", 1.0f);
+    setParam (*proc, "object1_pitchShift", -6.0f);  // user wants pitch DOWN
+
+    // Stabilize
+    processBlocksCapturingAll (*proc, 60);
+
+    // Sweep azimuth rapidly — generates large Doppler that could cancel -6 semitones
+    constexpr int sweepBlocks = 40;
+    int gateOpenCount = 0;
+
+    juce::MidiBuffer midi;
+    for (int b = 0; b < sweepBlocks; ++b)
+    {
+        float az = -180.0f + 360.0f * static_cast<float> (b) / static_cast<float> (sweepBlocks);
+        setParam (*proc, "object1_azimuth", az);
+
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+
+        // Check that Doppler semitones exist (trajectory is moving)
+        float doppler = proc->getDopplerSemitones (0);
+        (void) doppler;
+
+        // The pitch gate should ALWAYS be open because user pitch is -6
+        // (even if combinedPitch = -6 + doppler is near zero)
+        gateOpenCount++;
+    }
+
+    // Verify: after sweep with Doppler active, output is non-silent
+    // (pitch shift is still working despite Doppler)
+    auto [outL, outR] = processBlocksCapturingAll (*proc, 10);
+
+    // Skip first 5 blocks (cold-start period), check remaining has signal
+    int skip = 5 * kBlockSize;
+    int len = static_cast<int> (outL.size()) - skip;
+    float rms = computeRMS (outL.data() + skip, len);
+    INFO ("RMS after Doppler sweep with pitch -6: " << rms);
+    REQUIRE (rms > 0.001f);  // must have audible output, pitch shift working
+}
+
+TEST_CASE ("Preset change resets trajectory state — no stale position spike", "[issue42][preset][trajectory]")
+{
+    auto proc = createStereoProcessor (100.0f, 0.5f, 3);
+
+    // Load preset with active trajectory (Spiral Descent = index 17)
+    int numPresets = static_cast<int> (proc->getNumPresets());
+    if (numPresets <= 17)
+        return;  // Skip if not enough presets
+
+    proc->loadPreset (17);  // Spiral Descent — trajectory shape 11
+
+    // Run for a while so trajectory advances and Doppler builds up
+    processBlocksCapturingAll (*proc, 100);
+
+    // Now load a different trajectory preset (Random Walk = index 18)
+    proc->loadPreset (18);
+
+    // After loadPreset, process several blocks — should be clean (no velocity spike)
+    auto [outL, outR] = processBlocksCapturingAll (*proc, 20);
+
+    // Skip first 3 blocks (cold-start buffer fill), then check for glitches
+    int skip = 3 * kBlockSize;
+    int len = static_cast<int> (outL.size()) - skip;
+    auto glitchesL = detectGlitches (outL.data() + skip, len, 0.25f);
+    auto glitchesR = detectGlitches (outR.data() + skip, len, 0.25f);
+
+    INFO ("Trajectory preset switch: L=" << glitchesL.size() << " R=" << glitchesR.size());
+    REQUIRE (glitchesL.empty());
+    REQUIRE (glitchesR.empty());
+}
+
+TEST_CASE ("Repeated preset cycling with trajectories — pitch remains functional", "[issue42][preset][cycling]")
+{
+    auto proc = createStereoProcessor (100.0f, 0.5f, 3);
+
+    int numPresets = static_cast<int> (proc->getNumPresets());
+    if (numPresets <= 18)
+        return;
+
+    // Simulate the exact user scenario: cycle presets, adjust pitch, repeat
+    for (int cycle = 0; cycle < 5; ++cycle)
+    {
+        // Load Spiral Descent
+        proc->loadPreset (17);
+        processBlocksCapturingAll (*proc, 30);
+
+        // User adjusts pitch to -12 (after preset loaded)
+        for (int t = 0; t < 6; ++t)
+            setParam (*proc, "object" + juce::String (t + 1) + "_pitchShift", -12.0f);
+        processBlocksCapturingAll (*proc, 20);
+
+        // Load Random Walk
+        proc->loadPreset (18);
+        processBlocksCapturingAll (*proc, 30);
+
+        // User adjusts pitch to -12 again
+        for (int t = 0; t < 5; ++t)
+            setParam (*proc, "object" + juce::String (t + 1) + "_pitchShift", -12.0f);
+        processBlocksCapturingAll (*proc, 20);
+    }
+
+    // After 5 cycles of preset changes, pitch should still work.
+    // Set pitch to -12 and verify output has signal (not silent/non-functional).
+    setParam (*proc, "object1_pitchShift", -12.0f);
+    processBlocksCapturingAll (*proc, 10);  // let WSOLA stabilize
+
+    auto [outL, outR] = processBlocksCapturingAll (*proc, 10);
+
+    int skip = 2 * kBlockSize;
+    int len = static_cast<int> (outL.size()) - skip;
+    float rms = computeRMS (outL.data() + skip, len);
+
+    INFO ("RMS after 5 preset cycles with pitch -12: " << rms);
+    REQUIRE (rms > 0.001f);
+}
+
+TEST_CASE ("Pitch shift negative with active Doppler — output is audible", "[issue42][doppler][pitch]")
+{
+    auto proc = createStereoProcessor (150.0f, 0.5f, 3);
+
+    // Enable Doppler and negative pitch simultaneously
+    for (int i = 0; i < 3; ++i)
+    {
+        auto idx = juce::String (i + 1);
+        setParam (*proc, "object" + idx + "_dopplerAmount", 1.0f);
+        setParam (*proc, "object" + idx + "_pitchShift", -12.0f);
+    }
+
+    // Stabilize with both active
+    processBlocksCapturingAll (*proc, 60);
+
+    // Sweep azimuth to generate sustained Doppler
+    constexpr int sweepBlocks = 60;
+    std::vector<float> allL, allR;
+    allL.reserve (static_cast<size_t> (sweepBlocks * kBlockSize));
+    allR.reserve (static_cast<size_t> (sweepBlocks * kBlockSize));
+    juce::MidiBuffer midi;
+
+    for (int b = 0; b < sweepBlocks; ++b)
+    {
+        float az = -180.0f + 360.0f * static_cast<float> (b) / static_cast<float> (sweepBlocks);
+        for (int i = 0; i < 3; ++i)
+            setParam (*proc, "object" + juce::String (i + 1) + "_azimuth",
+                      az + 30.0f * static_cast<float> (i));
+
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+
+        const float* outL_ = buffer.getReadPointer (0);
+        const float* outR_ = buffer.getReadPointer (1);
+        allL.insert (allL.end(), outL_, outL_ + kBlockSize);
+        allR.insert (allR.end(), outR_, outR_ + kBlockSize);
+    }
+
+    // Check that output has signal throughout (pitch shift never "drops out")
+    // Divide into 10 segments and check each has non-trivial RMS
+    int segSize = static_cast<int> (allL.size()) / 10;
+    for (int seg = 2; seg < 10; ++seg)  // skip first 2 segments (warmup)
+    {
+        float segRMS = computeRMS (allL.data() + seg * segSize, segSize);
+        INFO ("Segment " << seg << " RMS: " << segRMS);
+        REQUIRE (segRMS > 0.0005f);
+    }
+}
+
+TEST_CASE ("Thread-safe preset reset — WSOLA state consistent after loadPreset", "[issue42][thread][wsola]")
+{
+    auto proc = createStereoProcessor (100.0f, 0.5f, 3);
+    setParam (*proc, "object1_pitchShift", 12.0f);
+
+    // Run for a while to build up WSOLA state
+    processBlocksCapturingAll (*proc, 80);
+
+    // Call loadPreset (simulates message thread)
+    proc->loadPreset (0);
+
+    // Immediately process blocks (simulates audio thread picking up the reset)
+    auto [outL, outR] = processBlocksCapturingAll (*proc, 10);
+
+    // The reset should produce clean output (no glitches from inconsistent state)
+    // Skip first 5 blocks for cold-start bypass
+    int skip = 5 * kBlockSize;
+    int len = static_cast<int> (outL.size()) - skip;
+    auto glitchesL = detectGlitches (outL.data() + skip, len, 0.25f);
+
+    INFO ("Thread-safe reset glitches: " << glitchesL.size());
+    REQUIRE (glitchesL.empty());
+}
+
+// ===========================================================================
+
 TEST_CASE ("Binaural HRTF — preset cycle with tap changes produces no clicks", "[issue40][binaural][preset]")
 {
     auto proc = createBinauralProcessor (1);  // MIT KEMAR

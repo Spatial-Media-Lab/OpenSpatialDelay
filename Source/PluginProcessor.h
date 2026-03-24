@@ -857,7 +857,19 @@ private:
         int   crossfadeRemaining = 0;
     };
     WSOLAState wsolaState[MAX_OBJECTS] = {};  // 12 objects (feedback uses direct delay read, no pitch shift)
+    bool wsolaGateOpen[MAX_OBJECTS] = {};    // v1.0: Hysteresis state for pitch gate (prevents rapid toggling from Doppler)
     float wsolaProcess (int objectIndex, float inputSample, float perTapSemitones);
+
+    // v1.0.1: Thread-safe preset reset — loadPreset() (message thread) stores pending
+    // state here; processBlock() (audio thread) applies it, eliminating the data race
+    // that caused intermittent WSOLA/Doppler corruption on preset changes (issue #42).
+    struct PendingPresetReset {
+        float prevAz[MAX_OBJECTS] = {};
+        float prevEl[MAX_OBJECTS] = {};
+        float prevDist[MAX_OBJECTS] = {};
+    };
+    PendingPresetReset pendingReset;
+    std::atomic<bool>  presetResetPending { false };
 
     // v1.0: Per-tap fade envelope for glitch-free enable/disable transitions
     // 64-sample ramp (~1.3ms @ 48kHz) — fast enough to be inaudible, long enough to prevent clicks
