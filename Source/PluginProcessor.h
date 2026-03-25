@@ -328,9 +328,10 @@ public:
     void prepare (int maxBlockSize, int irLength);
 
     /** Set or update the impulse response.
-        v1.0.4: Uses spectral envelope EMA smoothing — magnitude spectrum is
-        smoothly interpolated while phase always comes from the target IR.
-        This prevents comb filtering from phase-misaligned blending (issue #47). */
+        v1.0.5: Dual-convolver crossfade — new IR is loaded into the inactive
+        slot and crossfaded over kCrossfadeBlocks blocks using equal-power
+        (cos/sin) gains.  This eliminates overlap-save boundary discontinuities
+        that caused audible pops during HRTF transitions (issue #50). */
     void setIR (const float* ir, int length);
 
     /** Process one block: convolve input with IR, write to output.
@@ -349,28 +350,51 @@ private:
     int irLen = 0;
     int blockSize = 0;
 
-    std::vector<float> irFreqDomain;     // Current smoothed IR in frequency domain
-    std::vector<float> inputAccum;       // Input accumulator for FFT
-    std::vector<float> fftWorkBuf;       // FFT work buffer
-    std::vector<float> overlapBuf;       // Overlap-save tail buffer
-    int inputAccumPos = 0;               // Current position in input accumulator
+    // v1.0.5: Dual-convolver architecture (issue #50).
+    // Two independent convolution slots run in parallel during crossfades.
+    // This avoids the overlap-save boundary discontinuity: each slot keeps
+    // its own overlap buffer tied to its own IR, so the tail is never
+    // contaminated by a mismatched kernel.
+    struct ConvSlot
+    {
+        std::vector<float> irFreqDomain;     // IR in frequency domain
+        std::vector<float> inputAccum;       // Input accumulator for FFT
+        std::vector<float> fftWorkBuf;       // FFT work buffer
+        std::vector<float> overlapBuf;       // Overlap-save tail buffer
+        int inputAccumPos = 0;               // Current position in input accumulator
+    };
 
-    // v1.0.4: Spectral envelope EMA smoothing (issue #47).
-    // Smooths only the magnitude spectrum while always using the target's phase.
-    // This prevents comb filtering from phase-misaligned IR interpolation —
-    // the root cause of perceptual pops during HRTF transitions.
-    // Previous approaches that failed:
-    //   - Dual-convolver crossfade (v1.0): overlap contamination
-    //   - Time-domain EMA (v1.0.3): comb filtering from phase blending
-    //   - Minimum-phase conversion: increased spectral flux by 68%
-    std::vector<float> currentMagnitude;     // Current EMA-smoothed magnitude spectrum
-    std::vector<float> targetMagnitude;      // Target magnitude from latest setIR()
-    std::vector<float> currentPhase;         // Current EMA-smoothed phase (circular interpolation)
-    std::vector<float> targetPhase;          // Target phase from latest setIR()
-    bool irNeedsSmoothing = false;           // True when currentMag != targetMag
-    bool irInitialized = false;              // False until first setIR()
-    static constexpr float kIRSmoothAlpha = 0.12f;      // EMA alpha: ~97% converged in 25 blocks (~133ms)
-    static constexpr float kIRConvergenceEps = 1e-8f;   // Smoothing stops when all bins converge
+    ConvSlot slots[2];
+
+    // State machine for IR transitions
+    enum class State { Idle, Warmup, Crossfading };
+    State state = State::Idle;
+
+    static constexpr int kCrossfadeBlocks = 4;   // Equal-power crossfade duration
+    static constexpr int kWarmupBlocks = 1;      // Let inactive slot build overlap before crossfade
+
+    int activeSlot = 0;                          // Index of the currently active slot (0 or 1)
+    int stateBlockCount = 0;                     // Blocks elapsed in current state
+
+    // Per-sample gain interpolation for glitch-free crossfade
+    float fadeOutGain = 1.0f;                    // Current fade-out gain (active → old)
+    float fadeInGain  = 0.0f;                    // Current fade-in gain  (inactive → new)
+    float prevFadeOutGain = 1.0f;                // Previous block's ending fade-out gain
+    float prevFadeInGain  = 0.0f;               // Previous block's ending fade-in gain
+
+    // Deferred IR: if setIR() is called mid-transition, store it for later
+    std::vector<float> pendingIR;
+    int pendingIRLen = 0;
+    bool hasPendingIR = false;
+
+    // Work buffers for dual-slot output mixing
+    std::vector<float> slotOutputA;
+    std::vector<float> slotOutputB;
+
+    // Helpers
+    void processSlot (ConvSlot& slot, const float* in, float* out, int numSamples);
+    void resetSlot (ConvSlot& slot);
+    void loadIRIntoSlot (ConvSlot& slot, const float* ir, int length);
 };
 
 //==============================================================================
@@ -423,8 +447,8 @@ public:
     float getTargetITDL (int src) const { return (src >= 0 && src < MAX_SOURCES) ? targetITDL[src] : 0.0f; }
     float getTargetITDR (int src) const { return (src >= 0 && src < MAX_SOURCES) ? targetITDR[src] : 0.0f; }
 
-    /** Test-only: enable/disable minimum-phase conversion for A/B comparison. */
-    void setMinPhaseEnabled (bool enabled) { minPhaseEnabled = enabled; }
+    /** Test-only: no-op, retained for API compatibility. */
+    void setMinPhaseEnabled (bool) {}
 
 private:
     // v0.3: Per-source direct binaural convolvers
@@ -460,12 +484,6 @@ private:
     int itdWritePos[MAX_SOURCES] = {};
     bool itdActive = false;  // true when using aligned HRIRs (non-Simple profiles)
 
-    // v1.0.4: Minimum-phase HRIR conversion (issue #47).
-    // Converts raw HRIRs to minimum-phase before EMA smoothing to prevent
-    // comb filtering from time-domain interpolation of phase-misaligned IRs.
-    int minPhaseFFTOrder = 0;                // FFT order for min-phase extraction (>= 2*irLen)
-    std::vector<float> minPhaseWorkBuf;      // Pre-allocated work buffer for convertToMinPhase
-    bool minPhaseEnabled = true;             // Can be disabled for A/B testing
 };
 
 // #############################################################################
