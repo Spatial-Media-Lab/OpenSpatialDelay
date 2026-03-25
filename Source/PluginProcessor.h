@@ -370,7 +370,7 @@ private:
     enum class State { Idle, Warmup, Crossfading };
     State state = State::Idle;
 
-    static constexpr int kCrossfadeBlocks = 6;   // Smootherstep crossfade duration (~32ms)
+    static constexpr int kCrossfadeBlocks = 4;   // Equal-power crossfade duration (~21ms)
     static constexpr int kWarmupBlocks = 1;      // Let inactive slot build overlap before crossfade
 
     int activeSlot = 0;                          // Index of the currently active slot (0 or 1)
