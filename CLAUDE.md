@@ -20,7 +20,8 @@ bash scripts/build_version.sh <commit-hash> v1.0.X O10X
 - v1.0.0 / O100 — baseline (commit 023670a)
 - v1.0.1 / O101 — dual-convolver output crossfade + feedback smoothing (commit 99d1525)
 - v1.0.2 / O102 — smootherstep crossfade + 6-block duration, 195/195 pass (commit 44185d4)
-- Next available: **v1.0.3 / O103**
+- v1.0.3 / O103 — WSOLA float precision fix + 5 bug fixes + doubled buffers (commit 19ddb28)
+- Next available: **v1.0.4 / O104**
 
 ### Running tests
 
