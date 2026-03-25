@@ -457,7 +457,7 @@ public:
     static constexpr int kHandleWidth = 16;
     static constexpr int kPanelWidth  = kOpenWidth - kHandleWidth;  // 62px knob area
 
-    enum KnobID { kAzimuth = 0, kElevation, kDistance, kDoppler, kPitch, kSpeed, kNumKnobs };
+    enum KnobID { kAzimuth = 0, kElevation, kDistance, kPitch, kDoppler, kSpeed, kNumKnobs };
 
 private:
     bool open = false;

@@ -635,7 +635,7 @@ public:
 
     // v1.0: Global tap offset values (for OSC ↔ editor sync)
     static constexpr int kNumGlobalTapOffsets = 6;
-    std::atomic<float> globalTapOffset[kNumGlobalTapOffsets] = {};  // AZ, EL, DIST, DOPPLER, PITCH, SPEED
+    std::atomic<float> globalTapOffset[kNumGlobalTapOffsets] = {};  // AZ, EL, DIST, PITCH, DOPPLER, SPEED
     std::atomic<bool>  globalTapOffsetChanged { false };
 
     // v0.7: OSC Send accessors for editor
