@@ -11,17 +11,25 @@ float WSOLAPitcher::process (int objectIndex, float inputSample, float semitones
 
     // Cold-start bypass: pass through unpitched signal until buffer has enough
     // real audio data for a full grain. Without this, pitch UP races readPhase
-    // into zero-filled regions, producing ~21ms silence after init/preset load.
+    // into zero-filled regions, producing ~42ms silence after init/preset load.
     if (ws.writePos <= State::kGrainSize)
     {
-        ws.readPhase = 0.0f;
+        // v1.0.3: Center readPhase in filled region (issue #53, fix 1).
+        // Placing at half-grain gives symmetric drift headroom for both
+        // pitch-up and pitch-down on first grain after cold-start.
+        int halfGrain = State::kGrainSize / 2;
+        ws.readPhase = (ws.writePos > halfGrain)
+                     ? static_cast<float> (ws.writePos - halfGrain)
+                     : 0.0f;
         return inputSample;
     }
 
-    // Normalize writePos to prevent float precision decay over long sessions.
-    // After ~87s @ 48kHz, writePos > 2^22 and readPhase (float) starts losing
-    // sub-sample precision needed for Catmull-Rom interpolation and drift detection.
-    constexpr int kNormThreshold = 1 << 22;
+    // v1.0.3: Aggressive normalization to prevent float precision decay (issue #53).
+    // IEEE 754 float32 ULP grows with magnitude: at writePos ~1M (21s @ 48kHz),
+    // the +1st ratio increment (0.0595) is below ULP and gets rounded to 0,
+    // making small pitch shifts silently fail. Normalizing at kBufSize*2 keeps
+    // writePos in [0, 8191] where ULP = 0.001 — full precision for all pitches.
+    constexpr int kNormThreshold = State::kBufSize * 2;
     if (ws.writePos > kNormThreshold)
     {
         int excess = ws.writePos & ~State::kBufMask;
@@ -64,11 +72,14 @@ float WSOLAPitcher::process (int objectIndex, float inputSample, float semitones
         float fading  = readBuf (ws.fadingPhase);
         ws.fadingPhase += ratio;
 
+        // v1.0.3: Hann crossfade replacing sin/cos (issue #53, fix 2).
+        // sin/cos gains sum to sqrt(2) at midpoint (+3dB), creating periodic
+        // amplitude bumps heard as clicks on correlated grains. Hann guarantees
+        // gainNew + gainOld = 1.0 at all points (constant amplitude).
         float t = 1.0f - static_cast<float> (ws.crossfadeRemaining)
                        / static_cast<float> (State::kCrossfadeLen);
-        float halfPi = juce::MathConstants<float>::halfPi;
-        float gainNew = std::sin (t * halfPi);
-        float gainOld = std::cos (t * halfPi);
+        float gainNew = 0.5f * (1.0f - std::cos (t * juce::MathConstants<float>::pi));
+        float gainOld = 1.0f - gainNew;
 
         ws.crossfadeRemaining--;
         return primary * gainNew + fading * gainOld;
@@ -79,7 +90,16 @@ float WSOLAPitcher::process (int objectIndex, float inputSample, float semitones
     if (std::abs (drift) > static_cast<float> (State::kGrainSize))
     {
         ws.fadingPhase = ws.readPhase;
-        ws.readPhase = static_cast<float> (ws.writePos) - static_cast<float> (State::kGrainSize);
+
+        // v1.0.3: Ratio-aware reset offset for pitch-down (issue #53, fix 3).
+        // For ratio < 1.0, fixed kGrainSize offset causes post-reset drift to
+        // ALWAYS exceed threshold immediately (drift = -kGrainSize + kCrossfadeLen*(ratio-1)),
+        // trapping the algorithm in perpetual back-to-back crossfading.
+        // Scaling by ratio ensures post-reset drift is within bounds.
+        float grainOffset = (ratio < 1.0f)
+                          ? static_cast<float> (State::kGrainSize) * ratio
+                          : static_cast<float> (State::kGrainSize);
+        ws.readPhase = static_cast<float> (ws.writePos) - grainOffset;
         ws.crossfadeRemaining = State::kCrossfadeLen;
 
         float fading = readBuf (ws.fadingPhase);
@@ -108,14 +128,29 @@ void WSOLAPitcher::bypass (int objectIndex, float inputSample)
     auto& ws = states_[objectIndex];
     ws.buffer[ws.writePos & State::kBufMask] = inputSample;
     ws.writePos++;
-    ws.readPhase = static_cast<float> (ws.writePos);
 
-    constexpr int kNormThreshold = 1 << 22;
+    // v1.0.3: Position readPhase at half-grain behind writePos (issue #53, fix 4).
+    // Previously set readPhase = writePos, placing it at the write boundary.
+    // For small pitch shifts (+1st), this caused >1s warm-up delay before pitch
+    // became audible because drift accumulated too slowly from zero offset.
+    // Half-grain offset ensures immediate pitch audibility on gate open.
+    ws.readPhase = static_cast<float> (ws.writePos - State::kGrainSize / 2);
+
+    // v1.0.3: Clear crossfade state on bypass (issue #53, fix 5).
+    // If gate closed during an active crossfade, stale fadingPhase persisted.
+    // On gate reopen, process() would enter crossfade block reading from
+    // buffer positions written before bypass — completely stale audio.
+    ws.crossfadeRemaining = 0;
+    ws.fadingPhase = ws.readPhase;
+
+    // v1.0.3: Same aggressive normalization as process() (issue #53).
+    constexpr int kNormThreshold = State::kBufSize * 2;
     if (ws.writePos > kNormThreshold)
     {
         int excess = ws.writePos & ~State::kBufMask;
         ws.writePos -= excess;
-        ws.readPhase = static_cast<float> (ws.writePos);
+        ws.readPhase = static_cast<float> (ws.writePos - State::kGrainSize / 2);
+        ws.fadingPhase = ws.readPhase;
     }
 }
 

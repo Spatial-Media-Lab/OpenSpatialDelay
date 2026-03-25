@@ -17,10 +17,13 @@ public:
 
     struct State
     {
-        static constexpr int kBufSize = 2048;        // ~42ms at 48kHz, power of 2
+        // v1.0.3: Doubled buffer/grain/crossfade for better WSOLA quality (issue #53).
+        // Larger grains = fewer crossfade resets = cleaner pitch shifting.
+        // Memory: 4096 × 4 bytes × 12 taps = 192KB (trivial).
+        static constexpr int kBufSize = 4096;        // ~85ms at 48kHz, power of 2
         static constexpr int kBufMask = kBufSize - 1;
-        static constexpr int kGrainSize = 1024;      // ~21ms grain
-        static constexpr int kCrossfadeLen = 512;    // ~10ms crossfade (50% overlap)
+        static constexpr int kGrainSize = 2048;      // ~42ms grain
+        static constexpr int kCrossfadeLen = 1024;   // ~21ms crossfade (50% overlap)
 
         float buffer[kBufSize] = {};
         int   writePos = 0;
