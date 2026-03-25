@@ -1414,9 +1414,9 @@ void OpenSpatialDelayProcessor::timerCallback()
 
             // v1.0: Global tap offset knobs (UI-only, change-gated)
             static const char* tapOffsetProps[] = { "tapazimuth", "tapelevation", "tapdistance",
-                                                    "tapdoppler", "tappitch",     "tapspeed" };
+                                                    "tappitch",   "tapdoppler",  "tapspeed" };
             float* tapOffsetPrevs[] = { &pg.tapAzimuth, &pg.tapElevation, &pg.tapDistance,
-                                        &pg.tapDoppler, &pg.tapPitch,     &pg.tapSpeed };
+                                        &pg.tapPitch,   &pg.tapDoppler,   &pg.tapSpeed };
             for (int i = 0; i < kNumGlobalTapOffsets; ++i)
                 sendGlobal (tapOffsetProps[i], globalTapOffset[i].load (std::memory_order_relaxed), *tapOffsetPrevs[i]);
         }
@@ -4787,8 +4787,8 @@ void OpenSpatialDelayProcessor::oscMessageReceived (const juce::OSCMessage& mess
         else if (property == "/tapazimuth")    { globalTapOffset[0].store (juce::jlimit (-180.0f, 180.0f, val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
         else if (property == "/tapelevation")  { globalTapOffset[1].store (juce::jlimit (-90.0f,  90.0f,  val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
         else if (property == "/tapdistance")   { globalTapOffset[2].store (juce::jlimit (-1.0f,   1.0f,   val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
-        else if (property == "/tapdoppler")    { globalTapOffset[3].store (juce::jlimit (-100.0f, 100.0f, val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
-        else if (property == "/tappitch")      { globalTapOffset[4].store (juce::jlimit (-24.0f,  24.0f,  val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
+        else if (property == "/tappitch")      { globalTapOffset[3].store (juce::jlimit (-24.0f,  24.0f,  val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
+        else if (property == "/tapdoppler")    { globalTapOffset[4].store (juce::jlimit (-100.0f, 100.0f, val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
         else if (property == "/tapspeed")      { globalTapOffset[5].store (juce::jlimit (-5.0f,   5.0f,   val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
     }
 }

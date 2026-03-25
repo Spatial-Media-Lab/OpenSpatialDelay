@@ -1724,7 +1724,7 @@ void GlobalTapDrawerComponent::resetToCenter()
 float GlobalTapDrawerComponent::getKnobValue (int knobIdx) const
 {
     const juce::Slider* sliders[] = { &azSlider, &elSlider, &distSlider,
-                                       &dopplerSlider, &pitchSlider, &speedSlider };
+                                       &pitchSlider, &dopplerSlider, &speedSlider };
     if (knobIdx < 0 || knobIdx >= kNumKnobs) return 0.0f;
     return static_cast<float> (sliders[knobIdx]->getValue());
 }
@@ -1732,7 +1732,7 @@ float GlobalTapDrawerComponent::getKnobValue (int knobIdx) const
 void GlobalTapDrawerComponent::setKnobValueSilent (int knobIdx, float value)
 {
     juce::Slider* sliders[] = { &azSlider, &elSlider, &distSlider,
-                                 &dopplerSlider, &pitchSlider, &speedSlider };
+                                 &pitchSlider, &dopplerSlider, &speedSlider };
     if (knobIdx < 0 || knobIdx >= kNumKnobs) return;
     suppressCallbacks = true;
     sliders[knobIdx]->setValue (value, juce::dontSendNotification);
@@ -1824,8 +1824,8 @@ void GlobalTapDrawerComponent::layoutKnobs()
     int panelW = knobPanel.getWidth();
     int contentH = labelH + knobSize + textBoxH;  // total content per knob slot
 
-    juce::Slider* sliders[] = { &azSlider, &elSlider, &distSlider, &dopplerSlider, &pitchSlider, &speedSlider };
-    juce::Label* labels[] = { &azLabel, &elLabel, &distLabel, &dopplerLabel, &pitchLabel, &speedLabel };
+    juce::Slider* sliders[] = { &azSlider, &elSlider, &distSlider, &pitchSlider, &dopplerSlider, &speedSlider };
+    juce::Label* labels[] = { &azLabel, &elLabel, &distLabel, &pitchLabel, &dopplerLabel, &speedLabel };
 
     for (int i = 0; i < kNumKnobs; ++i)
     {
@@ -2784,14 +2784,14 @@ void OpenSpatialDelayEditor::applyGlobalTapDelta (int knobIndex, float delta)
 {
     static const char* suffixes[] = {
         "azimuth", "elevation", "distance",
-        "dopplerAmount", "pitchShift", "trajectorySpeed"
+        "pitchShift", "dopplerAmount", "trajectorySpeed"
     };
     if (knobIndex < 0 || knobIndex >= 6) return;
     const bool wraps = (knobIndex == GlobalTapDrawerComponent::kAzimuth);
 
     // Scale factors: knob display range → APVTS denormalized range
     // Doppler: knob shows -100..+100 (%), APVTS is 0..1 → scale by 0.01
-    static const float scaleFactors[] = { 1.0f, 1.0f, 1.0f, 0.01f, 1.0f, 1.0f };
+    static const float scaleFactors[] = { 1.0f, 1.0f, 1.0f, 1.0f, 0.01f, 1.0f };
     float scaledDelta = delta * scaleFactors[knobIndex];
 
     for (int i = 0; i < SpatialMapComponent::MAX_OBJECTS; ++i)
