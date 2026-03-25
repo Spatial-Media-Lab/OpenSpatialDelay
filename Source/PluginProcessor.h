@@ -391,13 +391,6 @@ private:
     std::vector<float> slotOutputA;
     std::vector<float> slotOutputB;
 
-    // v1.0.6: Block-boundary micro-crossfade (issue #50).
-    // Smooths the first kMicroFadeSamples of each output block from the
-    // previous block's last sample to eliminate per-block discontinuities
-    // caused by feedback-enriched input interacting with the crossfade.
-    static constexpr int kMicroFadeSamples = 8;  // ~0.17ms at 48kHz
-    float prevOutputSample = 0.0f;
-
     // Helpers
     void processSlot (ConvSlot& slot, const float* in, float* out, int numSamples);
     void resetSlot (ConvSlot& slot);

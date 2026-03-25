@@ -878,21 +878,6 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
             break;
         }
     }
-
-    // v1.0.6: Micro-crossfade at block boundary (issue #50).
-    // Interpolate the first kMicroFadeSamples from the previous block's
-    // last output sample to the current block's output, eliminating
-    // discontinuities from feedback-enriched input during crossfade.
-    if (numSamples > 0)
-    {
-        int fadeSamples = std::min (kMicroFadeSamples, numSamples);
-        for (int i = 0; i < fadeSamples; ++i)
-        {
-            float t = static_cast<float> (i + 1) / static_cast<float> (fadeSamples + 1);
-            out[i] = prevOutputSample + t * (out[i] - prevOutputSample);
-        }
-        prevOutputSample = out[numSamples - 1];
-    }
 }
 
 void PartitionedConvolver::reset()
@@ -909,7 +894,6 @@ void PartitionedConvolver::reset()
     prevFadeInGain  = 0.0f;
     hasPendingIR = false;
     pendingIRLen = 0;
-    prevOutputSample = 0.0f;
 }
 
 //==============================================================================
