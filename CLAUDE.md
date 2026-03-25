@@ -18,11 +18,9 @@ bash scripts/build_version.sh <commit-hash> v1.0.X O10X
 
 **Version number registry (do not reuse):**
 - v1.0.0 / O100 — baseline (commit 023670a)
-- v1.0.1 / O101 — NaN handler fix
-- v1.0.2 / O102 — overlap zeroing + threshold reduction (PR #48)
-- v1.0.3 / O103 — freq-domain IR interpolation branch
-- v1.0.4 / O104 — spectral envelope EMA smoothing (commit 8c665cb)
-- Next available: **v1.0.5 / O105**
+- v1.0.1 / O101 — dual-convolver output crossfade + feedback smoothing (commit 99d1525)
+- v1.0.2 / O102 — smootherstep crossfade + 6-block duration, 195/195 pass (commit 44185d4)
+- Next available: **v1.0.3 / O103**
 
 ### Running tests
 

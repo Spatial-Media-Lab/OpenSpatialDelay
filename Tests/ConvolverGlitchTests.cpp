@@ -487,12 +487,12 @@ TEST_CASE ("Binaural HRTF — azimuth sweep glitch detection", "[binaural][glitc
     auto glitchesR = detectGlitches (allR.data(), static_cast<int> (allR.size()));
 
     INFO ("Azimuth sweep: L=" << glitchesL.size() << " R=" << glitchesR.size() << " glitches");
-    for (size_t g = 0; g < glitchesL.size() && g < 5; ++g)
+    for (size_t g = 0; g < glitchesL.size() && g < 10; ++g)
     {
         int idx = glitchesL[g];
         float diff = std::abs (allL[static_cast<size_t> (idx)] - allL[static_cast<size_t> (idx - 1)]);
-        INFO ("  Az L glitch at sample " << idx << " (block " << idx / kBlockSize
-              << "), diff=" << diff);
+        WARN ("  Az L glitch at sample " << idx << " (block " << idx / kBlockSize
+              << "), diff=" << diff << ", posInBlock=" << idx % kBlockSize);
     }
 
     // Target: zero glitches during azimuth sweep
