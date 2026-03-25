@@ -830,13 +830,15 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
 
             ++stateBlockCount;
 
-            // Compute equal-power crossfade gains for this block's END
-            float progress = static_cast<float> (stateBlockCount) / static_cast<float> (kCrossfadeBlocks);
-            if (progress > 1.0f) progress = 1.0f;
-
-            constexpr float halfPi = juce::MathConstants<float>::halfPi;
-            fadeOutGain = std::cos (progress * halfPi);   // 1 → 0
-            fadeInGain  = std::sin (progress * halfPi);   // 0 → 1
+            // v1.0.6: Smootherstep crossfade (issue #50).
+            // 5th-order Hermite: zero 1st AND 2nd derivatives at endpoints.
+            // Gentler onset/offset than cos/sin — reduces perceptual "stepping"
+            // during HRTF transitions, especially at the shadow zone.
+            float t = static_cast<float> (stateBlockCount) / static_cast<float> (kCrossfadeBlocks);
+            if (t > 1.0f) t = 1.0f;
+            float s = t * t * t * (t * (t * 6.0f - 15.0f) + 10.0f);  // smootherstep
+            fadeOutGain = 1.0f - s;
+            fadeInGain  = s;
 
             // Per-sample linear interpolation between previous and current gains
             float fadeOutInc = (fadeOutGain - prevFadeOutGain) / static_cast<float> (numSamples);
