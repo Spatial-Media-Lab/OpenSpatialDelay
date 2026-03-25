@@ -24,19 +24,20 @@ float WSOLAPitcher::process (int objectIndex, float inputSample, float semitones
         return inputSample;
     }
 
-    // v1.0.3: Aggressive normalization to prevent float precision decay (issue #53).
+    // v1.0.3: Frequent normalization to prevent float precision decay (issue #53).
     // IEEE 754 float32 ULP grows with magnitude: at writePos ~1M (21s @ 48kHz),
     // the +1st ratio increment (0.0595) is below ULP and gets rounded to 0,
-    // making small pitch shifts silently fail. Normalizing at kBufSize*2 keeps
-    // writePos in [0, 8191] where ULP = 0.001 — full precision for all pitches.
-    constexpr int kNormThreshold = State::kBufSize * 2;
+    // making small pitch shifts silently fail. Subtract exactly kBufSize when
+    // writePos exceeds kBufSize + kGrainSize, keeping writePos in [kGrainSize+1,
+    // kBufSize + kGrainSize] where ULP ≈ 0.0005 — full precision for all pitches.
+    // Threshold must stay ABOVE kGrainSize to avoid triggering cold-start bypass.
+    constexpr int kNormThreshold = State::kBufSize + State::kGrainSize;
     if (ws.writePos > kNormThreshold)
     {
-        int excess = ws.writePos & ~State::kBufMask;
-        ws.writePos -= excess;
-        ws.readPhase -= static_cast<float> (excess);
+        ws.writePos -= State::kBufSize;
+        ws.readPhase -= static_cast<float> (State::kBufSize);
         if (ws.crossfadeRemaining > 0)
-            ws.fadingPhase -= static_cast<float> (excess);
+            ws.fadingPhase -= static_cast<float> (State::kBufSize);
     }
 
     const float ratio = std::pow (2.0f, semitones / 12.0f);
@@ -143,12 +144,11 @@ void WSOLAPitcher::bypass (int objectIndex, float inputSample)
     ws.crossfadeRemaining = 0;
     ws.fadingPhase = ws.readPhase;
 
-    // v1.0.3: Same aggressive normalization as process() (issue #53).
-    constexpr int kNormThreshold = State::kBufSize * 2;
+    // v1.0.3: Same frequent normalization as process() (issue #53).
+    constexpr int kNormThreshold = State::kBufSize + State::kGrainSize;
     if (ws.writePos > kNormThreshold)
     {
-        int excess = ws.writePos & ~State::kBufMask;
-        ws.writePos -= excess;
+        ws.writePos -= State::kBufSize;
         ws.readPhase = static_cast<float> (ws.writePos - State::kGrainSize / 2);
         ws.fadingPhase = ws.readPhase;
     }
