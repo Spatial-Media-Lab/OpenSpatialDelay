@@ -646,63 +646,139 @@ void PartitionedConvolver::prepare (int maxBlockSize, int irLength_)
 
     fft = juce::dsp::FFT (fftOrder);
 
-    // Allocate buffers (FFT uses 2× size for complex interleaved)
-    irFreqDomain.resize (static_cast<size_t> (fftSize * 2), 0.0f);
-    inputAccum.resize (static_cast<size_t> (fftSize * 2), 0.0f);
-    fftWorkBuf.resize (static_cast<size_t> (fftSize * 2), 0.0f);
-    overlapBuf.resize (static_cast<size_t> (fftSize), 0.0f);
+    // v1.0.5: Allocate dual convolution slots (issue #50)
+    for (int s = 0; s < 2; ++s)
+    {
+        slots[s].irFreqDomain.resize (static_cast<size_t> (fftSize * 2), 0.0f);
+        slots[s].inputAccum.resize (static_cast<size_t> (fftSize * 2), 0.0f);
+        slots[s].fftWorkBuf.resize (static_cast<size_t> (fftSize * 2), 0.0f);
+        slots[s].overlapBuf.resize (static_cast<size_t> (fftSize), 0.0f);
+        slots[s].inputAccumPos = 0;
+    }
 
-    // v1.0.4: Spectral envelope EMA buffers (frequency domain, per-bin mag+phase)
-    int numBins = fftSize / 2 + 1;
-    currentMagnitude.resize (static_cast<size_t> (numBins), 0.0f);
-    targetMagnitude.resize (static_cast<size_t> (numBins), 0.0f);
-    currentPhase.resize (static_cast<size_t> (numBins), 0.0f);
-    targetPhase.resize (static_cast<size_t> (numBins), 0.0f);
+    // Work buffers for dual-slot output mixing
+    slotOutputA.resize (static_cast<size_t> (maxBlockSize), 0.0f);
+    slotOutputB.resize (static_cast<size_t> (maxBlockSize), 0.0f);
+
+    // Pending IR buffer (deferred updates during transitions)
+    pendingIR.resize (static_cast<size_t> (irLen), 0.0f);
+    pendingIRLen = 0;
+    hasPendingIR = false;
 
     reset();
+}
+
+void PartitionedConvolver::loadIRIntoSlot (ConvSlot& slot, const float* ir, int length)
+{
+    std::fill (slot.irFreqDomain.begin(), slot.irFreqDomain.end(), 0.0f);
+    for (int i = 0; i < std::min (length, fftSize); ++i)
+        slot.irFreqDomain[static_cast<size_t> (i)] = ir[i];
+    fft.performRealOnlyForwardTransform (slot.irFreqDomain.data(), true);
+}
+
+void PartitionedConvolver::resetSlot (ConvSlot& slot)
+{
+    std::fill (slot.inputAccum.begin(), slot.inputAccum.end(), 0.0f);
+    std::fill (slot.overlapBuf.begin(), slot.overlapBuf.end(), 0.0f);
+    std::fill (slot.fftWorkBuf.begin(), slot.fftWorkBuf.end(), 0.0f);
+    slot.inputAccumPos = 0;
 }
 
 void PartitionedConvolver::setIR (const float* ir, int length)
 {
     if (fftSize == 0) return;
 
-    // v1.0.4: Spectral envelope EMA smoothing.
-    // Compute target's magnitude and phase in frequency domain.
-    // Only the magnitude is EMA-smoothed; phase always comes from the target.
-    // This prevents comb filtering from blending IRs with misaligned phase.
-
-    // FFT the new IR to get its spectrum
-    std::fill (irFreqDomain.begin(), irFreqDomain.end(), 0.0f);
-    for (int i = 0; i < std::min (length, fftSize); ++i)
-        irFreqDomain[static_cast<size_t> (i)] = ir[i];
-    fft.performRealOnlyForwardTransform (irFreqDomain.data(), true);
-
-    // Extract magnitude and phase from the target spectrum
-    // JUCE real FFT stores: [re0, im0, re1, im1, ..., reN/2, imN/2] (fftSize+1 values)
-    int numBins = fftSize / 2 + 1;
-    for (int k = 0; k < numBins; ++k)
-    {
-        float re = irFreqDomain[static_cast<size_t> (k * 2)];
-        float im = irFreqDomain[static_cast<size_t> (k * 2 + 1)];
-        targetMagnitude[static_cast<size_t> (k)] = std::sqrt (re * re + im * im);
-        targetPhase[static_cast<size_t> (k)] = std::atan2 (im, re);
-    }
-
-    if (! irInitialized)
-    {
-        // First IR: snap both magnitude and phase immediately
-        std::copy (targetMagnitude.begin(), targetMagnitude.end(), currentMagnitude.begin());
-        std::copy (targetPhase.begin(), targetPhase.end(), currentPhase.begin());
-        // irFreqDomain is already correct from the FFT above
-        irInitialized = true;
-        irNeedsSmoothing = false;
-    }
-    else
-    {
-        irNeedsSmoothing = true;
-    }
-
     irLen = length;
+
+    // v1.0.5: Dual-convolver IR loading strategy (issue #50).
+    // First IR ever: load directly into the active slot, no crossfade.
+    if (slots[static_cast<size_t> (activeSlot)].irFreqDomain.empty() ||
+        std::all_of (slots[static_cast<size_t> (activeSlot)].irFreqDomain.begin(),
+                     slots[static_cast<size_t> (activeSlot)].irFreqDomain.end(),
+                     [] (float v) { return v == 0.0f; }))
+    {
+        loadIRIntoSlot (slots[static_cast<size_t> (activeSlot)], ir, length);
+        return;
+    }
+
+    // Mid-transition (Warmup or Crossfading): defer to pendingIR
+    if (state != State::Idle)
+    {
+        for (int i = 0; i < std::min (length, static_cast<int> (pendingIR.size())); ++i)
+            pendingIR[static_cast<size_t> (i)] = ir[i];
+        pendingIRLen = length;
+        hasPendingIR = true;
+        return;
+    }
+
+    // Idle: load new IR into inactive slot, enter Warmup
+    int inactiveSlot = 1 - activeSlot;
+    resetSlot (slots[static_cast<size_t> (inactiveSlot)]);
+    // Sync input accumulator position so both slots process in lockstep
+    slots[static_cast<size_t> (inactiveSlot)].inputAccumPos =
+        slots[static_cast<size_t> (activeSlot)].inputAccumPos;
+    loadIRIntoSlot (slots[static_cast<size_t> (inactiveSlot)], ir, length);
+
+    state = State::Warmup;
+    stateBlockCount = 0;
+}
+
+void PartitionedConvolver::processSlot (ConvSlot& slot, const float* in, float* out, int numSamples)
+{
+    // Standard overlap-save convolution on a single ConvSlot
+    int samplesProcessed = 0;
+
+    while (samplesProcessed < numSamples)
+    {
+        int spaceInAccum = blockSize - slot.inputAccumPos;
+        int samplesToAccum = std::min (spaceInAccum, numSamples - samplesProcessed);
+
+        for (int i = 0; i < samplesToAccum; ++i)
+            slot.inputAccum[static_cast<size_t> (slot.inputAccumPos + i)] = in[samplesProcessed + i];
+
+        slot.inputAccumPos += samplesToAccum;
+        samplesProcessed += samplesToAccum;
+
+        if (slot.inputAccumPos >= blockSize)
+        {
+            // Copy input to work buffer, zero-pad to fftSize
+            std::fill (slot.fftWorkBuf.begin(), slot.fftWorkBuf.end(), 0.0f);
+            for (int i = 0; i < blockSize; ++i)
+                slot.fftWorkBuf[static_cast<size_t> (i)] = slot.inputAccum[static_cast<size_t> (i)];
+
+            // Forward FFT of input
+            fft.performRealOnlyForwardTransform (slot.fftWorkBuf.data(), true);
+
+            // Complex multiply with slot's IR spectrum
+            for (int i = 0; i < fftSize * 2; i += 2)
+            {
+                float re1 = slot.fftWorkBuf[static_cast<size_t> (i)],     im1 = slot.fftWorkBuf[static_cast<size_t> (i + 1)];
+                float re2 = slot.irFreqDomain[static_cast<size_t> (i)],   im2 = slot.irFreqDomain[static_cast<size_t> (i + 1)];
+                slot.fftWorkBuf[static_cast<size_t> (i)]     = re1 * re2 - im1 * im2;
+                slot.fftWorkBuf[static_cast<size_t> (i + 1)] = re1 * im2 + im1 * re2;
+            }
+
+            fft.performRealOnlyInverseTransform (slot.fftWorkBuf.data());
+
+            int outStart = samplesProcessed - blockSize;
+            int outSamples = std::min (blockSize, numSamples - outStart);
+
+            for (int i = 0; i < outSamples; ++i)
+            {
+                out[outStart + i] = slot.fftWorkBuf[static_cast<size_t> (i)]
+                                  + slot.overlapBuf[static_cast<size_t> (i)];
+            }
+
+            // Save overlap for next block
+            int overlapLen = fftSize - blockSize;
+            for (int i = 0; i < overlapLen; ++i)
+                slot.overlapBuf[static_cast<size_t> (i)] = slot.fftWorkBuf[static_cast<size_t> (blockSize + i)];
+            for (int i = overlapLen; i < fftSize; ++i)
+                slot.overlapBuf[static_cast<size_t> (i)] = 0.0f;
+
+            slot.inputAccumPos = 0;
+        }
+    }
 }
 
 void PartitionedConvolver::process (const float* in, float* out, int numSamples)
@@ -715,119 +791,109 @@ void PartitionedConvolver::process (const float* in, float* out, int numSamples)
         return;
     }
 
-    // v1.0.4: Spectral envelope EMA smoothing (issue #47).
-    // Smooth magnitude (linear EMA) and phase (circular EMA) SEPARATELY per bin.
-    // This avoids comb filtering from complex-coefficient blending (which cancels
-    // when phases oppose) while also preventing phase discontinuities.
-    if (irNeedsSmoothing)
+    // v1.0.5: Dual-convolver state machine (issue #50).
+    // Three states: Idle (single slot), Warmup (both process, output only active),
+    // Crossfading (equal-power cos/sin blend with per-sample gain interpolation).
+    switch (state)
     {
-        constexpr float pi = juce::MathConstants<float>::pi;
-        constexpr float twoPi = juce::MathConstants<float>::twoPi;
-        bool stillSmoothing = false;
-        int numBins = fftSize / 2 + 1;
-
-        for (int k = 0; k < numBins; ++k)
+        case State::Idle:
         {
-            // Magnitude: linear EMA
-            float magDiff = targetMagnitude[static_cast<size_t> (k)] - currentMagnitude[static_cast<size_t> (k)];
-            if (std::abs (magDiff) > kIRConvergenceEps)
-            {
-                currentMagnitude[static_cast<size_t> (k)] += kIRSmoothAlpha * magDiff;
-                stillSmoothing = true;
-            }
-
-            // Phase: circular EMA (wrap difference to [-π, π])
-            float phaseDiff = targetPhase[static_cast<size_t> (k)] - currentPhase[static_cast<size_t> (k)];
-            // Wrap to [-π, π]
-            phaseDiff = phaseDiff - twoPi * std::round (phaseDiff / twoPi);
-            if (std::abs (phaseDiff) > kIRConvergenceEps)
-            {
-                currentPhase[static_cast<size_t> (k)] += kIRSmoothAlpha * phaseDiff;
-                stillSmoothing = true;
-            }
+            // Only the active slot processes
+            processSlot (slots[static_cast<size_t> (activeSlot)], in, out, numSamples);
+            break;
         }
 
-        // Reconstruct frequency-domain IR from smoothed magnitude + smoothed phase
-        for (int k = 0; k < numBins; ++k)
+        case State::Warmup:
         {
-            float mag = currentMagnitude[static_cast<size_t> (k)];
-            float phase = currentPhase[static_cast<size_t> (k)];
-            irFreqDomain[static_cast<size_t> (k * 2)]     = mag * std::cos (phase);
-            irFreqDomain[static_cast<size_t> (k * 2 + 1)] = mag * std::sin (phase);
+            // Both slots process, but output only from active slot.
+            // This lets the inactive slot build up its overlap buffer.
+            processSlot (slots[static_cast<size_t> (activeSlot)], in, out, numSamples);
+            processSlot (slots[static_cast<size_t> (1 - activeSlot)], in, slotOutputB.data(), numSamples);
+
+            ++stateBlockCount;
+            if (stateBlockCount >= kWarmupBlocks)
+            {
+                state = State::Crossfading;
+                stateBlockCount = 0;
+                // Initialize crossfade gains
+                prevFadeOutGain = 1.0f;
+                prevFadeInGain  = 0.0f;
+            }
+            break;
         }
 
-        irNeedsSmoothing = stillSmoothing;
-    }
-
-    // Single-convolver overlap-save (no crossfade needed — IR transitions smoothly)
-    int samplesProcessed = 0;
-
-    while (samplesProcessed < numSamples)
-    {
-        int spaceInAccum = blockSize - inputAccumPos;
-        int samplesToAccum = std::min (spaceInAccum, numSamples - samplesProcessed);
-
-        for (int i = 0; i < samplesToAccum; ++i)
-            inputAccum[static_cast<size_t> (inputAccumPos + i)] = in[samplesProcessed + i];
-
-        inputAccumPos += samplesToAccum;
-        samplesProcessed += samplesToAccum;
-
-        if (inputAccumPos >= blockSize)
+        case State::Crossfading:
         {
-            // Copy input to work buffer, zero-pad to fftSize
-            std::fill (fftWorkBuf.begin(), fftWorkBuf.end(), 0.0f);
-            for (int i = 0; i < blockSize; ++i)
-                fftWorkBuf[static_cast<size_t> (i)] = inputAccum[static_cast<size_t> (i)];
+            // Both slots process into separate buffers
+            processSlot (slots[static_cast<size_t> (activeSlot)], in, slotOutputA.data(), numSamples);
+            processSlot (slots[static_cast<size_t> (1 - activeSlot)], in, slotOutputB.data(), numSamples);
 
-            // Forward FFT of input
-            fft.performRealOnlyForwardTransform (fftWorkBuf.data(), true);
+            ++stateBlockCount;
 
-            // Complex multiply with smoothed IR spectrum
-            for (int i = 0; i < fftSize * 2; i += 2)
+            // Compute equal-power crossfade gains for this block's END
+            float progress = static_cast<float> (stateBlockCount) / static_cast<float> (kCrossfadeBlocks);
+            if (progress > 1.0f) progress = 1.0f;
+
+            constexpr float halfPi = juce::MathConstants<float>::halfPi;
+            fadeOutGain = std::cos (progress * halfPi);   // 1 → 0
+            fadeInGain  = std::sin (progress * halfPi);   // 0 → 1
+
+            // Per-sample linear interpolation between previous and current gains
+            float fadeOutInc = (fadeOutGain - prevFadeOutGain) / static_cast<float> (numSamples);
+            float fadeInInc  = (fadeInGain  - prevFadeInGain)  / static_cast<float> (numSamples);
+
+            float gOut = prevFadeOutGain;
+            float gIn  = prevFadeInGain;
+
+            for (int i = 0; i < numSamples; ++i)
             {
-                float re1 = fftWorkBuf[static_cast<size_t> (i)],     im1 = fftWorkBuf[static_cast<size_t> (i + 1)];
-                float re2 = irFreqDomain[static_cast<size_t> (i)],   im2 = irFreqDomain[static_cast<size_t> (i + 1)];
-                fftWorkBuf[static_cast<size_t> (i)]     = re1 * re2 - im1 * im2;
-                fftWorkBuf[static_cast<size_t> (i + 1)] = re1 * im2 + im1 * re2;
+                gOut += fadeOutInc;
+                gIn  += fadeInInc;
+                out[i] = slotOutputA[static_cast<size_t> (i)] * gOut
+                       + slotOutputB[static_cast<size_t> (i)] * gIn;
             }
 
-            fft.performRealOnlyInverseTransform (fftWorkBuf.data());
+            prevFadeOutGain = fadeOutGain;
+            prevFadeInGain  = fadeInGain;
 
-            int outStart = samplesProcessed - blockSize;
-            int outSamples = std::min (blockSize, numSamples - outStart);
-
-            for (int i = 0; i < outSamples; ++i)
+            // Check if crossfade is complete
+            if (stateBlockCount >= kCrossfadeBlocks)
             {
-                out[outStart + i] = fftWorkBuf[static_cast<size_t> (i)]
-                                  + overlapBuf[static_cast<size_t> (i)];
+                // Swap active slot to the new one
+                activeSlot = 1 - activeSlot;
+                state = State::Idle;
+                stateBlockCount = 0;
+                fadeOutGain = 1.0f;
+                fadeInGain  = 0.0f;
+                prevFadeOutGain = 1.0f;
+                prevFadeInGain  = 0.0f;
+
+                // Apply any pending IR that arrived during the transition
+                if (hasPendingIR)
+                {
+                    hasPendingIR = false;
+                    setIR (pendingIR.data(), pendingIRLen);
+                }
             }
-
-            // Save overlap for next block
-            int overlapLen = fftSize - blockSize;
-            for (int i = 0; i < overlapLen; ++i)
-                overlapBuf[static_cast<size_t> (i)] = fftWorkBuf[static_cast<size_t> (blockSize + i)];
-            for (int i = overlapLen; i < fftSize; ++i)
-                overlapBuf[static_cast<size_t> (i)] = 0.0f;
-
-            inputAccumPos = 0;
+            break;
         }
     }
 }
 
 void PartitionedConvolver::reset()
 {
-    std::fill (inputAccum.begin(), inputAccum.end(), 0.0f);
-    std::fill (overlapBuf.begin(), overlapBuf.end(), 0.0f);
-    std::fill (fftWorkBuf.begin(), fftWorkBuf.end(), 0.0f);
-    std::fill (irFreqDomain.begin(), irFreqDomain.end(), 0.0f);
-    std::fill (currentMagnitude.begin(), currentMagnitude.end(), 0.0f);
-    std::fill (targetMagnitude.begin(), targetMagnitude.end(), 0.0f);
-    std::fill (currentPhase.begin(), currentPhase.end(), 0.0f);
-    std::fill (targetPhase.begin(), targetPhase.end(), 0.0f);
-    irNeedsSmoothing = false;
-    irInitialized = false;
-    inputAccumPos = 0;
+    for (int s = 0; s < 2; ++s)
+        resetSlot (slots[s]);
+
+    state = State::Idle;
+    activeSlot = 0;
+    stateBlockCount = 0;
+    fadeOutGain = 1.0f;
+    fadeInGain  = 0.0f;
+    prevFadeOutGain = 1.0f;
+    prevFadeInGain  = 0.0f;
+    hasPendingIR = false;
+    pendingIRLen = 0;
 }
 
 //==============================================================================
@@ -900,19 +966,6 @@ void BinauralRenderer::setProfile (int profileIndex, HRTFDatabase& hrtfDb)
     const float targetRMS = 1.0f / std::sqrt ((float) irLen);
     const double avgRMS   = std::sqrt (totalEnergy / (double) (NUM_REF_DIRS * 2 * irLen));
     storedNormGain = (avgRMS > 1e-8) ? (float) (targetRMS / avgRMS) : 1.0f;
-
-    // =========================================================================
-    // v1.0.4: Pre-allocate minimum-phase extraction buffer.
-    // Use 4× IR length for FFT to preserve stopband magnitude after truncation.
-    // =========================================================================
-    {
-        int mpSize = 4 * irLen;
-        minPhaseFFTOrder = 1;
-        while ((1 << minPhaseFFTOrder) < mpSize)
-            ++minPhaseFFTOrder;
-        int mpFFTSize = 1 << minPhaseFFTOrder;
-        minPhaseWorkBuf.resize (static_cast<size_t> (mpFFTSize * 2), 0.0f);
-    }
 
     // =========================================================================
     // Prepare per-source convolvers (allocate FFT buffers for irLength).
@@ -3628,7 +3681,13 @@ void OpenSpatialDelayProcessor::processFeedbackSample (float currentLoopMult,
     float feedbackRaw = readDelayLineMono (fbDelaySamples);
     float filtered = filters.processFeedbackSample (feedbackRaw);
     const float makeupGain = 1.0f + (fb * fb * kMakeupGainCoeff);
-    feedbackSample = softClip (filtered * makeupGain);
+    float newFeedback = softClip (filtered * makeupGain);
+    // v1.0.5: One-pole lowpass on feedback signal prevents the feedback loop from
+    // amplifying HRTF crossfade transitions into audible pops (issue #50).
+    // Alpha = 0.15 gives ~1.8ms smoothing at 48kHz — fast enough for musical delay
+    // response, slow enough to attenuate the block-rate crossfade transients.
+    constexpr float kFeedbackSmoothAlpha = 0.3f;
+    feedbackSample += kFeedbackSmoothAlpha * (newFeedback - feedbackSample);
     if (! std::isfinite (feedbackSample))
     {
         feedbackSample = 0.0f;
