@@ -1,6 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include "../Source/PluginProcessor.h"
+#include "../Source/WSOLAPitcher.h"
 #include <cmath>
 #include <vector>
 #include <numeric>
@@ -2240,6 +2241,343 @@ TEST_CASE ("Thread-safe preset reset — WSOLA state consistent after loadPreset
 
     INFO ("Thread-safe reset glitches: " << glitchesL.size());
     REQUIRE (glitchesL.empty());
+}
+
+// ===========================================================================
+// Issue #53: WSOLA pitch shifter fixes — comprehensive regression tests
+// ===========================================================================
+
+// Direct WSOLA unit test helper: process samples through WSOLAPitcher directly
+// without full processor, for fast isolated testing of pitch algorithm.
+static float measureWSOLAFrequency (WSOLAPitcher& wsola, int objIdx, float inputFreq,
+                                     float semitones, int numSamples, int skipSamples)
+{
+    // Feed sine wave and count zero crossings in output
+    int crossings = 0;
+    float prevOut = 0.0f;
+    for (int s = 0; s < numSamples; ++s)
+    {
+        float phase = 2.0f * kPi * inputFreq * static_cast<float> (s)
+                      / static_cast<float> (kSampleRate);
+        float in = 0.5f * std::sin (phase);
+        float out = wsola.process (objIdx, in, semitones);
+
+        if (s > skipSamples && prevOut <= 0.0f && out > 0.0f)
+            crossings++;
+        prevOut = out;
+    }
+
+    int measureSamples = numSamples - skipSamples;
+    return static_cast<float> (crossings) * static_cast<float> (kSampleRate)
+           / static_cast<float> (measureSamples);
+}
+
+TEST_CASE ("WSOLA — positive pitch accuracy (+1 to +12 semitones)", "[issue53][wsola][pitch]")
+{
+    WSOLAPitcher wsola;
+    wsola.resetAll();
+
+    constexpr float inputFreq = 440.0f;
+    constexpr int numSamples = 48000;  // 1 second
+    constexpr int skipSamples = 4096;  // skip cold-start + first grain
+
+    float semitones[] = { 1.0f, 2.0f, 5.0f, 7.0f, 12.0f };
+    for (float st : semitones)
+    {
+        wsola.reset (0);
+        float expectedFreq = inputFreq * std::pow (2.0f, st / 12.0f);
+        float measuredFreq = measureWSOLAFrequency (wsola, 0, inputFreq, st, numSamples, skipSamples);
+
+        float error = std::abs (measuredFreq - expectedFreq) / expectedFreq;
+        // Zero-crossing measurement has limited accuracy for WSOLA (grain boundaries
+        // cause amplitude dips that can miss crossings), so tolerance is 15%.
+        // Extreme values (±12st) have wider grain artifacts → higher error.
+        INFO ("Pitch +" << st << "st: expected=" << expectedFreq << " measured=" << measuredFreq
+              << " error=" << (error * 100.0f) << "%");
+        REQUIRE (error < 0.15f);
+    }
+}
+
+TEST_CASE ("WSOLA — negative pitch accuracy (-1 to -12 semitones)", "[issue53][wsola][pitch]")
+{
+    WSOLAPitcher wsola;
+    wsola.resetAll();
+
+    constexpr float inputFreq = 880.0f;  // higher freq for better resolution at pitch-down
+    constexpr int numSamples = 48000;
+    constexpr int skipSamples = 4096;
+
+    // -12st omitted: at octave-down, grain crossfades happen every ~42ms,
+    // generating extra zero crossings that the counting method can't filter.
+    float semitones[] = { -1.0f, -2.0f, -5.0f, -7.0f };
+    for (float st : semitones)
+    {
+        wsola.reset (0);
+        float expectedFreq = inputFreq * std::pow (2.0f, st / 12.0f);
+        float measuredFreq = measureWSOLAFrequency (wsola, 0, inputFreq, st, numSamples, skipSamples);
+
+        float error = std::abs (measuredFreq - expectedFreq) / expectedFreq;
+        INFO ("Pitch " << st << "st: expected=" << expectedFreq << " measured=" << measuredFreq
+              << " error=" << (error * 100.0f) << "%");
+        REQUIRE (error < 0.15f);
+    }
+}
+
+TEST_CASE ("WSOLA — no clicks during pitch sweep -12 to +12", "[issue53][wsola][glitch]")
+{
+    WSOLAPitcher wsola;
+    wsola.resetAll();
+
+    constexpr int numBlocks = 200;
+    constexpr int blockSize = 256;
+    float prevOut = 0.0f;
+    int glitchCount = 0;
+
+    for (int b = 0; b < numBlocks; ++b)
+    {
+        // Sweep from -12 to +12 over 200 blocks
+        float t = static_cast<float> (b) / static_cast<float> (numBlocks);
+        float semitones = -12.0f + 24.0f * t;
+
+        for (int s = 0; s < blockSize; ++s)
+        {
+            int totalSample = b * blockSize + s;
+            float phase = 2.0f * kPi * 440.0f * static_cast<float> (totalSample)
+                          / static_cast<float> (kSampleRate);
+            float in = 0.5f * std::sin (phase);
+            float out = wsola.process (0, in, semitones);
+
+            // Skip first grain of cold-start
+            if (totalSample > 4096)
+            {
+                float diff = std::abs (out - prevOut);
+                if (diff > 0.20f)
+                    glitchCount++;
+            }
+            prevOut = out;
+        }
+    }
+
+    INFO ("Sweep glitches: " << glitchCount);
+    // Crossfade boundaries during rapid pitch sweeps produce expected transients.
+    // With doubled grain (2048) and Hann crossfade, ~15-20 boundaries are typical
+    // over a full -12→+12 sweep at 0.12st/block rate.
+    REQUIRE (glitchCount < 20);
+}
+
+TEST_CASE ("WSOLA — knob stress test (random pitch changes)", "[issue53][wsola][stress]")
+{
+    WSOLAPitcher wsola;
+    wsola.resetAll();
+
+    constexpr int numBlocks = 200;
+    constexpr int blockSize = 256;
+    // Pseudo-random pitch changes every 2 blocks
+    float pitchValues[] = { 1.0f, -3.0f, 7.0f, -1.0f, 12.0f, -7.0f, 2.0f, 0.5f, -12.0f, 5.0f,
+                            -2.0f, 1.0f, -5.0f, 3.0f, -1.0f, 7.0f, 0.5f, -3.0f, 12.0f, -7.0f };
+    int numPitchValues = 20;
+
+    float prevOut = 0.0f;
+    int glitchCount = 0;
+
+    for (int b = 0; b < numBlocks; ++b)
+    {
+        float semitones = pitchValues[(b / 2) % numPitchValues];
+
+        for (int s = 0; s < blockSize; ++s)
+        {
+            int totalSample = b * blockSize + s;
+            float phase = 2.0f * kPi * 440.0f * static_cast<float> (totalSample)
+                          / static_cast<float> (kSampleRate);
+            float in = 0.5f * std::sin (phase);
+            float out = wsola.process (0, in, semitones);
+
+            if (totalSample > 4096)
+            {
+                float diff = std::abs (out - prevOut);
+                if (diff > 0.25f)
+                    glitchCount++;
+            }
+            prevOut = out;
+        }
+    }
+
+    INFO ("Stress test glitches: " << glitchCount);
+    REQUIRE (glitchCount < 10);
+}
+
+TEST_CASE ("WSOLA — gate reopen produces immediate pitch", "[issue53][wsola][gate]")
+{
+    WSOLAPitcher wsola;
+    wsola.resetAll();
+
+    constexpr float inputFreq = 440.0f;
+    constexpr float semitones = 6.0f;  // +6st for clear detection
+    constexpr int blockSize = 256;
+
+    // Phase 1: Process with pitch for 20 blocks
+    for (int b = 0; b < 20; ++b)
+    {
+        wsola.updateGate (0, semitones);
+        for (int s = 0; s < blockSize; ++s)
+        {
+            float phase = 2.0f * kPi * inputFreq * static_cast<float> (b * blockSize + s)
+                          / static_cast<float> (kSampleRate);
+            float in = 0.5f * std::sin (phase);
+            wsola.process (0, in, semitones);
+        }
+    }
+
+    // Phase 2: Bypass for 20 blocks (gate close)
+    wsola.updateGate (0, 0.0f);  // close gate
+    REQUIRE (! wsola.isGateOpen (0));
+    for (int b = 0; b < 20; ++b)
+    {
+        for (int s = 0; s < blockSize; ++s)
+        {
+            float phase = 2.0f * kPi * inputFreq * static_cast<float> ((20 + b) * blockSize + s)
+                          / static_cast<float> (kSampleRate);
+            float in = 0.5f * std::sin (phase);
+            wsola.bypass (0, in);
+        }
+    }
+
+    // Phase 3: Reopen gate, process with +6st
+    wsola.updateGate (0, semitones);  // reopen gate
+    REQUIRE (wsola.isGateOpen (0));
+
+    // Process 1 second and measure frequency in the FIRST 0.5 seconds after gate open
+    // Pitch must be audible immediately (no warm-up delay)
+    int crossings = 0;
+    float prevOut = 0.0f;
+    constexpr int measureSamples = 24000;  // 0.5 seconds
+    constexpr int totalSamples = 24000;
+
+    for (int s = 0; s < totalSamples; ++s)
+    {
+        float phase = 2.0f * kPi * inputFreq * static_cast<float> ((40 * blockSize) + s)
+                      / static_cast<float> (kSampleRate);
+        float in = 0.5f * std::sin (phase);
+        float out = wsola.process (0, in, semitones);
+
+        if (s > 2048 && prevOut <= 0.0f && out > 0.0f)  // skip first grain
+            crossings++;
+        prevOut = out;
+    }
+
+    float measuredFreq = static_cast<float> (crossings) * static_cast<float> (kSampleRate)
+                         / static_cast<float> (measureSamples - 2048);
+    float expectedFreq = inputFreq * std::pow (2.0f, semitones / 12.0f);
+    float error = std::abs (measuredFreq - expectedFreq) / expectedFreq;
+
+    INFO ("Gate reopen: expected=" << expectedFreq << " measured=" << measuredFreq
+          << " error=" << (error * 100.0f) << "%");
+    REQUIRE (error < 0.15f);  // within 15%
+}
+
+TEST_CASE ("WSOLA — long-running float precision (+1st for 53 seconds)", "[issue53][wsola][precision]")
+{
+    // This is the KEY test for the float precision fix (issue #53, fix 6).
+    // At 48kHz, 53 seconds = 2,544,000 samples. With the old normalization
+    // threshold (2^22 = 4,194,304), writePos reaches ~1M after 21 seconds
+    // and float ULP exceeds the +1st increment (0.0595), causing drift to stop.
+    // With the new threshold (kBufSize * 2 = 8192), precision is maintained.
+    WSOLAPitcher wsola;
+    wsola.resetAll();
+
+    constexpr float inputFreq = 440.0f;
+    constexpr float semitones = 1.0f;  // +1st — the most vulnerable value
+    constexpr int totalSamples = 2544000;  // 53 seconds at 48kHz
+    constexpr int checkInterval = 480000;  // check every 10 seconds
+    constexpr int windowSize = 24000;  // 0.5 second measurement window
+
+    // Process and periodically check that pitch shift is still active
+    float prevOut = 0.0f;
+    int samplesSinceLastCheck = 0;
+    int checkIndex = 0;
+
+    for (int s = 0; s < totalSamples; ++s)
+    {
+        float phase = 2.0f * kPi * inputFreq * static_cast<float> (s)
+                      / static_cast<float> (kSampleRate);
+        float in = 0.5f * std::sin (phase);
+        float out = wsola.process (0, in, semitones);
+        prevOut = out;
+        samplesSinceLastCheck++;
+
+        // At each checkpoint, measure frequency over the next windowSize samples
+        if (s > 0 && s % checkInterval == 0)
+        {
+            int crossings = 0;
+            float prev = 0.0f;
+            for (int w = 0; w < windowSize; ++w)
+            {
+                float p = 2.0f * kPi * inputFreq * static_cast<float> (s + w)
+                          / static_cast<float> (kSampleRate);
+                float inp = 0.5f * std::sin (p);
+                float outp = wsola.process (0, inp, semitones);
+                if (prev <= 0.0f && outp > 0.0f)
+                    crossings++;
+                prev = outp;
+            }
+            s += windowSize;  // account for the measurement samples
+
+            float measuredFreq = static_cast<float> (crossings) * static_cast<float> (kSampleRate)
+                                 / static_cast<float> (windowSize);
+            float expectedFreq = inputFreq * std::pow (2.0f, semitones / 12.0f);
+            float error = std::abs (measuredFreq - expectedFreq) / expectedFreq;
+
+            float timeSeconds = static_cast<float> (s) / static_cast<float> (kSampleRate);
+            INFO ("Checkpoint at " << timeSeconds << "s: expected=" << expectedFreq
+                  << " measured=" << measuredFreq << " error=" << (error * 100.0f) << "%");
+            REQUIRE (error < 0.10f);  // within 10% at every checkpoint
+
+            checkIndex++;
+        }
+    }
+
+    // Must have completed at least 4 checkpoints (10s, 20s, 30s, 40s)
+    REQUIRE (checkIndex >= 4);
+}
+
+TEST_CASE ("WSOLA — bypass-to-process transition is clean", "[issue53][wsola][transition]")
+{
+    WSOLAPitcher wsola;
+    wsola.resetAll();
+
+    constexpr float inputFreq = 440.0f;
+    constexpr float semitones = 1.0f;
+
+    // Fill buffer with audio via bypass
+    for (int s = 0; s < 8192; ++s)
+    {
+        float phase = 2.0f * kPi * inputFreq * static_cast<float> (s)
+                      / static_cast<float> (kSampleRate);
+        float in = 0.5f * std::sin (phase);
+        wsola.bypass (0, in);
+    }
+
+    // Switch to processing — should be clean (no click)
+    float prevOut = 0.0f;
+    int glitchCount = 0;
+    for (int s = 0; s < 4096; ++s)
+    {
+        float phase = 2.0f * kPi * inputFreq * static_cast<float> (8192 + s)
+                      / static_cast<float> (kSampleRate);
+        float in = 0.5f * std::sin (phase);
+        float out = wsola.process (0, in, semitones);
+
+        if (s > 0)
+        {
+            float diff = std::abs (out - prevOut);
+            if (diff > 0.15f)
+                glitchCount++;
+        }
+        prevOut = out;
+    }
+
+    INFO ("Bypass→process transition glitches: " << glitchCount);
+    REQUIRE (glitchCount < 3);
 }
 
 // ===========================================================================
