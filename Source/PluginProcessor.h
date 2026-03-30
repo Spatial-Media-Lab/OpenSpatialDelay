@@ -955,6 +955,14 @@ private:
     std::vector<float> inputBufferL;   // v0.8: per-channel input for stereo delay lines
     std::vector<float> inputBufferR;
 
+    // v1.0.7: Dry path latency compensation (issue #63)
+    // The phase vocoder adds kFFTSize (2048) samples of latency to the wet path.
+    // The dry signal must be delayed by the same amount so the DAW's PDC is correct
+    // at all dry/wet settings. Without this, the dry signal arrives 2048 samples early.
+    std::vector<float> dryDelayLine;        // circular buffer, size = kFFTSize
+    int dryDelayWritePos = 0;
+    std::vector<float> dryCompBuffer;       // pre-filled delayed dry signal for current block
+
     // v0.5: Contiguous per-source accumulation buffers for direct HRTF convolution
     std::vector<float> sourceAccumBufStorage;          // MAX_OBJECTS * maxBlockSize (contiguous)
     float* sourceAccumBufPtrs[MAX_OBJECTS] = {};       // pointers into storage
