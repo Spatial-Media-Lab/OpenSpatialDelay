@@ -33,9 +33,15 @@ cd "${BUILD_DIR}"
 git checkout "${COMMIT}" -- . 2>/dev/null
 git submodule update --init --recursive 2>/dev/null
 
-# Step 2: Patch CMakeLists.txt with version-specific name and plugin code
+# Step 2: Patch CMakeLists.txt with version-specific name, plugin code, and bundle ID
 sed -i '' "s/PLUGIN_CODE Os10/PLUGIN_CODE ${PLUGIN_CODE}/" CMakeLists.txt
 sed -i '' "s/PRODUCT_NAME \"OpenSpatialDelay v1.0\"/PRODUCT_NAME \"${PLUGIN_NAME}\"/" CMakeLists.txt
+
+# v1.0.7: Unique CFBundleIdentifier per version to prevent heap corruption when
+# multiple versioned builds are loaded simultaneously (issue #62).
+# Without this, macOS shares/confuses static resources between bundles with the same ID.
+BUNDLE_SUFFIX=$(echo "${VERSION}" | tr '.' '-')  # e.g., v1.0.7 → v1-0-7
+sed -i '' "s/JucePlugin_CFBundleIdentifier=com.SpatialMediaLibrary.OpenSpatialDelay/JucePlugin_CFBundleIdentifier=com.SpatialMediaLibrary.OpenSpatialDelay.${BUNDLE_SUFFIX}/g" CMakeLists.txt
 
 # Step 3: Patch install script with version-specific name
 sed -i '' "s/PLUGIN_NAME=\"OpenSpatialDelay v1.0\"/PLUGIN_NAME=\"${PLUGIN_NAME}\"/" scripts/install_plugins.sh
