@@ -3,7 +3,7 @@
 #include <array>
 #include <vector>
 #include "PresetData.h"
-#include "WSOLAPitcher.h"
+#include "PhaseVocoderPitchShifter.h"
 #include "DopplerVelocity.h"
 #include "TrajectoryEngine.h"
 #include "FilterBank.h"
@@ -878,8 +878,8 @@ private:
     // v1.0.1: Filter management — extracted to FilterBank class
     FilterBank filters;
 
-    // v1.0.1: WSOLA pitch shifter — extracted to WSOLAPitcher class for testability
-    WSOLAPitcher wsola;
+    // v1.0.6: Phase vocoder pitch shifter — replaces WSOLA-Lite (issue #60)
+    PhaseVocoderPitchShifter pvPitchShifters[MAX_OBJECTS];
 
     // v1.0.1: Thread-safe preset reset — loadPreset() (message thread) stores pending
     // state here; processBlock() (audio thread) applies it, eliminating the data race
