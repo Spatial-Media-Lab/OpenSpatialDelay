@@ -397,10 +397,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.0f,
             juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
 
-        // v0.8: Per-object pitch shift (semitones, integer ±24)
+        // v1.0.6: Per-object pitch shift (semitones, integer ±12 — PV quality range)
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("pitchShift"), name ("Pitch Shift"),
-            juce::NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 0.0f,
+            juce::NormalisableRange<float> (-12.0f, 12.0f, 1.0f), 0.0f,
             juce::AudioParameterFloatAttributes().withStringFromValueFunction (
                 [](float value, int) { return juce::String (juce::roundToInt (value)) + " st"; })));
 
@@ -2355,8 +2355,10 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     smoothedWobbleAmount.setCurrentAndTargetValue (0.0f);
     blockWobbleMorph = 0.0f;
 
-    // v1.0.1: Reset WSOLA pitch shifter
-    wsola.resetAll();
+    // v1.0.6: Reset phase vocoder pitch shifters and report latency (issue #60)
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+        pvPitchShifters[i].reset();
+    setLatencySamples (PhaseVocoderPitchShifter::kFFTSize);
 
     // v1.0: Initialize tap fade envelopes
     for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -2529,7 +2531,7 @@ float OpenSpatialDelayProcessor::readDelayLineMono (float delaySamples) const
     return (readDelayLineL (delaySamples) + readDelayLineR (delaySamples)) * 0.5f;
 }
 
-// v1.0.1: WSOLA pitch shifter moved to WSOLAPitcher.h/cpp
+// v1.0.6: Pitch shifting via PhaseVocoderPitchShifter (issue #60)
 
 // #############################################################################
 // SPATIAL MEDIA LIBRARY — Spatialization algorithm implementations
@@ -3651,14 +3653,8 @@ float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDe
     if (ch == DelayChannel::Left)       objMono = readDelayLineL (objDelaySamples);
     else if (ch == DelayChannel::Right) objMono = readDelayLineR (objDelaySamples);
 
-    // v1.0.1: WSOLA gate + process via extracted WSOLAPitcher class.
-    // Gate uses USER pitch only so Doppler cannot close it (issue #42, bug 3).
-    wsola.updateGate (objectIndex, perTapPitch);
-
-    if (wsola.isGateOpen (objectIndex))
-        objMono = wsola.process (objectIndex, objMono, combinedPitch);
-    else
-        wsola.bypass (objectIndex, objMono);
+    // v1.0.6: Phase vocoder pitch shift — handles bypass internally when |semitones| < 0.01 (issue #60)
+    objMono = pvPitchShifters[objectIndex].process (objMono, combinedPitch);
     // v1.0.1: Air absorption + tap filters via FilterBank class
     float result = filters.processAirSample (objectIndex, objMono);
     result = filters.processTapSample (objectIndex, result);
@@ -3717,7 +3713,8 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         for (int i = 0; i < MAX_OBJECTS; ++i)
             doppler.reset (i, pendingReset.prevAz[i], pendingReset.prevEl[i], pendingReset.prevDist[i]);
 
-        wsola.resetAll();
+        for (int i = 0; i < MAX_OBJECTS; ++i)
+            pvPitchShifters[i].reset();
 
         filters.resetAll();
 

@@ -21,7 +21,10 @@ bash scripts/build_version.sh <commit-hash> v1.0.X O10X
 - v1.0.1 / O101 — dual-convolver output crossfade + feedback smoothing (commit 99d1525)
 - v1.0.2 / O102 — smootherstep crossfade + 6-block duration, 195/195 pass (commit 44185d4)
 - v1.0.3 / O103 — WSOLA float precision fix + 5 bug fixes + doubled buffers (commit 19ddb28)
-- Next available: **v1.0.4 / O104**
+- v1.0.4 / O104 — spectral envelope EMA smoothing
+- v1.0.5 / O105 — feedback EMA smoothing for HRTF crossfade pops
+- v1.0.6 / O106 — Phase vocoder pitch shifter replacing WSOLA-Lite (issue #60)
+- Next available: **v1.0.7 / O107**
 
 ### Running tests
 
@@ -53,6 +56,14 @@ cmake --build build --target OpenSpatialDelayTests -j$(sysctl -n hw.ncpu)
 
 ### PartitionedConvolver (v1.0.4)
 Uses spectral envelope EMA smoothing: magnitude and phase smoothed separately per frequency bin. This prevents comb filtering from phase-misaligned time-domain blending.
+
+### Phase Vocoder Pitch Shifter (v1.0.6)
+Replaces WSOLA-Lite. Uses STFT (2048-point FFT, 4x overlap) with:
+- Laroche-Dolson phase locking for tonal content
+- Röbel-style spectral flux transient detection with adaptive median threshold
+- Phase reset on transient frames preserves attack sharpness
+- Latency: 2048 samples (reported to DAW via setLatencySamples)
+- Range: ±12 semitones (combined with Doppler)
 
 ### ITD delay line
 For MIT KEMAR SOFA file, ITD values are always 0 (embedded in HRIR waveform). The ITD delay line is effectively a pass-through for this dataset.
