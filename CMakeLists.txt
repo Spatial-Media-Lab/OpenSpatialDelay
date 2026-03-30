@@ -105,7 +105,7 @@ target_sources(OpenSpatialDelay
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/PresetData.cpp
-        Source/WSOLAPitcher.cpp
+        Source/PhaseVocoderPitchShifter.h
         Source/DopplerVelocity.cpp
         Source/TrajectoryEngine.cpp
         Source/FilterBank.cpp
@@ -195,7 +195,7 @@ if(BUILD_OSD_TESTS)
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/PresetData.cpp
-        Source/WSOLAPitcher.cpp
+        Source/PhaseVocoderPitchShifter.h
         Source/DopplerVelocity.cpp
         Source/TrajectoryEngine.cpp
         Source/FilterBank.cpp
@@ -282,6 +282,10 @@ add_executable(screenshot_tool
     Source/PluginProcessor.cpp
     Source/PluginEditor.cpp
     Source/PresetData.cpp
+    Source/PhaseVocoderPitchShifter.h
+    Source/DopplerVelocity.cpp
+    Source/TrajectoryEngine.cpp
+    Source/FilterBank.cpp
 )
 
 target_link_libraries(screenshot_tool
