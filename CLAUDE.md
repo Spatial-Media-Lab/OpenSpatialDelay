@@ -25,7 +25,8 @@ bash scripts/build_version.sh <commit-hash> v1.0.X O10X
 - v1.0.5 / O105 — feedback EMA smoothing for HRTF crossfade pops
 - v1.0.6 / O106 — Phase vocoder pitch shifter replacing WSOLA-Lite (issue #60)
 - v1.0.7 / O107 — dry path latency compensation + unique CFBundleIdentifier per build (issues #63, #62)
-- Next available: **v1.0.8 / O108**
+- v1.0.8 / O108 — transport-aware PV reset for intermittent buzzing (issue #65)
+- Next available: **v1.0.9 / O109**
 
 ### Running tests
 
