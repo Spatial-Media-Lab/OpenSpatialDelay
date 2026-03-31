@@ -881,6 +881,11 @@ private:
     // v1.0.6: Phase vocoder pitch shifter — replaces WSOLA-Lite (issue #60)
     PhaseVocoderPitchShifter pvPitchShifters[MAX_OBJECTS];
 
+    // v1.0.8: Transport-aware PV reset — clears stale phase state on transport
+    // stop/start/seek to prevent intermittent buzzing artifacts (issue #65)
+    bool wasPlaying = false;
+    juce::int64 expectedNextSample = 0;
+
     // v1.0.1: Thread-safe preset reset — loadPreset() (message thread) stores pending
     // state here; processBlock() (audio thread) applies it, eliminating the data race
     // that caused intermittent WSOLA/Doppler corruption on preset changes (issue #42).

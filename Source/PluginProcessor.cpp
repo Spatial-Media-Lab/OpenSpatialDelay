@@ -3711,6 +3711,36 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     if (delayBufferL.empty() || numSamples <= 0)
         return;
 
+    // v1.0.8: Transport-aware PV reset — clear stale phase state on transport
+    // stop→play, seek, or position jump to prevent intermittent buzzing (issue #65).
+    // The PV maintains phase/magnitude arrays across blocks; stale data after a
+    // transport discontinuity can cause phase coherence errors that sound like buzz.
+    {
+        auto* playHead = getPlayHead();
+        if (playHead != nullptr)
+        {
+            auto pos = playHead->getPosition();
+            if (pos.hasValue())
+            {
+                bool isPlaying = pos->getIsPlaying();
+                juce::int64 currentSample = pos->getTimeInSamples().orFallback (-1);
+
+                bool transportStarted = (! wasPlaying && isPlaying);
+                bool transportJumped  = (isPlaying && currentSample >= 0
+                                         && std::abs (currentSample - expectedNextSample) > numSamples);
+
+                if (transportStarted || transportJumped)
+                {
+                    for (int i = 0; i < MAX_OBJECTS; ++i)
+                        pvPitchShifters[i].reset();
+                }
+
+                wasPlaying = isPlaying;
+                expectedNextSample = currentSample + numSamples;
+            }
+        }
+    }
+
     // v1.0.1: Apply deferred preset reset on the audio thread (thread-safe).
     // loadPreset() sets the flag; we do the actual WSOLA/Doppler/filter reset here
     // so there's no race between message thread writes and audio thread reads.
