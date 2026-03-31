@@ -2360,6 +2360,12 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
         pvPitchShifters[i].reset();
     setLatencySamples (PhaseVocoderPitchShifter::kFFTSize);
 
+    // v1.0.7: Dry path latency compensation (issue #63)
+    // Delay dry signal by kFFTSize samples to match the phase vocoder's wet path latency.
+    dryDelayLine.assign (static_cast<size_t> (PhaseVocoderPitchShifter::kFFTSize), 0.0f);
+    dryDelayWritePos = 0;
+    dryCompBuffer.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+
     // v1.0: Initialize tap fade envelopes
     for (int t = 0; t < MAX_OBJECTS; ++t)
     {
@@ -3945,6 +3951,22 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         }
     }
 
+    // v1.0.7: Fill latency-compensated dry buffer (issue #63)
+    // The phase vocoder adds kFFTSize samples of latency to the wet path.
+    // Delay the dry signal by the same amount so DAW PDC is correct at all dry/wet levels.
+    if (dryCompBuffer.size() < ns)
+        dryCompBuffer.resize (ns);
+    {
+        const int dryDelaySize = static_cast<int> (dryDelayLine.size());
+        for (int i = 0; i < numSamples; ++i)
+        {
+            // Read delayed sample first, then overwrite with new input
+            dryCompBuffer[static_cast<size_t> (i)] = dryDelayLine[static_cast<size_t> (dryDelayWritePos)];
+            dryDelayLine[static_cast<size_t> (dryDelayWritePos)] = monoInputBuffer[static_cast<size_t> (i)];
+            dryDelayWritePos = (dryDelayWritePos + 1) % dryDelaySize;
+        }
+    }
+
     // --- Clear output buffer -------------------------------------------------
     buffer.clear();
 
@@ -4111,7 +4133,7 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
         float frac    = static_cast<float> (s) * invN;
         float dw      = dwStart + frac * (dwEnd - dwStart);
         float outGain = outGainStart + frac * (outGainEnd - outGainStart);
-        float rawInput = monoInputBuffer[static_cast<size_t> (s)];
+        float rawInput = dryCompBuffer[static_cast<size_t> (s)];  // v1.0.7: latency-compensated dry signal (issue #63)
 
         outL[s] = outputLimiter ((rawInput * (1.0f - dw) + wetBufL[static_cast<size_t> (s)] * dw) * outGain);
         outR[s] = outputLimiter ((rawInput * (1.0f - dw) + wetBufR[static_cast<size_t> (s)] * dw) * outGain);
@@ -4158,7 +4180,7 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
         float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
         float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
         writeDelayLine (delayInputL, delayInputR);
-        float rawInput = monoInputBuffer[static_cast<size_t> (s)];  // for dry mix (no inGain — INPUT only scales delay input)
+        float rawInput = dryCompBuffer[static_cast<size_t> (s)];  // v1.0.7: latency-compensated dry signal (issue #63)
 
         // === STAGE 2: READ & SPATIALIZE ===
         float wetL = 0.0f, wetR = 0.0f;
@@ -4296,7 +4318,7 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
         float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
         float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
         writeDelayLine (delayInputL, delayInputR);
-        float rawInput = monoInputBuffer[static_cast<size_t> (s)];  // for dry mix (no inGain — INPUT only scales delay input)
+        float rawInput = dryCompBuffer[static_cast<size_t> (s)];  // v1.0.7: latency-compensated dry signal (issue #63)
 
         // === STAGE 2: READ & SPATIALIZE ===
         float wetL = 0.0f, wetR = 0.0f;
@@ -4443,7 +4465,7 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
         float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
         float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
         writeDelayLine (delayInputL, delayInputR);
-        float rawInput = monoInputBuffer[static_cast<size_t> (s)];  // for dry mix (no inGain — INPUT only scales delay input)
+        float rawInput = dryCompBuffer[static_cast<size_t> (s)];  // v1.0.7: latency-compensated dry signal (issue #63)
 
         // === STAGE 2: READ & SH ENCODE (with NFC-HOA) ===
         float ambiAccum[MAX_AMBI_CHANNELS] = {};
@@ -4547,7 +4569,7 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
         float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
         float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
         writeDelayLine (delayInputL, delayInputR);
-        float rawInput = monoInputBuffer[static_cast<size_t> (s)];  // for dry mix (no inGain — INPUT only scales delay input)
+        float rawInput = dryCompBuffer[static_cast<size_t> (s)];  // v1.0.7: latency-compensated dry signal (issue #63)
 
         // === STAGE 2: READ & SPATIALIZE ===
         float channelAccum[16] = {};

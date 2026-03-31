@@ -33,9 +33,13 @@ cd "${BUILD_DIR}"
 git checkout "${COMMIT}" -- . 2>/dev/null
 git submodule update --init --recursive 2>/dev/null
 
-# Step 2: Patch CMakeLists.txt with version-specific name and plugin code
+# Step 2: Patch CMakeLists.txt with version-specific name, plugin code, and bundle ID
 sed -i '' "s/PLUGIN_CODE Os10/PLUGIN_CODE ${PLUGIN_CODE}/" CMakeLists.txt
 sed -i '' "s/PRODUCT_NAME \"OpenSpatialDelay v1.0\"/PRODUCT_NAME \"${PLUGIN_NAME}\"/" CMakeLists.txt
+
+# v1.0.7: Compute unique bundle ID suffix for post-build plist patching (issue #62)
+BUNDLE_SUFFIX=$(echo "${VERSION}" | tr '.' '-')  # e.g., v1.0.7 → v1-0-7
+UNIQUE_BUNDLE_ID="com.SpatialMediaLibrary.OpenSpatialDelay.${BUNDLE_SUFFIX}"
 
 # Step 3: Patch install script with version-specific name
 sed -i '' "s/PLUGIN_NAME=\"OpenSpatialDelay v1.0\"/PLUGIN_NAME=\"${PLUGIN_NAME}\"/" scripts/install_plugins.sh
@@ -99,9 +103,28 @@ if [ ! -f "${AU_BUILT}" ]; then
 fi
 echo "  AU binary verified: $(file "${AU_BUILT}" | grep -o 'Mach-O.*')"
 
+# Step 8b: Patch AU Info.plist with unique CFBundleIdentifier (issue #62)
+# JUCE generates the same bundle ID for all builds; we must differentiate so macOS
+# doesn't share/confuse resources when multiple versioned builds are loaded simultaneously.
+AU_PLIST="build/OpenSpatialDelay_artefacts/Release/AU/${PLUGIN_NAME}.component/Contents/Info.plist"
+if [ -f "${AU_PLIST}" ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${UNIQUE_BUNDLE_ID}" "${AU_PLIST}"
+    echo "  AU bundle ID patched: ${UNIQUE_BUNDLE_ID}"
+fi
+
 # Step 9: Build VST3 (triggers install script via POST_BUILD)
 echo "  Building VST3 + installing..."
 cmake --build build --target OpenSpatialDelay_VST3 -j${NCPU} 2>&1 | tail -3
+
+# Step 9b: Patch installed AU and VST3 plists with unique CFBundleIdentifier
+AU_INSTALLED_PLIST="$HOME/Library/Audio/Plug-Ins/Components/${PLUGIN_NAME}.component/Contents/Info.plist"
+VST3_INSTALLED_PLIST="$HOME/Library/Audio/Plug-Ins/VST3/${PLUGIN_NAME}.vst3/Contents/Info.plist"
+if [ -f "${AU_INSTALLED_PLIST}" ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${UNIQUE_BUNDLE_ID}" "${AU_INSTALLED_PLIST}"
+fi
+if [ -f "${VST3_INSTALLED_PLIST}" ]; then
+    /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${UNIQUE_BUNDLE_ID}" "${VST3_INSTALLED_PLIST}"
+fi
 
 # Step 10: Final validation of installed plugins
 echo ""
