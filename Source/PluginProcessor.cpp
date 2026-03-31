@@ -3860,7 +3860,14 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     {
         // Read per-object state via cached pointers (no string lookups)
         objects[t].enabled      = cachedObj[t].enabled->load()   > 0.5f;
-        tapFadeTarget[t] = objects[t].enabled ? 1.0f : 0.0f;
+
+        // v1.0.8: Reset PV on tap enable transition to prevent chirping (issue #65)
+        // When a tap is disabled, its PV stops receiving samples (readObjectSample skipped).
+        // On re-enable, stale outputAccum/phase data causes a chirp. Reset clears it.
+        float newTarget = objects[t].enabled ? 1.0f : 0.0f;
+        if (newTarget > 0.0f && tapFadeTarget[t] <= 0.0f)
+            pvPitchShifters[t].reset();
+        tapFadeTarget[t] = newTarget;
 
         // v0.9: When trajectory is active, read animated position from internal arrays
         // (the knobs/APVTS hold the origin; the internal arrays hold origin + trajectory offset)
