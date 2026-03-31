@@ -29,10 +29,15 @@ public:
     static constexpr int kNumBins   = kFFTSize / 2 + 1;      // 1025
 
     PhaseVocoderPitchShifter()
-        : fft (kFFTOrder),
-          window (static_cast<size_t> (kFFTSize),
-                  juce::dsp::WindowingFunction<float>::hann, false)
+        : fft (kFFTOrder)
     {
+        // v1.0.8: Generate periodic Hann window (N denominator, not N-1).
+        // JUCE's WindowingFunction::hann uses symmetric (N-1), which creates a
+        // ~-66 dB COLA ripple at the hop rate (93.75 Hz @ 48kHz/512 hop).
+        // Periodic Hann sums to exactly 1.5 under 4x overlap — zero ripple.
+        for (int i = 0; i < kFFTSize; ++i)
+            windowData[i] = 0.5f * (1.0f - std::cos (kTwoPi * static_cast<float> (i)
+                                                       / static_cast<float> (kFFTSize)));
         reset();
     }
 
@@ -123,7 +128,7 @@ private:
     static constexpr float kTwoPi      = 2.0f * kPi;
 
     juce::dsp::FFT fft;
-    juce::dsp::WindowingFunction<float> window;
+    float windowData[kFFTSize] = {};  // Periodic Hann window (generated in constructor)
 
     // Input ring buffer (stores last kFFTSize samples)
     float inputRing[kFFTSize] = {};
@@ -207,7 +212,7 @@ private:
             fftData[i] = inputRing[readIdx];
         }
 
-        window.multiplyWithWindowingTable (fftData, static_cast<size_t> (kFFTSize));
+        juce::FloatVectorOperations::multiply (fftData, windowData, kFFTSize);
 
         // Zero the second half (JUCE FFT requires 2*N buffer for real-only transform)
         std::memset (fftData + kFFTSize, 0, sizeof (float) * static_cast<size_t> (kFFTSize));
@@ -400,7 +405,7 @@ private:
         // =====================================================================
         // 8. Apply synthesis window and overlap-add
         // =====================================================================
-        window.multiplyWithWindowingTable (fftData, static_cast<size_t> (kFFTSize));
+        juce::FloatVectorOperations::multiply (fftData, windowData, kFFTSize);
 
         // COLA normalization for Hann window with 4x overlap:
         // Sum of squared Hann windows at hop=N/4 is 1.5, so divide by 1.5
