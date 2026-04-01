@@ -3734,7 +3734,22 @@ void OpenSpatialDelayProcessor::processFeedbackSample (float currentLoopMult,
     float fbDelaySamples = currentLoopMult * baseDelaySamples;
     fbDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), fbDelaySamples);
 
-    float feedbackRaw = readDelayLineMono (fbDelaySamples);
+    float feedbackRaw;
+    // v1.0.8: Crossfade feedback between old and new positions on loop multiplier change (issue #65)
+    if (fbCrossfadeProgress < 1.0f)
+    {
+        float oldFbDelay = prevLoopMultiplier * baseDelaySamples;
+        oldFbDelay = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), oldFbDelay);
+
+        float oldSample = readDelayLineMono (oldFbDelay);
+        float newSample = readDelayLineMono (fbDelaySamples);
+        feedbackRaw = oldSample + fbCrossfadeProgress * (newSample - oldSample);
+        fbCrossfadeProgress = std::min (fbCrossfadeProgress + fbCrossfadeIncrement, 1.0f);
+    }
+    else
+    {
+        feedbackRaw = readDelayLineMono (fbDelaySamples);
+    }
     float filtered = filters.processFeedbackSample (feedbackRaw);
     const float makeupGain = 1.0f + (fb * fb * kMakeupGainCoeff);
     float newFeedback = softClip (filtered * makeupGain);
@@ -3764,6 +3779,36 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     if (delayBufferL.empty() || numSamples <= 0)
         return;
+
+    // v1.0.8: Transport-aware PV reset — clear stale phase state on transport
+    // stop→play, seek, or position jump to prevent intermittent buzzing (issue #65).
+    // The PV maintains phase/magnitude arrays across blocks; stale data after a
+    // transport discontinuity can cause phase coherence errors that sound like buzz.
+    {
+        auto* playHead = getPlayHead();
+        if (playHead != nullptr)
+        {
+            auto pos = playHead->getPosition();
+            if (pos.hasValue())
+            {
+                bool isPlaying = pos->getIsPlaying();
+                juce::int64 currentSample = pos->getTimeInSamples().orFallback (-1);
+
+                bool transportStarted = (! wasPlaying && isPlaying);
+                bool transportJumped  = (isPlaying && currentSample >= 0
+                                         && std::abs (currentSample - expectedNextSample) > numSamples);
+
+                if (transportStarted || transportJumped)
+                {
+                    for (int i = 0; i < MAX_OBJECTS; ++i)
+                        pvPitchShifters[i].reset();
+                }
+
+                wasPlaying = isPlaying;
+                expectedNextSample = currentSample + numSamples;
+            }
+        }
+    }
 
     // v1.0.1: Apply deferred preset reset on the audio thread (thread-safe).
     // loadPreset() sets the flag; we do the actual WSOLA/Doppler/filter reset here
@@ -3884,6 +3929,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     {
         // Read per-object state via cached pointers (no string lookups)
         objects[t].enabled      = cachedObj[t].enabled->load()   > 0.5f;
+
         tapFadeTarget[t] = objects[t].enabled ? 1.0f : 0.0f;
 
         // v0.9: When trajectory is active, read animated position from internal arrays
@@ -4034,9 +4080,15 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     //   6. OUTPUT MIX: dry/wet blend → output channels
 
     // Determine the loop length multiplier based on the highest enabled object index
-    // Smoothed to prevent clicks when enabling/disabling objects mid-playback
+    // v1.0.8: When the multiplier changes, start a crossfade between old and new feedback
+    // read positions instead of sweeping — sweeping causes a Doppler chirp (issue #65).
     float loopMultiplierTarget = static_cast<float>(std::max (1, lastEnabledObjectIndex + 1));
-    smoothedLoopMultiplier.setTargetValue (loopMultiplierTarget);
+    if (loopMultiplierTarget != smoothedLoopMultiplier.getTargetValue())
+    {
+        prevLoopMultiplier = smoothedLoopMultiplier.getCurrentValue();
+        fbCrossfadeProgress = 0.0f;
+    }
+    smoothedLoopMultiplier.setCurrentAndTargetValue (loopMultiplierTarget);
 
     // --- Dispatch to appropriate render method --------------------------------
     if (isStereoVariant)
@@ -4152,9 +4204,11 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
                 tapFadeGain[t] = std::min (tapFadeGain[t] + tapFadeIncrement, 1.0f);
             else if (tapFadeGain[t] > tapFadeTarget[t])
                 tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
+            // v1.0.8: Always feed PV to keep it in sync — prevents chirp on tap enable (issue #65)
+            float objMono = readObjectSample (t, baseDelaySamples);
             if (tapFadeGain[t] <= 0.0f) continue;
             float dist = prevDistGain[t] + frac * (objDistGain[t] - prevDistGain[t]);
-            sourceAccumBufPtrs[t][s] = readObjectSample (t, baseDelaySamples) * dist * tapFadeGain[t];
+            sourceAccumBufPtrs[t][s] = objMono * dist * tapFadeGain[t];
         }
 
         // STAGE 3: FEEDBACK (mono, pre-spatial)
@@ -4246,8 +4300,9 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
                 tapFadeGain[t] = std::min (tapFadeGain[t] + tapFadeIncrement, 1.0f);
             else if (tapFadeGain[t] > tapFadeTarget[t])
                 tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
-            if (tapFadeGain[t] <= 0.0f) continue;
+            // v1.0.8: Always feed PV to keep it in sync — prevents chirp on tap enable (issue #65)
             float objMono = readObjectSample (t, baseDelaySamples);
+            if (tapFadeGain[t] <= 0.0f) continue;
 
             // Interpolate between previous and current block gains
             float gL = prevBinauralGains[t].leftGain  + frac * (objGains[t].leftGain  - prevBinauralGains[t].leftGain);
@@ -4384,8 +4439,9 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
                 tapFadeGain[t] = std::min (tapFadeGain[t] + tapFadeIncrement, 1.0f);
             else if (tapFadeGain[t] > tapFadeTarget[t])
                 tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
-            if (tapFadeGain[t] <= 0.0f) continue;
+            // v1.0.8: Always feed PV to keep it in sync — prevents chirp on tap enable (issue #65)
             float objMono = readObjectSample (t, baseDelaySamples);
+            if (tapFadeGain[t] <= 0.0f) continue;
 
             // Interpolate between previous and current block gains
             float gL = prevStereoGainL[t] + frac * (objGainL[t] - prevStereoGainL[t]);
@@ -4531,8 +4587,9 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
                 tapFadeGain[t] = std::min (tapFadeGain[t] + tapFadeIncrement, 1.0f);
             else if (tapFadeGain[t] > tapFadeTarget[t])
                 tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
-            if (tapFadeGain[t] <= 0.0f) continue;
+            // v1.0.8: Always feed PV to keep it in sync — prevents chirp on tap enable (issue #65)
             float objMono = readObjectSample (t, baseDelaySamples);
+            if (tapFadeGain[t] <= 0.0f) continue;
 
             // Interpolate distance gain between previous and current block
             float dist = prevDistGain[t] + frac * (objDistGain[t] - prevDistGain[t]);
@@ -4636,8 +4693,9 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
                 tapFadeGain[t] = std::min (tapFadeGain[t] + tapFadeIncrement, 1.0f);
             else if (tapFadeGain[t] > tapFadeTarget[t])
                 tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
-            if (tapFadeGain[t] <= 0.0f) continue;
+            // v1.0.8: Always feed PV to keep it in sync — prevents chirp on tap enable (issue #65)
             float objMono = readObjectSample (t, baseDelaySamples);
+            if (tapFadeGain[t] <= 0.0f) continue;
 
             // Interpolate distance gain and channel gains between previous and current block
             float dist = prevDistGain[t] + frac * (objDistGain[t] - prevDistGain[t]);
