@@ -27,8 +27,8 @@ bash scripts/build_version.sh <commit-hash> v1.0.Z O10Z
 
 **Why this is critical:** The default `cmake --build` installs to `OpenSpatialDelay v1.0.component`. The user tests with individually-named versioned plugins (e.g., `OpenSpatialDelay v1.0.1.component`) loaded side-by-side in REAPER for A/B comparison. If you don't use `build_version.sh`, the user will never hear your changes.
 
-**Version number registry (do not reuse):**
-- v1.0.0 / O100 — first release baseline (commit ae86d1e)
+**Version number registry (do not reuse) — reset 2026-04-01, see issue #73:**
+- v1.0.0 / O100 — baseline (commit 6c629ef)
 - Next available: **v1.0.1 / O101**
 
 ### Running tests
@@ -70,8 +70,10 @@ Replaces WSOLA-Lite. Uses STFT (2048-point FFT, 4x overlap) with:
 - Latency: 2048 samples (reported to DAW via setLatencySamples)
 - Range: ±12 semitones (combined with Doppler)
 
-### Dry Path Latency Compensation
-The phase vocoder adds 2048 samples of latency to the wet path. The dry signal must be delayed by the same amount so the DAW's plugin delay compensation (PDC) is correct at all dry/wet settings. Implemented as a circular `dryDelayLine` buffer that pre-fills `dryCompBuffer` at the start of each processBlock, before dispatch to render methods. All 5 render paths read from `dryCompBuffer` instead of `monoInputBuffer` for dry mixing.
+### Dry Path Latency Compensation (v1.0.7) + Stereo Dry (v1.0.1)
+The phase vocoder adds 2048 samples of latency to the wet path. The dry signal must be delayed by the same amount so the DAW's plugin delay compensation (PDC) is correct at all dry/wet settings. Implemented as stereo circular `dryDelayLineL/R` buffers that pre-fill `dryCompBufferL/R` from raw DAW input at the start of each processBlock.
+
+The dry/wet mix happens in a single post-render stage in processBlock — render paths output raw wet signal only. This ensures the dry signal truly bypasses the entire plugin (Input selector only affects the wet path). Equal-power crossfade (cos/sin) replaces linear (1-dw/dw) for constant perceived loudness at all mix settings.
 
 ### ITD delay line
 For MIT KEMAR SOFA file, ITD values are always 0 (embedded in HRIR waveform). The ITD delay line is effectively a pass-through for this dataset.
