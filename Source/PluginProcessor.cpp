@@ -220,7 +220,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         return juce::String (value, 1) + juce::String::charToString (0x00B0);
     };
 
-    // --- Global parameters ---------------------------------------------------
+    // --- Global parameters (issue #68: reordered, renamed, audited) ---------
+
+    // G1: Delay Time
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("delayTime", 1), "Delay Time",
         juce::NormalisableRange<float> (1.0f, 2000.0f, 0.1f, 0.3f), 500.0f,
@@ -231,17 +233,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout
                 return juce::String (juce::roundToInt (value)) + " ms";
             })));
 
+    // G2: Delay Sync (was "Tempo Sync")
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("tempoSync", 1), "Tempo Sync", false));
+        juce::ParameterID ("tempoSync", 1), "Delay Sync", false));
 
-    // Note division: value = number of 16th notes. Range: 0.5 (1/32) to 32 (2/1)
-    // Steps at musical intervals: 0.5, 1, 2, 4, 8, 16, 32
+    // G3: Delay Division (was "Note Division")
+    // Value = number of 16th notes. Range: 0.5 (1/32) to 32 (2/1)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("noteDivision", 1), "Note Division",
+        juce::ParameterID ("noteDivision", 1), "Delay Division",
         juce::NormalisableRange<float> (0.5f, 32.0f, 0.5f), 4.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) {
-                // value = number of 16th notes
                 float sixteenths = value;
                 if (std::abs (sixteenths - 32.0f)  < 0.01f) return juce::String ("2/1");
                 if (std::abs (sixteenths - 16.0f)  < 0.01f) return juce::String ("1/1");
@@ -250,192 +252,232 @@ juce::AudioProcessorValueTreeState::ParameterLayout
                 if (std::abs (sixteenths - 2.0f)   < 0.01f) return juce::String ("1/8");
                 if (std::abs (sixteenths - 1.0f)   < 0.01f) return juce::String ("1/16");
                 if (std::abs (sixteenths - 0.5f)   < 0.01f) return juce::String ("1/32");
-                // For other values, show as fraction of 16ths
                 if (sixteenths >= 1.0f)
                     return juce::String (juce::roundToInt (sixteenths)) + "/16";
                 return juce::String (sixteenths, 1) + "/16";
             })));
 
-    // v0.7: Reworked to 3-state: Straight (0), Dotted (1), Triplet (2)
+    // G4: Sync Mode
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
         juce::ParameterID ("syncMode", 7), "Sync Mode",
         juce::StringArray { "Straight", "Dotted", "Triplet" }, 0));
 
-
+    // G5: Feedback
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("feedback", 1), "Feedback",
         juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.3f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
 
-    // v0.9: Defaults changed from LP=20000/HP=20 to LP=5000/HP=50. Version bumped to 9
-    // so DAWs discard stale saved state and use new defaults on fresh instances.
+    // G6: Filter On (was "Filter Enabled" — moved before filter params, enable→configure)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("filterLP", 9), "Low-Pass Filter",
-        juce::NormalisableRange<float> (200.0f, 20000.0f, 1.0f, 0.3f), 5000.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtFreq)));
+        juce::ParameterID ("filterEnabled", 9), "Filter On",
+        juce::NormalisableRange<float> (0.0f, 1.0f, 1.0f), 0.0f));
 
+    // G7: High-Pass Frequency (was "High-Pass Filter" — HP grouped before LP)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("filterHP", 9), "High-Pass Filter",
+        juce::ParameterID ("filterHP", 9), "High-Pass Frequency",
         juce::NormalisableRange<float> (20.0f, 5000.0f, 1.0f, 0.3f), 50.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtFreq)));
 
-    // v0.7: Separate HP and LP resonance (Q). Range 0.5 (gentle) to 8.0 (sharp peak). Default: 0.707 (Butterworth).
+    // G8: High-Pass Resonance (was "HP Resonance")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("filterHPQ", 7), "HP Resonance",
-        juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-            [](float value, int) { return juce::String (value, 2); })));
-    params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("filterLPQ", 7), "LP Resonance",
+        juce::ParameterID ("filterHPQ", 7), "High-Pass Resonance",
         juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2); })));
 
-    // v0.9: Dedicated filter enabled toggle (default OFF — filter bypassed on fresh load)
+    // G9: Low-Pass Frequency (was "Low-Pass Filter")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("filterEnabled", 9), "Filter Enabled",
-        juce::NormalisableRange<float> (0.0f, 1.0f, 1.0f), 0.0f));
+        juce::ParameterID ("filterLP", 9), "Low-Pass Frequency",
+        juce::NormalisableRange<float> (200.0f, 20000.0f, 1.0f, 0.3f), 5000.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtFreq)));
 
+    // G10: Low-Pass Resonance (was "LP Resonance")
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID ("filterLPQ", 7), "Low-Pass Resonance",
+        juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
+            [](float value, int) { return juce::String (value, 2); })));
+
+    // G11: Dry/Wet
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("dryWet", 1), "Dry/Wet",
         juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
 
-    // Input gain: -100 dB (shown as -∞) to +40 dB
+    // G12: Input Gain (-100 dB shown as -∞ to +40 dB)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("inputGain", 1), "Input Gain",
         juce::NormalisableRange<float> (-100.0f, 40.0f, 0.1f, 3.0f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDbInf)));
 
-    // Output gain: -100 dB (shown as -∞) to +12 dB
+    // G13: Output Gain (-100 dB shown as -∞ to +12 dB)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("outputGain", 1), "Output Gain",
         juce::NormalisableRange<float> (-100.0f, 12.0f, 0.1f, 3.0f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDbInf)));
 
-
-
-    // v0.5: Combined algorithm parameter — surround algorithms (0-5) + stereo modes (6-10)
+    // G14: Algorithm (non-automatable — switching mid-playback causes glitches)
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
         juce::ParameterID ("algorithm", 8), "Algorithm",
         juce::StringArray { "Ambisonics (HOA)", "DBAP", "KNN", "MDAP", "VBAP", "VBIP",
-                            "Equal Power", "Stereo VBAP", "XY Pair", "MS Encode", "Blumlein" }, 0));
+                            "Equal Power", "Stereo VBAP", "XY Pair", "MS Encode", "Blumlein" }, 0,
+        juce::AudioParameterChoiceAttributes().withAutomatable (false)));
 
+    // G15: HRTF Profile (non-automatable — triggers async SOFA reload)
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
         juce::ParameterID ("hrtfProfile", 3), "HRTF Profile",
         juce::StringArray { "Simple (Low CPU)", "Studio Reference", "Immersive",
-                            "Natural", "Precise", "Spatial" }, 0));
+                            "Natural", "Precise", "Spatial" }, 0,
+        juce::AudioParameterChoiceAttributes().withAutomatable (false)));
 
-    // v0.2: User-selectable output format (bus-constrained in UI)
+    // G16: Output Format (non-automatable — changes bus layout)
     {
         juce::StringArray formatNames;
         for (const auto& info : outputFormatRegistry)
             formatNames.add (info.name);
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
-            juce::ParameterID ("outputFormat", 9), "Output Format", formatNames, 0));  // default=Binaural (index 0)
+            juce::ParameterID ("outputFormat", 9), "Output Format", formatNames, 0,
+            juce::AudioParameterChoiceAttributes().withAutomatable (false)));
     }
 
-    // v0.4: Air absorption — global toggle (distance-driven HF rolloff for all taps)
+    // G17: Air Absorption
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID ("airAbsorption", 4), "Air Absorption", false));
 
-    // v0.8: Wobble modulation (delay time LFO)
+    // G18: Wobble On (was "Wobble Enabled" — moved before wobble params, enable→configure)
+    params.push_back (std::make_unique<juce::AudioParameterBool> (
+        juce::ParameterID ("wobbleEnabled", 8), "Wobble On", false));
+
+    // G19: Wobble Amount
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("wobbleAmount", 8), "Wobble Amount",
         juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
+    // G20: Wobble Morph
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("wobbleMorph", 8), "Wobble Morph",
         juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
-    // v0.8: Wobble modulation enable toggle
-    params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("wobbleEnabled", 8), "Wobble Enabled", false));
+    // G21: Input Format (non-automatable — changes bus routing)
+    params.push_back (std::make_unique<juce::AudioParameterChoice> (
+        juce::ParameterID ("inputFormat", 7), "Input Format",
+        juce::StringArray { "Mono", "Stereo" }, 0,
+        juce::AudioParameterChoiceAttributes().withAutomatable (false)));
 
-    // --- Per-object parameters ------------------------------------------------
+    // G22: OSC Bypass (was "ADM-OSC Enabled" — inverted: true=bypassed=all OSC off)
+    // Version bumped 5→10 so old sessions reset to new default (true=bypassed)
+    params.push_back (std::make_unique<juce::AudioParameterBool> (
+        juce::ParameterID ("admOscEnabled", 10), "OSC Bypass", true));
+
+    // G23–G28: Global Tap Offsets (promoted from OSC-only atomics to APVTS)
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID ("globalTapAzimuth", 10), "Global Tap Azimuth",
+        juce::NormalisableRange<float> (-180.0f, 180.0f, 0.1f), 0.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDeg)));
+
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID ("globalTapElevation", 10), "Global Tap Elevation",
+        juce::NormalisableRange<float> (-90.0f, 90.0f, 0.1f), 0.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDeg)));
+
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID ("globalTapDistance", 10), "Global Tap Distance",
+        juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f));
+
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID ("globalTapPitch", 10), "Global Tap Pitch",
+        juce::NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 0.0f,
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
+            [](float value, int) { return juce::String (juce::roundToInt (value)) + " st"; })));
+
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID ("globalTapDoppler", 10), "Global Tap Doppler",
+        juce::NormalisableRange<float> (-100.0f, 100.0f, 0.1f), 0.0f,
+        juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
+
+    params.push_back (std::make_unique<juce::AudioParameterFloat> (
+        juce::ParameterID ("globalTapSpeed", 10), "Global Tap Speed",
+        juce::NormalisableRange<float> (-5.0f, 5.0f, 0.01f), 0.0f,
+        juce::AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
+            [](float value, int) { return juce::String (value, 2) + " Hz"; })));
+
+    // --- Per-tap parameters (issue #68: "Object N" → "Tap 0N") ---------------
     for (int i = 0; i < MAX_OBJECTS; ++i)
     {
         auto id  = [&](const char* suffix) {
             return juce::ParameterID ("object" + juce::String (i + 1) + "_" + suffix, 1);
         };
         auto name = [&](const char* suffix) {
-            return "Object " + juce::String (i + 1) + " " + suffix;
+            return "Tap " + juce::String (i + 1).paddedLeft ('0', 2) + " " + suffix;
         };
 
         bool defaultEnabled = (i < 4);
-        float defaultTime   = 100.0f * (i + 1);  // 100, 200, 300... ms
         // v0.9: Default azimuth is 0° (center front) so double-click resets to 0°.
         // Initial spatial spread is applied in constructor after APVTS creation.
         float defaultAz = 0.0f;
 
+        // T1: Tap On (was "Object N Enabled")
         params.push_back (std::make_unique<juce::AudioParameterBool> (
-            id ("enabled"), name ("Enabled"), defaultEnabled));
+            id ("enabled"), name ("On"), defaultEnabled));
 
-        params.push_back (std::make_unique<juce::AudioParameterFloat> (
-            id ("time"), name ("Time"),
-            juce::NormalisableRange<float> (1.0f, 2000.0f, 0.1f, 0.3f), defaultTime));
+        // T2: Per-tap Time — REMOVED (orphaned param, issue #68)
 
+        // T3: Tap Azimuth
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("azimuth"), name ("Azimuth"),
             juce::NormalisableRange<float> (-180.0f, 180.0f, 0.1f), defaultAz,
             juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDeg)));
 
+        // T4: Tap Elevation
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("elevation"), name ("Elevation"),
             juce::NormalisableRange<float> (-90.0f, 90.0f, 0.1f), 0.0f,
             juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDeg)));
 
+        // T5: Tap Distance
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("distance"), name ("Distance"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f));
 
-        // v0.4: Per-object Doppler amount (0=off, >0=on at that intensity)
+        // T6: Tap Doppler Amount
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("dopplerAmount"), name ("Doppler Amount"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.0f,
             juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
 
-        // v1.0.6: Per-object pitch shift (semitones, integer ±12 — PV quality range)
+        // T7: Tap Pitch Shift
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("pitchShift"), name ("Pitch Shift"),
             juce::NormalisableRange<float> (-12.0f, 12.0f, 1.0f), 0.0f,
             juce::AudioParameterFloatAttributes().withStringFromValueFunction (
                 [](float value, int) { return juce::String (juce::roundToInt (value)) + " st"; })));
 
-        // v0.6: Per-object trajectory (shape + speed)
-        // v0.9: Expanded from 6 to 14 shapes, alphabetized (None at top)
+        // T8: Tap Trajectory Shape
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("trajectoryShape"), name ("Trajectory Shape"),
             juce::StringArray { "None", "Bounce", "Circle", "Cross", "Figure-8", "Heart", "Helix",
                                 "Infinity", "Line", "Orbit", "Random", "Spiral", "Square", "Triangle" }, 0));
 
+        // T9: Tap Trajectory Speed
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("trajectorySpeed"), name ("Trajectory Speed"),
             juce::NormalisableRange<float> (0.0f, 5.0f, 0.01f), 0.3f,
             juce::AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
                 [](float value, int) { return juce::String (value, 2) + " Hz"; })));
 
-        // v0.8: Per-object trajectory direction (0=Forward/CCW, 1=Reverse/CW)
+        // T10: Tap Trajectory Direction
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("trajectoryDirection"), name ("Trajectory Direction"),
             juce::StringArray { "Forward", "Reverse" }, 0));
 
-        // v0.8: Per-object input channel selection (only active when Input Format = Stereo)
+        // T11: Tap Input Channel
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("inputChannel"), name ("Input Channel"),
             juce::StringArray { "L+R", "L", "R" }, 0));
     }
-
-    // v0.7: Input format (Mono / Stereo)
-    params.push_back (std::make_unique<juce::AudioParameterChoice> (
-        juce::ParameterID ("inputFormat", 7), "Input Format",
-        juce::StringArray { "Mono", "Stereo" }, 0));
-
-    // v0.5: ADM-OSC global parameter stub (engine deferred to v0.6+)
-    params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("admOscEnabled", 5), "ADM-OSC Enabled", false));
 
     return { params.begin(), params.end() };
 }
@@ -1228,8 +1270,10 @@ void OpenSpatialDelayProcessor::timerCallback()
     }
 
     // --- v0.6: ADM-OSC connection management (edge-detect enable/disable) ---
-    bool admEnabled = cachedParam_admOscEnabled != nullptr
-                      && cachedParam_admOscEnabled->load() >= 0.5f;
+    // issue #68: admOscEnabled param is now "OSC Bypass" (true=bypassed=OSC off)
+    bool oscBypassed = cachedParam_admOscEnabled != nullptr
+                       && cachedParam_admOscEnabled->load() >= 0.5f;
+    bool admEnabled = ! oscBypassed;
     if (admEnabled && ! prevAdmOscEnabled)
     {
         // Transition OFF→ON: connect
@@ -1284,7 +1328,8 @@ void OpenSpatialDelayProcessor::timerCallback()
     }
 
     // --- SPATIAL MEDIA LIBRARY: ADM-OSC Send — broadcast object positions at 30Hz ---
-    if (oscSendEnabled && oscSendConnected && ++oscSendTickCounter >= 2)
+    // issue #68: OSC Bypass disables both send and receive
+    if (oscSendEnabled && ! oscBypassed && oscSendConnected && ++oscSendTickCounter >= 2)
     {
         oscSendTickCounter = 0;
         for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -1412,13 +1457,17 @@ void OpenSpatialDelayProcessor::timerCallback()
                 }
             }
 
-            // v1.0: Global tap offset knobs (UI-only, change-gated)
+            // issue #68: Global tap offsets now from APVTS (still mirrored in atomics for editor)
             static const char* tapOffsetProps[] = { "tapazimuth", "tapelevation", "tapdistance",
                                                     "tappitch",   "tapdoppler",  "tapspeed" };
             float* tapOffsetPrevs[] = { &pg.tapAzimuth, &pg.tapElevation, &pg.tapDistance,
                                         &pg.tapPitch,   &pg.tapDoppler,   &pg.tapSpeed };
+            std::atomic<float>* tapOffsetCached[] = {
+                cachedParam_globalTapAzimuth, cachedParam_globalTapElevation, cachedParam_globalTapDistance,
+                cachedParam_globalTapPitch,   cachedParam_globalTapDoppler,   cachedParam_globalTapSpeed };
             for (int i = 0; i < kNumGlobalTapOffsets; ++i)
-                sendGlobal (tapOffsetProps[i], globalTapOffset[i].load (std::memory_order_relaxed), *tapOffsetPrevs[i]);
+                if (tapOffsetCached[i])
+                    sendGlobal (tapOffsetProps[i], tapOffsetCached[i]->load(), *tapOffsetPrevs[i]);
         }
     }
 
@@ -1485,6 +1534,13 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     cachedParam_outputGain      = apvts.getRawParameterValue ("outputGain");
     cachedParam_algorithm       = apvts.getRawParameterValue ("algorithm");
     cachedParam_admOscEnabled   = apvts.getRawParameterValue ("admOscEnabled");
+    // issue #68: Cache global tap offset APVTS pointers
+    cachedParam_globalTapAzimuth   = apvts.getRawParameterValue ("globalTapAzimuth");
+    cachedParam_globalTapElevation = apvts.getRawParameterValue ("globalTapElevation");
+    cachedParam_globalTapDistance   = apvts.getRawParameterValue ("globalTapDistance");
+    cachedParam_globalTapPitch     = apvts.getRawParameterValue ("globalTapPitch");
+    cachedParam_globalTapDoppler   = apvts.getRawParameterValue ("globalTapDoppler");
+    cachedParam_globalTapSpeed     = apvts.getRawParameterValue ("globalTapSpeed");
 
     // Cache RangedAudioParameter* for trajectory writes and pre-build OSC addresses
     for (int i = 0; i < MAX_OBJECTS; ++i)
@@ -3538,8 +3594,6 @@ ObjectState OpenSpatialDelayProcessor::getObjectState (int objectIndex) const
     auto prefix = "object" + juce::String (objectIndex + 1) + "_";
     if (auto* p = apvts.getRawParameterValue (prefix + "enabled"))
         state.enabled = p->load() > 0.5f;
-    if (auto* p = apvts.getRawParameterValue (prefix + "time"))
-        state.delayTimeMs = p->load();
 
     // v0.9: When trajectory is active, return the animated position (not the origin/knob values)
     if (trajectory.isActive (objectIndex))
@@ -4802,13 +4856,13 @@ void OpenSpatialDelayProcessor::oscMessageReceived (const juce::OSCMessage& mess
         else if (property == "/wobble")        handleOSCParam ("wobbleEnabled", val);
         else if (property == "/wobbleamount")  handleOSCParam ("wobbleAmount", val);
         else if (property == "/wobblemorph")   handleOSCParam ("wobbleMorph", val);
-        // v1.0: Global tap offset knobs (UI-only, not APVTS — stored in atomics)
-        else if (property == "/tapazimuth")    { globalTapOffset[0].store (juce::jlimit (-180.0f, 180.0f, val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
-        else if (property == "/tapelevation")  { globalTapOffset[1].store (juce::jlimit (-90.0f,  90.0f,  val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
-        else if (property == "/tapdistance")   { globalTapOffset[2].store (juce::jlimit (-1.0f,   1.0f,   val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
-        else if (property == "/tappitch")      { globalTapOffset[3].store (juce::jlimit (-24.0f,  24.0f,  val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
-        else if (property == "/tapdoppler")    { globalTapOffset[4].store (juce::jlimit (-100.0f, 100.0f, val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
-        else if (property == "/tapspeed")      { globalTapOffset[5].store (juce::jlimit (-5.0f,   5.0f,   val), std::memory_order_relaxed); globalTapOffsetChanged.store (true, std::memory_order_relaxed); }
+        // v1.0: Global tap offset knobs — now APVTS params (issue #68)
+        else if (property == "/tapazimuth")    { handleOSCParam ("globalTapAzimuth", val); syncGlobalTapOffsetAtomic (0, val); }
+        else if (property == "/tapelevation")  { handleOSCParam ("globalTapElevation", val); syncGlobalTapOffsetAtomic (1, val); }
+        else if (property == "/tapdistance")   { handleOSCParam ("globalTapDistance", val); syncGlobalTapOffsetAtomic (2, val); }
+        else if (property == "/tappitch")      { handleOSCParam ("globalTapPitch", val); syncGlobalTapOffsetAtomic (3, val); }
+        else if (property == "/tapdoppler")    { handleOSCParam ("globalTapDoppler", val); syncGlobalTapOffsetAtomic (4, val); }
+        else if (property == "/tapspeed")      { handleOSCParam ("globalTapSpeed", val); syncGlobalTapOffsetAtomic (5, val); }
     }
 }
 
@@ -4819,6 +4873,19 @@ void OpenSpatialDelayProcessor::handleOSCParam (const juce::String& paramID, flo
 {
     if (auto* param = apvts.getParameter (paramID))
         param->setValueNotifyingHost (param->convertTo0to1 (denormValue));
+}
+
+// issue #68: Keep atomic mirror in sync for editor drawer when OSC writes to APVTS.
+// Reads the clamped value back from the APVTS param (not the raw OSC input).
+void OpenSpatialDelayProcessor::syncGlobalTapOffsetAtomic (int index, float /*rawValue*/)
+{
+    if (index < 0 || index >= kNumGlobalTapOffsets)
+        return;
+    static const char* ids[] = { "globalTapAzimuth", "globalTapElevation", "globalTapDistance",
+                                 "globalTapPitch",   "globalTapDoppler",   "globalTapSpeed" };
+    if (auto* p = apvts.getRawParameterValue (ids[index]))
+        globalTapOffset[index].store (p->load(), std::memory_order_relaxed);
+    globalTapOffsetChanged.store (true, std::memory_order_relaxed);
 }
 
 //==============================================================================
