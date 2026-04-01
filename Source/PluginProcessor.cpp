@@ -319,88 +319,62 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         juce::NormalisableRange<float> (-100.0f, 12.0f, 0.1f, 3.0f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDbInf)));
 
-    // G14: Algorithm (non-automatable — switching mid-playback causes glitches)
-    params.push_back (std::make_unique<juce::AudioParameterChoice> (
-        juce::ParameterID ("algorithm", 14), "Algorithm",
-        juce::StringArray { "Ambisonics (HOA)", "DBAP", "KNN", "MDAP", "VBAP", "VBIP",
-                            "Equal Power", "Stereo VBAP", "XY Pair", "MS Encode", "Blumlein" }, 0,
-        juce::AudioParameterChoiceAttributes().withAutomatable (false)));
+    // Issue #68: Algorithm, HRTF Profile, Output Format, and Input Format removed from APVTS.
+    // They are now stored as raw std::atomic<int> members (configAlgorithm, configHrtfProfile,
+    // configOutputFormat, configInputFormat) to hide them from DAW automation lists.
 
-    // G15: HRTF Profile (non-automatable — triggers async SOFA reload)
-    params.push_back (std::make_unique<juce::AudioParameterChoice> (
-        juce::ParameterID ("hrtfProfile", 15), "HRTF Profile",
-        juce::StringArray { "Simple (Low CPU)", "Studio Reference", "Immersive",
-                            "Natural", "Precise", "Spatial" }, 0,
-        juce::AudioParameterChoiceAttributes().withAutomatable (false)));
-
-    // G16: Output Format (non-automatable — changes bus layout)
-    {
-        juce::StringArray formatNames;
-        for (const auto& info : outputFormatRegistry)
-            formatNames.add (info.name);
-        params.push_back (std::make_unique<juce::AudioParameterChoice> (
-            juce::ParameterID ("outputFormat", 16), "Output Format", formatNames, 0,
-            juce::AudioParameterChoiceAttributes().withAutomatable (false)));
-    }
-
-    // G17: Air Absorption
+    // G14: Air Absorption
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("airAbsorption", 17), "Air Absorption", false));
+        juce::ParameterID ("airAbsorption", 14), "Air Absorption", false));
 
-    // G18: Wobble On (was "Wobble Enabled" — moved before wobble params, enable→configure)
+    // G15: Wobble On (was "Wobble Enabled" — moved before wobble params, enable→configure)
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("wobbleEnabled", 18), "Wobble On", false));
+        juce::ParameterID ("wobbleEnabled", 15), "Wobble On", false));
 
-    // G19: Wobble Amount
+    // G16: Wobble Amount
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("wobbleAmount", 19), "Wobble Amount",
+        juce::ParameterID ("wobbleAmount", 16), "Wobble Amount",
         juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
-    // G20: Wobble Morph
+    // G17: Wobble Morph
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("wobbleMorph", 20), "Wobble Morph",
+        juce::ParameterID ("wobbleMorph", 17), "Wobble Morph",
         juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
-    // G21: Input Format (non-automatable — changes bus routing)
-    params.push_back (std::make_unique<juce::AudioParameterChoice> (
-        juce::ParameterID ("inputFormat", 21), "Input Format",
-        juce::StringArray { "Mono", "Stereo" }, 0,
-        juce::AudioParameterChoiceAttributes().withAutomatable (false)));
-
-    // G22: OSC Bypass (was "ADM-OSC Enabled" — inverted: true=bypassed=all OSC off)
+    // G18: OSC Bypass (was "ADM-OSC Enabled" — inverted: true=bypassed=all OSC off)
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("admOscEnabled", 22), "OSC Bypass", true));
+        juce::ParameterID ("admOscEnabled", 18), "OSC Bypass", true));
 
-    // G23–G28: Global Tap Offsets (promoted from OSC-only atomics to APVTS)
+    // G19–G24: Global Tap Offsets (promoted from OSC-only atomics to APVTS)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("globalTapAzimuth", 23), "Global Tap Azimuth",
+        juce::ParameterID ("globalTapAzimuth", 19), "Global Tap Azimuth",
         juce::NormalisableRange<float> (-180.0f, 180.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDeg)));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("globalTapElevation", 24), "Global Tap Elevation",
+        juce::ParameterID ("globalTapElevation", 20), "Global Tap Elevation",
         juce::NormalisableRange<float> (-90.0f, 90.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDeg)));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("globalTapDistance", 25), "Global Tap Distance",
+        juce::ParameterID ("globalTapDistance", 21), "Global Tap Distance",
         juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("globalTapPitch", 26), "Global Tap Pitch",
+        juce::ParameterID ("globalTapPitch", 22), "Global Tap Pitch",
         juce::NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) { return juce::String (juce::roundToInt (value)) + " st"; })));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("globalTapDoppler", 27), "Global Tap Doppler",
+        juce::ParameterID ("globalTapDoppler", 23), "Global Tap Doppler",
         juce::NormalisableRange<float> (-100.0f, 100.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("globalTapSpeed", 28), "Global Tap Speed",
+        juce::ParameterID ("globalTapSpeed", 24), "Global Tap Speed",
         juce::NormalisableRange<float> (-5.0f, 5.0f, 0.01f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2) + " Hz"; })));
@@ -1429,8 +1403,8 @@ void OpenSpatialDelayProcessor::timerCallback()
             if (cachedParam_dryWet)         sendGlobal ("drywet",        cachedParam_dryWet->load(),         pg.dryWet);
             if (cachedParam_inputGain)      sendGlobal ("inputgain",     cachedParam_inputGain->load(),      pg.inputGain);
             if (cachedParam_outputGain)     sendGlobal ("outputgain",    cachedParam_outputGain->load(),     pg.outputGain);
-            if (cachedParam_algorithm)      sendGlobal ("algorithm",     cachedParam_algorithm->load(),      pg.algorithm);
-            if (cachedParam_hrtfProfile)    sendGlobal ("hrtfprofile",   cachedParam_hrtfProfile->load(),    pg.hrtfProfile);
+            sendGlobal ("algorithm",     static_cast<float> (configAlgorithm.load (std::memory_order_relaxed)),  pg.algorithm);
+            sendGlobal ("hrtfprofile",   static_cast<float> (configHrtfProfile.load (std::memory_order_relaxed)), pg.hrtfProfile);
             if (cachedParam_airAbsorption)  sendGlobal ("air",           cachedParam_airAbsorption->load(),  pg.airAbsorption);
             if (cachedParam_wobbleEnabled)  sendGlobal ("wobble",        cachedParam_wobbleEnabled->load(),  pg.wobbleEnabled);
             if (cachedParam_wobbleAmount)   sendGlobal ("wobbleamount",  cachedParam_wobbleAmount->load(),   pg.wobbleAmount);
@@ -1448,9 +1422,8 @@ void OpenSpatialDelayProcessor::timerCallback()
                     oscSender.send (m);
                 }
             }
-            if (auto* fmtParam = apvts.getRawParameterValue ("outputFormat"))
             {
-                float v = fmtParam->load();
+                float v = static_cast<float> (configOutputFormat.load (std::memory_order_relaxed));
                 if (std::abs (v - pg.outputFormat) > 0.001f)
                 {
                     pg.outputFormat = v;
@@ -1524,18 +1497,15 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     cachedParam_filterHPQ       = apvts.getRawParameterValue ("filterHPQ");
     cachedParam_filterLPQ       = apvts.getRawParameterValue ("filterLPQ");
     cachedParam_filterEnabled   = apvts.getRawParameterValue ("filterEnabled");
-    cachedParam_hrtfProfile     = apvts.getRawParameterValue ("hrtfProfile");
     cachedParam_airAbsorption   = apvts.getRawParameterValue ("airAbsorption");
     cachedParam_wobbleEnabled   = apvts.getRawParameterValue ("wobbleEnabled");
     cachedParam_wobbleAmount    = apvts.getRawParameterValue ("wobbleAmount");
     cachedParam_wobbleMorph     = apvts.getRawParameterValue ("wobbleMorph");
-    cachedParam_inputFormat     = apvts.getRawParameterValue ("inputFormat");
     cachedParam_delayTime       = apvts.getRawParameterValue ("delayTime");
     cachedParam_dryWet          = apvts.getRawParameterValue ("dryWet");
     cachedParam_feedback        = apvts.getRawParameterValue ("feedback");
     cachedParam_inputGain       = apvts.getRawParameterValue ("inputGain");
     cachedParam_outputGain      = apvts.getRawParameterValue ("outputGain");
-    cachedParam_algorithm       = apvts.getRawParameterValue ("algorithm");
     cachedParam_admOscEnabled   = apvts.getRawParameterValue ("admOscEnabled");
     // issue #68: Cache global tap offset APVTS pointers
     cachedParam_globalTapAzimuth   = apvts.getRawParameterValue ("globalTapAzimuth");
@@ -1721,8 +1691,8 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
     setBool   ("wobbleEnabled", preset->wobbleEnabled);
     setFloat  ("wobbleAmount", preset->wobbleAmount);
     setFloat  ("wobbleMorph",  preset->wobbleMorph);
-    setChoice ("algorithm",    preset->algorithm);
-    setChoice ("hrtfProfile",  preset->hrtfProfile);
+    configAlgorithm.store (preset->algorithm, std::memory_order_relaxed);
+    configHrtfProfile.store (preset->hrtfProfile, std::memory_order_relaxed);
     // NOTE: outputFormat, admOscEnabled, oscReceivePort are NOT modified by presets
 
     // Per-tap params
@@ -1822,8 +1792,8 @@ PresetData OpenSpatialDelayProcessor::captureCurrentState() const
     pd.wobbleEnabled = apvts.getRawParameterValue ("wobbleEnabled")->load() > 0.5f;
     pd.wobbleAmount  = apvts.getRawParameterValue ("wobbleAmount")->load();
     pd.wobbleMorph   = apvts.getRawParameterValue ("wobbleMorph")->load();
-    pd.algorithm    = static_cast<int> (apvts.getRawParameterValue ("algorithm")->load());
-    pd.hrtfProfile  = static_cast<int> (apvts.getRawParameterValue ("hrtfProfile")->load());
+    pd.algorithm    = configAlgorithm.load (std::memory_order_relaxed);
+    pd.hrtfProfile  = configHrtfProfile.load (std::memory_order_relaxed);
 
     for (int i = 0; i < MAX_OBJECTS; ++i)
     {
@@ -2479,7 +2449,7 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
 
     // v0.2: Resolve output format from user selection + bus constraint
     maxBusChannels = getTotalNumOutputChannels();
-    int userFormatIndex = static_cast<int> (apvts.getRawParameterValue ("outputFormat")->load());
+    int userFormatIndex = configOutputFormat.load (std::memory_order_relaxed);
     auto userFormat = outputFormatRegistry[static_cast<size_t> (juce::jlimit (0, NUM_OUTPUT_FORMATS - 1, userFormatIndex))].format;
     auto effectiveFormat = resolveEffectiveFormat (userFormat, maxBusChannels);
     activateLayout (effectiveFormat);
@@ -3842,7 +3812,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     float filterLPQ       = cachedParam_filterLPQ->load();
     // v0.9: Filter bypass driven by dedicated parameter (not threshold inference)
     bool filterEnabled = cachedParam_filterEnabled->load() > 0.5f;
-    int   profileIndex    = static_cast<int> (cachedParam_hrtfProfile->load());
+    int   profileIndex    = configHrtfProfile.load (std::memory_order_relaxed);
 
     // v0.4: Air absorption — true bypass with edge detection for immediate toggle response
     airAbsorptionActive = cachedParam_airAbsorption->load() > 0.5f;
@@ -3857,7 +3827,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     }
 
     // v0.8: Input format (0=Mono, 1=Stereo) — selects whether dual delay lines receive L/R or summed mono
-    int inputFormat = static_cast<int> (cachedParam_inputFormat->load());
+    int inputFormat = configInputFormat.load (std::memory_order_relaxed);
 
     // (#3) Calculate target base delay
     float targetBaseDelayMs;
@@ -3896,7 +3866,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
 
     // --- Read algorithm selection (block-rate, surround only) -----------------
-    int algorithmIndex = static_cast<int> (cachedParam_algorithm->load());
+    int algorithmIndex = configAlgorithm.load (std::memory_order_relaxed);
     auto* algo = algorithms[juce::jlimit (0, NUM_ALGORITHMS - 1, algorithmIndex)];
 
     // For surround output, fall back if algorithm doesn't support speakers
@@ -4910,9 +4880,9 @@ void OpenSpatialDelayProcessor::oscMessageReceived (const juce::OSCMessage& mess
         else if (property == "/drywet")        handleOSCParam ("dryWet", val);
         else if (property == "/inputgain")     handleOSCParam ("inputGain", val);
         else if (property == "/outputgain")    handleOSCParam ("outputGain", val);
-        else if (property == "/algorithm")     handleOSCParam ("algorithm", val);
-        else if (property == "/hrtfprofile")   handleOSCParam ("hrtfProfile", val);
-        else if (property == "/outputformat")  handleOSCParam ("outputFormat", val);
+        else if (property == "/algorithm")    configAlgorithm.store (juce::roundToInt (val), std::memory_order_relaxed);
+        else if (property == "/hrtfprofile")  configHrtfProfile.store (juce::roundToInt (val), std::memory_order_relaxed);
+        else if (property == "/outputformat") configOutputFormat.store (juce::roundToInt (val), std::memory_order_relaxed);
         else if (property == "/air")           handleOSCParam ("airAbsorption", val);
         else if (property == "/wobble")        handleOSCParam ("wobbleEnabled", val);
         else if (property == "/wobbleamount")  handleOSCParam ("wobbleAmount", val);
@@ -5003,7 +4973,12 @@ void OpenSpatialDelayProcessor::handleOSCPosition (int objIdx, float azDeg, floa
 void OpenSpatialDelayProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
-    state.setProperty ("pluginStateVersion", 19, nullptr);  // v1.0 state format (19 = 9.1.4 added)
+    state.setProperty ("pluginStateVersion", 20, nullptr);  // v1.0 state format (20 = config params moved out of APVTS)
+    // Issue #68: Config params stored as top-level properties (not APVTS children)
+    state.setProperty ("configAlgorithm", configAlgorithm.load (std::memory_order_relaxed), nullptr);
+    state.setProperty ("configHrtfProfile", configHrtfProfile.load (std::memory_order_relaxed), nullptr);
+    state.setProperty ("configOutputFormat", configOutputFormat.load (std::memory_order_relaxed), nullptr);
+    state.setProperty ("configInputFormat", configInputFormat.load (std::memory_order_relaxed), nullptr);
     state.setProperty ("oscReceivePort", oscReceivePort, nullptr);  // v0.6: persist OSC port
     state.setProperty ("globalDrawerOpen", globalDrawerOpen, nullptr);  // v1.0: persist drawer state
     state.setProperty ("currentPresetIndex", currentPresetIndex, nullptr);  // v0.6: persist preset selection
@@ -5496,6 +5471,54 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
         }
 
         tree.setProperty ("pluginStateVersion", 19, nullptr);
+    }
+
+    // Issue #68: Migrate config params from APVTS children (old sessions) to top-level properties.
+    // Old sessions (savedVersion < 20) stored algorithm/hrtfProfile/outputFormat/inputFormat
+    // as normalized-float APVTS child nodes. New sessions store them as integer top-level properties.
+    if (savedVersion < 20)
+    {
+        // Extract config param values from APVTS child nodes, then remove those children
+        // so APVTS doesn't try to restore params that no longer exist in the layout.
+        struct ConfigParamMigration { const char* id; int numChoices; std::atomic<int>* target; };
+        ConfigParamMigration migrations[] = {
+            { "algorithm",    11, &configAlgorithm },
+            { "hrtfProfile",   6, &configHrtfProfile },
+            { "outputFormat", 22, &configOutputFormat },
+            { "inputFormat",   2, &configInputFormat },
+        };
+
+        for (auto& m : migrations)
+        {
+            for (int i = tree.getNumChildren() - 1; i >= 0; --i)
+            {
+                auto child = tree.getChild (i);
+                if (child.hasProperty ("id") && child.getProperty ("id").toString() == m.id)
+                {
+                    float normVal = static_cast<float> (child.getProperty ("value", 0.0f));
+                    int index = juce::roundToInt (normVal * static_cast<float> (m.numChoices - 1));
+                    index = juce::jlimit (0, m.numChoices - 1, index);
+                    m.target->store (index, std::memory_order_relaxed);
+                    tree.removeChild (i, nullptr);
+                    break;
+                }
+            }
+        }
+
+        // Store as top-level properties for future saves
+        tree.setProperty ("configAlgorithm", configAlgorithm.load (std::memory_order_relaxed), nullptr);
+        tree.setProperty ("configHrtfProfile", configHrtfProfile.load (std::memory_order_relaxed), nullptr);
+        tree.setProperty ("configOutputFormat", configOutputFormat.load (std::memory_order_relaxed), nullptr);
+        tree.setProperty ("configInputFormat", configInputFormat.load (std::memory_order_relaxed), nullptr);
+        tree.setProperty ("pluginStateVersion", 20, nullptr);
+    }
+    else
+    {
+        // New session format: config params are top-level integer properties
+        configAlgorithm.store (static_cast<int> (tree.getProperty ("configAlgorithm", 0)), std::memory_order_relaxed);
+        configHrtfProfile.store (static_cast<int> (tree.getProperty ("configHrtfProfile", 0)), std::memory_order_relaxed);
+        configOutputFormat.store (static_cast<int> (tree.getProperty ("configOutputFormat", 0)), std::memory_order_relaxed);
+        configInputFormat.store (static_cast<int> (tree.getProperty ("configInputFormat", 0)), std::memory_order_relaxed);
     }
 
     // v0.6: Restore OSC receive port (non-APVTS property)
