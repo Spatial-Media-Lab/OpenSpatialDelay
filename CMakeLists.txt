@@ -188,6 +188,7 @@ if(BUILD_OSD_TESTS)
     FetchContent_MakeAvailable(Catch2)
 
     add_executable(OpenSpatialDelayTests
+        Tests/ParameterCountTests.cpp
         Tests/TrajectoryTests.cpp
         Tests/SurroundOutputTests.cpp
         Tests/OscTests.cpp

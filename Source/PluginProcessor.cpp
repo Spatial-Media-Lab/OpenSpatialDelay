@@ -221,6 +221,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     };
 
     // --- Global parameters (issue #68: reordered, renamed, audited) ---------
+    // Version hints: unique ascending per param for correct AU enumeration order.
+    // Globals use 1–28, per-tap uses 100 + tapIndex*20 + offset. See issue #68.
 
     // G1: Delay Time
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -235,12 +237,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout
 
     // G2: Delay Sync (was "Tempo Sync")
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("tempoSync", 1), "Delay Sync", false));
+        juce::ParameterID ("tempoSync", 2), "Delay Sync", false));
 
     // G3: Delay Division (was "Note Division")
     // Value = number of 16th notes. Range: 0.5 (1/32) to 32 (2/1)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("noteDivision", 1), "Delay Division",
+        juce::ParameterID ("noteDivision", 3), "Delay Division",
         juce::NormalisableRange<float> (0.5f, 32.0f, 0.5f), 4.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) {
@@ -259,29 +261,29 @@ juce::AudioProcessorValueTreeState::ParameterLayout
 
     // G4: Sync Mode
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
-        juce::ParameterID ("syncMode", 7), "Sync Mode",
+        juce::ParameterID ("syncMode", 4), "Sync Mode",
         juce::StringArray { "Straight", "Dotted", "Triplet" }, 0));
 
     // G5: Feedback
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("feedback", 1), "Feedback",
+        juce::ParameterID ("feedback", 5), "Feedback",
         juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.3f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
 
     // G6: Filter On (was "Filter Enabled" — moved before filter params, enable→configure)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("filterEnabled", 9), "Filter On",
+        juce::ParameterID ("filterEnabled", 6), "Filter On",
         juce::NormalisableRange<float> (0.0f, 1.0f, 1.0f), 0.0f));
 
     // G7: High-Pass Frequency (was "High-Pass Filter" — HP grouped before LP)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("filterHP", 9), "High-Pass Frequency",
+        juce::ParameterID ("filterHP", 7), "High-Pass Frequency",
         juce::NormalisableRange<float> (20.0f, 5000.0f, 1.0f, 0.3f), 50.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtFreq)));
 
     // G8: High-Pass Resonance (was "HP Resonance")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("filterHPQ", 7), "High-Pass Resonance",
+        juce::ParameterID ("filterHPQ", 8), "High-Pass Resonance",
         juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2); })));
@@ -294,39 +296,39 @@ juce::AudioProcessorValueTreeState::ParameterLayout
 
     // G10: Low-Pass Resonance (was "LP Resonance")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("filterLPQ", 7), "Low-Pass Resonance",
+        juce::ParameterID ("filterLPQ", 10), "Low-Pass Resonance",
         juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2); })));
 
     // G11: Dry/Wet
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("dryWet", 1), "Dry/Wet",
+        juce::ParameterID ("dryWet", 11), "Dry/Wet",
         juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
 
     // G12: Input Gain (-100 dB shown as -∞ to +40 dB)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("inputGain", 1), "Input Gain",
+        juce::ParameterID ("inputGain", 12), "Input Gain",
         juce::NormalisableRange<float> (-100.0f, 40.0f, 0.1f, 3.0f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDbInf)));
 
     // G13: Output Gain (-100 dB shown as -∞ to +12 dB)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("outputGain", 1), "Output Gain",
+        juce::ParameterID ("outputGain", 13), "Output Gain",
         juce::NormalisableRange<float> (-100.0f, 12.0f, 0.1f, 3.0f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDbInf)));
 
     // G14: Algorithm (non-automatable — switching mid-playback causes glitches)
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
-        juce::ParameterID ("algorithm", 8), "Algorithm",
+        juce::ParameterID ("algorithm", 14), "Algorithm",
         juce::StringArray { "Ambisonics (HOA)", "DBAP", "KNN", "MDAP", "VBAP", "VBIP",
                             "Equal Power", "Stereo VBAP", "XY Pair", "MS Encode", "Blumlein" }, 0,
         juce::AudioParameterChoiceAttributes().withAutomatable (false)));
 
     // G15: HRTF Profile (non-automatable — triggers async SOFA reload)
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
-        juce::ParameterID ("hrtfProfile", 3), "HRTF Profile",
+        juce::ParameterID ("hrtfProfile", 15), "HRTF Profile",
         juce::StringArray { "Simple (Low CPU)", "Studio Reference", "Immersive",
                             "Natural", "Precise", "Spatial" }, 0,
         juce::AudioParameterChoiceAttributes().withAutomatable (false)));
@@ -337,78 +339,79 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         for (const auto& info : outputFormatRegistry)
             formatNames.add (info.name);
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
-            juce::ParameterID ("outputFormat", 9), "Output Format", formatNames, 0,
+            juce::ParameterID ("outputFormat", 16), "Output Format", formatNames, 0,
             juce::AudioParameterChoiceAttributes().withAutomatable (false)));
     }
 
     // G17: Air Absorption
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("airAbsorption", 4), "Air Absorption", false));
+        juce::ParameterID ("airAbsorption", 17), "Air Absorption", false));
 
     // G18: Wobble On (was "Wobble Enabled" — moved before wobble params, enable→configure)
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("wobbleEnabled", 8), "Wobble On", false));
+        juce::ParameterID ("wobbleEnabled", 18), "Wobble On", false));
 
     // G19: Wobble Amount
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("wobbleAmount", 8), "Wobble Amount",
+        juce::ParameterID ("wobbleAmount", 19), "Wobble Amount",
         juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
     // G20: Wobble Morph
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("wobbleMorph", 8), "Wobble Morph",
+        juce::ParameterID ("wobbleMorph", 20), "Wobble Morph",
         juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
     // G21: Input Format (non-automatable — changes bus routing)
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
-        juce::ParameterID ("inputFormat", 7), "Input Format",
+        juce::ParameterID ("inputFormat", 21), "Input Format",
         juce::StringArray { "Mono", "Stereo" }, 0,
         juce::AudioParameterChoiceAttributes().withAutomatable (false)));
 
     // G22: OSC Bypass (was "ADM-OSC Enabled" — inverted: true=bypassed=all OSC off)
-    // Version bumped 5→10 so old sessions reset to new default (true=bypassed)
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("admOscEnabled", 10), "OSC Bypass", true));
+        juce::ParameterID ("admOscEnabled", 22), "OSC Bypass", true));
 
     // G23–G28: Global Tap Offsets (promoted from OSC-only atomics to APVTS)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("globalTapAzimuth", 10), "Global Tap Azimuth",
+        juce::ParameterID ("globalTapAzimuth", 23), "Global Tap Azimuth",
         juce::NormalisableRange<float> (-180.0f, 180.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDeg)));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("globalTapElevation", 10), "Global Tap Elevation",
+        juce::ParameterID ("globalTapElevation", 24), "Global Tap Elevation",
         juce::NormalisableRange<float> (-90.0f, 90.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDeg)));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("globalTapDistance", 10), "Global Tap Distance",
+        juce::ParameterID ("globalTapDistance", 25), "Global Tap Distance",
         juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("globalTapPitch", 10), "Global Tap Pitch",
+        juce::ParameterID ("globalTapPitch", 26), "Global Tap Pitch",
         juce::NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) { return juce::String (juce::roundToInt (value)) + " st"; })));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("globalTapDoppler", 10), "Global Tap Doppler",
+        juce::ParameterID ("globalTapDoppler", 27), "Global Tap Doppler",
         juce::NormalisableRange<float> (-100.0f, 100.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
-        juce::ParameterID ("globalTapSpeed", 10), "Global Tap Speed",
+        juce::ParameterID ("globalTapSpeed", 28), "Global Tap Speed",
         juce::NormalisableRange<float> (-5.0f, 5.0f, 0.01f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2) + " Hz"; })));
 
     // --- Per-tap parameters (issue #68: "Object N" → "Tap 0N") ---------------
+    // Version hints: 100 + tapIndex*20 + offset (Tap 01=100–109, Tap 02=120–129, …, Tap 12=320–329)
     for (int i = 0; i < MAX_OBJECTS; ++i)
     {
-        auto id  = [&](const char* suffix) {
-            return juce::ParameterID ("object" + juce::String (i + 1) + "_" + suffix, 1);
+        int tapBase = 100 + i * 20;
+        auto id  = [&](const char* suffix, int offset) {
+            return juce::ParameterID ("object" + juce::String (i + 1) + "_" + suffix, tapBase + offset);
         };
         auto name = [&](const char* suffix) {
             return "Tap " + juce::String (i + 1).paddedLeft ('0', 2) + " " + suffix;
@@ -421,61 +424,61 @@ juce::AudioProcessorValueTreeState::ParameterLayout
 
         // T1: Tap On (was "Object N Enabled")
         params.push_back (std::make_unique<juce::AudioParameterBool> (
-            id ("enabled"), name ("On"), defaultEnabled));
+            id ("enabled", 0), name ("On"), defaultEnabled));
 
         // T2: Per-tap Time — REMOVED (orphaned param, issue #68)
 
         // T3: Tap Azimuth
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
-            id ("azimuth"), name ("Azimuth"),
+            id ("azimuth", 1), name ("Azimuth"),
             juce::NormalisableRange<float> (-180.0f, 180.0f, 0.1f), defaultAz,
             juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDeg)));
 
         // T4: Tap Elevation
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
-            id ("elevation"), name ("Elevation"),
+            id ("elevation", 2), name ("Elevation"),
             juce::NormalisableRange<float> (-90.0f, 90.0f, 0.1f), 0.0f,
             juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDeg)));
 
         // T5: Tap Distance
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
-            id ("distance"), name ("Distance"),
+            id ("distance", 3), name ("Distance"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f));
 
         // T6: Tap Doppler Amount
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
-            id ("dopplerAmount"), name ("Doppler Amount"),
+            id ("dopplerAmount", 4), name ("Doppler Amount"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.0f,
             juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
 
         // T7: Tap Pitch Shift
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
-            id ("pitchShift"), name ("Pitch Shift"),
+            id ("pitchShift", 5), name ("Pitch Shift"),
             juce::NormalisableRange<float> (-12.0f, 12.0f, 1.0f), 0.0f,
             juce::AudioParameterFloatAttributes().withStringFromValueFunction (
                 [](float value, int) { return juce::String (juce::roundToInt (value)) + " st"; })));
 
         // T8: Tap Trajectory Shape
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
-            id ("trajectoryShape"), name ("Trajectory Shape"),
+            id ("trajectoryShape", 6), name ("Trajectory Shape"),
             juce::StringArray { "None", "Bounce", "Circle", "Cross", "Figure-8", "Heart", "Helix",
                                 "Infinity", "Line", "Orbit", "Random", "Spiral", "Square", "Triangle" }, 0));
 
         // T9: Tap Trajectory Speed
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
-            id ("trajectorySpeed"), name ("Trajectory Speed"),
+            id ("trajectorySpeed", 7), name ("Trajectory Speed"),
             juce::NormalisableRange<float> (0.0f, 5.0f, 0.01f), 0.3f,
             juce::AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
                 [](float value, int) { return juce::String (value, 2) + " Hz"; })));
 
         // T10: Tap Trajectory Direction
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
-            id ("trajectoryDirection"), name ("Trajectory Direction"),
+            id ("trajectoryDirection", 8), name ("Trajectory Direction"),
             juce::StringArray { "Forward", "Reverse" }, 0));
 
         // T11: Tap Input Channel
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
-            id ("inputChannel"), name ("Input Channel"),
+            id ("inputChannel", 9), name ("Input Channel"),
             juce::StringArray { "L+R", "L", "R" }, 0));
     }
 
