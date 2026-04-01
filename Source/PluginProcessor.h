@@ -881,6 +881,11 @@ private:
     // v1.0.6: Phase vocoder pitch shifter — replaces WSOLA-Lite (issue #60)
     PhaseVocoderPitchShifter pvPitchShifters[MAX_OBJECTS];
 
+    // v1.0.8: Transport-aware PV reset — clears stale phase state on transport
+    // stop/start/seek to prevent intermittent buzzing artifacts (issue #65)
+    bool wasPlaying = false;
+    juce::int64 expectedNextSample = 0;
+
     // v1.0.1: Thread-safe preset reset — loadPreset() (message thread) stores pending
     // state here; processBlock() (audio thread) applies it, eliminating the data race
     // that caused intermittent WSOLA/Doppler corruption on preset changes (issue #42).
@@ -912,6 +917,14 @@ private:
 
     // Smooth loop multiplier — prevents clicks when enabling/disabling objects
     juce::LinearSmoothedValue<float> smoothedLoopMultiplier;
+
+    // v1.0.8: Feedback crossfade for loop multiplier changes (issue #65)
+    // When the loop multiplier changes, crossfade the feedback read between old and new
+    // positions instead of sweeping — sweeping causes a Doppler chirp.
+    float prevLoopMultiplier = 1.0f;
+    float fbCrossfadeProgress = 1.0f;  // 1.0 = crossfade complete (use new position only)
+    static constexpr float kFbCrossfadeSamples = 1024.0f;  // ~21ms @ 48kHz
+    float fbCrossfadeIncrement = 1.0f / kFbCrossfadeSamples;
 
     //--- SPATIAL FRAMEWORK: Layout & decode state ----------------------------
     float ambiDecodeMatrix[NUM_VIRTUAL_SPEAKERS][HOA_CHANNELS] = {};  // v0.2+ surround decode
