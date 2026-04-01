@@ -2006,14 +2006,23 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         if (selectedId > 0)
         {
             int paramIdx = selectedId - 1;  // IDs are 1-based, param indices are 0-based
-            auto* param = processorRef.apvts.getParameter ("algorithm");
-            float normVal = static_cast<float> (paramIdx) / 10.0f;  // 11 items (0..10)
-            param->setValueNotifyingHost (normVal);
+            processorRef.configAlgorithm.store (paramIdx, std::memory_order_relaxed);
         }
     };
-    setupCombo (hrtfProfileBox, hrtfProfileLabel, "PROFILE",
-                "hrtfProfile", { "Simple", "Studio Ref", "Immersive", "Natural", "Precise", "Spatial" },
-                hrtfProfileAttach);
+    {
+        juce::StringArray hrtfItems { "Simple", "Studio Ref", "Immersive", "Natural", "Precise", "Spatial" };
+        for (int i = 0; i < hrtfItems.size(); ++i)
+            hrtfProfileBox.addItem (hrtfItems[i], i + 1);
+        hrtfProfileBox.setLookAndFeel (&osdLookAndFeel);
+        addAndMakeVisible (hrtfProfileBox);
+        styleLabel (hrtfProfileLabel, "PROFILE", &osdLookAndFeel);
+        addAndMakeVisible (hrtfProfileLabel);
+        hrtfProfileBox.setSelectedItemIndex (processorRef.configHrtfProfile.load (std::memory_order_relaxed),
+                                             juce::dontSendNotification);
+        hrtfProfileBox.onChange = [this] {
+            processorRef.configHrtfProfile.store (hrtfProfileBox.getSelectedItemIndex(), std::memory_order_relaxed);
+        };
+    }
     // v0.7: syncMode reworked to 3-state (Straight/Dotted/Triplet)
     // Uses music note icons: straight = ♩, dotted = ♩., triplet = ♩³
     setupCombo (syncModeBox, delayTimeLabel, "SYNC MODE",
@@ -2027,8 +2036,17 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         juce::StringArray formatNames;
         for (const auto& info : OpenSpatialDelayProcessor::outputFormatRegistry)
             formatNames.add (info.name);
-        setupCombo (outputFormatBox, outputFormatLabel, "OUTPUT",
-                    "outputFormat", formatNames, outputFormatAttach);
+        for (int i = 0; i < formatNames.size(); ++i)
+            outputFormatBox.addItem (formatNames[i], i + 1);
+        outputFormatBox.setLookAndFeel (&osdLookAndFeel);
+        addAndMakeVisible (outputFormatBox);
+        styleLabel (outputFormatLabel, "OUTPUT", &osdLookAndFeel);
+        addAndMakeVisible (outputFormatLabel);
+        outputFormatBox.setSelectedItemIndex (processorRef.configOutputFormat.load (std::memory_order_relaxed),
+                                              juce::dontSendNotification);
+        outputFormatBox.onChange = [this] {
+            processorRef.configOutputFormat.store (outputFormatBox.getSelectedItemIndex(), std::memory_order_relaxed);
+        };
     }
 
     // --- Header dropdown labels: left-aligned, JetBrains Mono Medium ----------
@@ -2438,7 +2456,11 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     inputFormatBox.addItem ("Mono", 1);
     inputFormatBox.addItem ("Stereo", 2);
     addAndMakeVisible (inputFormatBox);
-    inputFormatAttach = std::make_unique<ComboBoxAttachment> (processorRef.apvts, "inputFormat", inputFormatBox);
+    inputFormatBox.setSelectedItemIndex (processorRef.configInputFormat.load (std::memory_order_relaxed),
+                                        juce::dontSendNotification);
+    inputFormatBox.onChange = [this] {
+        processorRef.configInputFormat.store (inputFormatBox.getSelectedItemIndex(), std::memory_order_relaxed);
+    };
 
     // Header dropdown labels: JetBrains Mono Medium 7.5px, wide kerning
     {
@@ -2705,7 +2727,7 @@ void OpenSpatialDelayEditor::selectObject (int index)
             objInputChannelButton->setAccentColour (objCol);
 
         // Visibility: only show when Input Format = Stereo (index 1)
-        int inputFmt = static_cast<int> (processorRef.apvts.getRawParameterValue ("inputFormat")->load());
+        int inputFmt = processorRef.configInputFormat.load (std::memory_order_relaxed);
         objInputChannelButton->setVisible (inputFmt == 1);
     }
 
@@ -2893,7 +2915,7 @@ void OpenSpatialDelayEditor::timerCallback()
 
     // v0.8: Show/hide input channel button based on Input Format (Mono=hide, Stereo=show)
     {
-        int inputFmt = static_cast<int> (processorRef.apvts.getRawParameterValue ("inputFormat")->load());
+        int inputFmt = processorRef.configInputFormat.load (std::memory_order_relaxed);
         if (objInputChannelButton) objInputChannelButton->setVisible (inputFmt == 1);
     }
 
@@ -2989,7 +3011,7 @@ void OpenSpatialDelayEditor::timerCallback()
     // Ambisonics: show disabled, text = "Ambisonics Encode"
     // Stereo: show only stereo modes (param indices 6-10)
     // Surround: show only surround algorithms (param indices 0-5)
-    int algoIdx = static_cast<int> (processorRef.apvts.getRawParameterValue ("algorithm")->load());
+    int algoIdx = processorRef.configAlgorithm.load (std::memory_order_relaxed);
 
     // Determine current format category: 0=binaural, 1=ambi, 2=stereo, 3=surround
     int fmtCategory = isBinaural ? 0 : isAmbiOutput ? 1 : isStereoVariant ? 2 : 3;
@@ -3030,8 +3052,7 @@ void OpenSpatialDelayEditor::timerCallback()
                 // Auto-snap if current param is a surround algorithm
                 if (algoIdx < 6)
                 {
-                    processorRef.apvts.getParameter ("algorithm")
-                        ->setValueNotifyingHost (6.0f / 10.0f);  // Equal Power
+                    processorRef.configAlgorithm.store (6, std::memory_order_relaxed);  // Equal Power
                     algoIdx = 6;
                 }
             }
@@ -3048,8 +3069,7 @@ void OpenSpatialDelayEditor::timerCallback()
                 // Auto-snap if current param is a stereo mode
                 if (algoIdx > 5)
                 {
-                    processorRef.apvts.getParameter ("algorithm")
-                        ->setValueNotifyingHost (4.0f / 10.0f);  // VBAP
+                    processorRef.configAlgorithm.store (4, std::memory_order_relaxed);  // VBAP
                     algoIdx = 4;
                 }
             }

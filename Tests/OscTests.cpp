@@ -234,14 +234,14 @@ TEST_CASE ("OSC: /osd/global/algorithm sets algorithm", "[osc][global]")
 {
     auto proc = createOscProcessor();
     sendOSC (*proc, "/osd/global/algorithm", { 2.0f });  // KNN
-    REQUIRE_THAT (readParam (*proc, "algorithm"), WithinAbs (2.0f, 0.5f));
+    REQUIRE (proc->configAlgorithm.load (std::memory_order_relaxed) == 2);
 }
 
 TEST_CASE ("OSC: /osd/global/hrtfprofile sets HRTF profile", "[osc][global]")
 {
     auto proc = createOscProcessor();
     sendOSC (*proc, "/osd/global/hrtfprofile", { 3.0f });  // CIPIC
-    REQUIRE_THAT (readParam (*proc, "hrtfProfile"), WithinAbs (3.0f, 0.5f));
+    REQUIRE (proc->configHrtfProfile.load (std::memory_order_relaxed) == 3);
 }
 
 TEST_CASE ("OSC: /osd/global/air sets air absorption toggle", "[osc][global]")
@@ -290,7 +290,7 @@ TEST_CASE ("OSC: /osd/global/outputformat sets output format", "[osc][global]")
 {
     auto proc = createOscProcessor();
     sendOSC (*proc, "/osd/global/outputformat", { 5.0f });  // Binaural
-    REQUIRE_THAT (readParam (*proc, "outputFormat"), WithinAbs (5.0f, 0.5f));
+    REQUIRE (proc->configOutputFormat.load (std::memory_order_relaxed) == 5);
 }
 
 // ============================================================================

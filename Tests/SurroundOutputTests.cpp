@@ -29,11 +29,9 @@ static std::unique_ptr<Proc> createTestProcessor (int outputFormat = 0, int algo
 {
     auto proc = std::make_unique<Proc>();
 
-    // Set output format and algorithm parameters BEFORE prepareToPlay
-    if (auto* p = proc->apvts.getParameter ("outputFormat"))
-        p->setValueNotifyingHost (p->convertTo0to1 (static_cast<float> (outputFormat)));
-    if (auto* p = proc->apvts.getParameter ("algorithm"))
-        p->setValueNotifyingHost (p->convertTo0to1 (static_cast<float> (algorithm)));
+    // Set output format and algorithm config params BEFORE prepareToPlay
+    proc->configOutputFormat.store (outputFormat, std::memory_order_relaxed);
+    proc->configAlgorithm.store (algorithm, std::memory_order_relaxed);
 
     // Set short delay and 100% wet BEFORE prepareToPlay so smoothed values
     // initialize correctly — prevents 500ms default from starving the delay line
@@ -53,10 +51,8 @@ static std::unique_ptr<Proc> createConstrainedProcessor (int outputFormat, int a
 {
     auto proc = std::make_unique<Proc>();
 
-    if (auto* p = proc->apvts.getParameter ("outputFormat"))
-        p->setValueNotifyingHost (p->convertTo0to1 (static_cast<float> (outputFormat)));
-    if (auto* p = proc->apvts.getParameter ("algorithm"))
-        p->setValueNotifyingHost (p->convertTo0to1 (static_cast<float> (algorithm)));
+    proc->configOutputFormat.store (outputFormat, std::memory_order_relaxed);
+    proc->configAlgorithm.store (algorithm, std::memory_order_relaxed);
 
     // Set short delay and 100% wet BEFORE prepareToPlay so smoothed values
     // initialize correctly — prevents 500ms default from starving the delay line

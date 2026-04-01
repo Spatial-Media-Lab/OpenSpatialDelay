@@ -637,6 +637,13 @@ public:
     std::atomic<float> globalTapOffset[kNumGlobalTapOffsets] = {};  // AZ, EL, DIST, PITCH, DOPPLER, SPEED
     std::atomic<bool>  globalTapOffsetChanged { false };
 
+    // Issue #68: Config params stored outside APVTS to hide from DAW automation lists.
+    // Saved/restored in getStateInformation/setStateInformation.
+    std::atomic<int> configAlgorithm { 0 };
+    std::atomic<int> configHrtfProfile { 0 };
+    std::atomic<int> configOutputFormat { 0 };
+    std::atomic<int> configInputFormat { 0 };
+
     // v0.7: OSC Send accessors for editor
     bool isOscSendConnected() const { return oscSendConnected; }
     bool getOscSendEnabled() const { return oscSendEnabled; }
@@ -1023,18 +1030,15 @@ private:
     std::atomic<float>* cachedParam_filterHPQ       = nullptr;
     std::atomic<float>* cachedParam_filterLPQ       = nullptr;
     std::atomic<float>* cachedParam_filterEnabled   = nullptr;
-    std::atomic<float>* cachedParam_hrtfProfile     = nullptr;
     std::atomic<float>* cachedParam_airAbsorption   = nullptr;
     std::atomic<float>* cachedParam_wobbleEnabled   = nullptr;
     std::atomic<float>* cachedParam_wobbleAmount    = nullptr;
     std::atomic<float>* cachedParam_wobbleMorph     = nullptr;
-    std::atomic<float>* cachedParam_inputFormat     = nullptr;
     std::atomic<float>* cachedParam_delayTime       = nullptr;
     std::atomic<float>* cachedParam_dryWet          = nullptr;
     std::atomic<float>* cachedParam_feedback        = nullptr;
     std::atomic<float>* cachedParam_inputGain       = nullptr;
     std::atomic<float>* cachedParam_outputGain      = nullptr;
-    std::atomic<float>* cachedParam_algorithm       = nullptr;
     // issue #68: Global tap offset APVTS cached pointers
     std::atomic<float>* cachedParam_globalTapAzimuth   = nullptr;
     std::atomic<float>* cachedParam_globalTapElevation = nullptr;

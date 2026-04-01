@@ -360,8 +360,8 @@ static std::unique_ptr<Proc> createBinauralProcessor (int hrtfProfile = 1)
     auto proc = std::make_unique<Proc>();
 
     // Binaural output = format index 0
-    setParam (*proc, "outputFormat", 0.0f);
-    setParam (*proc, "hrtfProfile", static_cast<float> (hrtfProfile));
+    proc->configOutputFormat.store (0, std::memory_order_relaxed);
+    proc->configHrtfProfile.store (hrtfProfile, std::memory_order_relaxed);
 
     // Set up delay parameters for audible output
     // 50ms delay — taps stabilize within 30 blocks:
@@ -608,7 +608,7 @@ TEST_CASE ("Stereo — azimuth sweep has no glitches (regression guard)", "[ster
     auto proc = std::make_unique<Proc>();
 
     // Stereo output = format index 1
-    setParam (*proc, "outputFormat", 1.0f);
+    proc->configOutputFormat.store (1, std::memory_order_relaxed);
     setParam (*proc, "delayTime", 50.0f);
     setParam (*proc, "feedback", 0.85f);
     setParam (*proc, "dryWet", 1.0f);
@@ -689,8 +689,8 @@ static std::unique_ptr<Proc> createMultiTapBinauralProcessor (int numTaps, float
                                                                int hrtfProfile = 1)
 {
     auto proc = std::make_unique<Proc>();
-    setParam (*proc, "outputFormat", 0.0f);   // Binaural
-    setParam (*proc, "hrtfProfile", static_cast<float> (hrtfProfile));
+    proc->configOutputFormat.store (0, std::memory_order_relaxed);   // Binaural
+    proc->configHrtfProfile.store (hrtfProfile, std::memory_order_relaxed);
     setParam (*proc, "delayTime", 50.0f);
     setParam (*proc, "feedback", feedback);
     setParam (*proc, "dryWet", 1.0f);
@@ -935,8 +935,8 @@ TEST_CASE ("Binaural HRTF — 12-tap simultaneous sweep stress", "[binaural][mul
 TEST_CASE ("Doppler — velocity response latency characterization", "[doppler][latency]")
 {
     auto proc = std::make_unique<Proc>();
-    setParam (*proc, "outputFormat", 0.0f);   // Binaural
-    setParam (*proc, "hrtfProfile", 0.0f);    // Simple/Woodworth (no HRTF convolver variable)
+    proc->configOutputFormat.store (0, std::memory_order_relaxed);   // Binaural
+    proc->configHrtfProfile.store (0, std::memory_order_relaxed);    // Simple/Woodworth (no HRTF convolver variable)
     setParam (*proc, "delayTime", 100.0f);
     setParam (*proc, "feedback", 0.0f);       // Single pass
     setParam (*proc, "dryWet", 1.0f);
@@ -1103,8 +1103,8 @@ TEST_CASE ("Surround VBAP — azimuth sweep has no glitches", "[surround][glitch
     auto proc = std::make_unique<Proc>();
 
     // Surround 5.1 = format index 4, VBAP = algorithm index 4
-    setParam (*proc, "outputFormat", 4.0f);
-    setParam (*proc, "algorithm", 4.0f);
+    proc->configOutputFormat.store (4, std::memory_order_relaxed);
+    proc->configAlgorithm.store (4, std::memory_order_relaxed);
     setParam (*proc, "delayTime", 50.0f);
     setParam (*proc, "feedback", 0.85f);
     setParam (*proc, "dryWet", 1.0f);
@@ -1259,8 +1259,8 @@ TEST_CASE ("Doppler — block size sensitivity", "[doppler][blocksize]")
         SECTION ("Block size " + std::to_string (bs))
         {
             auto proc = std::make_unique<Proc>();
-            setParam (*proc, "outputFormat", 0.0f);
-            setParam (*proc, "hrtfProfile", 0.0f);  // Simple
+            proc->configOutputFormat.store (0, std::memory_order_relaxed);
+            proc->configHrtfProfile.store (0, std::memory_order_relaxed);  // Simple
             setParam (*proc, "delayTime", 100.0f);
             setParam (*proc, "feedback", 0.5f);
             setParam (*proc, "dryWet", 1.0f);
@@ -1360,7 +1360,7 @@ static std::unique_ptr<Proc> createStereoProcessor (float delayMs = 50.0f, float
                                                      int numTaps = 3)
 {
     auto proc = std::make_unique<Proc>();
-    setParam (*proc, "outputFormat", 1.0f);  // Stereo
+    proc->configOutputFormat.store (1, std::memory_order_relaxed);  // Stereo
     setParam (*proc, "delayTime", delayMs);
     setParam (*proc, "feedback", feedback);
     setParam (*proc, "dryWet", 1.0f);
@@ -1531,7 +1531,7 @@ TEST_CASE ("Tap toggle rapid on/off — no clicks", "[issue40][tapfade]")
 TEST_CASE ("Preset change — sequential factory presets produce no clicks", "[issue40][preset]")
 {
     auto proc = std::make_unique<Proc>();
-    setParam (*proc, "outputFormat", 1.0f);  // Stereo
+    proc->configOutputFormat.store (1, std::memory_order_relaxed);  // Stereo
     proc->prepareToPlay (kSampleRate, kBlockSize);
 
     // Load first preset and stabilize
