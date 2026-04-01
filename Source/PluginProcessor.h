@@ -340,6 +340,9 @@ public:
     /** Reset internal state (overlap buffers, input accumulators). */
     void reset();
 
+    /** Reset and clear all IR data so the next setIR is a direct load (no crossfade). */
+    void clearAll();
+
     bool isPrepared() const { return fftSize > 0; }
 
 private:
@@ -436,6 +439,11 @@ public:
 
     /** Reset all convolver states (e.g., on playback restart). */
     void reset();
+
+    /** Invalidate all source convolvers so the next HRIR load is a direct load
+        (no crossfade from stale IR). Used during preset transitions to prevent
+        clicks from crossfading between unrelated HRIR positions. */
+    void invalidateSources();
 
     /** Test-only: override ITD processing state for diagnostic isolation. */
     void setITDEnabled (bool enabled) { itdActive = enabled; }
