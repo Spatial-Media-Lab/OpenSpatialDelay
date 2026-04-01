@@ -3087,3 +3087,98 @@ TEST_CASE ("MinPhase HRTF — reduces spectral flux vs raw HRIR", "[issue47][min
     WARN ("Spectral flux reduction: L=" << (1.0f - mpFluxL / rawFluxL) * 100.0f
           << "% R=" << (1.0f - mpFluxR / rawFluxR) * 100.0f << "%");
 }
+
+// ============================================================================
+// Section: MS Encode Stereo Mode Tests (issue #76)
+// ============================================================================
+
+TEST_CASE ("MS Encode — subcardioid gain values at cardinal azimuths", "[issue76][msencode]")
+{
+    // Pure math verification of the subcardioid Mid formula:
+    //   mid = 0.75 + 0.25 * cos(az)
+    //   side = sin(az)
+    //   L = mid + side,  R = mid - side
+
+    auto check = [] (float azDeg, float expectedMid, float expectedL, float expectedR)
+    {
+        float azRad = azDeg * (kPi / 180.0f);
+        float mid   = 0.75f + 0.25f * std::cos (azRad);
+        float side  = std::sin (azRad);
+        float L     = mid + side;
+        float R     = mid - side;
+
+        INFO ("Azimuth=" << azDeg << "° mid=" << mid << " L=" << L << " R=" << R);
+        CHECK_THAT (mid, WithinAbs (expectedMid, 0.001));
+        CHECK_THAT (L,   WithinAbs (expectedL,   0.001));
+        CHECK_THAT (R,   WithinAbs (expectedR,   0.001));
+    };
+
+    check (  0.0f, 1.00f,  1.00f,  1.00f);   // front center
+    check ( 90.0f, 0.75f,  1.75f, -0.25f);   // left  — clearly L-dominant
+    check (-90.0f, 0.75f, -0.25f,  1.75f);   // right — clearly R-dominant
+    check (180.0f, 0.50f,  0.50f,  0.50f);   // rear center (quiet)
+
+    // Critical regression: mid at ±90° must NOT be zero (was 0.0 in buggy |cos| formula)
+    float mid90 = 0.75f + 0.25f * std::cos (90.0f * kPi / 180.0f);
+    REQUIRE (mid90 > 0.5f);
+}
+
+TEST_CASE ("MS Encode — no null at 90 degrees (regression for issue #76)", "[issue76][msencode]")
+{
+    // Full signal-flow test: single tap at az=90°, MS Encode stereo mode
+    auto proc = createStereoProcessor (50.0f, 0.0f, 1);  // 1 tap, no feedback
+    proc->configAlgorithm.store (9, std::memory_order_relaxed);  // algorithm 9 → stereoMode 3 = MS Encode
+    setParam (*proc, "object1_azimuth", 90.0f);
+    setParam (*proc, "object1_distance", 0.4f);
+    setParam (*proc, "dryWet", 1.0f);
+
+    // Feed enough blocks for delay to fill and output to stabilize
+    auto [allL, allR] = processBlocksWithSine (*proc, 80);
+
+    // Skip initial silence (delay line fill time)
+    int skip = 20 * kBlockSize;
+    int len  = static_cast<int> (allL.size()) - skip;
+    REQUIRE (len > 0);
+
+    float rmsL = computeRMS (allL.data() + skip, len);
+    float rmsR = computeRMS (allR.data() + skip, len);
+
+    INFO ("MS Encode az=90°: RMS L=" << rmsL << " R=" << rmsR);
+
+    // Left channel should be dominant (object at +90° = left)
+    REQUIRE (rmsL > rmsR);
+
+    // Both channels must have signal (no null — the bug caused equal amplitude opposite polarity)
+    REQUIRE (rmsL > 0.001f);
+    REQUIRE (rmsR > 0.0001f);  // R is small but non-zero with subcardioid
+}
+
+TEST_CASE ("MS Encode — L/R symmetry for mirrored azimuths", "[issue76][msencode]")
+{
+    auto runAtAzimuth = [] (float azDeg)
+    {
+        auto proc = createStereoProcessor (50.0f, 0.0f, 1);
+        proc->configAlgorithm.store (9, std::memory_order_relaxed);
+        setParam (*proc, "object1_azimuth", azDeg);
+        setParam (*proc, "object1_distance", 0.4f);
+        setParam (*proc, "dryWet", 1.0f);
+
+        auto [allL, allR] = processBlocksWithSine (*proc, 80);
+
+        int skip = 20 * kBlockSize;
+        int len  = static_cast<int> (allL.size()) - skip;
+        float rmsL = computeRMS (allL.data() + skip, len);
+        float rmsR = computeRMS (allR.data() + skip, len);
+        return std::pair<float, float> { rmsL, rmsR };
+    };
+
+    auto [posL, posR] = runAtAzimuth (+60.0f);
+    auto [negL, negR] = runAtAzimuth (-60.0f);
+
+    INFO ("+60°: L=" << posL << " R=" << posR);
+    INFO ("-60°: L=" << negL << " R=" << negR);
+
+    // L channel at +60° ≈ R channel at -60° and vice versa
+    CHECK_THAT (posL, WithinAbs (static_cast<double> (negR), 0.01));
+    CHECK_THAT (posR, WithinAbs (static_cast<double> (negL), 0.01));
+}
