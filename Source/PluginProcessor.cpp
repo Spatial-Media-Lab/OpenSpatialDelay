@@ -343,9 +343,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
-    // G18: OSC Bypass (was "ADM-OSC Enabled" — inverted: true=bypassed=all OSC off)
+    // G18: OSC Receive (true=enabled, false=disabled; default OFF)
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("admOscEnabled", 18), "OSC Bypass", true));
+        juce::ParameterID ("admOscEnabled", 18), "OSC Receive", false));
 
     // G19–G24: Global Tap Offsets (promoted from OSC-only atomics to APVTS)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -915,6 +915,15 @@ void PartitionedConvolver::reset()
     pendingIRLen = 0;
 }
 
+void PartitionedConvolver::clearAll()
+{
+    reset();
+    // Zero frequency-domain IR data so the next setIR does a direct load
+    // instead of crossfading from stale IR (used during preset transitions)
+    for (int s = 0; s < 2; ++s)
+        std::fill (slots[s].irFreqDomain.begin(), slots[s].irFreqDomain.end(), 0.0f);
+}
+
 //==============================================================================
 // BinauralRenderer implementation — manages HRTF convolver banks
 //==============================================================================
@@ -1159,6 +1168,25 @@ void BinauralRenderer::reset()
     }
 }
 
+void BinauralRenderer::invalidateSources()
+{
+    for (int i = 0; i < MAX_SOURCES; ++i)
+    {
+        sourceConvL[i].clearAll();
+        sourceConvR[i].clearAll();
+        sourceConvReady[i] = false;
+        cachedSourceAz[i] = -999.0f;
+        cachedSourceEl[i] = -999.0f;
+        currentITDL[i] = 0.0f;
+        currentITDR[i] = 0.0f;
+        targetITDL[i] = 0.0f;
+        targetITDR[i] = 0.0f;
+        itdWritePos[i] = 0;
+        std::memset (itdBufferL[i], 0, sizeof (itdBufferL[i]));
+        std::memset (itdBufferR[i], 0, sizeof (itdBufferR[i]));
+    }
+}
+
 //==============================================================================
 // HRTF Profile Loading — maps profile index to SOFA BinaryData
 //==============================================================================
@@ -1247,10 +1275,8 @@ void OpenSpatialDelayProcessor::timerCallback()
     }
 
     // --- v0.6: ADM-OSC connection management (edge-detect enable/disable) ---
-    // issue #68: admOscEnabled param is now "OSC Bypass" (true=bypassed=OSC off)
-    bool oscBypassed = cachedParam_admOscEnabled != nullptr
-                       && cachedParam_admOscEnabled->load() >= 0.5f;
-    bool admEnabled = ! oscBypassed;
+    bool admEnabled = cachedParam_admOscEnabled != nullptr
+                      && cachedParam_admOscEnabled->load() >= 0.5f;
     if (admEnabled && ! prevAdmOscEnabled)
     {
         // Transition OFF→ON: connect
@@ -1305,8 +1331,7 @@ void OpenSpatialDelayProcessor::timerCallback()
     }
 
     // --- SPATIAL MEDIA LIBRARY: ADM-OSC Send — broadcast object positions at 30Hz ---
-    // issue #68: OSC Bypass disables both send and receive
-    if (oscSendEnabled && ! oscBypassed && oscSendConnected && ++oscSendTickCounter >= 2)
+    if (oscSendEnabled && admEnabled && oscSendConnected && ++oscSendTickCounter >= 2)
     {
         oscSendTickCounter = 0;
         for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -3795,6 +3820,11 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             pvPitchShifters[i].reset();
 
         filters.resetAll();
+
+        // Invalidate HRTF convolvers so new HRIRs load directly (no crossfade
+        // from stale IR at the old preset's positions — prevents clicks).
+        auto& activeRenderer = binauralRenderers[activeRendererIndex.load (std::memory_order_acquire)];
+        activeRenderer.invalidateSources();
 
         presetResetPending.store (false, std::memory_order_release);
     }
