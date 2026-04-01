@@ -27,7 +27,8 @@ bash scripts/build_version.sh <commit-hash> v1.0.X O10X
 - v1.0.7 / O107 — dry path latency compensation + unique CFBundleIdentifier per build (issues #63, #62)
 - v1.0.8 / O108 — transport-aware PV reset for intermittent buzzing (issue #65)
 - v1.0.9 / O109 — AU parameter ordering via unique version hints + blank row fix (issue #68)
-- Next available: **v1.0.10 / O110**
+- v1.0.10 / O110 — hide 4 config params from DAW automation list (issue #68)
+- Next available: **v1.0.11 / O111**
 
 ### Running tests
 
