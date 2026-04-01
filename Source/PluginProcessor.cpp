@@ -915,6 +915,15 @@ void PartitionedConvolver::reset()
     pendingIRLen = 0;
 }
 
+void PartitionedConvolver::clearAll()
+{
+    reset();
+    // Zero frequency-domain IR data so the next setIR does a direct load
+    // instead of crossfading from stale IR (used during preset transitions)
+    for (int s = 0; s < 2; ++s)
+        std::fill (slots[s].irFreqDomain.begin(), slots[s].irFreqDomain.end(), 0.0f);
+}
+
 //==============================================================================
 // BinauralRenderer implementation — manages HRTF convolver banks
 //==============================================================================
@@ -1149,6 +1158,25 @@ void BinauralRenderer::reset()
         sourceConvL[i].reset();
         sourceConvR[i].reset();
         sourceConvReady[i] = false;
+        currentITDL[i] = 0.0f;
+        currentITDR[i] = 0.0f;
+        targetITDL[i] = 0.0f;
+        targetITDR[i] = 0.0f;
+        itdWritePos[i] = 0;
+        std::memset (itdBufferL[i], 0, sizeof (itdBufferL[i]));
+        std::memset (itdBufferR[i], 0, sizeof (itdBufferR[i]));
+    }
+}
+
+void BinauralRenderer::invalidateSources()
+{
+    for (int i = 0; i < MAX_SOURCES; ++i)
+    {
+        sourceConvL[i].clearAll();
+        sourceConvR[i].clearAll();
+        sourceConvReady[i] = false;
+        cachedSourceAz[i] = -999.0f;
+        cachedSourceEl[i] = -999.0f;
         currentITDL[i] = 0.0f;
         currentITDR[i] = 0.0f;
         targetITDL[i] = 0.0f;
@@ -3797,6 +3825,11 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             pvPitchShifters[i].reset();
 
         filters.resetAll();
+
+        // Invalidate HRTF convolvers so new HRIRs load directly (no crossfade
+        // from stale IR at the old preset's positions — prevents clicks).
+        auto& activeRenderer = binauralRenderers[activeRendererIndex.load (std::memory_order_acquire)];
+        activeRenderer.invalidateSources();
 
         presetResetPending.store (false, std::memory_order_release);
     }
