@@ -2391,9 +2391,14 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
 
     // v1.0.7: Dry path latency compensation (issue #63)
     // Delay dry signal by kFFTSize samples to match the phase vocoder's wet path latency.
-    dryDelayLine.assign (static_cast<size_t> (PhaseVocoderPitchShifter::kFFTSize), 0.0f);
+    // v1.0.1: Stereo dry buffers — dry path preserves stereo input (issue #73)
+    dryDelayLineL.assign (static_cast<size_t> (PhaseVocoderPitchShifter::kFFTSize), 0.0f);
+    dryDelayLineR.assign (static_cast<size_t> (PhaseVocoderPitchShifter::kFFTSize), 0.0f);
     dryDelayWritePos = 0;
-    dryCompBuffer.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+    dryCompBufferL.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+    dryCompBufferR.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+    perSampleDW.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+    perSampleOutGain.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
 
     // v1.0: Initialize tap fade envelopes
     for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -4027,15 +4032,19 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // v1.0.7: Fill latency-compensated dry buffer (issue #63)
     // The phase vocoder adds kFFTSize samples of latency to the wet path.
     // Delay the dry signal by the same amount so DAW PDC is correct at all dry/wet levels.
-    if (dryCompBuffer.size() < ns)
-        dryCompBuffer.resize (ns);
+    // v1.0.1: Stereo dry path — reads from inputBufferL/R to preserve stereo (issue #73)
+    if (dryCompBufferL.size() < ns) dryCompBufferL.resize (ns);
+    if (dryCompBufferR.size() < ns) dryCompBufferR.resize (ns);
     {
-        const int dryDelaySize = static_cast<int> (dryDelayLine.size());
+        const int dryDelaySize = static_cast<int> (dryDelayLineL.size());
         for (int i = 0; i < numSamples; ++i)
         {
-            // Read delayed sample first, then overwrite with new input
-            dryCompBuffer[static_cast<size_t> (i)] = dryDelayLine[static_cast<size_t> (dryDelayWritePos)];
-            dryDelayLine[static_cast<size_t> (dryDelayWritePos)] = monoInputBuffer[static_cast<size_t> (i)];
+            auto si = static_cast<size_t> (i);
+            auto wp = static_cast<size_t> (dryDelayWritePos);
+            dryCompBufferL[si] = dryDelayLineL[wp];
+            dryCompBufferR[si] = dryDelayLineR[wp];
+            dryDelayLineL[wp] = inputBufferL[si];
+            dryDelayLineR[wp] = inputBufferR[si];
             dryDelayWritePos = (dryDelayWritePos + 1) % dryDelaySize;
         }
     }
@@ -4063,7 +4072,18 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     }
     smoothedLoopMultiplier.setCurrentAndTargetValue (loopMultiplierTarget);
 
+    // v1.0.1: Pre-advance dryWet / outputGain smoothers into per-sample arrays (issue #73)
+    // Render paths now output raw wet signal; dry/wet mix happens once after dispatch.
+    if (perSampleDW.size() < ns)       perSampleDW.resize (ns);
+    if (perSampleOutGain.size() < ns)  perSampleOutGain.resize (ns);
+    for (int s = 0; s < numSamples; ++s)
+    {
+        perSampleDW[static_cast<size_t> (s)]       = smoothedDryWet.getNextValue();
+        perSampleOutGain[static_cast<size_t> (s)]  = smoothedOutputGain.getNextValue();
+    }
+
     // --- Dispatch to appropriate render method --------------------------------
+    // Render paths write RAW WET signal to the output buffer (no dry, no dw, no outGain, no limiter).
     if (isStereoVariant)
     {
         // Stereo mode from algorithm parameter: indices 6-10 → modes 0-4
@@ -4088,6 +4108,50 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     {
         renderDiscreteSurround (buffer, numSamples, objects, objChannelGains,
                                 objDistGain, surLayout);
+    }
+
+    // === v1.0.1: Single-point dry/wet mix with equal-power crossfade (issue #73) ===
+    // The dry signal bypasses the entire plugin; only dryWet and outputGain affect it.
+    // Equal-power (cos/sin) crossfade maintains constant perceived loudness at all dw settings.
+    {
+        const int numOutCh = buffer.getNumChannels();
+        constexpr int kMaxPostRenderCh = 64;  // Covers surround (16), ambi (49), and any DAW padding
+        float* outPtrs[kMaxPostRenderCh] = {};
+        const int usableCh = std::min (numOutCh, kMaxPostRenderCh);
+        for (int ch = 0; ch < usableCh; ++ch)
+            outPtrs[ch] = buffer.getWritePointer (ch);
+
+        for (int s = 0; s < numSamples; ++s)
+        {
+            auto si = static_cast<size_t> (s);
+            float dw       = perSampleDW[si];
+            float outGain  = perSampleOutGain[si];
+            float dryCoeff = std::cos (dw * juce::MathConstants<float>::halfPi);
+            float wetCoeff = std::sin (dw * juce::MathConstants<float>::halfPi);
+
+            if (isAmbiOutput)
+            {
+                // Ambisonics: mono dry → W channel (ACN 0), wet → all SH channels
+                float dryMono = (dryCompBufferL[si] + dryCompBufferR[si]) * 0.5f;
+                if (outPtrs[0])
+                    outPtrs[0][s] = outputLimiter ((outPtrs[0][s] * wetCoeff + dryMono * dryCoeff) * outGain);
+                for (int ch = 1; ch < usableCh; ++ch)
+                    if (outPtrs[ch])
+                        outPtrs[ch][s] = outputLimiter (outPtrs[ch][s] * wetCoeff * outGain);
+            }
+            else
+            {
+                // Binaural / Stereo / Surround: stereo dry → L/R (ch 0/1)
+                if (outPtrs[0])
+                    outPtrs[0][s] = outputLimiter ((outPtrs[0][s] * wetCoeff + dryCompBufferL[si] * dryCoeff) * outGain);
+                if (usableCh > 1 && outPtrs[1])
+                    outPtrs[1][s] = outputLimiter ((outPtrs[1][s] * wetCoeff + dryCompBufferR[si] * dryCoeff) * outGain);
+                // Remaining channels (surround speakers, LFE): wet only
+                for (int ch = 2; ch < usableCh; ++ch)
+                    if (outPtrs[ch])
+                        outPtrs[ch][s] = outputLimiter (outPtrs[ch][s] * wetCoeff * outGain);
+            }
+        }
     }
 
     // v0.7: Store per-tap peak to atomics for UI glow
@@ -4138,10 +4202,6 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
         wetBufR.resize (static_cast<size_t> (numSamples), 0.0f);
     }
 
-    // Capture smoothed value start positions for Pass 3 interpolation
-    float dwStart      = smoothedDryWet.getCurrentValue();
-    float outGainStart = smoothedOutputGain.getCurrentValue();
-
     // v1.0: Per-sample distGain interpolation to prevent clicks on rapid position changes
     float hrtfInvN = (numSamples > 1) ? 1.0f / static_cast<float> (numSamples - 1) : 1.0f;
 
@@ -4157,9 +4217,7 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
 
         float inGain = smoothedInputGain.getNextValue();
         float fb     = smoothedFeedback.getNextValue();
-        // Advance dryWet/outputGain smoothing per-sample; values read at block-end in PASS 3
-        smoothedDryWet.getNextValue();
-        smoothedOutputGain.getNextValue();
+        // v1.0.1: dryWet/outputGain smoothers pre-advanced in processBlock (issue #73)
 
         // STAGE 1: WRITE to delay line (dual L/R)
         float rawL = inputBufferL[static_cast<size_t> (s)] * inGain;
@@ -4204,21 +4262,9 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
     activeRenderer.renderSourceBuffers (srcBufPtrs, sourceEnabled, MAX_OBJECTS,
                                         numSamples, wetBufL.data(), wetBufR.data());
 
-    // === PASS 3: Per-sample dry/wet mix + output gain ===
-    float dwEnd      = smoothedDryWet.getCurrentValue();
-    float outGainEnd = smoothedOutputGain.getCurrentValue();
-    float invN = (numSamples > 1) ? 1.0f / static_cast<float> (numSamples - 1) : 1.0f;
-
-    for (int s = 0; s < numSamples; ++s)
-    {
-        float frac    = static_cast<float> (s) * invN;
-        float dw      = dwStart + frac * (dwEnd - dwStart);
-        float outGain = outGainStart + frac * (outGainEnd - outGainStart);
-        float rawInput = dryCompBuffer[static_cast<size_t> (s)];  // v1.0.7: latency-compensated dry signal (issue #63)
-
-        outL[s] = outputLimiter ((rawInput * (1.0f - dw) + wetBufL[static_cast<size_t> (s)] * dw) * outGain);
-        outR[s] = outputLimiter ((rawInput * (1.0f - dw) + wetBufR[static_cast<size_t> (s)] * dw) * outGain);
-    }
+    // === PASS 3: Write raw wet signal to output (dry/wet mix handled in processBlock) ===
+    std::memcpy (outL, wetBufL.data(), sizeof (float) * static_cast<size_t> (numSamples));
+    std::memcpy (outR, wetBufR.data(), sizeof (float) * static_cast<size_t> (numSamples));
 
     // Zero remaining channels when binaural is selected on a multi-channel bus
     for (int ch = 2; ch < buffer.getNumChannels(); ++ch)
@@ -4251,9 +4297,8 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
         float currentLoopMult = smoothedLoopMultiplier.getNextValue();
 
         float inGain  = smoothedInputGain.getNextValue();
-        float dw      = smoothedDryWet.getNextValue();
         float fb      = smoothedFeedback.getNextValue();
-        float outGain = smoothedOutputGain.getNextValue();
+        // v1.0.1: dryWet/outputGain smoothers pre-advanced in processBlock (issue #73)
 
         // === STAGE 1: WRITE (dual L/R) ===
         float rawL = inputBufferL[static_cast<size_t> (s)] * inGain;
@@ -4261,7 +4306,6 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
         float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
         float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
         writeDelayLine (delayInputL, delayInputR);
-        float rawInput = dryCompBuffer[static_cast<size_t> (s)];  // v1.0.7: latency-compensated dry signal (issue #63)
 
         // === STAGE 2: READ & SPATIALIZE ===
         float wetL = 0.0f, wetR = 0.0f;
@@ -4287,9 +4331,9 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
         // === STAGE 3: FEEDBACK ===
         processFeedbackSample (currentLoopMult, baseDelaySamples, fb);
 
-        // === STAGE 4: OUTPUT MIX ===
-        outL[s] = outputLimiter ((rawInput * (1.0f - dw) + wetL * dw) * outGain);
-        outR[s] = outputLimiter ((rawInput * (1.0f - dw) + wetR * dw) * outGain);
+        // === STAGE 4: OUTPUT — raw wet (dry/wet mix handled in processBlock) ===
+        outL[s] = wetL;
+        outR[s] = wetR;
     }
 
     // Store current gains as previous for next block
@@ -4390,9 +4434,8 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
         float currentLoopMult = smoothedLoopMultiplier.getNextValue();
 
         float inGain  = smoothedInputGain.getNextValue();
-        float dw      = smoothedDryWet.getNextValue();
         float fb      = smoothedFeedback.getNextValue();
-        float outGain = smoothedOutputGain.getNextValue();
+        // v1.0.1: dryWet/outputGain smoothers pre-advanced in processBlock (issue #73)
 
         // === STAGE 1: WRITE (dual L/R) ===
         float rawL = inputBufferL[static_cast<size_t> (s)] * inGain;
@@ -4400,7 +4443,6 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
         float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
         float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
         writeDelayLine (delayInputL, delayInputR);
-        float rawInput = dryCompBuffer[static_cast<size_t> (s)];  // v1.0.7: latency-compensated dry signal (issue #63)
 
         // === STAGE 2: READ & SPATIALIZE ===
         float wetL = 0.0f, wetR = 0.0f;
@@ -4426,9 +4468,9 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
         // === STAGE 3: FEEDBACK ===
         processFeedbackSample (currentLoopMult, baseDelaySamples, fb);
 
-        // === STAGE 4: OUTPUT MIX ===
-        outL[s] = outputLimiter ((rawInput * (1.0f - dw) + wetL * dw) * outGain);
-        outR[s] = outputLimiter ((rawInput * (1.0f - dw) + wetR * dw) * outGain);
+        // === STAGE 4: OUTPUT — raw wet (dry/wet mix handled in processBlock) ===
+        outL[s] = wetL;
+        outR[s] = wetR;
     }
 
     // Store current gains as previous for next block
@@ -4538,9 +4580,8 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
         float currentLoopMult = smoothedLoopMultiplier.getNextValue();
 
         float inGain  = smoothedInputGain.getNextValue();
-        float dw      = smoothedDryWet.getNextValue();
         float fb      = smoothedFeedback.getNextValue();
-        float outGain = smoothedOutputGain.getNextValue();
+        // v1.0.1: dryWet/outputGain smoothers pre-advanced in processBlock (issue #73)
 
         // === STAGE 1: WRITE (dual L/R) ===
         float rawL = inputBufferL[static_cast<size_t> (s)] * inGain;
@@ -4548,7 +4589,6 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
         float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
         float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
         writeDelayLine (delayInputL, delayInputR);
-        float rawInput = dryCompBuffer[static_cast<size_t> (s)];  // v1.0.7: latency-compensated dry signal (issue #63)
 
         // === STAGE 2: READ & SH ENCODE (with NFC-HOA) ===
         float ambiAccum[MAX_AMBI_CHANNELS] = {};
@@ -4589,17 +4629,12 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
         // === STAGE 3: FEEDBACK ===
         processFeedbackSample (currentLoopMult, baseDelaySamples, fb);
 
-        // === STAGE 4: OUTPUT MIX ===
-        // Wet: SH-encoded signal to all Ambisonics channels
+        // === STAGE 4: OUTPUT — raw wet (dry/wet mix handled in processBlock) ===
         for (int c = 0; c < numAmbiCh && c < numOutCh; ++c)
         {
             if (outChannels[c] != nullptr)
-                outChannels[c][s] = outputLimiter (ambiAccum[c] * dw * outGain);
+                outChannels[c][s] = ambiAccum[c];
         }
-
-        // Dry: omnidirectional (W channel = ACN 0 only)
-        if (outChannels[0] != nullptr)
-            outChannels[0][s] = outputLimiter (outChannels[0][s] + rawInput * (1.0f - dw) * outGain);
     }
 
     // Store current SH coefficients and distance gains as previous for next block
@@ -4643,9 +4678,8 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
         float currentLoopMult = smoothedLoopMultiplier.getNextValue();
 
         float inGain  = smoothedInputGain.getNextValue();
-        float dw      = smoothedDryWet.getNextValue();
         float fb      = smoothedFeedback.getNextValue();
-        float outGain = smoothedOutputGain.getNextValue();
+        // v1.0.1: dryWet/outputGain smoothers pre-advanced in processBlock (issue #73)
 
         // === STAGE 1: WRITE (dual L/R) ===
         float rawL = inputBufferL[static_cast<size_t> (s)] * inGain;
@@ -4653,7 +4687,6 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
         float delayInputL = softClip ((rawL + feedbackSample * fb) * kFeedbackInputHeadroom);
         float delayInputR = softClip ((rawR + feedbackSample * fb) * kFeedbackInputHeadroom);
         writeDelayLine (delayInputL, delayInputR);
-        float rawInput = dryCompBuffer[static_cast<size_t> (s)];  // v1.0.7: latency-compensated dry signal (issue #63)
 
         // === STAGE 2: READ & SPATIALIZE ===
         float channelAccum[16] = {};
@@ -4685,26 +4718,17 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
         // === STAGE 3: FEEDBACK ===
         processFeedbackSample (currentLoopMult, baseDelaySamples, fb);
 
-        // === STAGE 4: OUTPUT MIX ===
-        // Route spatialized signal to output channels
+        // === STAGE 4: OUTPUT — raw wet (dry/wet mix handled in processBlock) ===
         for (int sp = 0; sp < numSpeakers; ++sp)
         {
             int ch = surLayout.speakers[sp].channelIndex;
             if (ch >= 0 && ch < numOutCh && outChannels[ch] != nullptr)
-                outChannels[ch][s] = outputLimiter (channelAccum[sp] * dw * outGain);
+                outChannels[ch][s] = channelAccum[sp];
         }
 
-        // Dry signal → L and R only (channels 0 and 1)
-        float drySignal = rawInput * (1.0f - dw) * outGain;
-        if (outChannels[0] != nullptr) outChannels[0][s] = outputLimiter (outChannels[0][s] + drySignal);
-        if (outChannels[1] != nullptr) outChannels[1][s] = outputLimiter (outChannels[1][s] + drySignal);
-
-        // LFE generation — low-pass filtered mono sum at −10 dB
+        // LFE generation — low-pass filtered mono sum at −10 dB (raw, no dw/outGain)
         if (lfeIdx >= 0 && lfeIdx < numOutCh && outChannels[lfeIdx] != nullptr)
-        {
-            float lfeSig = outputLimiter (lfeFilter.processSample (wetMono) * 0.316f * dw * outGain);  // −10 dB ≈ 0.316
-            outChannels[lfeIdx][s] = lfeSig;
-        }
+            outChannels[lfeIdx][s] = lfeFilter.processSample (wetMono) * 0.316f;
     }
 
     // Store current gains as previous for next block
