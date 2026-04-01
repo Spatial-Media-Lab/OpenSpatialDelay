@@ -27,10 +27,9 @@ bash scripts/build_version.sh <commit-hash> v1.0.Z O10Z
 
 **Why this is critical:** The default `cmake --build` installs to `OpenSpatialDelay v1.0.component`. The user tests with individually-named versioned plugins (e.g., `OpenSpatialDelay v1.0.1.component`) loaded side-by-side in REAPER for A/B comparison. If you don't use `build_version.sh`, the user will never hear your changes.
 
-**Version number registry (do not reuse) — reset 2026-03-25, see issue #55:**
-- v1.0.0 / O100 — baseline (commit 023670a)
-- v1.0.1 / O101 — stereo dry path + equal-power crossfade (commit 6e128c6, issue #73)
-- Next available: **v1.0.2 / O102**
+**Version number registry (do not reuse) — reset 2026-04-01, see issue #73:**
+- v1.0.0 / O100 — baseline (commit 6c629ef)
+- Next available: **v1.0.1 / O101**
 
 ### Running tests
 
