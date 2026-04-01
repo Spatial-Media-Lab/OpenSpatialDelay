@@ -29,7 +29,8 @@ bash scripts/build_version.sh <commit-hash> v1.0.Z O10Z
 
 **Version number registry (do not reuse) — reset 2026-04-01, see issue #73:**
 - v1.0.0 / O100 — baseline (commit 6c629ef)
-- Next available: **v1.0.1 / O101**
+- v1.0.1 / O101 — MS Encode subcardioid Mid fix for ±90° center collapse (commit 59f244a, issue #76)
+- Next available: **v1.0.2 / O102**
 
 ### Running tests
 
