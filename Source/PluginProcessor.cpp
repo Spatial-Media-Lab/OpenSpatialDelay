@@ -343,9 +343,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
-    // G18: OSC Bypass (was "ADM-OSC Enabled" — inverted: true=bypassed=all OSC off)
+    // G18: OSC Receive (true=enabled, false=disabled; default OFF)
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("admOscEnabled", 18), "OSC Bypass", true));
+        juce::ParameterID ("admOscEnabled", 18), "OSC Receive", false));
 
     // G19–G24: Global Tap Offsets (promoted from OSC-only atomics to APVTS)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -1247,10 +1247,8 @@ void OpenSpatialDelayProcessor::timerCallback()
     }
 
     // --- v0.6: ADM-OSC connection management (edge-detect enable/disable) ---
-    // issue #68: admOscEnabled param is now "OSC Bypass" (true=bypassed=OSC off)
-    bool oscBypassed = cachedParam_admOscEnabled != nullptr
-                       && cachedParam_admOscEnabled->load() >= 0.5f;
-    bool admEnabled = ! oscBypassed;
+    bool admEnabled = cachedParam_admOscEnabled != nullptr
+                      && cachedParam_admOscEnabled->load() >= 0.5f;
     if (admEnabled && ! prevAdmOscEnabled)
     {
         // Transition OFF→ON: connect
@@ -1305,8 +1303,7 @@ void OpenSpatialDelayProcessor::timerCallback()
     }
 
     // --- SPATIAL MEDIA LIBRARY: ADM-OSC Send — broadcast object positions at 30Hz ---
-    // issue #68: OSC Bypass disables both send and receive
-    if (oscSendEnabled && ! oscBypassed && oscSendConnected && ++oscSendTickCounter >= 2)
+    if (oscSendEnabled && admEnabled && oscSendConnected && ++oscSendTickCounter >= 2)
     {
         oscSendTickCounter = 0;
         for (int t = 0; t < MAX_OBJECTS; ++t)
