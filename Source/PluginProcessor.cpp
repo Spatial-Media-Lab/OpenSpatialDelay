@@ -4426,9 +4426,9 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
                 objGainR[t] = 0.5f * (1.0f + std::cos (azRad + angle)) * dG;
                 break;
             }
-            case 3:  // MS Encode — Mid = |cos(az)|, Side = sin(az), L = M+S, R = M-S
+            case 3:  // MS Encode — Subcardioid Mid + Figure-8 Side, L = M+S, R = M-S
             {
-                float mid  = std::abs (std::cos (azRad)) * dG;
+                float mid  = (0.75f + 0.25f * std::cos (azRad)) * dG;
                 float side = std::sin (azRad) * dG;
                 objGainL[t] = mid + side;
                 objGainR[t] = mid - side;
