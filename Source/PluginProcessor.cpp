@@ -4011,9 +4011,11 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     //   6. OUTPUT MIX: dry/wet blend → output channels
 
     // Determine the loop length multiplier based on the highest enabled object index
-    // Smoothed to prevent clicks when enabling/disabling objects mid-playback
+    // v1.0.8: Snap instantly — the previous 50ms ramp swept the feedback read position
+    // through old buffer content, creating a Doppler chirp on tap enable (issue #65).
+    // The tap fade envelope already handles smooth onset of new taps.
     float loopMultiplierTarget = static_cast<float>(std::max (1, lastEnabledObjectIndex + 1));
-    smoothedLoopMultiplier.setTargetValue (loopMultiplierTarget);
+    smoothedLoopMultiplier.setCurrentAndTargetValue (loopMultiplierTarget);
 
     // --- Dispatch to appropriate render method --------------------------------
     if (isStereoVariant)
