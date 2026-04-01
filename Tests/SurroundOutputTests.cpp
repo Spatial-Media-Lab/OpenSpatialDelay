@@ -35,6 +35,13 @@ static std::unique_ptr<Proc> createTestProcessor (int outputFormat = 0, int algo
     if (auto* p = proc->apvts.getParameter ("algorithm"))
         p->setValueNotifyingHost (p->convertTo0to1 (static_cast<float> (algorithm)));
 
+    // Set short delay and 100% wet BEFORE prepareToPlay so smoothed values
+    // initialize correctly — prevents 500ms default from starving the delay line
+    if (auto* p = proc->apvts.getParameter ("delayTime"))
+        p->setValueNotifyingHost (p->convertTo0to1 (1.0f));
+    if (auto* p = proc->apvts.getParameter ("dryWet"))
+        p->setValueNotifyingHost (p->convertTo0to1 (1.0f));
+
     proc->prepareToPlay (48000.0, 512);
     return proc;
 }
@@ -51,6 +58,13 @@ static std::unique_ptr<Proc> createConstrainedProcessor (int outputFormat, int a
     if (auto* p = proc->apvts.getParameter ("algorithm"))
         p->setValueNotifyingHost (p->convertTo0to1 (static_cast<float> (algorithm)));
 
+    // Set short delay and 100% wet BEFORE prepareToPlay so smoothed values
+    // initialize correctly — prevents 500ms default from starving the delay line
+    if (auto* p = proc->apvts.getParameter ("delayTime"))
+        p->setValueNotifyingHost (p->convertTo0to1 (1.0f));
+    if (auto* p = proc->apvts.getParameter ("dryWet"))
+        p->setValueNotifyingHost (p->convertTo0to1 (1.0f));
+
     juce::AudioProcessor::BusesLayout layout;
     layout.inputBuses.add (juce::AudioChannelSet::stereo());
     layout.outputBuses.add (outputChannelSet);
@@ -61,12 +75,27 @@ static std::unique_ptr<Proc> createConstrainedProcessor (int outputFormat, int a
 }
 
 // Process blocks with a buffer matching the constrained bus channel count.
+// Includes warmup period to fill the delay line and let parameter smoothing settle.
 static juce::AudioBuffer<float> processBlocksConstrained (Proc& proc, int numBlocks, int blockSize,
                                                            int numOutChannels, float inputLevel = 0.5f)
 {
     juce::AudioBuffer<float> result (numOutChannels, blockSize);
     result.clear();
     juce::MidiBuffer midi;
+
+    // Warmup: fill delay line and let smoothing settle (matches createBinauralProcessor pattern)
+    for (int w = 0; w < 30; ++w)
+    {
+        juce::AudioBuffer<float> buffer (numOutChannels, blockSize);
+        buffer.clear();
+        for (int s = 0; s < blockSize; ++s)
+        {
+            buffer.setSample (0, s, inputLevel);
+            if (numOutChannels > 1)
+                buffer.setSample (1, s, inputLevel);
+        }
+        proc.processBlock (buffer, midi);
+    }
 
     for (int b = 0; b < numBlocks; ++b)
     {
@@ -1045,6 +1074,7 @@ TEST_CASE ("Elevation: all algorithms — height isolation for horizontal source
 // Helper: process N blocks through the processor with a constant input signal.
 // Uses the processor's actual total output channel count (typically 50) for the buffer,
 // since processBlock may access channels up to getTotalNumOutputChannels().
+// Includes warmup period to fill the delay line and let parameter smoothing settle.
 static juce::AudioBuffer<float> processBlocks (Proc& proc, int numBlocks, int blockSize,
                                                 int /*numOutChannels_unused*/, float inputLevel = 0.5f)
 {
@@ -1053,6 +1083,19 @@ static juce::AudioBuffer<float> processBlocks (Proc& proc, int numBlocks, int bl
     result.clear();
 
     juce::MidiBuffer midi;
+
+    // Warmup: fill delay line and let smoothing settle (matches createBinauralProcessor pattern)
+    for (int w = 0; w < 30; ++w)
+    {
+        juce::AudioBuffer<float> buffer (totalCh, blockSize);
+        buffer.clear();
+        for (int s = 0; s < blockSize; ++s)
+        {
+            buffer.setSample (0, s, inputLevel);
+            buffer.setSample (1, s, inputLevel);
+        }
+        proc.processBlock (buffer, midi);
+    }
 
     for (int b = 0; b < numBlocks; ++b)
     {
