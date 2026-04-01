@@ -3680,7 +3680,22 @@ void OpenSpatialDelayProcessor::processFeedbackSample (float currentLoopMult,
     float fbDelaySamples = currentLoopMult * baseDelaySamples;
     fbDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), fbDelaySamples);
 
-    float feedbackRaw = readDelayLineMono (fbDelaySamples);
+    float feedbackRaw;
+    // v1.0.8: Crossfade feedback between old and new positions on loop multiplier change (issue #65)
+    if (fbCrossfadeProgress < 1.0f)
+    {
+        float oldFbDelay = prevLoopMultiplier * baseDelaySamples;
+        oldFbDelay = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), oldFbDelay);
+
+        float oldSample = readDelayLineMono (oldFbDelay);
+        float newSample = readDelayLineMono (fbDelaySamples);
+        feedbackRaw = oldSample + fbCrossfadeProgress * (newSample - oldSample);
+        fbCrossfadeProgress = std::min (fbCrossfadeProgress + fbCrossfadeIncrement, 1.0f);
+    }
+    else
+    {
+        feedbackRaw = readDelayLineMono (fbDelaySamples);
+    }
     float filtered = filters.processFeedbackSample (feedbackRaw);
     const float makeupGain = 1.0f + (fb * fb * kMakeupGainCoeff);
     float newFeedback = softClip (filtered * makeupGain);
@@ -4011,10 +4026,14 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     //   6. OUTPUT MIX: dry/wet blend → output channels
 
     // Determine the loop length multiplier based on the highest enabled object index
-    // v1.0.8: Snap instantly — the previous 50ms ramp swept the feedback read position
-    // through old buffer content, creating a Doppler chirp on tap enable (issue #65).
-    // The tap fade envelope already handles smooth onset of new taps.
+    // v1.0.8: When the multiplier changes, start a crossfade between old and new feedback
+    // read positions instead of sweeping — sweeping causes a Doppler chirp (issue #65).
     float loopMultiplierTarget = static_cast<float>(std::max (1, lastEnabledObjectIndex + 1));
+    if (loopMultiplierTarget != smoothedLoopMultiplier.getTargetValue())
+    {
+        prevLoopMultiplier = smoothedLoopMultiplier.getCurrentValue();
+        fbCrossfadeProgress = 0.0f;
+    }
     smoothedLoopMultiplier.setCurrentAndTargetValue (loopMultiplierTarget);
 
     // --- Dispatch to appropriate render method --------------------------------
