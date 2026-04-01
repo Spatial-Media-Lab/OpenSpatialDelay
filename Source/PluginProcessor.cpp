@@ -3861,13 +3861,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         // Read per-object state via cached pointers (no string lookups)
         objects[t].enabled      = cachedObj[t].enabled->load()   > 0.5f;
 
-        // v1.0.8: Reset PV on tap enable transition to prevent chirping (issue #65)
-        // When a tap is disabled, its PV stops receiving samples (readObjectSample skipped).
-        // On re-enable, stale outputAccum/phase data causes a chirp. Reset clears it.
-        float newTarget = objects[t].enabled ? 1.0f : 0.0f;
-        if (newTarget > 0.0f && tapFadeTarget[t] <= 0.0f)
-            pvPitchShifters[t].reset();
-        tapFadeTarget[t] = newTarget;
+        tapFadeTarget[t] = objects[t].enabled ? 1.0f : 0.0f;
 
         // v0.9: When trajectory is active, read animated position from internal arrays
         // (the knobs/APVTS hold the origin; the internal arrays hold origin + trajectory offset)
@@ -4135,9 +4129,11 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
                 tapFadeGain[t] = std::min (tapFadeGain[t] + tapFadeIncrement, 1.0f);
             else if (tapFadeGain[t] > tapFadeTarget[t])
                 tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
+            // v1.0.8: Always feed PV to keep it in sync — prevents chirp on tap enable (issue #65)
+            float objMono = readObjectSample (t, baseDelaySamples);
             if (tapFadeGain[t] <= 0.0f) continue;
             float dist = prevDistGain[t] + frac * (objDistGain[t] - prevDistGain[t]);
-            sourceAccumBufPtrs[t][s] = readObjectSample (t, baseDelaySamples) * dist * tapFadeGain[t];
+            sourceAccumBufPtrs[t][s] = objMono * dist * tapFadeGain[t];
         }
 
         // STAGE 3: FEEDBACK (mono, pre-spatial)
@@ -4229,8 +4225,9 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
                 tapFadeGain[t] = std::min (tapFadeGain[t] + tapFadeIncrement, 1.0f);
             else if (tapFadeGain[t] > tapFadeTarget[t])
                 tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
-            if (tapFadeGain[t] <= 0.0f) continue;
+            // v1.0.8: Always feed PV to keep it in sync — prevents chirp on tap enable (issue #65)
             float objMono = readObjectSample (t, baseDelaySamples);
+            if (tapFadeGain[t] <= 0.0f) continue;
 
             // Interpolate between previous and current block gains
             float gL = prevBinauralGains[t].leftGain  + frac * (objGains[t].leftGain  - prevBinauralGains[t].leftGain);
@@ -4367,8 +4364,9 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
                 tapFadeGain[t] = std::min (tapFadeGain[t] + tapFadeIncrement, 1.0f);
             else if (tapFadeGain[t] > tapFadeTarget[t])
                 tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
-            if (tapFadeGain[t] <= 0.0f) continue;
+            // v1.0.8: Always feed PV to keep it in sync — prevents chirp on tap enable (issue #65)
             float objMono = readObjectSample (t, baseDelaySamples);
+            if (tapFadeGain[t] <= 0.0f) continue;
 
             // Interpolate between previous and current block gains
             float gL = prevStereoGainL[t] + frac * (objGainL[t] - prevStereoGainL[t]);
@@ -4514,8 +4512,9 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
                 tapFadeGain[t] = std::min (tapFadeGain[t] + tapFadeIncrement, 1.0f);
             else if (tapFadeGain[t] > tapFadeTarget[t])
                 tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
-            if (tapFadeGain[t] <= 0.0f) continue;
+            // v1.0.8: Always feed PV to keep it in sync — prevents chirp on tap enable (issue #65)
             float objMono = readObjectSample (t, baseDelaySamples);
+            if (tapFadeGain[t] <= 0.0f) continue;
 
             // Interpolate distance gain between previous and current block
             float dist = prevDistGain[t] + frac * (objDistGain[t] - prevDistGain[t]);
@@ -4619,8 +4618,9 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
                 tapFadeGain[t] = std::min (tapFadeGain[t] + tapFadeIncrement, 1.0f);
             else if (tapFadeGain[t] > tapFadeTarget[t])
                 tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
-            if (tapFadeGain[t] <= 0.0f) continue;
+            // v1.0.8: Always feed PV to keep it in sync — prevents chirp on tap enable (issue #65)
             float objMono = readObjectSample (t, baseDelaySamples);
+            if (tapFadeGain[t] <= 0.0f) continue;
 
             // Interpolate distance gain and channel gains between previous and current block
             float dist = prevDistGain[t] + frac * (objDistGain[t] - prevDistGain[t]);
