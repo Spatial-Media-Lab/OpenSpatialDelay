@@ -86,7 +86,6 @@ struct ObjectState
     float azimuthDeg   = 0.0f;
     float elevationDeg = 0.0f;
     float distance     = 0.5f;
-    float delayTimeMs  = 500.0f;
     bool  enabled      = false;
 };
 
@@ -766,6 +765,7 @@ private:
     void oscMessageReceived (const juce::OSCMessage& message) override;
     void handleOSCPosition (int objectIndex, float azDeg, float elDeg, float dist);
     void handleOSCParam (const juce::String& paramID, float denormValue);
+    void syncGlobalTapOffsetAtomic (int index, float value);
 public:
     // v1.0: Public test entry point — forwards to oscMessageReceived
     void testProcessOSCMessage (const juce::OSCMessage& msg) { oscMessageReceived (msg); }
@@ -1022,6 +1022,13 @@ private:
     std::atomic<float>* cachedParam_inputGain       = nullptr;
     std::atomic<float>* cachedParam_outputGain      = nullptr;
     std::atomic<float>* cachedParam_algorithm       = nullptr;
+    // issue #68: Global tap offset APVTS cached pointers
+    std::atomic<float>* cachedParam_globalTapAzimuth   = nullptr;
+    std::atomic<float>* cachedParam_globalTapElevation = nullptr;
+    std::atomic<float>* cachedParam_globalTapDistance   = nullptr;
+    std::atomic<float>* cachedParam_globalTapPitch     = nullptr;
+    std::atomic<float>* cachedParam_globalTapDoppler   = nullptr;
+    std::atomic<float>* cachedParam_globalTapSpeed     = nullptr;
 
     // v0.5: Cached feedback filter frequencies + Q (skip recalculation when unchanged)
     // v1.0.1: Filter smoothing/cache state moved to FilterBank class
