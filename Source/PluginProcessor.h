@@ -987,9 +987,16 @@ private:
     // The phase vocoder adds kFFTSize (2048) samples of latency to the wet path.
     // The dry signal must be delayed by the same amount so the DAW's PDC is correct
     // at all dry/wet settings. Without this, the dry signal arrives 2048 samples early.
-    std::vector<float> dryDelayLine;        // circular buffer, size = kFFTSize
+    // v1.0.1: Stereo dry buffers — dry path preserves stereo input (issue #73)
+    std::vector<float> dryDelayLineL;       // circular buffer L, size = kFFTSize
+    std::vector<float> dryDelayLineR;       // circular buffer R, size = kFFTSize
     int dryDelayWritePos = 0;
-    std::vector<float> dryCompBuffer;       // pre-filled delayed dry signal for current block
+    std::vector<float> dryCompBufferL;      // pre-filled delayed dry signal L for current block
+    std::vector<float> dryCompBufferR;      // pre-filled delayed dry signal R for current block
+
+    // v1.0.1: Pre-computed per-sample dryWet / outputGain for post-render mix (issue #73)
+    std::vector<float> perSampleDW;
+    std::vector<float> perSampleOutGain;
 
     // v0.5: Contiguous per-source accumulation buffers for direct HRTF convolution
     std::vector<float> sourceAccumBufStorage;          // MAX_OBJECTS * maxBlockSize (contiguous)
