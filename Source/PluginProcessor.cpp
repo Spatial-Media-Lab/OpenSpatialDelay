@@ -4029,10 +4029,14 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     // v1.0.7: Fill latency-compensated dry buffer (issue #63)
     // The phase vocoder adds kFFTSize samples of latency to the wet path.
     // Delay the dry signal by the same amount so DAW PDC is correct at all dry/wet levels.
-    // v1.0.1: Stereo dry path — reads from inputBufferL/R to preserve stereo (issue #73)
+    // v1.0.1: Stereo dry path — reads raw DAW input, bypasses input selector (issue #73)
+    // The Input selector only affects the wet (delay) path. The dry signal is a true bypass
+    // of whatever the DAW sends, affected only by the Output knob.
     if (dryCompBufferL.size() < ns) dryCompBufferL.resize (ns);
     if (dryCompBufferR.size() < ns) dryCompBufferR.resize (ns);
     {
+        auto* rawInL = buffer.getReadPointer (0);
+        auto* rawInR = (numInputChannels > 1) ? buffer.getReadPointer (1) : buffer.getReadPointer (0);
         const int dryDelaySize = static_cast<int> (dryDelayLineL.size());
         for (int i = 0; i < numSamples; ++i)
         {
@@ -4040,8 +4044,8 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             auto wp = static_cast<size_t> (dryDelayWritePos);
             dryCompBufferL[si] = dryDelayLineL[wp];
             dryCompBufferR[si] = dryDelayLineR[wp];
-            dryDelayLineL[wp] = inputBufferL[si];
-            dryDelayLineR[wp] = inputBufferR[si];
+            dryDelayLineL[wp] = rawInL[i];
+            dryDelayLineR[wp] = rawInR[i];
             dryDelayWritePos = (dryDelayWritePos + 1) % dryDelaySize;
         }
     }
