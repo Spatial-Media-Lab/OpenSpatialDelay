@@ -638,7 +638,7 @@ private:
     std::unique_ptr<SliderAttachment> delayTimeAttach, noteDivisionAttach, feedbackAttach;
     std::unique_ptr<SliderAttachment> filterHPAttach, filterLPAttach;
     std::unique_ptr<SliderAttachment> dryWetAttach;
-    std::unique_ptr<ComboBoxAttachment> hrtfProfileAttach, syncModeAttach, outputFormatAttach;
+    std::unique_ptr<ComboBoxAttachment> syncModeAttach;
     int lastAlgoCategoryShown = -1;  // Track format category to avoid redundant combo rebuilds
     int lastMaxBusChannels    = -1;  // v0.7: Gate format availability re-check
     int lastOscPort           = -1;  // v0.7: Gate OSC port label sync
@@ -658,8 +658,7 @@ private:
     // v0.7: Per-object pitch shift attachment (rebound in selectObject)
     std::unique_ptr<SliderAttachment> objPitchShiftAttach;
 
-    // v0.7: Input format attachment
-    std::unique_ptr<ComboBoxAttachment> inputFormatAttach;
+    // v0.7: Input format — no attachment, uses onChange callback (issue #68)
 
     // v0.8: Per-object input channel attachment (rebound in selectObject)
     std::unique_ptr<ComboBoxAttachment> objInputChannelAttach;
