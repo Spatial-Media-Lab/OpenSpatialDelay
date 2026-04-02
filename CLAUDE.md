@@ -31,7 +31,8 @@ bash scripts/build_version.sh <commit-hash> v1.0.Z O10Z
 - v1.0.0 / O100 — baseline (commit 3ef9c79, includes issues #76 + #77)
 - v1.0.1 / O101 — fix dry signal attenuation at 0% wet (issue #97, commit a0f39c5)
 - v1.0.2 / O102 — call updateHostDisplay() on config changes (issue #94, commit dbf19ce)
-- Next available: **v1.0.3 / O103**
+- v1.0.3 / O103 — fix direction toggle for Bounce, Line, Random (issue #100, commit 9dd6266)
+- Next available: **v1.0.4 / O104**
 
 ### Running tests
 
