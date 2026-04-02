@@ -30,7 +30,8 @@ bash scripts/build_version.sh <commit-hash> v1.0.Z O10Z
 **Version number registry (do not reuse) — reset 2026-04-02, collapsed after issue #77:**
 - v1.0.0 / O100 — baseline (commit 3ef9c79, includes issues #76 + #77)
 - v1.0.1 / O101 — fix dry signal attenuation at 0% wet (issue #97, commit a0f39c5)
-- Next available: **v1.0.2 / O102**
+- v1.0.2 / O102 — call updateHostDisplay() on config changes (issue #94, commit dbf19ce)
+- Next available: **v1.0.3 / O103**
 
 ### Running tests
 
