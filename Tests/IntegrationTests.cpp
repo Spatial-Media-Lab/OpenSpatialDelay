@@ -236,6 +236,34 @@ TEST_CASE ("DryWet -- dry path latency compensation is 2048 samples", "[drywet]"
     REQUIRE (firstSignalSample <= 2048 + kBlockSize);
 }
 
+TEST_CASE ("DryWet -- 0% wet is unity gain (issue #97)", "[drywet][issue97]")
+{
+    auto proc = createStereoProcessor();
+    setParam (*proc, "dryWet", 0.0f);
+    setParam (*proc, "outputGain", 0.0f);  // 0 dB
+
+    const float inputLevel = 0.9f;  // High level to expose tanh compression
+
+    // Warmup at measurement level (parameter smoothing + dry delay line priming)
+    processBlocksCapturingAll (*proc, 60, inputLevel, inputLevel);
+
+    // Measure output — must be unity gain
+    auto [outL, outR] = processBlocksCapturingAll (*proc, 20, inputLevel, inputLevel);
+
+    float rmsL = computeRMS (outL.data(), static_cast<int> (outL.size()));
+    float rmsR = computeRMS (outR.data(), static_cast<int> (outR.size()));
+
+    // At 0% wet with 0 dB output gain, output must match input within ±0.5 dB
+    float diffL_dB = 20.0f * std::log10 (rmsL / inputLevel);
+    float diffR_dB = 20.0f * std::log10 (rmsR / inputLevel);
+
+    INFO ("L channel: input=" << inputLevel << " output=" << rmsL << " diff=" << diffL_dB << " dB");
+    INFO ("R channel: input=" << inputLevel << " output=" << rmsR << " diff=" << diffR_dB << " dB");
+
+    REQUIRE (std::abs (diffL_dB) < 0.5f);
+    REQUIRE (std::abs (diffR_dB) < 0.5f);
+}
+
 // ============================================================================
 // Section 2: Preset System Tests
 // ============================================================================

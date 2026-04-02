@@ -4242,9 +4242,10 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             if (isAmbiOutput)
             {
                 // Ambisonics: mono dry → W channel (ACN 0), wet → all SH channels
+                // v1.0.1: Limiter on wet only — dry passes through at unity (issue #97)
                 float dryMono = (dryCompBufferL[si] + dryCompBufferR[si]) * 0.5f;
                 if (outPtrs[0])
-                    outPtrs[0][s] = outputLimiter ((outPtrs[0][s] * wetCoeff + dryMono * dryCoeff) * outGain) * tGain;
+                    outPtrs[0][s] = (outputLimiter (outPtrs[0][s] * wetCoeff * outGain) + dryMono * dryCoeff * outGain) * tGain;
                 for (int ch = 1; ch < usableCh; ++ch)
                     if (outPtrs[ch])
                         outPtrs[ch][s] = outputLimiter (outPtrs[ch][s] * wetCoeff * outGain) * tGain;
@@ -4252,10 +4253,11 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             else
             {
                 // Binaural / Stereo / Surround: stereo dry → L/R (ch 0/1)
+                // v1.0.1: Limiter on wet only — dry passes through at unity (issue #97)
                 if (outPtrs[0])
-                    outPtrs[0][s] = outputLimiter ((outPtrs[0][s] * wetCoeff + dryCompBufferL[si] * dryCoeff) * outGain) * tGain;
+                    outPtrs[0][s] = (outputLimiter (outPtrs[0][s] * wetCoeff * outGain) + dryCompBufferL[si] * dryCoeff * outGain) * tGain;
                 if (usableCh > 1 && outPtrs[1])
-                    outPtrs[1][s] = outputLimiter ((outPtrs[1][s] * wetCoeff + dryCompBufferR[si] * dryCoeff) * outGain) * tGain;
+                    outPtrs[1][s] = (outputLimiter (outPtrs[1][s] * wetCoeff * outGain) + dryCompBufferR[si] * dryCoeff * outGain) * tGain;
                 // Remaining channels (surround speakers, LFE): wet only
                 for (int ch = 2; ch < usableCh; ++ch)
                     if (outPtrs[ch])
