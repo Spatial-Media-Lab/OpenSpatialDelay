@@ -451,23 +451,20 @@ TEST_CASE("Issue #3: Triangle collapses at baseDist=1.0", "[trajectory][distance
 // Issue #100: Direction toggle must affect Bounce, Line, and Random
 // ============================================================================
 
-TEST_CASE("Issue #100: Bounce reverse produces different position at same phase", "[trajectory][direction]")
+TEST_CASE("Issue #100: Bounce reverse flips the trajectory diagonally", "[trajectory][direction]")
 {
-    // Bounce triangle wave is symmetric under phase→1-phase, so the global
-    // reverse was a no-op.  Fix adds a half-period offset when reversed.
-    auto fwd = CT::computeTrajectory(TrajShape::Bounce, 0.1f, 0.0f, 0.0f, 0.5f, false);
-    auto rev = CT::computeTrajectory(TrajShape::Bounce, 0.1f, 0.0f, 0.0f, 0.5f, true);
-    // Forward phase 0.1 and reverse phase 0.1 must differ
-    CHECK(std::abs(fwd.azDeg - rev.azDeg) > 1.0f);
-}
-
-TEST_CASE("Issue #100: Bounce reverse is half-period offset", "[trajectory][direction]")
-{
-    // Reverse at phase p should equal forward at phase p+0.5 (mod 1)
-    auto rev  = CT::computeTrajectory(TrajShape::Bounce, 0.2f, 30.0f, 10.0f, 0.5f, true);
-    auto fwd5 = CT::computeTrajectory(TrajShape::Bounce, 0.7f, 30.0f, 10.0f, 0.5f, false);
-    CHECK_THAT(rev.azDeg, WithinAbs(fwd5.azDeg, 0.01f));
-    CHECK_THAT(rev.elDeg, WithinAbs(fwd5.elDeg, 0.01f));
+    // Reverse mirrors the azimuth offset so the az–el relationship flips.
+    // At the same phase, azimuth should be negated relative to base while
+    // elevation stays the same.
+    float baseAz = 0.0f;
+    auto fwd = CT::computeTrajectory(TrajShape::Bounce, 0.1f, baseAz, 0.0f, 0.5f, false);
+    auto rev = CT::computeTrajectory(TrajShape::Bounce, 0.1f, baseAz, 0.0f, 0.5f, true);
+    // Azimuth offsets should be opposite signs
+    float fwdAzOff = fwd.azDeg - baseAz;
+    float revAzOff = rev.azDeg - baseAz;
+    CHECK_THAT(revAzOff, WithinAbs(-fwdAzOff, 0.01f));
+    // Elevation should be identical (same triangle value)
+    CHECK_THAT(rev.elDeg, WithinAbs(fwd.elDeg, 0.01f));
 }
 
 TEST_CASE("Issue #100: Line reverse produces different position at same phase", "[trajectory][direction]")

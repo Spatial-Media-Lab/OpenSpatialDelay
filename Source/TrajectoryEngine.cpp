@@ -178,12 +178,11 @@ TrajectoryEngine::computeTrajectory (int shape, float phase,
     {
         case 1: // Bounce
         {
-            // phase=1-phase is a no-op for triangle wave (symmetric);
-            // offset by half-period to actually reverse direction
-            if (reverse)
-                phase = std::fmod (phase + 0.5f, 1.0f);
             float tri = 1.0f - std::abs (2.0f * phase - 1.0f);
-            r.azDeg = baseAz - 90.0f * (2.0f * tri - 1.0f);
+            // Flip the trajectory diagonally: negate azimuth offset so
+            // the az–elevation relationship mirrors (issue #100)
+            float azSign = reverse ? -1.0f : 1.0f;
+            r.azDeg = baseAz - azSign * 90.0f * (2.0f * tri - 1.0f);
             r.elDeg = baseEl - 30.0f * (2.0f * tri - 1.0f);
             r.dist  = baseDist;
             r.controlsAz = r.controlsEl = true;
