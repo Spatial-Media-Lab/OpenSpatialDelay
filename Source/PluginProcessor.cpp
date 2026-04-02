@@ -668,7 +668,7 @@ void PartitionedConvolver::prepare (int maxBlockSize, int irLength_)
     // v1.0.5: Allocate dual convolution slots (issue #50)
     for (int s = 0; s < 2; ++s)
     {
-        slots[s].irFreqDomain.resize (static_cast<size_t> (fftSize * 2), 0.0f);
+        slots[s].irFreqDomain.assign (static_cast<size_t> (fftSize * 2), 0.0f);
         slots[s].inputAccum.resize (static_cast<size_t> (fftSize * 2), 0.0f);
         slots[s].fftWorkBuf.resize (static_cast<size_t> (fftSize * 2), 0.0f);
         slots[s].overlapBuf.resize (static_cast<size_t> (fftSize), 0.0f);
@@ -1006,6 +1006,18 @@ void BinauralRenderer::setProfile (int profileIndex, HRTFDatabase& hrtfDb)
         sourceConvReady[i] = false;   // Force HRIR reload on next processBlock
         cachedSourceAz[i] = -999.0f;  // Invalidate cached positions
         cachedSourceEl[i] = -999.0f;
+
+        // v1.0.4: Clear stale ITD state to prevent transient on profile switch
+        // (issue #90). Without this, the renderer reuses ITD buffer data from
+        // its previous profile, causing a volume swell when renderSourceBuffers
+        // interpolates from stale currentITD to new targetITD.
+        currentITDL[i] = 0.0f;
+        currentITDR[i] = 0.0f;
+        targetITDL[i] = 0.0f;
+        targetITDR[i] = 0.0f;
+        itdWritePos[i] = 0;
+        std::memset (itdBufferL[i], 0, sizeof (itdBufferL[i]));
+        std::memset (itdBufferR[i], 0, sizeof (itdBufferR[i]));
     }
 
     DBG ("BinauralRenderer: Profile " + juce::String (profileIndex)
@@ -4293,9 +4305,24 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
     auto* outL = buffer.getWritePointer (0);
     auto* outR = buffer.getWritePointer (1);
 
-    auto& activeRenderer = binauralRenderers[activeRendererIndex.load (std::memory_order_acquire)];
+    int currentActiveIdx = activeRendererIndex.load (std::memory_order_acquire);
+    auto& activeRenderer = binauralRenderers[currentActiveIdx];
+
+    // v1.0.4: Detect renderer swap → start crossfade (issue #90).
+    // The new convolver's overlap buffer is empty on first use, causing a
+    // one-block transient overshoot. Crossfading old→new masks this ramp-up.
+    if (currentActiveIdx != prevActiveRendererIdx_ && ! rendererXfading_)
+    {
+        rendererXfading_ = true;
+        rendererXfadeBlockCount_ = 0;
+        rendererXfadeFromIdx_ = prevActiveRendererIdx_;
+        prevRxFadeOut_ = 1.0f;
+        prevRxFadeIn_ = 0.0f;
+        prevActiveRendererIdx_ = currentActiveIdx;
+    }
 
     // Update per-source HRIRs at block boundary for any taps that moved
+    // (new renderer only — old renderer keeps its existing HRIRs during crossfade)
     for (int t = 0; t < MAX_OBJECTS; ++t)
     {
         if (objects[t].enabled)
@@ -4376,6 +4403,49 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
 
     activeRenderer.renderSourceBuffers (srcBufPtrs, sourceEnabled, MAX_OBJECTS,
                                         numSamples, wetBufL.data(), wetBufR.data());
+
+    // v1.0.4: Renderer-level crossfade (issue #90).
+    // Blend old renderer's output (full overlap → steady state) with new renderer's
+    // output (ramping up from empty overlap) using equal-power cos/sin envelope.
+    if (rendererXfading_)
+    {
+        auto ns = static_cast<size_t> (numSamples);
+        if (xfadeWetL_.size() < ns) { xfadeWetL_.resize (ns, 0.0f); xfadeWetR_.resize (ns, 0.0f); }
+
+        auto& oldRenderer = binauralRenderers[rendererXfadeFromIdx_];
+        oldRenderer.renderSourceBuffers (srcBufPtrs, sourceEnabled, MAX_OBJECTS,
+                                          numSamples, xfadeWetL_.data(), xfadeWetR_.data());
+
+        ++rendererXfadeBlockCount_;
+        float progress = static_cast<float> (rendererXfadeBlockCount_)
+                       / static_cast<float> (kRendererXfadeBlocks);
+        if (progress > 1.0f) progress = 1.0f;
+
+        constexpr float halfPi = juce::MathConstants<float>::halfPi;
+        float fadeOutGain = std::cos (progress * halfPi);
+        float fadeInGain  = std::sin (progress * halfPi);
+
+        float fadeOutInc = (fadeOutGain - prevRxFadeOut_) / static_cast<float> (numSamples);
+        float fadeInInc  = (fadeInGain  - prevRxFadeIn_)  / static_cast<float> (numSamples);
+        float gOut = prevRxFadeOut_;
+        float gIn  = prevRxFadeIn_;
+
+        for (int i = 0; i < numSamples; ++i)
+        {
+            gOut += fadeOutInc;
+            gIn  += fadeInInc;
+            wetBufL[static_cast<size_t> (i)] = xfadeWetL_[static_cast<size_t> (i)] * gOut
+                                             + wetBufL[static_cast<size_t> (i)]     * gIn;
+            wetBufR[static_cast<size_t> (i)] = xfadeWetR_[static_cast<size_t> (i)] * gOut
+                                             + wetBufR[static_cast<size_t> (i)]     * gIn;
+        }
+
+        prevRxFadeOut_ = fadeOutGain;
+        prevRxFadeIn_  = fadeInGain;
+
+        if (rendererXfadeBlockCount_ >= kRendererXfadeBlocks)
+            rendererXfading_ = false;
+    }
 
     // === PASS 3: Write raw wet signal to output (dry/wet mix handled in processBlock) ===
     std::memcpy (outL, wetBufL.data(), sizeof (float) * static_cast<size_t> (numSamples));
