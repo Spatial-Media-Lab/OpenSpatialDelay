@@ -60,6 +60,10 @@ public:
         std::memset (fluxHistory,     0, sizeof (fluxHistory));
         fluxWritePos     = 0;
         transientHold    = 0;
+
+        // Bypass hysteresis state
+        bypassed_    = true;
+        bypassFade_  = 1.0f;
     }
 
     /** Process one sample with pitch shift in semitones (-12 to +12).
@@ -72,25 +76,54 @@ public:
         inputWritePos = (inputWritePos + 1) % kFFTSize;
         inputCount++;
 
-        // Bypass: no pitch shift — just delay by kFFTSize for latency compensation
-        if (std::abs (semitones) < 0.01f)
+        // Hysteresis bypass: enter at |s| < 0.005, exit at |s| > 0.02
+        // Prevents oscillation near zero crossing from toggling PV on/off
+        float absSemi = std::abs (semitones);
+        if (bypassed_)
         {
-            // Reset phase state so re-engaging pitch shift starts clean
-            std::memset (lastInputPhase,  0, sizeof (lastInputPhase));
-            std::memset (lastOutputPhase, 0, sizeof (lastOutputPhase));
-            std::memset (prevAnalysisMag, 0, sizeof (prevAnalysisMag));
-            std::memset (fluxHistory,     0, sizeof (fluxHistory));
-            fluxWritePos  = 0;
-            transientHold = 0;
-
-            // Read from kFFTSize samples ago in the ring buffer
-            int readPos = (inputWritePos - kFFTSize + kFFTSize) % kFFTSize;
-
-            if (inputCount < kFFTSize)
-                return 0.0f;
-
-            return inputRing[readPos];
+            if (absSemi > kBypassExitThreshold)
+                bypassed_ = false;
         }
+        else
+        {
+            if (absSemi < kBypassEnterThreshold)
+                bypassed_ = true;
+        }
+
+        if (bypassed_)
+        {
+            // Fade toward dry — NO FFT processing, just drain the accumulator
+            if (bypassFade_ < 1.0f)
+                bypassFade_ = std::min (bypassFade_ + kBypassFadeStep, 1.0f);
+
+            // Keep hop counter in sync (no processOneFrame — too expensive)
+            hopCounter++;
+            if (hopCounter >= kHopSize)
+                hopCounter = 0;
+
+            // Read bypass (latency-compensated dry)
+            int readPos = (inputWritePos - kFFTSize + kFFTSize) % kFFTSize;
+            float dry = (inputCount < kFFTSize) ? 0.0f : inputRing[readPos];
+
+            // Drain PV accumulator during crossfade to prevent stale data buildup
+            if (filledLatency && bypassFade_ < 1.0f)
+            {
+                float pvOut = outputAccum[outputReadPos];
+                outputAccum[outputReadPos] = 0.0f;
+                outputReadPos = (outputReadPos + 1) % kOutputSize;
+                return dry * bypassFade_ + pvOut * (1.0f - bypassFade_);
+            }
+
+            // Fully bypassed — just return latency-compensated dry
+            if (! filledLatency && inputCount >= kFFTSize + kHopSize)
+                filledLatency = true;
+
+            return dry;
+        }
+
+        // Active PV: fade in PV, fade out dry
+        if (bypassFade_ > 0.0f)
+            bypassFade_ = std::max (bypassFade_ - kBypassFadeStep, 0.0f);
 
         // Accumulate until we have a hop's worth
         hopCounter++;
@@ -113,11 +146,19 @@ public:
         }
 
         // Pop one sample from output accumulator
-        float out = outputAccum[outputReadPos];
+        float pvOut = outputAccum[outputReadPos];
         outputAccum[outputReadPos] = 0.0f;  // Clear for next overlap-add cycle
         outputReadPos = (outputReadPos + 1) % kOutputSize;
 
-        return out;
+        // If still crossfading from bypass, blend with dry
+        if (bypassFade_ > 0.0f)
+        {
+            int readPos = (inputWritePos - kFFTSize + kFFTSize) % kFFTSize;
+            float dry = inputRing[readPos];
+            return dry * bypassFade_ + pvOut * (1.0f - bypassFade_);
+        }
+
+        return pvOut;
     }
 
     static constexpr int getLatency() { return kFFTSize; }
@@ -149,6 +190,13 @@ private:
     // Phase vocoder state (per bin)
     float lastInputPhase[kNumBins]  = {};
     float lastOutputPhase[kNumBins] = {};
+
+    // Bypass hysteresis state
+    bool  bypassed_    = true;   // Start bypassed (no pitch shift initially)
+    float bypassFade_  = 1.0f;   // 1.0 = full bypass/dry, 0.0 = full PV
+    static constexpr float kBypassEnterThreshold = 0.005f;  // Enter bypass below this
+    static constexpr float kBypassExitThreshold  = 0.02f;   // Exit bypass above this
+    static constexpr float kBypassFadeStep       = 1.0f / 128.0f;  // ~2.7ms crossfade at 48kHz
 
     // Transient detection state
     static constexpr int kFluxHistorySize = 16;

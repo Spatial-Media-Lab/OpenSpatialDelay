@@ -714,8 +714,9 @@ private:
     float getTempoSyncedDelayMs (int noteDivisionIndex) const;
 
     //--- DELAY-SPECIFIC: Render path methods (v0.5 refactor) ------------------
-    /** Read one tap sample: delay + per-tap pitch shift + air absorption. */
-    float readObjectSample (int objectIndex, float baseDelaySamples);
+    /** Read one tap sample: delay + per-tap pitch shift + air absorption.
+        blockFraction: 0..1 position within block, for per-sample Doppler interpolation. */
+    float readObjectSample (int objectIndex, float baseDelaySamples, float blockFraction);
     /** Process feedback: read from end of chain, filter, soft-clip, NaN guard. */
     void  processFeedbackSample (float currentLoopMult, float baseDelaySamples,
                                  float fb);
@@ -895,6 +896,10 @@ private:
 
     // v1.0.6: Phase vocoder pitch shifter — replaces WSOLA-Lite (issue #60)
     PhaseVocoderPitchShifter pvPitchShifters[MAX_OBJECTS];
+
+    // v1.0.2: Doppler via delay modulation — accumulates per-sample delay offset
+    // from Doppler velocity. Natural pitch shift without PV artifacts (issue #77).
+    float dopplerDelayAccum[MAX_OBJECTS] = {};
 
     // v1.0.8: Transport-aware PV reset — clears stale phase state on transport
     // stop/start/seek to prevent intermittent buzzing artifacts (issue #65)
