@@ -3823,8 +3823,10 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             dopplerDelayAccum[i] = 0.0f;
         }
 
-        for (int i = 0; i < MAX_OBJECTS; ++i)
-            pvPitchShifters[i].reset();
+        // v1.0.1: PV reset removed — the PV's built-in bypass hysteresis and
+        // the "always feed PV" mechanism (issue #65) handle pitch shift transitions
+        // gracefully. A blanket reset causes ~42ms silence + hard onset → chirp
+        // through feedback (issue #84).
 
         filters.resetAll();
 
