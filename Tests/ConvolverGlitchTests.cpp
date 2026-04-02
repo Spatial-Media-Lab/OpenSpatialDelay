@@ -3182,3 +3182,102 @@ TEST_CASE ("MS Encode — L/R symmetry for mirrored azimuths", "[issue76][msenco
     CHECK_THAT (posL, WithinAbs (static_cast<double> (negR), 0.01));
     CHECK_THAT (posR, WithinAbs (static_cast<double> (negL), 0.01));
 }
+
+// ============================================================================
+// Issue #90: HRTF profile switching must not cause clipping or volume swell
+// ============================================================================
+
+// Helper: compute peak absolute value of interleaved L/R buffers
+static float peakAbs (const std::vector<float>& L, const std::vector<float>& R)
+{
+    float peak = 0.0f;
+    for (size_t i = 0; i < L.size(); ++i)
+        peak = std::max (peak, std::max (std::abs (L[i]), std::abs (R[i])));
+    return peak;
+}
+
+TEST_CASE ("Binaural HRTF — no volume swell on profile switch (issue #90)", "[binaural][glitch][profile]")
+{
+    auto proc = createBinauralProcessor (1);  // MIT KEMAR
+
+    // Disable extras and feedback to isolate HRTF transition
+    setParam (*proc, "object1_dopplerAmount", 0.0f);
+    setParam (*proc, "object1_pitchShift", 0.0f);
+    setParam (*proc, "airAbsorption", 0.0f);
+    setParam (*proc, "filterEnabled", 0.0f);
+    setParam (*proc, "feedback", 0.0f);
+
+    // Stabilize — fill delay line, let HRTF convolvers settle
+    processBlocksCapturingAll (*proc, 100);
+
+    // Measure Profile 1 steady-state peak
+    auto [ss1L, ss1R] = processBlocksCapturingAll (*proc, 20);
+    float p1Peak = peakAbs (ss1L, ss1R);
+    REQUIRE (p1Peak > 0.001f);  // Sanity: signal is audible
+
+    // Switch to Profile 2 (SADIE KU100)
+    proc->testLoadHRTFProfile (2);
+
+    // Capture transition window (10 blocks ≈ 53ms, covers the 4-block crossfade)
+    auto [txL, txR] = processBlocksCapturingAll (*proc, 10);
+    float txPeak = peakAbs (txL, txR);
+
+    // Let Profile 2 stabilize, then measure its steady state
+    processBlocksCapturingAll (*proc, 100);
+    auto [ss2L, ss2R] = processBlocksCapturingAll (*proc, 20);
+    float p2Peak = peakAbs (ss2L, ss2R);
+
+    // Transition peak must not exceed the HIGHER of the two profiles' levels
+    // by more than +1 dB (1.122x). A swell would exceed this.
+    float maxSS = std::max (p1Peak, p2Peak);
+
+    INFO ("Profile 1 SS peak: " << p1Peak << ", Profile 2 SS peak: " << p2Peak
+          << ", transition peak: " << txPeak);
+
+    CHECK (txPeak <= maxSS * 1.122f);
+}
+
+TEST_CASE ("Binaural HRTF — repeated profile cycling no volume swell (issue #90)", "[binaural][glitch][profile]")
+{
+    auto proc = createBinauralProcessor (1);  // MIT KEMAR
+
+    setParam (*proc, "object1_dopplerAmount", 0.0f);
+    setParam (*proc, "object1_pitchShift", 0.0f);
+    setParam (*proc, "airAbsorption", 0.0f);
+    setParam (*proc, "filterEnabled", 0.0f);
+    setParam (*proc, "feedback", 0.0f);
+
+    // Full stabilization
+    processBlocksCapturingAll (*proc, 100);
+
+    // Measure current profile's steady state before cycling
+    auto [initL, initR] = processBlocksCapturingAll (*proc, 20);
+    float prevSS = peakAbs (initL, initR);
+
+    // Cycle through profiles — the bug manifests on renderer reuse
+    int profiles[] = { 2, 3, 1, 2, 1, 3 };
+    for (int p : profiles)
+    {
+        proc->testLoadHRTFProfile (p);
+
+        // Capture transition window
+        auto [txL, txR] = processBlocksCapturingAll (*proc, 10);
+        float txPeak = peakAbs (txL, txR);
+
+        // Let new profile stabilize, then measure its steady state
+        processBlocksCapturingAll (*proc, 100);
+        auto [ssL, ssR] = processBlocksCapturingAll (*proc, 20);
+        float ssPeak = peakAbs (ssL, ssR);
+
+        // During crossfade, both old and new renderer contribute. The peak
+        // must not exceed the HIGHER of the two profiles' levels by > +1 dB.
+        float maxSS = std::max (prevSS, ssPeak);
+
+        INFO ("Profile " << p << ": prevSS=" << prevSS << ", newSS=" << ssPeak
+              << ", maxSS=" << maxSS << ", transition peak=" << txPeak);
+
+        CHECK (txPeak <= maxSS * 1.122f);
+
+        prevSS = ssPeak;
+    }
+}
