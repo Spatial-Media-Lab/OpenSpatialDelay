@@ -3072,14 +3072,6 @@ void OpenSpatialDelayEditor::timerCallback()
                 algorithmBox.addItem ("XY Pair",      9);   // param index 8
                 algorithmBox.addItem ("MS Encode",    10);  // param index 9
                 algorithmBox.addItem ("Blumlein",     11);  // param index 10
-
-                // Auto-snap if current param is a surround algorithm
-                if (algoIdx < 6)
-                {
-                    processorRef.configAlgorithm.store (6, std::memory_order_relaxed);  // Equal Power
-                    processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
-                    algoIdx = 6;
-                }
             }
             else  // Surround
             {
@@ -3090,15 +3082,22 @@ void OpenSpatialDelayEditor::timerCallback()
                 algorithmBox.addItem ("MDAP",         4);   // param index 3
                 algorithmBox.addItem ("VBAP",         5);   // param index 4
                 algorithmBox.addItem ("VBIP",         6);   // param index 5
-
-                // Auto-snap if current param is a stereo mode
-                if (algoIdx > 5)
-                {
-                    processorRef.configAlgorithm.store (4, std::memory_order_relaxed);  // VBAP
-                    processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
-                    algoIdx = 4;
-                }
             }
+        }
+
+        // Validate algorithm against current output mode every tick
+        // (preset loading can write an out-of-range value)
+        if (isStereoVariant && algoIdx < 6)
+        {
+            algoIdx = 6;  // Equal Power
+            processorRef.configAlgorithm.store (algoIdx, std::memory_order_relaxed);
+            processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
+        }
+        else if (! isStereoVariant && algoIdx > 5)
+        {
+            algoIdx = 4;  // VBAP
+            processorRef.configAlgorithm.store (algoIdx, std::memory_order_relaxed);
+            processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
         }
 
         // Sync combo selection from parameter (IDs are param index + 1)
