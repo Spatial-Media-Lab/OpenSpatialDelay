@@ -545,6 +545,7 @@ private:
     SpatialMapComponent spatialMap;
     GlobalTapDrawerComponent globalTapDrawer;  // v1.0: collapsible global offset knobs
     void applyGlobalTapDelta (int knobIndex, float delta);  // v1.0: IEM-style delta application
+    void resetGlobalTapAPVTSParams();                       // issue #95: zero APVTS + atomics on preset change
     void syncGlobalTapOffsetsFromOSC();                     // v1.0: processor → editor OSC sync
 
     // Global controls — ordered by signal flow
