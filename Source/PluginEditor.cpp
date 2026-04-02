@@ -2027,7 +2027,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         {
             int paramIdx = selectedId - 1;  // IDs are 1-based, param indices are 0-based
             processorRef.configAlgorithm.store (paramIdx, std::memory_order_relaxed);
-            processorRef.updateHostDisplay();
+            processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
         }
     };
     {
@@ -2042,7 +2042,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
                                              juce::dontSendNotification);
         hrtfProfileBox.onChange = [this] {
             processorRef.configHrtfProfile.store (hrtfProfileBox.getSelectedItemIndex(), std::memory_order_relaxed);
-            processorRef.updateHostDisplay();
+            processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
         };
     }
     // v0.7: syncMode reworked to 3-state (Straight/Dotted/Triplet)
@@ -2068,7 +2068,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
                                               juce::dontSendNotification);
         outputFormatBox.onChange = [this] {
             processorRef.configOutputFormat.store (outputFormatBox.getSelectedItemIndex(), std::memory_order_relaxed);
-            processorRef.updateHostDisplay();
+            processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
         };
     }
 
@@ -2483,7 +2483,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
                                         juce::dontSendNotification);
     inputFormatBox.onChange = [this] {
         processorRef.configInputFormat.store (inputFormatBox.getSelectedItemIndex(), std::memory_order_relaxed);
-        processorRef.updateHostDisplay();
+        processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
     };
 
     // Header dropdown labels: JetBrains Mono Medium 7.5px, wide kerning
@@ -3077,7 +3077,7 @@ void OpenSpatialDelayEditor::timerCallback()
                 if (algoIdx < 6)
                 {
                     processorRef.configAlgorithm.store (6, std::memory_order_relaxed);  // Equal Power
-                    processorRef.updateHostDisplay();
+                    processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
                     algoIdx = 6;
                 }
             }
@@ -3095,7 +3095,7 @@ void OpenSpatialDelayEditor::timerCallback()
                 if (algoIdx > 5)
                 {
                     processorRef.configAlgorithm.store (4, std::memory_order_relaxed);  // VBAP
-                    processorRef.updateHostDisplay();
+                    processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
                     algoIdx = 4;
                 }
             }
