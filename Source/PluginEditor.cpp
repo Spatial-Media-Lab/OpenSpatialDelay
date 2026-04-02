@@ -1630,7 +1630,7 @@ GlobalTapDrawerComponent::GlobalTapDrawerComponent (OSDLookAndFeel& lf)
     setupKnob (distSlider,    distLabel,    "DIST",    -1.0f,   1.0f,   0.01f, kDistance);
     setupKnob (dopplerSlider, dopplerLabel, "DOPPLER", -100.0f, 100.0f, 1.0f,  kDoppler);
     dopplerSlider.setTextValueSuffix ("%");
-    setupKnob (pitchSlider,   pitchLabel,   "PITCH",   -24.0f,  24.0f,  1.0f,  kPitch);
+    setupKnob (pitchSlider,   pitchLabel,   "PITCH",   -12.0f,  12.0f,  1.0f,  kPitch);
     pitchSlider.setTextValueSuffix (" st");
     setupKnob (speedSlider,   speedLabel,   "SPEED",   -5.0f,   5.0f,   0.01f, kSpeed);
     speedSlider.setTextValueSuffix (" Hz");
