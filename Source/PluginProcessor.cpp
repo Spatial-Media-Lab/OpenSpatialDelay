@@ -2458,6 +2458,11 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     smoothedLoopMultiplier.reset (sampleRate, 0.05);
     smoothedLoopMultiplier.setCurrentAndTargetValue (1.0f);
 
+    // v1.0.1: Preset transition fade — 5ms = imperceptible but click-free (issue #84)
+    presetTransitionStep = 1.0f / (0.005f * static_cast<float> (sampleRate));
+    presetTransitionState = PresetTransitionState::Idle;
+    presetTransitionGain = 1.0f;
+
     // Initialize modular 3D audio core
     computeAmbiDecodeMatrix();        // Pre-compute 3rd-order decode matrix for virtual speakers
 
@@ -3812,28 +3817,13 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         }
     }
 
-    // v1.0.1: Apply deferred preset reset on the audio thread (thread-safe).
-    // loadPreset() sets the flag; we do the actual WSOLA/Doppler/filter reset here
-    // so there's no race between message thread writes and audio thread reads.
-    if (presetResetPending.load (std::memory_order_acquire))
+    // v1.0.1: Preset transition — fade-out/reconfigure/fade-in (issue #84).
+    // Instead of resetting state immediately (which causes chirp through feedback),
+    // trigger a fade-out. The actual reset happens at zero gain in the output stage.
+    if (presetResetPending.load (std::memory_order_acquire)
+        && presetTransitionState != PresetTransitionState::FadeOut)
     {
-        for (int i = 0; i < MAX_OBJECTS; ++i)
-        {
-            doppler.reset (i, pendingReset.prevAz[i], pendingReset.prevEl[i], pendingReset.prevDist[i]);
-            dopplerDelayAccum[i] = 0.0f;
-        }
-
-        for (int i = 0; i < MAX_OBJECTS; ++i)
-            pvPitchShifters[i].reset();
-
-        filters.resetAll();
-
-        // Invalidate HRTF convolvers so new HRIRs load directly (no crossfade
-        // from stale IR at the old preset's positions — prevents clicks).
-        auto& activeRenderer = binauralRenderers[activeRendererIndex.load (std::memory_order_acquire)];
-        activeRenderer.invalidateSources();
-
-        presetResetPending.store (false, std::memory_order_release);
+        presetTransitionState = PresetTransitionState::FadeOut;
     }
 
     // v0.7: Reset per-tap peak accumulators for this block
@@ -4135,6 +4125,47 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     }
     smoothedLoopMultiplier.setCurrentAndTargetValue (loopMultiplierTarget);
 
+    // v1.0.1: At zero-gain, reconfigure everything cleanly (issue #84).
+    // All smoother targets and per-object state have been set above, so snapping
+    // smoothers here gives correct new-preset values for the upcoming render.
+    if (presetTransitionState == PresetTransitionState::FadeOut
+        && presetTransitionGain <= 0.0f)
+    {
+        // Clear delay buffers — old audio is stale for the new preset
+        std::fill (delayBufferL.begin(), delayBufferL.end(), 0.0f);
+        std::fill (delayBufferR.begin(), delayBufferR.end(), 0.0f);
+        feedbackSample = 0.0f;
+
+        // Doppler reset
+        for (int i = 0; i < MAX_OBJECTS; ++i)
+        {
+            doppler.reset (i, pendingReset.prevAz[i], pendingReset.prevEl[i], pendingReset.prevDist[i]);
+            dopplerDelayAccum[i] = 0.0f;
+        }
+
+        // Filter + HRTF reset (safe at zero gain — no audible transient)
+        filters.resetAll();
+        auto& rend = binauralRenderers[activeRendererIndex.load (std::memory_order_acquire)];
+        rend.invalidateSources();
+
+        // Snap ALL smoothers to target — no ramps during fade-in
+        smoothedDelayTime.setCurrentAndTargetValue (smoothedDelayTime.getTargetValue());
+        smoothedDryWet.setCurrentAndTargetValue (smoothedDryWet.getTargetValue());
+        smoothedFeedback.setCurrentAndTargetValue (smoothedFeedback.getTargetValue());
+        smoothedInputGain.setCurrentAndTargetValue (smoothedInputGain.getTargetValue());
+        smoothedOutputGain.setCurrentAndTargetValue (smoothedOutputGain.getTargetValue());
+        smoothedLoopMultiplier.setCurrentAndTargetValue (smoothedLoopMultiplier.getTargetValue());
+        smoothedWobbleAmount.setCurrentAndTargetValue (smoothedWobbleAmount.getTargetValue());
+
+        // Snap tap fades + feedback crossfade
+        for (int t = 0; t < MAX_OBJECTS; ++t)
+            tapFadeGain[t] = tapFadeTarget[t];
+        fbCrossfadeProgress = 1.0f;
+
+        presetResetPending.store (false, std::memory_order_release);
+        presetTransitionState = PresetTransitionState::FadeIn;
+    }
+
     // v1.0.1: Pre-advance dryWet / outputGain smoothers into per-sample arrays (issue #73)
     // Render paths now output raw wet signal; dry/wet mix happens once after dispatch.
     if (perSampleDW.size() < ns)       perSampleDW.resize (ns);
@@ -4187,6 +4218,22 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         for (int s = 0; s < numSamples; ++s)
         {
             auto si = static_cast<size_t> (s);
+
+            // v1.0.1: Advance preset transition envelope (issue #84)
+            float tGain = 1.0f;
+            if (presetTransitionState == PresetTransitionState::FadeOut)
+            {
+                presetTransitionGain = std::max (0.0f, presetTransitionGain - presetTransitionStep);
+                tGain = presetTransitionGain;
+            }
+            else if (presetTransitionState == PresetTransitionState::FadeIn)
+            {
+                presetTransitionGain = std::min (1.0f, presetTransitionGain + presetTransitionStep);
+                tGain = presetTransitionGain;
+                if (presetTransitionGain >= 1.0f)
+                    presetTransitionState = PresetTransitionState::Idle;
+            }
+
             float dw       = perSampleDW[si];
             float outGain  = perSampleOutGain[si];
             float dryCoeff = std::cos (dw * juce::MathConstants<float>::halfPi);
@@ -4197,22 +4244,22 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                 // Ambisonics: mono dry → W channel (ACN 0), wet → all SH channels
                 float dryMono = (dryCompBufferL[si] + dryCompBufferR[si]) * 0.5f;
                 if (outPtrs[0])
-                    outPtrs[0][s] = outputLimiter ((outPtrs[0][s] * wetCoeff + dryMono * dryCoeff) * outGain);
+                    outPtrs[0][s] = outputLimiter ((outPtrs[0][s] * wetCoeff + dryMono * dryCoeff) * outGain) * tGain;
                 for (int ch = 1; ch < usableCh; ++ch)
                     if (outPtrs[ch])
-                        outPtrs[ch][s] = outputLimiter (outPtrs[ch][s] * wetCoeff * outGain);
+                        outPtrs[ch][s] = outputLimiter (outPtrs[ch][s] * wetCoeff * outGain) * tGain;
             }
             else
             {
                 // Binaural / Stereo / Surround: stereo dry → L/R (ch 0/1)
                 if (outPtrs[0])
-                    outPtrs[0][s] = outputLimiter ((outPtrs[0][s] * wetCoeff + dryCompBufferL[si] * dryCoeff) * outGain);
+                    outPtrs[0][s] = outputLimiter ((outPtrs[0][s] * wetCoeff + dryCompBufferL[si] * dryCoeff) * outGain) * tGain;
                 if (usableCh > 1 && outPtrs[1])
-                    outPtrs[1][s] = outputLimiter ((outPtrs[1][s] * wetCoeff + dryCompBufferR[si] * dryCoeff) * outGain);
+                    outPtrs[1][s] = outputLimiter ((outPtrs[1][s] * wetCoeff + dryCompBufferR[si] * dryCoeff) * outGain) * tGain;
                 // Remaining channels (surround speakers, LFE): wet only
                 for (int ch = 2; ch < usableCh; ++ch)
                     if (outPtrs[ch])
-                        outPtrs[ch][s] = outputLimiter (outPtrs[ch][s] * wetCoeff * outGain);
+                        outPtrs[ch][s] = outputLimiter (outPtrs[ch][s] * wetCoeff * outGain) * tGain;
             }
         }
     }

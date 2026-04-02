@@ -917,6 +917,13 @@ private:
     PendingPresetReset pendingReset;
     std::atomic<bool>  presetResetPending { false };
 
+    // v1.0.1: Preset transition — fade-out/reconfigure/fade-in (issue #84)
+    // Mutes output before resetting state, preventing all transition artifacts.
+    enum class PresetTransitionState { Idle, FadeOut, FadeIn };
+    PresetTransitionState presetTransitionState { PresetTransitionState::Idle };
+    float presetTransitionGain = 1.0f;
+    float presetTransitionStep = 0.0f;  // 1/(0.005*sampleRate), set in prepareToPlay
+
     // v1.0: Per-tap fade envelope for glitch-free enable/disable transitions
     // 64-sample ramp (~1.3ms @ 48kHz) — fast enough to be inaudible, long enough to prevent clicks
     float tapFadeGain[MAX_OBJECTS] = {};
