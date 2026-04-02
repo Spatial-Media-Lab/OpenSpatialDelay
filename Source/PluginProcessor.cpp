@@ -1310,25 +1310,9 @@ void OpenSpatialDelayProcessor::timerCallback()
         }
     }
 
-    // v1.0.1: Trajectory animation — delegated to TrajectoryEngine class
-    {
-        for (int t = 0; t < MAX_OBJECTS; ++t)
-        {
-            TrajectoryEngine::ObjectInput input;
-            input.shape     = juce::roundToInt (cachedParam_trajectoryShape[t] != nullptr
-                                                ? cachedParam_trajectoryShape[t]->load() : 0.0f);
-            input.speed     = cachedParam_trajectorySpeed[t] != nullptr
-                              ? cachedParam_trajectorySpeed[t]->load() : 1.0f;
-            input.reverse   = (cachedParam_trajectoryDirection[t] == nullptr
-                               || cachedParam_trajectoryDirection[t]->load() < 0.5f);
-            input.originAz   = cachedObj[t].azimuth->load();
-            input.originEl   = cachedObj[t].elevation->load();
-            input.originDist = cachedObj[t].distance->load();
-            input.oscOverride = oscOverrideActive[t].load (std::memory_order_relaxed);
-
-            trajectory.tick (t, input);
-        }
-    }
+    // v1.0.2: Trajectory tick moved to processBlock (audio thread) — see issue #77.
+    // Trajectory now advances in audio-time, fixing offline render speed mismatch
+    // and eliminating 60Hz staircase buzz in Doppler velocity.
 
     // --- SPATIAL MEDIA LIBRARY: ADM-OSC Send — broadcast object positions at 30Hz ---
     if (oscSendEnabled && admEnabled && oscSendConnected && ++oscSendTickCounter >= 2)
@@ -2513,6 +2497,7 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
 
     // v1.0.1: Reset Doppler velocity tracking
     doppler.resetAll();
+    std::memset (dopplerDelayAccum, 0, sizeof (dopplerDelayAccum));
 
     // HRTF convolution: prepare both renderers (double-buffered)
     binauralRenderers[0].prepare (sampleRate, samplesPerBlock);
@@ -3696,28 +3681,39 @@ inline float OpenSpatialDelayProcessor::applyWobble (float baseDelaySamples, flo
 //==============================================================================
 // v0.5: Shared inline helpers for render methods
 //==============================================================================
-float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDelaySamples)
+float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDelaySamples, float blockFraction)
 {
-    float objDelaySamples = static_cast<float> (objectIndex + 1) * baseDelaySamples;
+    // v1.0.2: Doppler via delay line modulation — the standard artifact-free approach.
+    // Accumulate per-sample delay offset from Doppler velocity. The rate of change
+    // of the read position naturally produces pitch shift without PV artifacts.
+    // PV is reserved for user pitch shift only (constant ratio = no grain-rate buzz).
+    float prevDoppler = doppler.getPrevSmoothedSemitones (objectIndex);
+    float curDoppler  = doppler.getSmoothedSemitones (objectIndex);
+    float interpDoppler = prevDoppler + blockFraction * (curDoppler - prevDoppler);
+
+    // delayRate: how much delay changes per sample. Negative when pitch up (approaching).
+    // pow(2, semitones/12) is the playback speed ratio. (1 - ratio) gives delay accumulation rate.
+    float delayRate = 1.0f - std::pow (2.0f, interpDoppler / 12.0f);
+    dopplerDelayAccum[objectIndex] += delayRate;
+
+    float objDelaySamples = static_cast<float> (objectIndex + 1) * baseDelaySamples
+                          + dopplerDelayAccum[objectIndex];
     objDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), objDelaySamples);
 
     // v0.9: Per-tap pitch via WSOLA-lite (timing-preserving)
     float perTapPitch = cachedObj[objectIndex].pitchShift->load (std::memory_order_relaxed);
 
-    // v1.0: Combined pitch = user pitch + Doppler (smoothed per-block in processBlock)
-    float combinedPitch = perTapPitch + doppler.getSmoothedSemitones (objectIndex);
-
     // v0.8: Per-tap input channel routing
     int inputCh = static_cast<int> (cachedObj[objectIndex].inputChannel->load (std::memory_order_relaxed));
     DelayChannel ch = (inputCh == 1) ? DelayChannel::Left : (inputCh == 2) ? DelayChannel::Right : DelayChannel::Mono;
 
-    // v0.8: Channel-aware delay line read
+    // v0.8: Channel-aware delay line read (now with Doppler-modulated position)
     float objMono = readDelayLineMono (objDelaySamples);
     if (ch == DelayChannel::Left)       objMono = readDelayLineL (objDelaySamples);
     else if (ch == DelayChannel::Right) objMono = readDelayLineR (objDelaySamples);
 
-    // v1.0.6: Phase vocoder pitch shift — handles bypass internally when |semitones| < 0.01 (issue #60)
-    objMono = pvPitchShifters[objectIndex].process (objMono, combinedPitch);
+    // v1.0.6: Phase vocoder pitch shift — user pitch only, no Doppler (issue #77)
+    objMono = pvPitchShifters[objectIndex].process (objMono, perTapPitch);
     // v1.0.1: Air absorption + tap filters via FilterBank class
     float result = filters.processAirSample (objectIndex, objMono);
     result = filters.processTapSample (objectIndex, result);
@@ -3804,7 +3800,10 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                 if (transportStarted || transportJumped)
                 {
                     for (int i = 0; i < MAX_OBJECTS; ++i)
+                    {
                         pvPitchShifters[i].reset();
+                        dopplerDelayAccum[i] = 0.0f;
+                    }
                 }
 
                 wasPlaying = isPlaying;
@@ -3819,7 +3818,10 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     if (presetResetPending.load (std::memory_order_acquire))
     {
         for (int i = 0; i < MAX_OBJECTS; ++i)
+        {
             doppler.reset (i, pendingReset.prevAz[i], pendingReset.prevEl[i], pendingReset.prevDist[i]);
+            dopplerDelayAccum[i] = 0.0f;
+        }
 
         for (int i = 0; i < MAX_OBJECTS; ++i)
             pvPitchShifters[i].reset();
@@ -3926,6 +3928,30 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     BinauralContext binCtx { profileIndex, currentSampleRate, binauralProfiles.data() };
 
+    // --- v1.0.2: Tick trajectory on audio thread (issue #77) -----------------
+    // Trajectory must advance in audio-time (not wall-clock) so that:
+    //   1) Offline render produces the same orbit speed as realtime
+    //   2) Position updates every audio block (eliminates 60Hz staircase buzz)
+    {
+        float blockDt = static_cast<float> (numSamples) / static_cast<float> (currentSampleRate);
+        for (int t = 0; t < MAX_OBJECTS; ++t)
+        {
+            TrajectoryEngine::ObjectInput input;
+            input.shape     = juce::roundToInt (cachedParam_trajectoryShape[t] != nullptr
+                                                ? cachedParam_trajectoryShape[t]->load() : 0.0f);
+            input.speed     = cachedParam_trajectorySpeed[t] != nullptr
+                              ? cachedParam_trajectorySpeed[t]->load() : 1.0f;
+            input.reverse   = (cachedParam_trajectoryDirection[t] == nullptr
+                               || cachedParam_trajectoryDirection[t]->load() < 0.5f);
+            input.originAz   = cachedObj[t].azimuth->load();
+            input.originEl   = cachedObj[t].elevation->load();
+            input.originDist = cachedObj[t].distance->load();
+            input.oscOverride = oscOverrideActive[t].load (std::memory_order_relaxed);
+
+            trajectory.tick (t, input, blockDt);
+        }
+    }
+
     // --- Read object states and pre-compute spatial gains -------------------
     ObjectState objects[MAX_OBJECTS];
     BinauralGains objGains[MAX_OBJECTS];                              // Simple Woodworth binaural
@@ -3998,6 +4024,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             if (! objects[t].enabled && tapFadeGain[t] <= 0.0f)
             {
                 doppler.clearDisabled (t);
+                dopplerDelayAccum[t] = 0.0f;
                 filters.clearAirAbsorption (t);
                 continue;
             }
@@ -4007,6 +4034,8 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             float dist  = objects[t].distance;
 
             float objDopplerAmount = cachedObj[t].dopplerAmount->load();
+            if (objDopplerAmount < 0.001f)
+                dopplerDelayAccum[t] = 0.0f;  // Reset when Doppler disabled
             doppler.update (t, azRad, elRad, dist, objDopplerAmount, blockDuration);
             doppler.smooth (t);
 
@@ -4270,7 +4299,7 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
             else if (tapFadeGain[t] > tapFadeTarget[t])
                 tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
             // v1.0.8: Always feed PV to keep it in sync — prevents chirp on tap enable (issue #65)
-            float objMono = readObjectSample (t, baseDelaySamples);
+            float objMono = readObjectSample (t, baseDelaySamples, static_cast<float> (s) / static_cast<float> (numSamples));
             if (tapFadeGain[t] <= 0.0f) continue;
             float dist = prevDistGain[t] + frac * (objDistGain[t] - prevDistGain[t]);
             sourceAccumBufPtrs[t][s] = objMono * dist * tapFadeGain[t];
@@ -4352,7 +4381,7 @@ void OpenSpatialDelayProcessor::renderSimpleBinauralWoodworth (
             else if (tapFadeGain[t] > tapFadeTarget[t])
                 tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
             // v1.0.8: Always feed PV to keep it in sync — prevents chirp on tap enable (issue #65)
-            float objMono = readObjectSample (t, baseDelaySamples);
+            float objMono = readObjectSample (t, baseDelaySamples, static_cast<float> (s) / static_cast<float> (numSamples));
             if (tapFadeGain[t] <= 0.0f) continue;
 
             // Interpolate between previous and current block gains
@@ -4489,7 +4518,7 @@ void OpenSpatialDelayProcessor::renderStereoVariant (
             else if (tapFadeGain[t] > tapFadeTarget[t])
                 tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
             // v1.0.8: Always feed PV to keep it in sync — prevents chirp on tap enable (issue #65)
-            float objMono = readObjectSample (t, baseDelaySamples);
+            float objMono = readObjectSample (t, baseDelaySamples, static_cast<float> (s) / static_cast<float> (numSamples));
             if (tapFadeGain[t] <= 0.0f) continue;
 
             // Interpolate between previous and current block gains
@@ -4635,7 +4664,7 @@ void OpenSpatialDelayProcessor::renderAmbisonicsOutput (
             else if (tapFadeGain[t] > tapFadeTarget[t])
                 tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
             // v1.0.8: Always feed PV to keep it in sync — prevents chirp on tap enable (issue #65)
-            float objMono = readObjectSample (t, baseDelaySamples);
+            float objMono = readObjectSample (t, baseDelaySamples, static_cast<float> (s) / static_cast<float> (numSamples));
             if (tapFadeGain[t] <= 0.0f) continue;
 
             // Interpolate distance gain between previous and current block
@@ -4734,7 +4763,7 @@ void OpenSpatialDelayProcessor::renderDiscreteSurround (
             else if (tapFadeGain[t] > tapFadeTarget[t])
                 tapFadeGain[t] = std::max (tapFadeGain[t] - tapFadeIncrement, 0.0f);
             // v1.0.8: Always feed PV to keep it in sync — prevents chirp on tap enable (issue #65)
-            float objMono = readObjectSample (t, baseDelaySamples);
+            float objMono = readObjectSample (t, baseDelaySamples, static_cast<float> (s) / static_cast<float> (numSamples));
             if (tapFadeGain[t] <= 0.0f) continue;
 
             // Interpolate distance gain and channel gains between previous and current block
