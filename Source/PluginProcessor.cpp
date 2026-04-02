@@ -1310,25 +1310,9 @@ void OpenSpatialDelayProcessor::timerCallback()
         }
     }
 
-    // v1.0.1: Trajectory animation — delegated to TrajectoryEngine class
-    {
-        for (int t = 0; t < MAX_OBJECTS; ++t)
-        {
-            TrajectoryEngine::ObjectInput input;
-            input.shape     = juce::roundToInt (cachedParam_trajectoryShape[t] != nullptr
-                                                ? cachedParam_trajectoryShape[t]->load() : 0.0f);
-            input.speed     = cachedParam_trajectorySpeed[t] != nullptr
-                              ? cachedParam_trajectorySpeed[t]->load() : 1.0f;
-            input.reverse   = (cachedParam_trajectoryDirection[t] == nullptr
-                               || cachedParam_trajectoryDirection[t]->load() < 0.5f);
-            input.originAz   = cachedObj[t].azimuth->load();
-            input.originEl   = cachedObj[t].elevation->load();
-            input.originDist = cachedObj[t].distance->load();
-            input.oscOverride = oscOverrideActive[t].load (std::memory_order_relaxed);
-
-            trajectory.tick (t, input);
-        }
-    }
+    // v1.0.2: Trajectory tick moved to processBlock (audio thread) — see issue #77.
+    // Trajectory now advances in audio-time, fixing offline render speed mismatch
+    // and eliminating 60Hz staircase buzz in Doppler velocity.
 
     // --- SPATIAL MEDIA LIBRARY: ADM-OSC Send — broadcast object positions at 30Hz ---
     if (oscSendEnabled && admEnabled && oscSendConnected && ++oscSendTickCounter >= 2)
@@ -3929,6 +3913,30 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                               layoutState.ambiDecodeMatrix, layoutState.ambiNumSpeakers };
 
     BinauralContext binCtx { profileIndex, currentSampleRate, binauralProfiles.data() };
+
+    // --- v1.0.2: Tick trajectory on audio thread (issue #77) -----------------
+    // Trajectory must advance in audio-time (not wall-clock) so that:
+    //   1) Offline render produces the same orbit speed as realtime
+    //   2) Position updates every audio block (eliminates 60Hz staircase buzz)
+    {
+        float blockDt = static_cast<float> (numSamples) / static_cast<float> (currentSampleRate);
+        for (int t = 0; t < MAX_OBJECTS; ++t)
+        {
+            TrajectoryEngine::ObjectInput input;
+            input.shape     = juce::roundToInt (cachedParam_trajectoryShape[t] != nullptr
+                                                ? cachedParam_trajectoryShape[t]->load() : 0.0f);
+            input.speed     = cachedParam_trajectorySpeed[t] != nullptr
+                              ? cachedParam_trajectorySpeed[t]->load() : 1.0f;
+            input.reverse   = (cachedParam_trajectoryDirection[t] == nullptr
+                               || cachedParam_trajectoryDirection[t]->load() < 0.5f);
+            input.originAz   = cachedObj[t].azimuth->load();
+            input.originEl   = cachedObj[t].elevation->load();
+            input.originDist = cachedObj[t].distance->load();
+            input.oscOverride = oscOverrideActive[t].load (std::memory_order_relaxed);
+
+            trajectory.tick (t, input, blockDt);
+        }
+    }
 
     // --- Read object states and pre-compute spatial gains -------------------
     ObjectState objects[MAX_OBJECTS];
