@@ -9,9 +9,9 @@ OpenSpatialDelay uses **semantic versioning vX.Y.Z**:
 - **Y (Minor):** New features, new output formats, new algorithms
 - **Z (Bugfix):** Bug fixes, threshold tweaks, documentation updates
 
-**Current release: v1.0.0** (commit ae86d1e, 2026-04-01)
+**Current release: v1.0.0** (commit 3ef9c79, 2026-04-02)
 
-All prior experimental build numbers (v1.0.1–v1.0.10) from the development cycle have been collapsed into v1.0.0. The next bugfix build will be v1.0.1.
+All prior bugfix builds (v1.0.1–v1.0.2 for issues #76, #77) have been collapsed into v1.0.0. The next bugfix build will be v1.0.1.
 
 ### MANDATORY: Versioned builds for every fix attempt
 
@@ -27,11 +27,9 @@ bash scripts/build_version.sh <commit-hash> v1.0.Z O10Z
 
 **Why this is critical:** The default `cmake --build` installs to `OpenSpatialDelay v1.0.component`. The user tests with individually-named versioned plugins (e.g., `OpenSpatialDelay v1.0.1.component`) loaded side-by-side in REAPER for A/B comparison. If you don't use `build_version.sh`, the user will never hear your changes.
 
-**Version number registry (do not reuse) — reset 2026-04-01, see issue #73:**
-- v1.0.0 / O100 — baseline (commit 6c629ef)
-- v1.0.1 / O101 — MS Encode subcardioid Mid fix for ±90° center collapse (commit 59f244a, issue #76)
-- v1.0.2 / O102 — Doppler buzz fix: delay modulation + trajectory on audio thread (commit 0914cd9, issue #77)
-- Next available: **v1.0.3 / O103**
+**Version number registry (do not reuse) — reset 2026-04-02, collapsed after issue #77:**
+- v1.0.0 / O100 — baseline (commit 3ef9c79, includes issues #76 + #77)
+- Next available: **v1.0.1 / O101**
 
 ### Running tests
 
