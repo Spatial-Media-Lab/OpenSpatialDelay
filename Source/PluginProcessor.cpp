@@ -1700,9 +1700,8 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
     setBool   ("wobbleEnabled", preset->wobbleEnabled);
     setFloat  ("wobbleAmount", preset->wobbleAmount);
     setFloat  ("wobbleMorph",  preset->wobbleMorph);
-    configAlgorithm.store (preset->algorithm, std::memory_order_relaxed);
     configHrtfProfile.store (preset->hrtfProfile, std::memory_order_relaxed);
-    // NOTE: outputFormat, admOscEnabled, oscReceivePort are NOT modified by presets
+    // NOTE: configAlgorithm, outputFormat, admOscEnabled, oscReceivePort are NOT modified by presets
 
     // Per-tap params
     for (int i = 0; i < MAX_OBJECTS; ++i)
