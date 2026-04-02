@@ -1557,6 +1557,15 @@ TEST_CASE ("Drift diagnostic: feedback repeats maintain consistent timing", "[dr
 // AudioChannelSets instead of the 50-channel discrete default.
 // ============================================================================
 
+TEST_CASE ("isBusesLayoutSupported accepts VST3 default layout (9.1.6)", "[bus]")
+{
+    auto proc = std::make_unique<Proc>();
+    juce::AudioProcessor::BusesLayout layout;
+    layout.inputBuses.add (juce::AudioChannelSet::stereo());
+    layout.outputBuses.add (juce::AudioChannelSet::create9point1point6());
+    CHECK (proc->checkBusesLayoutSupported (layout));
+}
+
 TEST_CASE ("Constrained bus: 7.1 rear speakers receive signal (8ch buffer)", "[bus][regression]")
 {
     struct TestPoint { float azDeg; int expectedChannel; const char* name; };

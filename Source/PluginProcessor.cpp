@@ -1470,7 +1470,15 @@ void OpenSpatialDelayProcessor::timerCallback()
 OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     : AudioProcessor (BusesProperties()
                         .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+#if JucePlugin_Build_VST3
+                        // VST3 requires a non-discrete default — discrete channel sets have no
+                        // VST3 SpeakerArrangement representation, causing getBusArrangement()
+                        // to fail and hosts to fall back to stereo. Use the largest standard
+                        // surround format in the frozen isBusesLayoutSupported set (issue #111).
+                        .withOutput ("Output", juce::AudioChannelSet::create9point1point6(), true)),
+#else
                         .withOutput ("Output", juce::AudioChannelSet::discreteChannels (50), true)),
+#endif
       apvts (*this, nullptr, "Parameters", createParameterLayout())
 {
     // Initialize polymorphic algorithm pointer array (O(1) index lookup)
