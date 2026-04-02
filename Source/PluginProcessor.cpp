@@ -364,7 +364,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("globalTapPitch", 22), "Global Tap Pitch",
-        juce::NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 0.0f,
+        juce::NormalisableRange<float> (-12.0f, 12.0f, 1.0f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) { return juce::String (juce::roundToInt (value)) + " st"; })));
 
