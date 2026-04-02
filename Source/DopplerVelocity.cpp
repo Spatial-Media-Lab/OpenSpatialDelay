@@ -98,8 +98,17 @@ void DopplerVelocity::clearDisabled (int objectIndex)
 //==============================================================================
 void DopplerVelocity::smooth (int objectIndex)
 {
+    // Store previous smoothed value before updating (for per-sample interpolation)
+    prevSmoothedSemitones_[objectIndex] = smoothedSemitones_[objectIndex];
+
+    // Two-pole (cascaded) EMA: continuous first derivative, eliminates
+    // staircase artifacts that cause hop-rate buzz in the phase vocoder.
+    // Stage 1: raw → intermediate
+    intermediateSmoothed_[objectIndex] += kSmoothAlpha
+        * (rawSemitones_[objectIndex] - intermediateSmoothed_[objectIndex]);
+    // Stage 2: intermediate → output
     smoothedSemitones_[objectIndex] += kSmoothAlpha
-        * (rawSemitones_[objectIndex] - smoothedSemitones_[objectIndex]);
+        * (intermediateSmoothed_[objectIndex] - smoothedSemitones_[objectIndex]);
 }
 
 //==============================================================================
@@ -110,6 +119,8 @@ void DopplerVelocity::reset (int objectIndex, float azRad, float elRad, float di
     prevDist_[objectIndex] = dist;
     rawSemitones_[objectIndex] = 0.0f;
     smoothedSemitones_[objectIndex] = 0.0f;
+    prevSmoothedSemitones_[objectIndex] = 0.0f;
+    intermediateSmoothed_[objectIndex] = 0.0f;
     smoothedVelocity_[objectIndex] = 0.0f;
     posChanged_[objectIndex] = false;
 }
