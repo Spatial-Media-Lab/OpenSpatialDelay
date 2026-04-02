@@ -2497,6 +2497,7 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
 
     // v1.0.1: Reset Doppler velocity tracking
     doppler.resetAll();
+    std::memset (dopplerDelayAccum, 0, sizeof (dopplerDelayAccum));
 
     // HRTF convolution: prepare both renderers (double-buffered)
     binauralRenderers[0].prepare (sampleRate, samplesPerBlock);
@@ -3682,30 +3683,37 @@ inline float OpenSpatialDelayProcessor::applyWobble (float baseDelaySamples, flo
 //==============================================================================
 float OpenSpatialDelayProcessor::readObjectSample (int objectIndex, float baseDelaySamples, float blockFraction)
 {
-    float objDelaySamples = static_cast<float> (objectIndex + 1) * baseDelaySamples;
+    // v1.0.2: Doppler via delay line modulation — the standard artifact-free approach.
+    // Accumulate per-sample delay offset from Doppler velocity. The rate of change
+    // of the read position naturally produces pitch shift without PV artifacts.
+    // PV is reserved for user pitch shift only (constant ratio = no grain-rate buzz).
+    float prevDoppler = doppler.getPrevSmoothedSemitones (objectIndex);
+    float curDoppler  = doppler.getSmoothedSemitones (objectIndex);
+    float interpDoppler = prevDoppler + blockFraction * (curDoppler - prevDoppler);
+
+    // delayRate: how much delay changes per sample. Negative when pitch up (approaching).
+    // pow(2, semitones/12) is the playback speed ratio. (1 - ratio) gives delay accumulation rate.
+    float delayRate = 1.0f - std::pow (2.0f, interpDoppler / 12.0f);
+    dopplerDelayAccum[objectIndex] += delayRate;
+
+    float objDelaySamples = static_cast<float> (objectIndex + 1) * baseDelaySamples
+                          + dopplerDelayAccum[objectIndex];
     objDelaySamples = juce::jlimit (1.0f, static_cast<float> (delayBufferSize - 2), objDelaySamples);
 
     // v0.9: Per-tap pitch via WSOLA-lite (timing-preserving)
     float perTapPitch = cachedObj[objectIndex].pitchShift->load (std::memory_order_relaxed);
 
-    // v1.0.1: Per-sample Doppler interpolation — converts block-rate staircase into
-    // smooth ramp, eliminating hop-rate buzz in the phase vocoder (issue #77)
-    float prevDoppler = doppler.getPrevSmoothedSemitones (objectIndex);
-    float curDoppler  = doppler.getSmoothedSemitones (objectIndex);
-    float interpDoppler = prevDoppler + blockFraction * (curDoppler - prevDoppler);
-    float combinedPitch = perTapPitch + interpDoppler;
-
     // v0.8: Per-tap input channel routing
     int inputCh = static_cast<int> (cachedObj[objectIndex].inputChannel->load (std::memory_order_relaxed));
     DelayChannel ch = (inputCh == 1) ? DelayChannel::Left : (inputCh == 2) ? DelayChannel::Right : DelayChannel::Mono;
 
-    // v0.8: Channel-aware delay line read
+    // v0.8: Channel-aware delay line read (now with Doppler-modulated position)
     float objMono = readDelayLineMono (objDelaySamples);
     if (ch == DelayChannel::Left)       objMono = readDelayLineL (objDelaySamples);
     else if (ch == DelayChannel::Right) objMono = readDelayLineR (objDelaySamples);
 
-    // v1.0.6: Phase vocoder pitch shift — handles bypass internally when |semitones| < 0.01 (issue #60)
-    objMono = pvPitchShifters[objectIndex].process (objMono, combinedPitch);
+    // v1.0.6: Phase vocoder pitch shift — user pitch only, no Doppler (issue #77)
+    objMono = pvPitchShifters[objectIndex].process (objMono, perTapPitch);
     // v1.0.1: Air absorption + tap filters via FilterBank class
     float result = filters.processAirSample (objectIndex, objMono);
     result = filters.processTapSample (objectIndex, result);
@@ -3792,7 +3800,10 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                 if (transportStarted || transportJumped)
                 {
                     for (int i = 0; i < MAX_OBJECTS; ++i)
+                    {
                         pvPitchShifters[i].reset();
+                        dopplerDelayAccum[i] = 0.0f;
+                    }
                 }
 
                 wasPlaying = isPlaying;
@@ -3807,7 +3818,10 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     if (presetResetPending.load (std::memory_order_acquire))
     {
         for (int i = 0; i < MAX_OBJECTS; ++i)
+        {
             doppler.reset (i, pendingReset.prevAz[i], pendingReset.prevEl[i], pendingReset.prevDist[i]);
+            dopplerDelayAccum[i] = 0.0f;
+        }
 
         for (int i = 0; i < MAX_OBJECTS; ++i)
             pvPitchShifters[i].reset();
@@ -4010,6 +4024,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             if (! objects[t].enabled && tapFadeGain[t] <= 0.0f)
             {
                 doppler.clearDisabled (t);
+                dopplerDelayAccum[t] = 0.0f;
                 filters.clearAirAbsorption (t);
                 continue;
             }
@@ -4019,6 +4034,8 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             float dist  = objects[t].distance;
 
             float objDopplerAmount = cachedObj[t].dopplerAmount->load();
+            if (objDopplerAmount < 0.001f)
+                dopplerDelayAccum[t] = 0.0f;  // Reset when Doppler disabled
             doppler.update (t, azRad, elRad, dist, objDopplerAmount, blockDuration);
             doppler.smooth (t);
 

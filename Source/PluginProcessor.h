@@ -897,6 +897,10 @@ private:
     // v1.0.6: Phase vocoder pitch shifter — replaces WSOLA-Lite (issue #60)
     PhaseVocoderPitchShifter pvPitchShifters[MAX_OBJECTS];
 
+    // v1.0.2: Doppler via delay modulation — accumulates per-sample delay offset
+    // from Doppler velocity. Natural pitch shift without PV artifacts (issue #77).
+    float dopplerDelayAccum[MAX_OBJECTS] = {};
+
     // v1.0.8: Transport-aware PV reset — clears stale phase state on transport
     // stop/start/seek to prevent intermittent buzzing artifacts (issue #65)
     bool wasPlaying = false;
