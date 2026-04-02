@@ -5016,9 +5016,9 @@ void OpenSpatialDelayProcessor::oscMessageReceived (const juce::OSCMessage& mess
         else if (property == "/drywet")        handleOSCParam ("dryWet", val);
         else if (property == "/inputgain")     handleOSCParam ("inputGain", val);
         else if (property == "/outputgain")    handleOSCParam ("outputGain", val);
-        else if (property == "/algorithm")    configAlgorithm.store (juce::roundToInt (val), std::memory_order_relaxed);
-        else if (property == "/hrtfprofile")  configHrtfProfile.store (juce::roundToInt (val), std::memory_order_relaxed);
-        else if (property == "/outputformat") configOutputFormat.store (juce::roundToInt (val), std::memory_order_relaxed);
+        else if (property == "/algorithm")    { configAlgorithm.store (juce::roundToInt (val), std::memory_order_relaxed); updateHostDisplay(); }
+        else if (property == "/hrtfprofile")  { configHrtfProfile.store (juce::roundToInt (val), std::memory_order_relaxed); updateHostDisplay(); }
+        else if (property == "/outputformat") { configOutputFormat.store (juce::roundToInt (val), std::memory_order_relaxed); updateHostDisplay(); }
         else if (property == "/air")           handleOSCParam ("airAbsorption", val);
         else if (property == "/wobble")        handleOSCParam ("wobbleEnabled", val);
         else if (property == "/wobbleamount")  handleOSCParam ("wobbleAmount", val);
