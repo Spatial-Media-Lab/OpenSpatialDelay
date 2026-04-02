@@ -456,3 +456,44 @@ TEST_CASE ("State -- OSC settings survive roundtrip", "[state]")
         REQUIRE (proc->getOscReceivePort() == 5555);
     }
 }
+
+TEST_CASE ("State -- global tap APVTS params survive roundtrip (issue #95)", "[state]")
+{
+    juce::MemoryBlock stateData;
+
+    // Simulate what the editor's onGlobalDelta callback now does:
+    // write absolute knob values to the APVTS global tap params.
+    {
+        auto proc = std::make_unique<Proc>();
+        proc->prepareToPlay (kSampleRate, kBlockSize);
+
+        setParam (*proc, "globalTapAzimuth",   45.0f);
+        setParam (*proc, "globalTapElevation", -30.0f);
+        setParam (*proc, "globalTapDistance",    0.5f);
+        setParam (*proc, "globalTapPitch",     -12.0f);
+        setParam (*proc, "globalTapDoppler",    50.0f);
+        setParam (*proc, "globalTapSpeed",       2.5f);
+
+        proc->getStateInformation (stateData);
+    }
+
+    // Restore on a fresh processor — APVTS params should have the saved values
+    {
+        auto proc = std::make_unique<Proc>();
+        proc->prepareToPlay (kSampleRate, kBlockSize);
+        proc->setStateInformation (stateData.getData(), static_cast<int> (stateData.getSize()));
+
+        REQUIRE (proc->apvts.getRawParameterValue ("globalTapAzimuth")->load()
+                 == Catch::Approx (45.0f).margin (0.2f));
+        REQUIRE (proc->apvts.getRawParameterValue ("globalTapElevation")->load()
+                 == Catch::Approx (-30.0f).margin (0.2f));
+        REQUIRE (proc->apvts.getRawParameterValue ("globalTapDistance")->load()
+                 == Catch::Approx (0.5f).margin (0.02f));
+        REQUIRE (proc->apvts.getRawParameterValue ("globalTapPitch")->load()
+                 == Catch::Approx (-12.0f).margin (1.0f));
+        REQUIRE (proc->apvts.getRawParameterValue ("globalTapDoppler")->load()
+                 == Catch::Approx (50.0f).margin (0.2f));
+        REQUIRE (proc->apvts.getRawParameterValue ("globalTapSpeed")->load()
+                 == Catch::Approx (2.5f).margin (0.02f));
+    }
+}

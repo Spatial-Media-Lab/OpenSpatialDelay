@@ -1910,11 +1910,29 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     addAndMakeVisible (globalTapDrawer);
     globalTapDrawer.toFront (false);
     globalTapDrawer.setOpen (processorRef.getGlobalDrawerOpen());
+    // issue #95: Restore drawer knob values from APVTS params on editor (re)creation.
+    // The globalTapAzimuth/etc. APVTS params hold the absolute knob value (written below
+    // in onGlobalDelta) and survive save/restore via apvts.replaceState.
+    {
+        static const char* tapParamIds[] = { "globalTapAzimuth", "globalTapElevation", "globalTapDistance",
+                                             "globalTapPitch",   "globalTapDoppler",   "globalTapSpeed" };
+        for (int i = 0; i < GlobalTapDrawerComponent::kNumKnobs; ++i)
+        {
+            if (auto* p = processorRef.apvts.getRawParameterValue (tapParamIds[i]))
+                globalTapDrawer.setKnobValueSilent (i, p->load());
+        }
+    }
     globalTapDrawer.onGlobalDelta = [this] (int idx, float delta) {
         applyGlobalTapDelta (idx, delta);
-        // Sync to processor atomics for OSC Send broadcast
-        processorRef.globalTapOffset[idx].store (
-            static_cast<float> (globalTapDrawer.getKnobValue (idx)), std::memory_order_relaxed);
+        // Sync absolute knob value to processor atomic (for OSC Send)
+        float absVal = static_cast<float> (globalTapDrawer.getKnobValue (idx));
+        processorRef.globalTapOffset[idx].store (absVal, std::memory_order_relaxed);
+        // issue #95: Also write to APVTS param so the value is saved with the session.
+        // Without this, globalTapAzimuth etc. stay at 0.0 and knobs reset on UI reopen.
+        static const char* tapParamIds[] = { "globalTapAzimuth", "globalTapElevation", "globalTapDistance",
+                                             "globalTapPitch",   "globalTapDoppler",   "globalTapSpeed" };
+        if (auto* param = processorRef.apvts.getParameter (tapParamIds[idx]))
+            param->setValueNotifyingHost (param->convertTo0to1 (absVal));
     };
     globalTapDrawer.onToggle = [this] {
         processorRef.setGlobalDrawerOpen (globalTapDrawer.isOpen());
@@ -2502,8 +2520,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     presetPrevButton.onClick = [this]
     {
         globalTapDrawer.resetToCenter();
-        for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
-            processorRef.globalTapOffset[i].store (0.0f, std::memory_order_relaxed);
+        resetGlobalTapAPVTSParams();
         processorRef.loadPreviousPreset();
         updatePresetButtonText();
     };
@@ -2512,8 +2529,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     presetNextButton.onClick = [this]
     {
         globalTapDrawer.resetToCenter();
-        for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
-            processorRef.globalTapOffset[i].store (0.0f, std::memory_order_relaxed);
+        resetGlobalTapAPVTSParams();
         processorRef.loadNextPreset();
         updatePresetButtonText();
     };
@@ -2640,8 +2656,7 @@ void OpenSpatialDelayEditor::showPresetMenu()
             if (result > 0)
             {
                 globalTapDrawer.resetToCenter();
-                for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
-                    processorRef.globalTapOffset[i].store (0.0f, std::memory_order_relaxed);
+                resetGlobalTapAPVTSParams();
                 processorRef.loadPreset (result - 1);
                 updatePresetButtonText();
             }
@@ -2840,6 +2855,19 @@ void OpenSpatialDelayEditor::applyGlobalTapDelta (int knobIndex, float delta)
 
         // convertTo0to1 handles NormalisableRange clamping for non-wrapping params
         param->setValueNotifyingHost (param->convertTo0to1 (newVal));
+    }
+}
+
+// issue #95: Zero out APVTS global tap params + processor atomics on preset change
+void OpenSpatialDelayEditor::resetGlobalTapAPVTSParams()
+{
+    static const char* tapParamIds[] = { "globalTapAzimuth", "globalTapElevation", "globalTapDistance",
+                                         "globalTapPitch",   "globalTapDoppler",   "globalTapSpeed" };
+    for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
+    {
+        processorRef.globalTapOffset[i].store (0.0f, std::memory_order_relaxed);
+        if (auto* param = processorRef.apvts.getParameter (tapParamIds[i]))
+            param->setValueNotifyingHost (param->convertTo0to1 (0.0f));
     }
 }
 
