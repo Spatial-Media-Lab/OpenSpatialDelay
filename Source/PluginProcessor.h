@@ -773,6 +773,19 @@ private:
     void loadHRTFProfileIntoRenderer (int profileIndex, BinauralRenderer& renderer);
     int loadedHRTFProfileIndex = -1;
 
+    // v1.0.4: Renderer-level crossfade for smooth HRTF profile switching (issue #90).
+    // When the active renderer swaps, the new convolver's overlap buffer is empty,
+    // causing a one-block transient overshoot from the HRIR's positive early energy.
+    // Crossfading old→new renderer output masks this startup ramp.
+    int prevActiveRendererIdx_ = 0;
+    bool rendererXfading_ = false;
+    int rendererXfadeBlockCount_ = 0;
+    int rendererXfadeFromIdx_ = 0;
+    static constexpr int kRendererXfadeBlocks = 8;
+    float prevRxFadeOut_ = 1.0f;
+    float prevRxFadeIn_ = 0.0f;
+    std::vector<float> xfadeWetL_, xfadeWetR_;
+
     //--- SPATIAL FRAMEWORK: Background HRTF loading (via Timer) ---
     void timerCallback() override;
     std::atomic<int> targetHRTFProfile { 0 };
