@@ -865,9 +865,10 @@ std::pair<float, float> SpatialMapComponent::pixelToSpatial (juce::Point<float> 
 
 int SpatialMapComponent::findObjectAt (juce::Point<float> pos) const
 {
-    for (int i = MAX_OBJECTS - 1; i >= 0; --i)
+    // Issue #98: Check selected tap first (it renders on top)
+    auto hitTest = [&](int i) -> bool
     {
-        if (! objects[(size_t)i].enabled) continue;
+        if (! objects[(size_t)i].enabled) return false;
         auto p = spatialToPixel (objects[(size_t)i].azimuthDeg, objects[(size_t)i].distance);
 
         // Variable hit radius based on elevation-dependent dot size
@@ -878,8 +879,18 @@ int SpatialMapComponent::findObjectAt (juce::Point<float> pos) const
         float currentDotSize = baseDiam + elevScale * z;
         float hitRadius = std::max (currentDotSize * 0.5f + 2.0f, 10.0f);
 
-        if (p.getDistanceFrom (pos) < hitRadius)
-            return (int)i;
+        return p.getDistanceFrom (pos) < hitRadius;
+    };
+
+    // Selected tap is visually on top, so check it first
+    if (selectedObject >= 0 && selectedObject < MAX_OBJECTS && hitTest (selectedObject))
+        return selectedObject;
+
+    for (int i = MAX_OBJECTS - 1; i >= 0; --i)
+    {
+        if (i == selectedObject) continue;
+        if (hitTest (i))
+            return i;
     }
     return -1;
 }
@@ -1163,8 +1174,17 @@ void SpatialMapComponent::paint (juce::Graphics& g)
         }
     }
 
+    // Issue #98: Build draw order so selected tap renders on top
+    int drawOrder[MAX_OBJECTS];
+    int drawCount = 0;
     for (int i = 0; i < MAX_OBJECTS; ++i)
+        if (i != selectedObject) drawOrder[drawCount++] = i;
+    if (selectedObject >= 0 && selectedObject < MAX_OBJECTS)
+        drawOrder[drawCount++] = selectedObject;
+
+    for (int di = 0; di < drawCount; ++di)
     {
+        int i = drawOrder[di];
         if (! objects[(size_t)i].enabled) continue;
 
         auto pos = spatialToPixel (objects[(size_t)i].azimuthDeg, objects[(size_t)i].distance);
