@@ -59,7 +59,7 @@ void TrajectoryEngine::tick (int t, const ObjectInput& input, float dt)
             rn.initialized = true;
         }
 
-        randomTime_[t] += effectiveSpeed * dt;
+        randomTime_[t] += (input.reverse ? -1.0f : 1.0f) * effectiveSpeed * dt;
         float p = randomTime_[t] * juce::MathConstants<float>::twoPi;
         float az = 0.0f, el = 0.0f, dist = 0.0f;
         for (int k = 0; k < 4; ++k)
@@ -179,7 +179,10 @@ TrajectoryEngine::computeTrajectory (int shape, float phase,
         case 1: // Bounce
         {
             float tri = 1.0f - std::abs (2.0f * phase - 1.0f);
-            r.azDeg = baseAz - 90.0f * (2.0f * tri - 1.0f);
+            // Flip the trajectory diagonally: negate azimuth offset so
+            // the az–elevation relationship mirrors (issue #100)
+            float azSign = reverse ? -1.0f : 1.0f;
+            r.azDeg = baseAz - azSign * 90.0f * (2.0f * tri - 1.0f);
             r.elDeg = baseEl - 30.0f * (2.0f * tri - 1.0f);
             r.dist  = baseDist;
             r.controlsAz = r.controlsEl = true;
@@ -317,6 +320,10 @@ TrajectoryEngine::computeTrajectory (int shape, float phase,
 
         case 8: // Line
         {
+            // phase=1-phase is a no-op for cos (even function);
+            // offset by half-period to actually reverse direction
+            if (reverse)
+                phase = std::fmod (phase + 0.5f, 1.0f);
             const float amplitude = 1.0f * distScale;
             float baseAzRad = juce::degreesToRadians (baseAz);
             float baseCx = baseDist * std::sin (baseAzRad);
