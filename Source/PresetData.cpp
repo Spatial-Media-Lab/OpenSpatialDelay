@@ -370,10 +370,10 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
         600.0f, false, 4.0f, 0, 0.65f, 8000.0f, 100.0f, 0.707f, 0.707f, 0.45f, 0.0f, 0.0f,
         true, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
         {
-            { true, -30.0f, 20.0f, 0.4f, 0.0f, 7.0f, 0, 1.0f },    // +7st (perfect 5th)
-            { true,  30.0f, 20.0f, 0.4f, 0.0f, 12.0f, 0, 1.0f },   // +12st (octave)
-            { true, -90.0f, 10.0f, 0.5f, 0.0f, 19.0f, 0, 1.0f },   // +19st (octave + 5th)
-            { true,  90.0f, 10.0f, 0.5f, 0.0f, 24.0f, 0, 1.0f },   // +24st (2 octaves)
+            { true, -30.0f, 20.0f, 0.4f, 0.0f, 5.0f, 0, 1.0f },    // +5st (perfect 4th)
+            { true,  30.0f, 20.0f, 0.4f, 0.0f, 7.0f, 0, 1.0f },    // +7st (perfect 5th)
+            { true, -90.0f, 10.0f, 0.5f, 0.0f, 10.0f, 0, 1.0f },   // +10st (minor 7th)
+            { true,  90.0f, 10.0f, 0.5f, 0.0f, 12.0f, 0, 1.0f },   // +12st (octave)
             {}, {}, {}, {}, {}, {}, {}, {}
         }
     },
