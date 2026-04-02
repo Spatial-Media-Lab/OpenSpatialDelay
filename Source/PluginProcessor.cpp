@@ -4147,6 +4147,10 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         auto& rend = binauralRenderers[activeRendererIndex.load (std::memory_order_acquire)];
         rend.invalidateSources();
 
+        // Reset pitch shifters — stale phase/accumulator state causes chirp (issue #99)
+        for (int i = 0; i < MAX_OBJECTS; ++i)
+            pvPitchShifters[i].reset();
+
         // Snap ALL smoothers to target — no ramps during fade-in
         smoothedDelayTime.setCurrentAndTargetValue (smoothedDelayTime.getTargetValue());
         smoothedDryWet.setCurrentAndTargetValue (smoothedDryWet.getTargetValue());
