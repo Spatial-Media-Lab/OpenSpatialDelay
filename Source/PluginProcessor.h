@@ -714,8 +714,9 @@ private:
     float getTempoSyncedDelayMs (int noteDivisionIndex) const;
 
     //--- DELAY-SPECIFIC: Render path methods (v0.5 refactor) ------------------
-    /** Read one tap sample: delay + per-tap pitch shift + air absorption. */
-    float readObjectSample (int objectIndex, float baseDelaySamples);
+    /** Read one tap sample: delay + per-tap pitch shift + air absorption.
+        blockFraction: 0..1 position within block, for per-sample Doppler interpolation. */
+    float readObjectSample (int objectIndex, float baseDelaySamples, float blockFraction);
     /** Process feedback: read from end of chain, filter, soft-clip, NaN guard. */
     void  processFeedbackSample (float currentLoopMult, float baseDelaySamples,
                                  float fb);

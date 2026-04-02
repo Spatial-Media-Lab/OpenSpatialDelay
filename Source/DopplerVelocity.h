@@ -31,8 +31,11 @@ public:
     /** Reset all objects. */
     void resetAll();
 
-    /** Get the smoothed Doppler pitch in semitones. */
+    /** Get the smoothed Doppler pitch in semitones (current block value). */
     float getSmoothedSemitones (int objectIndex) const { return smoothedSemitones_[objectIndex]; }
+
+    /** Get the previous block's smoothed Doppler pitch in semitones (for per-sample interpolation). */
+    float getPrevSmoothedSemitones (int objectIndex) const { return prevSmoothedSemitones_[objectIndex]; }
 
     /** Get the raw (unsmoothed) Doppler pitch in semitones. */
     float getRawSemitones (int objectIndex) const { return rawSemitones_[objectIndex]; }
@@ -50,6 +53,8 @@ private:
     float smoothedVelocity_[kMaxObjects] = {};
     float rawSemitones_[kMaxObjects] = {};
     float smoothedSemitones_[kMaxObjects] = {};
+    float prevSmoothedSemitones_[kMaxObjects] = {};  // Previous block's value for per-sample interpolation
+    float intermediateSmoothed_[kMaxObjects] = {};    // First stage of two-pole EMA
     bool  posChanged_[kMaxObjects] = {};
 
     // Constants
