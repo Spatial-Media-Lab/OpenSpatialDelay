@@ -193,6 +193,8 @@ if(BUILD_OSD_TESTS)
         Tests/SurroundOutputTests.cpp
         Tests/OscTests.cpp
         Tests/ConvolverGlitchTests.cpp
+        Tests/DSPUnitTests.cpp
+        Tests/IntegrationTests.cpp
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/PresetData.cpp
