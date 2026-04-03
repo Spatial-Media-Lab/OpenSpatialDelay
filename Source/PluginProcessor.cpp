@@ -2059,16 +2059,37 @@ void OpenSpatialDelayProcessor::rebuildCategorizedOrder()
 //==============================================================================
 bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    // v1.0.3: Accept any layout the host proposes (issue #111).
-    // This is the IEM Plugin Suite / SPARTA approach for multichannel VST3 support.
-    // VST3 hosts (REAPER, Cubase) use the channel count from getBusInfo() to allocate
-    // channels, then call setBusArrangements() with host-chosen arrangements that may
-    // not match our predefined set. Accepting everything lets the host provide whatever
-    // channel count the track supports. Output format selection and channel routing are
-    // handled internally via resolveEffectiveFormat() and the output format dropdown.
-    // processBlock only reads input channels 0-1 regardless of bus width.
-    juce::ignoreUnused (layouts);
-    return true;
+    // Input can be mono or stereo (stereo will be summed to mono internally)
+    auto inputSet = layouts.getMainInputChannelSet();
+    if (inputSet != juce::AudioChannelSet::mono() &&
+        inputSet != juce::AudioChannelSet::stereo())
+    {
+        // VST3 symmetric layout support (issue #111): REAPER/Cubase require
+        // input == output channel counts for VST3 bus negotiation. Accept
+        // multichannel input when it matches the output set — extra input
+        // channels are ignored in processBlock (only channels 0-1 are read).
+        if (inputSet != layouts.getMainOutputChannelSet())
+            return false;
+    }
+
+    // v0.2: Stable set of output bus layouts. DO NOT ADD NEW ENTRIES HERE.
+    // Adding entries causes DAWs to renegotiate bus layouts during playback,
+    // which triggers prepareToPlay() mid-session and zeros the delay buffer.
+    // See docs/BUS_LAYOUT_BUG.md for full explanation.
+    //
+    // New output formats (5.0, 7.0, 5.1.2, Ambisonics, etc.) are handled
+    // INTERNALLY via the output format dropdown — they render to whatever
+    // channels the bus provides without needing DAW-level bus support.
+    auto outputSet = layouts.getMainOutputChannelSet();
+    if (outputSet == juce::AudioChannelSet::stereo())              return true;
+    if (outputSet == juce::AudioChannelSet::quadraphonic())        return true;
+    if (outputSet == juce::AudioChannelSet::create5point1())       return true;
+    if (outputSet == juce::AudioChannelSet::create7point1())       return true;
+    if (outputSet == juce::AudioChannelSet::create7point1point4()) return true;
+    if (outputSet == juce::AudioChannelSet::create9point1point6()) return true;
+    if (outputSet == juce::AudioChannelSet::octagonal())           return true;
+    if (outputSet == juce::AudioChannelSet::discreteChannels (50)) return true;
+    return false;
 }
 
 //==============================================================================
