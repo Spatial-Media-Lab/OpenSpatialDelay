@@ -2445,8 +2445,8 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     writePosition = 0;
     feedbackSample = 0.0f;
 
-    // v0.8: Reset wobble modulation state
-    wobblePhase = 0.0f;
+    // v1.0.7: Reset wobble modulation state (4-layer tape emulation, issue #92)
+    std::fill (std::begin (wobblePhases), std::end (wobblePhases), 0.0f);
     smoothedWobbleAmount.reset (sampleRate, 0.05);  // 50ms ramp
     smoothedWobbleAmount.setCurrentAndTargetValue (0.0f);
     blockWobbleMorph = 0.0f;
@@ -3706,49 +3706,41 @@ OpenSpatialDelayProcessor::evaluateRandomNoise (int objectIndex, float time) con
 // and render logic, calling the spatial algorithms via computeGains().
 // #############################################################################
 
-// --- DELAY-SPECIFIC: Wobble modulation (v0.9) --- tape wow/flutter emulation
+// --- DELAY-SPECIFIC: Wobble modulation (v1.0.7) --- tape wow/flutter emulation
 // 4 incommensurate sinusoids spanning wow (1.5 Hz) to flutter (8.1 Hz).
 // Morph crossfades weight distribution: wow-heavy at 0%, flutter-heavy at 100%.
-// v0.8: Wobble waveform — morphs between 4 shapes based on morph parameter (0..100)
-// 0=sine (smooth wow), 33=triangle, 66=rounded square (mechanical), 100=irregular (worn tape)
-static float computeWobbleWaveform (float phase, float morphPercent)
-{
-    float twoPi = juce::MathConstants<float>::twoPi;
-    float p = phase * twoPi;
+// Restored from v0.9 architecture with smoothed amount + quadratic depth (issue #92).
+static constexpr int   kWobbleLayers = 4;
+static constexpr float kWobbleRates[kWobbleLayers]    = { 1.5f, 3.7f, 5.9f, 8.1f };
+static constexpr float kWowWeights[kWobbleLayers]     = { 0.55f, 0.30f, 0.10f, 0.05f };
+static constexpr float kFlutterWeights[kWobbleLayers] = { 0.05f, 0.10f, 0.30f, 0.55f };
 
-    float sine = std::sin (p);
-    float triangle = 2.0f * std::abs (2.0f * phase - 1.0f) - 1.0f;
-    float roundedSquare = std::tanh (4.0f * std::sin (p));
-    float irregular = std::sin (p)
-                    + 0.3f * std::sin (2.0f * p + 0.7f)
-                    + 0.15f * std::sin (3.0f * p + 1.3f)
-                    + 0.08f * std::sin (5.0f * p + 2.1f);
-    irregular *= 0.65f;  // normalize roughly to +/-1
-
-    // Crossfade between adjacent shapes (0→sine, 33→triangle, 66→roundedSq, 100→irregular)
-    float t = morphPercent / 100.0f * 3.0f;  // 0..3
-    int seg = juce::jlimit (0, 2, static_cast<int> (t));
-    float frac = t - static_cast<float> (seg);
-
-    float shapes[4] = { sine, triangle, roundedSquare, irregular };
-    return shapes[seg] * (1.0f - frac) + shapes[seg + 1] * frac;
-}
-
-// v0.8: Apply wobble modulation — LFO rate tied to delay time (shorter delay = faster wobble)
 inline float OpenSpatialDelayProcessor::applyWobble (float baseDelaySamples, float currentDelayMs)
 {
     float wobbleAmt = smoothedWobbleAmount.getNextValue();
     if (wobbleAmt <= 0.0f)
         return baseDelaySamples;
 
-    float lfoFreqHz = 1000.0f / std::max (1.0f, currentDelayMs);
-    wobblePhase += lfoFreqHz / static_cast<float> (currentSampleRate);
-    if (wobblePhase >= 1.0f)
-        wobblePhase -= std::floor (wobblePhase);
+    juce::ignoreUnused (currentDelayMs);
 
-    float waveform = computeWobbleWaveform (wobblePhase, blockWobbleMorph);
+    const float morph = blockWobbleMorph / 100.0f;
+    const float invSr = 1.0f / static_cast<float> (currentSampleRate);
+
+    float modulation = 0.0f;
+    for (int i = 0; i < kWobbleLayers; ++i)
+    {
+        wobblePhases[i] += kWobbleRates[i] * invSr;
+        if (wobblePhases[i] >= 1.0f)
+            wobblePhases[i] -= 1.0f;
+
+        float weight = kWowWeights[i] + morph * (kFlutterWeights[i] - kWowWeights[i]);
+        modulation += weight * std::sin (wobblePhases[i] * juce::MathConstants<float>::twoPi);
+    }
+
+    // Linear scaling — original 0.006 depth works correctly with fixed 4-layer rates
+    // (v0.8's "too extreme" was caused by delay-dependent rate, not depth)
     constexpr float maxDeviation = 0.006f;  // ±0.6% of delay time at max amount
-    return baseDelaySamples * (1.0f + wobbleAmt * waveform * maxDeviation);
+    return baseDelaySamples * (1.0f + wobbleAmt * modulation * maxDeviation);
 }
 
 //==============================================================================
