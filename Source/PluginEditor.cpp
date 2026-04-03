@@ -1672,8 +1672,7 @@ void GlobalTapDrawerComponent::setupKnob (juce::Slider& s, juce::Label& l,
                                            const juce::String& name,
                                            float min, float max, float step, int knobIdx)
 {
-    s.setSliderStyle (juce::Slider::RotaryVerticalDrag);
-    s.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 58, 11);
+    styleSlider (s, lookAndFeel);
     s.setRange (min, max, step);
     s.textFromValueFunction = [&s](double value) {
         int dec = s.getNumDecimalPlacesToDisplay();
@@ -1686,9 +1685,6 @@ void GlobalTapDrawerComponent::setupKnob (juce::Slider& s, juce::Label& l,
     s.setValue (0.0);
     s.updateText();  // force text refresh through textFromValueFunction (issue #126)
     s.setColour (juce::Slider::thumbColourId, Colours_OSD::accentGlobal);
-    s.setColour (juce::Slider::textBoxTextColourId, Colours_OSD::accentGlobalDim);
-    s.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-    s.setColour (juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
     s.setDoubleClickReturnValue (true, 0.0);
     knobPanel.addAndMakeVisible (s);  // add to knobPanel, not directly to drawer
 
@@ -1856,7 +1852,7 @@ void GlobalTapDrawerComponent::layoutKnobs()
 {
     // Layout knobs inside the knobPanel (always at full panel size)
     int knobSize = 38;
-    int textBoxH = 11;
+    int textBoxH = 12;
     int labelH = 12;
     int dividerGap = 10;
     int totalH = knobPanel.getHeight();
