@@ -1139,7 +1139,8 @@ void SpatialMapComponent::paint (juce::Graphics& g)
                 auto rp = processor->evaluateRandomNoise (selectedObject, sampleTime);
                 float az   = ts.originAzDeg + rp.azDeg;
                 float el   = juce::jlimit (-90.0f, 90.0f, ts.originElDeg + rp.elDeg);
-                float dist = juce::jlimit (0.0f, 1.0f, ts.originDist + rp.dist);
+                float distScaleR = 1.0f - ts.originDist;  // match tick() distance scaling
+                float dist = juce::jlimit (0.0f, 1.0f, ts.originDist + rp.dist * distScaleR);
                 while (az > 180.0f)  az -= 360.0f;
                 while (az < -180.0f) az += 360.0f;
 
