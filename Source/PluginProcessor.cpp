@@ -2058,27 +2058,25 @@ void OpenSpatialDelayProcessor::rebuildCategorizedOrder()
 //==============================================================================
 bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    // Input can be mono or stereo (stereo will be summed to mono internally)
+    // VST3: accept any layout the host proposes (IEM Plugin Suite approach, issue #111).
+    // VST3 hosts negotiate bus arrangements that may not match our predefined set;
+    // accepting everything lets REAPER/Cubase provide the track's full channel count.
+    // AU: keep explicit whitelist for Ableton AU compatibility (issue #122).
+    if (wrapperType == wrapperType_VST3)
+    {
+        juce::ignoreUnused (layouts);
+        return true;
+    }
+
+    // AU / standalone path: explicit layout whitelist
     auto inputSet = layouts.getMainInputChannelSet();
     if (inputSet != juce::AudioChannelSet::mono() &&
         inputSet != juce::AudioChannelSet::stereo())
     {
-        // VST3 symmetric layout support (issue #111): REAPER/Cubase require
-        // input == output channel counts for VST3 bus negotiation. Accept
-        // multichannel input when it matches the output set — extra input
-        // channels are ignored in processBlock (only channels 0-1 are read).
         if (inputSet != layouts.getMainOutputChannelSet())
             return false;
     }
 
-    // v0.2: Stable set of output bus layouts. DO NOT ADD NEW ENTRIES HERE.
-    // Adding entries causes DAWs to renegotiate bus layouts during playback,
-    // which triggers prepareToPlay() mid-session and zeros the delay buffer.
-    // See docs/BUS_LAYOUT_BUG.md for full explanation.
-    //
-    // New output formats (5.0, 7.0, 5.1.2, Ambisonics, etc.) are handled
-    // INTERNALLY via the output format dropdown — they render to whatever
-    // channels the bus provides without needing DAW-level bus support.
     auto outputSet = layouts.getMainOutputChannelSet();
     if (outputSet == juce::AudioChannelSet::stereo())              return true;
     if (outputSet == juce::AudioChannelSet::quadraphonic())        return true;
