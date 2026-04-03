@@ -33,6 +33,19 @@ cd "${BUILD_DIR}"
 git checkout "${COMMIT}" -- . 2>/dev/null
 git submodule update --init --recursive 2>/dev/null
 
+# Issue #122: Patch JUCE VST3 wrapper — guard restartComponent against flags=0
+# to prevent Ableton from resetting its Configure parameter state.
+VST3_WRAPPER="JUCE/modules/juce_audio_plugin_client/juce_audio_plugin_client_VST3.cpp"
+if grep -q 'if (auto\* handler = componentHandler.get())' "${VST3_WRAPPER}" 2>/dev/null; then
+    sed -i '' '/flags &= ~pluginShouldBeMarkedDirtyFlag;/{
+N
+s/\n.*if (auto\* handler = componentHandler.get())/\
+\
+        if (flags != 0)\
+            if (auto* handler = componentHandler.get())/
+}' "${VST3_WRAPPER}"
+fi
+
 # Step 2: Patch CMakeLists.txt with version-specific name, plugin code, and bundle ID
 sed -i '' "s/PLUGIN_CODE Os10/PLUGIN_CODE ${PLUGIN_CODE}/" CMakeLists.txt
 sed -i '' "s/PRODUCT_NAME \"OpenSpatialDelay v1.0\"/PRODUCT_NAME \"${PLUGIN_NAME}\"/" CMakeLists.txt
