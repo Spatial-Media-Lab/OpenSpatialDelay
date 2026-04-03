@@ -1468,6 +1468,10 @@ void OpenSpatialDelayProcessor::timerCallback()
         }
     }
 
+    // Issue #122: Debounced updateHostDisplay — at most once per 60Hz tick
+    // instead of on every UI dropdown / OSC config change (fixes Ableton automation reset)
+    if (configStateDirty.exchange (false, std::memory_order_relaxed))
+        updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true));
 }
 
 // #############################################################################
@@ -1574,6 +1578,10 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
 
 OpenSpatialDelayProcessor::~OpenSpatialDelayProcessor()
 {
+    // Issue #122: Stop 60Hz timer before any member destruction to prevent
+    // use-after-free in timerCallback() during plugin deletion
+    stopTimer();
+
     // v0.6: Disconnect OSC receiver before destruction
     oscReceiver.disconnect();
     oscReceiver.removeListener (this);
@@ -2540,6 +2548,9 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
 
 void OpenSpatialDelayProcessor::releaseResources()
 {
+    // Issue #122: Stop timer early — DAW calls this before destruction
+    stopTimer();
+
     delayBufferL.clear();
     delayBufferR.clear();
     monoInputBuffer.clear();
@@ -5108,9 +5119,9 @@ void OpenSpatialDelayProcessor::oscMessageReceived (const juce::OSCMessage& mess
         else if (property == "/drywet")        handleOSCParam ("dryWet", val);
         else if (property == "/inputgain")     handleOSCParam ("inputGain", val);
         else if (property == "/outputgain")    handleOSCParam ("outputGain", val);
-        else if (property == "/algorithm")    { configAlgorithm.store (juce::roundToInt (val), std::memory_order_relaxed); updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true)); }
-        else if (property == "/hrtfprofile")  { configHrtfProfile.store (juce::roundToInt (val), std::memory_order_relaxed); updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true)); }
-        else if (property == "/outputformat") { configOutputFormat.store (juce::roundToInt (val), std::memory_order_relaxed); updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true)); }
+        else if (property == "/algorithm")    { configAlgorithm.store (juce::roundToInt (val), std::memory_order_relaxed); markConfigStateDirty(); }
+        else if (property == "/hrtfprofile")  { configHrtfProfile.store (juce::roundToInt (val), std::memory_order_relaxed); markConfigStateDirty(); }
+        else if (property == "/outputformat") { configOutputFormat.store (juce::roundToInt (val), std::memory_order_relaxed); markConfigStateDirty(); }
         else if (property == "/air")           handleOSCParam ("airAbsorption", val);
         else if (property == "/wobble")        handleOSCParam ("wobbleEnabled", val);
         else if (property == "/wobbleamount")  handleOSCParam ("wobbleAmount", val);

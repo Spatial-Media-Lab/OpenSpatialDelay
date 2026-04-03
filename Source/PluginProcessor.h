@@ -652,6 +652,10 @@ public:
     std::atomic<int> configOutputFormat { 0 };
     std::atomic<int> configInputFormat { 0 };
 
+    // Issue #122: Debounce updateHostDisplay — set by editor/OSC, flushed in timerCallback
+    std::atomic<bool> configStateDirty { false };
+    void markConfigStateDirty() { configStateDirty.store (true, std::memory_order_relaxed); }
+
     // v0.7: OSC Send accessors for editor
     bool isOscSendConnected() const { return oscSendConnected; }
     bool getOscSendEnabled() const { return oscSendEnabled; }
