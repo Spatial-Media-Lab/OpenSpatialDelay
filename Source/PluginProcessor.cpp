@@ -309,11 +309,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             .withStringFromValueFunction (fmtFreq)
             .withValueFromStringFunction (parseFreq)));
 
-    // G8: High-Pass Resonance (was "HP Resonance")  [non-automatable: issue #122]
+    // G8: High-Pass Resonance (was "HP Resonance")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterHPQ", 8), "High-Pass Resonance",
         juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
-        juce::AudioParameterFloatAttributes().withAutomatable (false).withStringFromValueFunction (
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2); })));
 
     // G9: Low-Pass Frequency (was "Low-Pass Filter")
@@ -324,11 +324,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             .withStringFromValueFunction (fmtFreq)
             .withValueFromStringFunction (parseFreq)));
 
-    // G10: Low-Pass Resonance (was "LP Resonance")  [non-automatable: issue #122]
+    // G10: Low-Pass Resonance (was "LP Resonance")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterLPQ", 10), "Low-Pass Resonance",
         juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
-        juce::AudioParameterFloatAttributes().withAutomatable (false).withStringFromValueFunction (
+        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2); })));
 
     // G11: Dry/Wet
@@ -412,12 +412,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("globalTapDoppler", 23), "Global Tap Doppler",
         juce::NormalisableRange<float> (-100.0f, 100.0f, 0.1f), 0.0f,
-        juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
+        juce::AudioParameterFloatAttributes().withAutomatable (false).withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("globalTapSpeed", 24), "Global Tap Speed",
         juce::NormalisableRange<float> (-5.0f, 5.0f, 0.01f), 0.0f,
-        juce::AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
+        juce::AudioParameterFloatAttributes().withAutomatable (false).withLabel ("Hz").withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2) + " Hz"; })));
 
     // --- Per-tap parameters (issue #68: "Object N" → "Tap 0N") ---------------
