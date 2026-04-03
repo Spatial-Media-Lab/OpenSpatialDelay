@@ -33,7 +33,8 @@ bash scripts/build_version.sh <commit-hash> v1.0.Z O10Z
 - v1.0.2 / O102 — call updateHostDisplay() on config changes (issue #94, commit dbf19ce)
 - v1.0.3 / O103 — fix direction toggle for Bounce, Line, Random (issue #100, commit 9dd6266)
 - v1.0.5 / O105 — reset phase vocoder on preset change chirp (issue #99, commit a9df52a)
-- Next available: **v1.0.6 / O106**
+- v1.0.6 / O106 — transport fade-in to prevent scrub/seek click (issue #103, commit 7901a0a)
+- Next available: **v1.0.7 / O107**
 
 ### Running tests
 
