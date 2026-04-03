@@ -604,7 +604,9 @@ void HRTFDatabase::getAlignedHRIR (float azimuthRad, float elevationRad,
     // likely CIPIC/HUTUBS/Bernschuetz). Detect onset from the waveform
     // itself so the dual-slot crossfade blends time-aligned HRIRs.
     // SADIE II KU100 reports non-zero delays and bypasses this fallback.
-    if (shiftL == 0 && shiftR == 0)
+    // NOTE: Check raw float delays, not integer-truncated — SADIE reports
+    // fractional delays (e.g., 0.3/0.7) that truncate to int 0 but are valid.
+    if (delayL < 0.001f && delayR < 0.001f)
     {
         int onsetL = detectOnset (irL, irLength, 0.1f);
         int onsetR = detectOnset (irR, irLength, 0.1f);
