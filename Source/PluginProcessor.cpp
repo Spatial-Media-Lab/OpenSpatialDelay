@@ -2440,21 +2440,6 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
 
     // v0.2: Resolve output format from user selection + bus constraint
     maxBusChannels = getTotalNumOutputChannels();
-
-    // Diagnostic for issue #111 — log bus negotiation result to Desktop
-    {
-        juce::File logFile (juce::File::getSpecialLocation (juce::File::userDesktopDirectory)
-                                .getChildFile ("osd_bus_debug.txt"));
-        juce::String info;
-        info << "prepareToPlay: wrapperType=" << static_cast<int> (wrapperType)
-             << " totalOutCh=" << getTotalNumOutputChannels()
-             << " totalInCh=" << getTotalNumInputChannels()
-             << " sampleRate=" << sampleRate
-             << " outBusLayout=" << getBusesLayout().getMainOutputChannelSet().getDescription()
-             << " inBusLayout=" << getBusesLayout().getMainInputChannelSet().getDescription()
-             << "\n";
-        logFile.appendText (info);
-    }
     int userFormatIndex = configOutputFormat.load (std::memory_order_relaxed);
     auto userFormat = outputFormatRegistry[static_cast<size_t> (juce::jlimit (0, NUM_OUTPUT_FORMATS - 1, userFormatIndex))].format;
     auto effectiveFormat = resolveEffectiveFormat (userFormat, maxBusChannels);
