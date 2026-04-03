@@ -255,9 +255,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout
                     return text.getFloatValue();
                 })));
 
-    // G2: Delay Sync (was "Tempo Sync")
+    // G2: Delay Sync (was "Tempo Sync")  [non-automatable: toggle state, issue #122]
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("tempoSync", 2), "Delay Sync", false));
+        juce::ParameterID ("tempoSync", 2), "Delay Sync", false,
+        juce::AudioParameterBoolAttributes().withAutomatable (false)));
 
     // G3: Delay Division (was "Note Division")
     // Value = number of 16th notes. Range: 0.5 (1/32) to 32 (2/1)
@@ -279,10 +280,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
                 return juce::String (sixteenths, 1) + "/16";
             })));
 
-    // G4: Sync Mode
+    // G4: Sync Mode  [non-automatable: state selector, issue #122]
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
         juce::ParameterID ("syncMode", 4), "Sync Mode",
-        juce::StringArray { "Straight", "Dotted", "Triplet" }, 0));
+        juce::StringArray { "Straight", "Dotted", "Triplet" }, 0,
+        juce::AudioParameterChoiceAttributes().withAutomatable (false)));
 
     // G5: Feedback
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -293,9 +295,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             .withValueFromStringFunction (parsePct01)));
 
     // G6: Filter On (was "Filter Enabled" — moved before filter params, enable→configure)
+    // [non-automatable: toggle state, issue #122]
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterEnabled", 6), "Filter On",
-        juce::NormalisableRange<float> (0.0f, 1.0f, 1.0f), 0.0f));
+        juce::NormalisableRange<float> (0.0f, 1.0f, 1.0f), 0.0f,
+        juce::AudioParameterFloatAttributes().withAutomatable (false)));
 
     // G7: High-Pass Frequency (was "High-Pass Filter" — HP grouped before LP)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -305,11 +309,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             .withStringFromValueFunction (fmtFreq)
             .withValueFromStringFunction (parseFreq)));
 
-    // G8: High-Pass Resonance (was "HP Resonance")
+    // G8: High-Pass Resonance (was "HP Resonance")  [non-automatable: issue #122]
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterHPQ", 8), "High-Pass Resonance",
         juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
+        juce::AudioParameterFloatAttributes().withAutomatable (false).withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2); })));
 
     // G9: Low-Pass Frequency (was "Low-Pass Filter")
@@ -320,11 +324,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             .withStringFromValueFunction (fmtFreq)
             .withValueFromStringFunction (parseFreq)));
 
-    // G10: Low-Pass Resonance (was "LP Resonance")
+    // G10: Low-Pass Resonance (was "LP Resonance")  [non-automatable: issue #122]
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterLPQ", 10), "Low-Pass Resonance",
         juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
+        juce::AudioParameterFloatAttributes().withAutomatable (false).withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2); })));
 
     // G11: Dry/Wet
@@ -355,13 +359,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     // They are now stored as raw std::atomic<int> members (configAlgorithm, configHrtfProfile,
     // configOutputFormat, configInputFormat) to hide them from DAW automation lists.
 
-    // G14: Air Absorption
+    // G14: Air Absorption  [non-automatable: toggle state, issue #122]
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("airAbsorption", 14), "Air Absorption", false));
+        juce::ParameterID ("airAbsorption", 14), "Air Absorption", false,
+        juce::AudioParameterBoolAttributes().withAutomatable (false)));
 
     // G15: Wobble On (was "Wobble Enabled" — moved before wobble params, enable→configure)
+    // [non-automatable: toggle state, issue #122]
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("wobbleEnabled", 15), "Wobble On", false));
+        juce::ParameterID ("wobbleEnabled", 15), "Wobble On", false,
+        juce::AudioParameterBoolAttributes().withAutomatable (false)));
 
     // G16: Wobble Amount
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -376,8 +383,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
     // G18: OSC Receive (true=enabled, false=disabled; default OFF)
+    // [non-automatable: never automated, issue #122]
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("admOscEnabled", 18), "OSC Receive", false));
+        juce::ParameterID ("admOscEnabled", 18), "OSC Receive", false,
+        juce::AudioParameterBoolAttributes().withAutomatable (false)));
 
     // G19–G24: Global Tap Offsets (promoted from OSC-only atomics to APVTS)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -428,9 +437,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         // Initial spatial spread is applied in constructor after APVTS creation.
         float defaultAz = 0.0f;
 
-        // T1: Tap On (was "Object N Enabled")
+        // T1: Tap On (was "Object N Enabled")  [non-automatable: toggle state, issue #122]
         params.push_back (std::make_unique<juce::AudioParameterBool> (
-            id ("enabled", 0), name ("On"), defaultEnabled));
+            id ("enabled", 0), name ("On"), defaultEnabled,
+            juce::AudioParameterBoolAttributes().withAutomatable (false)));
 
         // T2: Per-tap Time — REMOVED (orphaned param, issue #68)
 
@@ -451,11 +461,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             id ("distance", 3), name ("Distance"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f));
 
-        // T6: Tap Doppler Amount
+        // T6: Tap Doppler Amount  [non-automatable: issue #122]
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("dopplerAmount", 4), name ("Doppler Amount"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.0f,
-            juce::AudioParameterFloatAttributes().withLabel ("%")
+            juce::AudioParameterFloatAttributes().withAutomatable (false).withLabel ("%")
                 .withStringFromValueFunction (fmtPct01)
                 .withValueFromStringFunction (parsePct01)));
 
@@ -466,28 +476,31 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             juce::AudioParameterFloatAttributes().withStringFromValueFunction (
                 [](float value, int) { return juce::String (juce::roundToInt (value)) + " st"; })));
 
-        // T8: Tap Trajectory Shape
+        // T8: Tap Trajectory Shape  [non-automatable: state selector, issue #122]
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("trajectoryShape", 6), name ("Trajectory Shape"),
             juce::StringArray { "None", "Bounce", "Circle", "Cross", "Figure-8", "Heart", "Helix",
-                                "Infinity", "Line", "Orbit", "Random", "Spiral", "Square", "Triangle" }, 0));
+                                "Infinity", "Line", "Orbit", "Random", "Spiral", "Square", "Triangle" }, 0,
+            juce::AudioParameterChoiceAttributes().withAutomatable (false)));
 
-        // T9: Tap Trajectory Speed
+        // T9: Tap Trajectory Speed  [non-automatable: issue #122]
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("trajectorySpeed", 7), name ("Trajectory Speed"),
             juce::NormalisableRange<float> (0.0f, 5.0f, 0.01f), 0.3f,
-            juce::AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
+            juce::AudioParameterFloatAttributes().withAutomatable (false).withLabel ("Hz").withStringFromValueFunction (
                 [](float value, int) { return juce::String (value, 2) + " Hz"; })));
 
-        // T10: Tap Trajectory Direction
+        // T10: Tap Trajectory Direction  [non-automatable: state toggle, issue #122]
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("trajectoryDirection", 8), name ("Trajectory Direction"),
-            juce::StringArray { "Forward", "Reverse" }, 0));
+            juce::StringArray { "Forward", "Reverse" }, 0,
+            juce::AudioParameterChoiceAttributes().withAutomatable (false)));
 
-        // T11: Tap Input Channel
+        // T11: Tap Input Channel  [non-automatable: state selector, issue #122]
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("inputChannel", 9), name ("Input Channel"),
-            juce::StringArray { "L+R", "L", "R" }, 0));
+            juce::StringArray { "L+R", "L", "R" }, 0,
+            juce::AudioParameterChoiceAttributes().withAutomatable (false)));
     }
 
     return { params.begin(), params.end() };
