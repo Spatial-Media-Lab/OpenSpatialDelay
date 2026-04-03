@@ -21,7 +21,9 @@ TEST_CASE ("All parameters have non-empty names", "[params]")
     }
 }
 
-TEST_CASE ("144 automatable + 0 non-automatable", "[params]")
+// Issue #122: 80 params marked non-automatable to stay within Ableton's 64-param
+// auto-populate threshold. Automatable: 16 global + 4 per-tap × 12 = 64.
+TEST_CASE ("64 automatable + 80 non-automatable", "[params]")
 {
     auto proc = std::make_unique<OpenSpatialDelayProcessor>();
     int automatable = 0, nonAutomatable = 0;
@@ -32,8 +34,8 @@ TEST_CASE ("144 automatable + 0 non-automatable", "[params]")
         else
             ++nonAutomatable;
     }
-    CHECK (automatable == 144);
-    CHECK (nonAutomatable == 0);
+    CHECK (automatable == 64);
+    CHECK (nonAutomatable == 80);
 }
 
 TEST_CASE ("Global params appear before per-tap params", "[params]")

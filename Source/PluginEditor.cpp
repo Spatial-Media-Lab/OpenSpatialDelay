@@ -2062,7 +2062,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         {
             int paramIdx = selectedId - 1;  // IDs are 1-based, param indices are 0-based
             processorRef.configAlgorithm.store (paramIdx, std::memory_order_relaxed);
-            processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
+            processorRef.markConfigStateDirty();
         }
     };
     {
@@ -2077,7 +2077,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
                                              juce::dontSendNotification);
         hrtfProfileBox.onChange = [this] {
             processorRef.configHrtfProfile.store (hrtfProfileBox.getSelectedItemIndex(), std::memory_order_relaxed);
-            processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
+            processorRef.markConfigStateDirty();
         };
     }
     // v0.7: syncMode reworked to 3-state (Straight/Dotted/Triplet)
@@ -2103,7 +2103,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
                                               juce::dontSendNotification);
         outputFormatBox.onChange = [this] {
             processorRef.configOutputFormat.store (outputFormatBox.getSelectedItemIndex(), std::memory_order_relaxed);
-            processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
+            processorRef.markConfigStateDirty();
         };
     }
 
@@ -2518,7 +2518,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
                                         juce::dontSendNotification);
     inputFormatBox.onChange = [this] {
         processorRef.configInputFormat.store (inputFormatBox.getSelectedItemIndex(), std::memory_order_relaxed);
-        processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
+        processorRef.markConfigStateDirty();
     };
 
     // Header dropdown labels: JetBrains Mono Medium 7.5px, wide kerning
@@ -3136,13 +3136,13 @@ void OpenSpatialDelayEditor::timerCallback()
         {
             algoIdx = 6;  // Equal Power
             processorRef.configAlgorithm.store (algoIdx, std::memory_order_relaxed);
-            processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
+            processorRef.markConfigStateDirty();
         }
         else if (! isStereoVariant && algoIdx > 5)
         {
             algoIdx = 4;  // VBAP
             processorRef.configAlgorithm.store (algoIdx, std::memory_order_relaxed);
-            processorRef.updateHostDisplay (juce::AudioProcessorListener::ChangeDetails().withNonParameterStateChanged (true));
+            processorRef.markConfigStateDirty();
         }
 
         // Sync combo selection from parameter (IDs are param index + 1)
