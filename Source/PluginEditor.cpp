@@ -1675,7 +1675,16 @@ void GlobalTapDrawerComponent::setupKnob (juce::Slider& s, juce::Label& l,
     s.setSliderStyle (juce::Slider::RotaryVerticalDrag);
     s.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 58, 11);
     s.setRange (min, max, step);
+    s.textFromValueFunction = [&s](double value) {
+        int dec = s.getNumDecimalPlacesToDisplay();
+        juce::String text = dec > 0 ? juce::String (value, dec)
+                                     : juce::String (juce::roundToInt (value));
+        if (text[0] == '-' && text.getDoubleValue() == 0.0)
+            return text.substring (1);
+        return text;
+    };
     s.setValue (0.0);
+    s.updateText();  // force text refresh through textFromValueFunction (issue #126)
     s.setColour (juce::Slider::thumbColourId, Colours_OSD::accentGlobal);
     s.setColour (juce::Slider::textBoxTextColourId, Colours_OSD::accentGlobalDim);
     s.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
