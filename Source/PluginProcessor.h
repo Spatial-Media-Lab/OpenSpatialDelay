@@ -322,6 +322,7 @@ class PartitionedConvolver
 {
 public:
     PartitionedConvolver() = default;
+    ~PartitionedConvolver();
 
     /** Prepare the convolver for a given max block size and IR length. */
     void prepare (int maxBlockSize, int irLength);
@@ -346,7 +347,7 @@ public:
     bool isPrepared() const { return fftSize > 0; }
 
 private:
-    juce::dsp::FFT fft { 1 };      // Will be re-initialized in prepare()
+    std::unique_ptr<juce::dsp::FFT> fft;  // Owned via unique_ptr for locked destruction (issue #137)
     int fftOrder = 1;
     int fftSize = 0;                 // 2^fftOrder
     int irLen = 0;
@@ -792,6 +793,7 @@ private:
     float prevRxFadeOut_ = 1.0f;
     float prevRxFadeIn_ = 0.0f;
     std::vector<float> xfadeWetL_, xfadeWetR_;
+    std::atomic<bool> rendererXfadeActive_ { false };  // Signals timer to defer prepare (issue #137)
 
     //--- SPATIAL FRAMEWORK: Background HRTF loading (via Timer) ---
     void timerCallback() override;

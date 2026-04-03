@@ -697,6 +697,25 @@ void HRTFDatabase::convertToMinPhase (float* ir, int irLength, int fftOrder, flo
 //==============================================================================
 // PartitionedConvolver implementation — overlap-save FFT convolution
 //==============================================================================
+
+// Process-global lock for vDSP FFT setup create/destroy (issue #137).
+// Apple's vDSP FFT setup functions are not documented as thread-safe.
+// JUCE already protects FFTW with a CriticalSection but omits vDSP.
+// With multiple plugin instances, concurrent setup create/destroy from the
+// timer thread can race with FFT operations on the audio thread, corrupting
+// vDSP's internal allocator state (manifests as free_list_checksum_botch).
+static juce::CriticalSection& getVDSPSetupLock()
+{
+    static juce::CriticalSection cs;
+    return cs;
+}
+
+PartitionedConvolver::~PartitionedConvolver()
+{
+    juce::ScopedLock sl (getVDSPSetupLock());
+    fft.reset();
+}
+
 void PartitionedConvolver::prepare (int maxBlockSize, int irLength_)
 {
     irLen = irLength_;
@@ -705,12 +724,19 @@ void PartitionedConvolver::prepare (int maxBlockSize, int irLength_)
     // FFT size must be >= blockSize + irLen - 1 (linear convolution length)
     // Round up to next power of 2
     int minFFTSize = blockSize + irLen - 1;
-    fftOrder = 1;
-    while ((1 << fftOrder) < minFFTSize)
-        ++fftOrder;
+    int newFftOrder = 1;
+    while ((1 << newFftOrder) < minFFTSize)
+        ++newFftOrder;
+
+    bool orderChanged = (newFftOrder != fftOrder) || fft == nullptr;
+    fftOrder = newFftOrder;
     fftSize = 1 << fftOrder;
 
-    fft = juce::dsp::FFT (fftOrder);
+    if (orderChanged)
+    {
+        juce::ScopedLock sl (getVDSPSetupLock());
+        fft = std::make_unique<juce::dsp::FFT> (fftOrder);
+    }
 
     // v1.0.5: Allocate dual convolution slots (issue #50)
     for (int s = 0; s < 2; ++s)
@@ -739,7 +765,7 @@ void PartitionedConvolver::loadIRIntoSlot (ConvSlot& slot, const float* ir, int 
     std::fill (slot.irFreqDomain.begin(), slot.irFreqDomain.end(), 0.0f);
     for (int i = 0; i < std::min (length, fftSize); ++i)
         slot.irFreqDomain[static_cast<size_t> (i)] = ir[i];
-    fft.performRealOnlyForwardTransform (slot.irFreqDomain.data(), true);
+    fft->performRealOnlyForwardTransform (slot.irFreqDomain.data(), true);
 }
 
 void PartitionedConvolver::resetSlot (ConvSlot& slot)
@@ -813,7 +839,7 @@ void PartitionedConvolver::processSlot (ConvSlot& slot, const float* in, float* 
                 slot.fftWorkBuf[static_cast<size_t> (i)] = slot.inputAccum[static_cast<size_t> (i)];
 
             // Forward FFT of input
-            fft.performRealOnlyForwardTransform (slot.fftWorkBuf.data(), true);
+            fft->performRealOnlyForwardTransform (slot.fftWorkBuf.data(), true);
 
             // Complex multiply with slot's IR spectrum
             for (int i = 0; i < fftSize * 2; i += 2)
@@ -824,7 +850,7 @@ void PartitionedConvolver::processSlot (ConvSlot& slot, const float* in, float* 
                 slot.fftWorkBuf[static_cast<size_t> (i + 1)] = re1 * im2 + im1 * re2;
             }
 
-            fft.performRealOnlyInverseTransform (slot.fftWorkBuf.data());
+            fft->performRealOnlyInverseTransform (slot.fftWorkBuf.data());
 
             int outStart = samplesProcessed - blockSize;
             int outSamples = std::min (blockSize, numSamples - outStart);
@@ -1322,7 +1348,8 @@ void OpenSpatialDelayProcessor::timerCallback()
 {
     // --- HRTF profile loading (existing, unchanged) ---
     int wantedProfile = targetHRTFProfile.load (std::memory_order_relaxed);
-    if (wantedProfile != loadedHRTFProfileIndex)
+    if (wantedProfile != loadedHRTFProfileIndex
+        && ! rendererXfadeActive_.load (std::memory_order_acquire))
     {
         auto& renderer = binauralRenderers[prepareRendererIndex];
         renderer.prepare (currentSampleRate, static_cast<int> (monoInputBuffer.size()));
@@ -4375,6 +4402,7 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
     if (currentActiveIdx != prevActiveRendererIdx_ && ! rendererXfading_)
     {
         rendererXfading_ = true;
+        rendererXfadeActive_.store (true, std::memory_order_release);
         rendererXfadeBlockCount_ = 0;
         rendererXfadeFromIdx_ = prevActiveRendererIdx_;
         prevRxFadeOut_ = 1.0f;
@@ -4505,7 +4533,10 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
         prevRxFadeIn_  = fadeInGain;
 
         if (rendererXfadeBlockCount_ >= kRendererXfadeBlocks)
+        {
             rendererXfading_ = false;
+            rendererXfadeActive_.store (false, std::memory_order_release);
+        }
     }
 
     // === PASS 3: Write raw wet signal to output (dry/wet mix handled in processBlock) ===
