@@ -307,6 +307,12 @@ public:
         without comb filtering (issue #47). workBuf must be >= fftSize * 2 floats. */
     static void convertToMinPhase (float* ir, int irLength, int fftOrder, float* workBuf);
 
+    /** Detect onset sample index of an IR using threshold of peak amplitude.
+        Returns the index of the first sample exceeding thresholdFraction * peakAbs.
+        Used to compute ITD when SOFA delay values are zero (ITD baked into waveform).
+        Returns 0 if no clear onset found or if onset > irLength/2. */
+    static int detectOnset (const float* ir, int length, float thresholdFraction = 0.1f);
+
 private:
     MYSOFA_EASY* easyHandle = nullptr;
     int irLength = 0;

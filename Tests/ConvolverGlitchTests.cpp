@@ -3281,3 +3281,171 @@ TEST_CASE ("Binaural HRTF — repeated profile cycling no volume swell (issue #9
         prevSS = ssPeak;
     }
 }
+
+// ============================================================================
+// Section: Onset-Detection ITD Alignment Tests (issue #89, Phase 1)
+// ============================================================================
+
+TEST_CASE ("detectOnset — unit: finds onset at correct position", "[issue89][onset][unit]")
+{
+    // Synthetic IR: silence for 5 samples, then a peak
+    std::vector<float> ir (64, 0.0f);
+    ir[5] = 0.8f;
+    ir[6] = 1.0f;
+    ir[7] = 0.5f;
+
+    int onset = HRTFDatabase::detectOnset (ir.data(), static_cast<int> (ir.size()), 0.1f);
+    // 10% of peak (1.0) = 0.1; first sample >= 0.1 is ir[5] = 0.8
+    CHECK (onset == 5);
+}
+
+TEST_CASE ("detectOnset — unit: returns 0 for silent IR", "[issue89][onset][unit]")
+{
+    std::vector<float> ir (64, 0.0f);
+    int onset = HRTFDatabase::detectOnset (ir.data(), static_cast<int> (ir.size()), 0.1f);
+    CHECK (onset == 0);
+}
+
+TEST_CASE ("detectOnset — unit: clamps onset past halfway", "[issue89][onset][unit]")
+{
+    // Peak is past halfway — no clear leading edge
+    std::vector<float> ir (64, 0.0f);
+    ir[40] = 1.0f;
+    int onset = HRTFDatabase::detectOnset (ir.data(), static_cast<int> (ir.size()), 0.1f);
+    CHECK (onset == 0);
+}
+
+TEST_CASE ("detectOnset — unit: immediate onset returns 0", "[issue89][onset][unit]")
+{
+    // Energy starts at sample 0
+    std::vector<float> ir (64, 0.0f);
+    ir[0] = 1.0f;
+    ir[1] = 0.5f;
+    int onset = HRTFDatabase::detectOnset (ir.data(), static_cast<int> (ir.size()), 0.1f);
+    CHECK (onset == 0);
+}
+
+TEST_CASE ("ITD onset detection — MIT KEMAR returns non-zero delays at az=90deg", "[issue89][onset][integration]")
+{
+    auto proc = createBinauralProcessor (1);  // MIT KEMAR (Studio Reference)
+
+    // Stabilize
+    processBlocksCapturingAll (*proc, 60);
+
+    // Set source hard left (az=90deg) — should produce maximum ITD
+    setParam (*proc, "object1_azimuth", 90.0f);
+
+    // Process several blocks to let ITD converge
+    for (int i = 0; i < 10; ++i)
+    {
+        juce::MidiBuffer midi;
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+    }
+
+    auto& renderer = proc->getActiveRenderer();
+    float tgtL = renderer.getTargetITDL (0);
+    float tgtR = renderer.getTargetITDR (0);
+
+    INFO ("MIT KEMAR at az=90deg: targetITD_L=" << tgtL << " targetITD_R=" << tgtR);
+
+    // With onset detection, at least one channel should have non-zero ITD.
+    // Before this fix, both were always 0 for KEMAR.
+    float maxITD = std::max (std::abs (tgtL), std::abs (tgtR));
+    CHECK (maxITD > 0.1f);  // At least ~2 microseconds of ITD at 48kHz
+}
+
+TEST_CASE ("ITD onset detection — SADIE bypasses fallback (non-zero SOFA delays)", "[issue89][onset][integration]")
+{
+    auto proc = createBinauralProcessor (2);  // SADIE II KU100 (Immersive)
+
+    // Stabilize
+    processBlocksCapturingAll (*proc, 60);
+
+    // Set source hard left
+    setParam (*proc, "object1_azimuth", 90.0f);
+
+    for (int i = 0; i < 10; ++i)
+    {
+        juce::MidiBuffer midi;
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+    }
+
+    auto& renderer = proc->getActiveRenderer();
+    float tgtL = renderer.getTargetITDL (0);
+    float tgtR = renderer.getTargetITDR (0);
+
+    INFO ("SADIE KU100 at az=90deg: targetITD_L=" << tgtL << " targetITD_R=" << tgtR);
+
+    // SADIE already has non-zero SOFA delays, so ITD should be valid
+    float maxITD = std::max (std::abs (tgtL), std::abs (tgtR));
+    CHECK (maxITD > 0.1f);
+}
+
+TEST_CASE ("ITD onset detection — symmetric positions produce symmetric delays", "[issue89][onset][integration]")
+{
+    auto proc = createBinauralProcessor (1);  // MIT KEMAR
+
+    // Stabilize
+    processBlocksCapturingAll (*proc, 60);
+
+    // Process at az=+90 (hard left)
+    setParam (*proc, "object1_azimuth", 90.0f);
+    for (int i = 0; i < 10; ++i)
+    {
+        juce::MidiBuffer midi;
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+    }
+
+    auto& renderer = proc->getActiveRenderer();
+    float leftL = renderer.getTargetITDL (0);
+    float leftR = renderer.getTargetITDR (0);
+
+    // Process at az=-90 (hard right)
+    setParam (*proc, "object1_azimuth", -90.0f);
+    for (int i = 0; i < 10; ++i)
+    {
+        juce::MidiBuffer midi;
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+    }
+
+    float rightL = renderer.getTargetITDL (0);
+    float rightR = renderer.getTargetITDR (0);
+
+    INFO ("Left: ITD_L=" << leftL << " ITD_R=" << leftR);
+    INFO ("Right: ITD_L=" << rightL << " ITD_R=" << rightR);
+
+    // At symmetric positions, L/R delays should roughly swap:
+    // at az=+90, ipsilateral ear (L) should have less delay than contralateral (R)
+    // at az=-90, it should be the reverse
+    // Allow tolerance since SOFA grids aren't perfectly symmetric
+    CHECK (std::abs (leftL - rightR) < 3.0f);
+    CHECK (std::abs (leftR - rightL) < 3.0f);
+}
