@@ -34,7 +34,8 @@ bash scripts/build_version.sh <commit-hash> v1.0.Z O10Z
 - v1.0.3 / O103 — fix direction toggle for Bounce, Line, Random (issue #100, commit 9dd6266)
 - v1.0.5 / O105 — reset phase vocoder on preset change chirp (issue #99, commit a9df52a)
 - v1.0.6 / O106 — transport fade-in to prevent scrub/seek click (issue #103, commit 7901a0a)
-- Next available: **v1.0.7 / O107**
+- v1.0.9 / O109 — re-sign bundles after plist patching for Ableton VST3 visibility (issue #120)
+- Next available: **v1.0.10 / O110**
 
 ### Running tests
 

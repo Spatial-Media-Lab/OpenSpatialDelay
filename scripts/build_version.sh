@@ -126,6 +126,19 @@ if [ -f "${VST3_INSTALLED_PLIST}" ]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${UNIQUE_BUNDLE_ID}" "${VST3_INSTALLED_PLIST}"
 fi
 
+# Step 9c: Re-sign bundles after plist patching (issue #120)
+# Patching Info.plist invalidates the JUCE ad-hoc signature; Ableton rejects unsigned VST3.
+AU_INSTALLED_BUNDLE="$HOME/Library/Audio/Plug-Ins/Components/${PLUGIN_NAME}.component"
+VST3_INSTALLED_BUNDLE="$HOME/Library/Audio/Plug-Ins/VST3/${PLUGIN_NAME}.vst3"
+if [ -d "${AU_INSTALLED_BUNDLE}" ]; then
+    codesign --force --deep --sign - "${AU_INSTALLED_BUNDLE}"
+    echo "  AU re-signed (ad-hoc)"
+fi
+if [ -d "${VST3_INSTALLED_BUNDLE}" ]; then
+    codesign --force --deep --sign - "${VST3_INSTALLED_BUNDLE}"
+    echo "  VST3 re-signed (ad-hoc)"
+fi
+
 # Step 10: Final validation of installed plugins
 echo ""
 echo "=== Validation ==="
@@ -139,7 +152,9 @@ AU_BIN_INSTALLED="${AU_INSTALLED}/Contents/MacOS/${PLUGIN_NAME}"
 if [ -f "${AU_BIN_INSTALLED}" ]; then
     AU_SUB=$(/usr/libexec/PlistBuddy -c "Print :AudioComponents:0:subtype" "${AU_INSTALLED}/Contents/Info.plist" 2>/dev/null)
     AU_ARCH=$(file "${AU_BIN_INSTALLED}" | grep -o 'arm64\|x86_64')
-    echo "  AU:   OK (subtype=${AU_SUB}, arch=${AU_ARCH})"
+    AU_SIGNED="unsigned"
+    if codesign --verify --deep --strict "${AU_INSTALLED}" 2>/dev/null; then AU_SIGNED="signed"; fi
+    echo "  AU:   OK (subtype=${AU_SUB}, arch=${AU_ARCH}, ${AU_SIGNED})"
     if [ "${AU_SUB}" != "${PLUGIN_CODE}" ]; then
         echo "  ERROR: AU subtype '${AU_SUB}' does not match expected '${PLUGIN_CODE}'"
         PASS=false
@@ -153,7 +168,12 @@ fi
 VST3_BIN_INSTALLED="${VST3_INSTALLED}/Contents/MacOS/${PLUGIN_NAME}"
 if [ -f "${VST3_BIN_INSTALLED}" ]; then
     VST3_ARCH=$(file "${VST3_BIN_INSTALLED}" | grep -o 'arm64\|x86_64')
-    echo "  VST3: OK (arch=${VST3_ARCH})"
+    if codesign --verify --deep --strict "${VST3_INSTALLED}" 2>/dev/null; then
+        echo "  VST3: OK (arch=${VST3_ARCH}, signed)"
+    else
+        echo "  VST3: OK (arch=${VST3_ARCH}, UNSIGNED — may not appear in Ableton)"
+        PASS=false
+    fi
 else
     echo "  VST3: FAILED — binary missing"
     PASS=false
