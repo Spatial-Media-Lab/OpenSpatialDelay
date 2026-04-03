@@ -1586,12 +1586,12 @@ TEST_CASE ("isBusesLayoutSupported accepts symmetric layouts for VST3 (issue #11
         CHECK (proc->checkBusesLayoutSupported (layout));
     }
 
-    // Asymmetric multichannel in / different out — should be rejected
+    // Asymmetric multichannel in / different out — now accepted (IEM approach, issue #111)
     {
         juce::AudioProcessor::BusesLayout layout;
         layout.inputBuses.add (juce::AudioChannelSet::create7point1());
         layout.outputBuses.add (juce::AudioChannelSet::create9point1point6());
-        CHECK_FALSE (proc->checkBusesLayoutSupported (layout));
+        CHECK (proc->checkBusesLayoutSupported (layout));
     }
 
     // Mono/stereo input still works with any supported output

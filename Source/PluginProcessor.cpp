@@ -1468,22 +1468,9 @@ void OpenSpatialDelayProcessor::timerCallback()
 // Constructor / Destructor
 //==============================================================================
 OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
-    : AudioProcessor (
-        // VST3 symmetric bus layout (issue #111): REAPER/Cubase only negotiate
-        // symmetric layouts (input channels == output channels). Additionally,
-        // discreteChannels() has no VST3 SpeakerArrangement mapping, while
-        // ambisonic(order) maps to kAmbiNthOrderACN. Use ambisonic(6) (49ch) as
-        // the VST3 default so hosts can negotiate up to 6th-order Ambisonics.
-        // Extra input channels are ignored — processBlock only reads channels 0-1.
-        // AU keeps asymmetric layout (stereo-in / discrete-50-out) for HOA + stereo-pair support.
-        // Runtime check because JUCE compiles shared code once for all formats.
-        juce::PluginHostType::getPluginLoadedAs() == juce::AudioProcessor::wrapperType_VST3
-            ? BusesProperties()
-                .withInput  ("Input",  juce::AudioChannelSet::ambisonic (6), true)
-                .withOutput ("Output", juce::AudioChannelSet::ambisonic (6), true)
-            : BusesProperties()
-                .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                .withOutput ("Output", juce::AudioChannelSet::discreteChannels (50), true)),
+    : AudioProcessor (BusesProperties()
+                        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                        .withOutput ("Output", juce::AudioChannelSet::discreteChannels (50), true)),
       apvts (*this, nullptr, "Parameters", createParameterLayout())
 {
     // Initialize polymorphic algorithm pointer array (O(1) index lookup)
@@ -2006,61 +1993,16 @@ void OpenSpatialDelayProcessor::rebuildCategorizedOrder()
 //==============================================================================
 bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    // Input can be mono or stereo (stereo will be summed to mono internally)
-    auto inputSet = layouts.getMainInputChannelSet();
-    if (inputSet != juce::AudioChannelSet::mono() &&
-        inputSet != juce::AudioChannelSet::stereo())
-    {
-        // VST3 symmetric layout support (issue #111): REAPER/Cubase require
-        // input == output channel counts for VST3 bus negotiation. Accept
-        // multichannel input when it matches the output set — extra input
-        // channels are ignored in processBlock (only channels 0-1 are read).
-        if (inputSet != layouts.getMainOutputChannelSet())
-            return false;
-    }
-
-    // v0.2: Stable set of output bus layouts. DO NOT ADD NEW ENTRIES HERE.
-    // Adding entries causes DAWs to renegotiate bus layouts during playback,
-    // which triggers prepareToPlay() mid-session and zeros the delay buffer.
-    // See docs/BUS_LAYOUT_BUG.md for full explanation.
-    //
-    // New output formats (5.0, 7.0, 5.1.2, Ambisonics, etc.) are handled
-    // INTERNALLY via the output format dropdown — they render to whatever
-    // channels the bus provides without needing DAW-level bus support.
-    auto outputSet = layouts.getMainOutputChannelSet();
-    if (outputSet == juce::AudioChannelSet::stereo())              return true;
-    if (outputSet == juce::AudioChannelSet::quadraphonic())        return true;
-    if (outputSet == juce::AudioChannelSet::create5point1())       return true;
-    if (outputSet == juce::AudioChannelSet::create7point1())       return true;
-    if (outputSet == juce::AudioChannelSet::create7point1point4()) return true;
-    if (outputSet == juce::AudioChannelSet::create9point1point6()) return true;
-    if (outputSet == juce::AudioChannelSet::octagonal())           return true;
-    if (outputSet == juce::AudioChannelSet::discreteChannels (8))  return true;
-
-    // v1.0: SpatialMediaLab 13.1 / 7.1.6 (14 channels)
-    if (outputSet == juce::AudioChannelSet::discreteChannels (14)) return true;
-
-    // v0.5: Ambisonics discrete channel buses (FOA through 6th order)
-    if (outputSet == juce::AudioChannelSet::discreteChannels (4))  return true;  // FOA
-    if (outputSet == juce::AudioChannelSet::discreteChannels (9))  return true;  // SOA
-    if (outputSet == juce::AudioChannelSet::discreteChannels (16)) return true;  // HOA (3rd)
-    if (outputSet == juce::AudioChannelSet::discreteChannels (25)) return true;  // 4th order
-    if (outputSet == juce::AudioChannelSet::discreteChannels (26)) return true;  // v0.8: 4OA stereo-pair (13×2)
-    if (outputSet == juce::AudioChannelSet::discreteChannels (36)) return true;  // 5th order
-    if (outputSet == juce::AudioChannelSet::discreteChannels (49)) return true;  // 6th order
-    if (outputSet == juce::AudioChannelSet::discreteChannels (50)) return true;  // v0.8: 6OA stereo-pair (25×2)
-
-    // v1.0.3: VST3 Ambisonics bus support (issue #111) — ambisonic() channel sets
-    // map to VST3 kAmbiNthOrderACN speaker arrangements. discreteChannels() cannot
-    // be represented in VST3, so these entries are required for VST3 HOA negotiation.
-    if (outputSet == juce::AudioChannelSet::ambisonic (1)) return true;  // FOA (4ch)
-    if (outputSet == juce::AudioChannelSet::ambisonic (2)) return true;  // SOA (9ch)
-    if (outputSet == juce::AudioChannelSet::ambisonic (3)) return true;  // 3rd order (16ch)
-    if (outputSet == juce::AudioChannelSet::ambisonic (4)) return true;  // 4th order (25ch)
-    if (outputSet == juce::AudioChannelSet::ambisonic (5)) return true;  // 5th order (36ch)
-    if (outputSet == juce::AudioChannelSet::ambisonic (6)) return true;  // 6th order (49ch)
-
-    return false;
+    // v1.0.3: Accept any layout the host proposes (issue #111).
+    // This is the IEM Plugin Suite / SPARTA approach for multichannel VST3 support.
+    // VST3 hosts (REAPER, Cubase) use the channel count from getBusInfo() to allocate
+    // channels, then call setBusArrangements() with host-chosen arrangements that may
+    // not match our predefined set. Accepting everything lets the host provide whatever
+    // channel count the track supports. Output format selection and channel routing are
+    // handled internally via resolveEffectiveFormat() and the output format dropdown.
+    // processBlock only reads input channels 0-1 regardless of bus width.
+    juce::ignoreUnused (layouts);
+    return true;
 }
 
 //==============================================================================
