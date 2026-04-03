@@ -958,8 +958,8 @@ private:
     // Block-rate cached conversion factor: ms → samples (set at top of processBlock)
     float blockMsToSamples = 0.0f;
 
-    // v0.8/v1.0: Wobble modulation — tape wow/flutter emulation
-    float wobblePhase = 0.0f;
+    // v1.0.7: Wobble modulation — 4-layer tape wow/flutter emulation (issue #92)
+    float wobblePhases[4] = {};
     juce::SmoothedValue<float> smoothedWobbleAmount;  // v1.0: replaces blockWobbleAmount for click-free onset
     float blockWobbleMorph = 0.0f;
     inline float applyWobble (float baseDelaySamples, float currentDelayMs);
