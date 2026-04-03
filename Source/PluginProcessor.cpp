@@ -1468,18 +1468,21 @@ void OpenSpatialDelayProcessor::timerCallback()
 // Constructor / Destructor
 //==============================================================================
 OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
-    : AudioProcessor (BusesProperties()
-                        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                        // VST3 requires a non-discrete default — discrete channel sets have no
-                        // VST3 SpeakerArrangement representation, causing getBusArrangement()
-                        // to fail and hosts to fall back to stereo. Use the largest standard
-                        // surround format in the frozen isBusesLayoutSupported set (issue #111).
-                        // Runtime check (not #if) because JUCE compiles shared code once for all formats.
-                        .withOutput ("Output",
-                            juce::PluginHostType::getPluginLoadedAs() == juce::AudioProcessor::wrapperType_VST3
-                                ? juce::AudioChannelSet::create9point1point6()
-                                : juce::AudioChannelSet::discreteChannels (50),
-                            true)),
+    : AudioProcessor (
+        // VST3 symmetric bus layout (issue #111): REAPER/Cubase only negotiate
+        // symmetric layouts (input channels == output channels). An asymmetric
+        // default (stereo-in / 9.1.6-out) causes the host to fall back to stereo.
+        // Fix: declare symmetric 9.1.6 in+out for VST3 so hosts accept 16 channels.
+        // Extra input channels are ignored — processBlock only reads channels 0-1.
+        // AU keeps asymmetric layout (stereo-in / discrete-50-out) for HOA support.
+        // Runtime check because JUCE compiles shared code once for all formats.
+        juce::PluginHostType::getPluginLoadedAs() == juce::AudioProcessor::wrapperType_VST3
+            ? BusesProperties()
+                .withInput  ("Input",  juce::AudioChannelSet::create9point1point6(), true)
+                .withOutput ("Output", juce::AudioChannelSet::create9point1point6(), true)
+            : BusesProperties()
+                .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                .withOutput ("Output", juce::AudioChannelSet::discreteChannels (50), true)),
       apvts (*this, nullptr, "Parameters", createParameterLayout())
 {
     // Initialize polymorphic algorithm pointer array (O(1) index lookup)
@@ -2006,7 +2009,14 @@ bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layou
     auto inputSet = layouts.getMainInputChannelSet();
     if (inputSet != juce::AudioChannelSet::mono() &&
         inputSet != juce::AudioChannelSet::stereo())
-        return false;
+    {
+        // VST3 symmetric layout support (issue #111): REAPER/Cubase require
+        // input == output channel counts for VST3 bus negotiation. Accept
+        // multichannel input when it matches the output set — extra input
+        // channels are ignored in processBlock (only channels 0-1 are read).
+        if (inputSet != layouts.getMainOutputChannelSet())
+            return false;
+    }
 
     // v0.2: Stable set of output bus layouts. DO NOT ADD NEW ENTRIES HERE.
     // Adding entries causes DAWs to renegotiate bus layouts during playback,

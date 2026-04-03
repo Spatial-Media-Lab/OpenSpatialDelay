@@ -1566,6 +1566,43 @@ TEST_CASE ("isBusesLayoutSupported accepts VST3 default layout (9.1.6)", "[bus]"
     CHECK (proc->checkBusesLayoutSupported (layout));
 }
 
+TEST_CASE ("isBusesLayoutSupported accepts symmetric layouts for VST3 (issue #111)", "[bus]")
+{
+    auto proc = std::make_unique<Proc>();
+
+    // Symmetric 7.1 in/out — REAPER proposes this on an 8ch track
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::create7point1());
+        layout.outputBuses.add (juce::AudioChannelSet::create7point1());
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+
+    // Symmetric 9.1.6 in/out — REAPER proposes this on a 16ch track
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::create9point1point6());
+        layout.outputBuses.add (juce::AudioChannelSet::create9point1point6());
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+
+    // Asymmetric multichannel in / different out — should be rejected
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::create7point1());
+        layout.outputBuses.add (juce::AudioChannelSet::create9point1point6());
+        CHECK_FALSE (proc->checkBusesLayoutSupported (layout));
+    }
+
+    // Mono/stereo input still works with any supported output
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::stereo());
+        layout.outputBuses.add (juce::AudioChannelSet::create7point1());
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+}
+
 TEST_CASE ("Constrained bus: 7.1 rear speakers receive signal (8ch buffer)", "[bus][regression]")
 {
     struct TestPoint { float azDeg; int expectedChannel; const char* name; };
