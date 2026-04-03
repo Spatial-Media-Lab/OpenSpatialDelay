@@ -919,6 +919,11 @@ private:
     bool wasPlaying = false;
     juce::int64 expectedNextSample = 0;
 
+    // v1.0.6: Transport fade-in — masks delay buffer discontinuity after scrub/seek (issue #103)
+    float transportFadeGain = 1.0f;
+    float transportFadeStep = 0.0f;  // 1/(0.005*sampleRate), set in prepareToPlay
+    bool  transportFadeActive = false;
+
     // v1.0.1: Thread-safe preset reset — loadPreset() (message thread) stores pending
     // state here; processBlock() (audio thread) applies it, eliminating the data race
     // that caused intermittent WSOLA/Doppler corruption on preset changes (issue #42).

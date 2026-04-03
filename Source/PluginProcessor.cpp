@@ -2474,6 +2474,11 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     presetTransitionState = PresetTransitionState::Idle;
     presetTransitionGain = 1.0f;
 
+    // v1.0.6: Transport fade-in — same 5ms ramp for scrub/seek click prevention (issue #103)
+    transportFadeStep = 1.0f / (0.005f * static_cast<float> (sampleRate));
+    transportFadeGain = 1.0f;
+    transportFadeActive = false;
+
     // Initialize modular 3D audio core
     computeAmbiDecodeMatrix();        // Pre-compute 3rd-order decode matrix for virtual speakers
 
@@ -3820,6 +3825,11 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                         pvPitchShifters[i].reset();
                         dopplerDelayAccum[i] = 0.0f;
                     }
+
+                    // v1.0.6: Mute output and fade back in over 5ms to mask
+                    // delay buffer discontinuity after scrub/seek (issue #103)
+                    transportFadeGain = 0.0f;
+                    transportFadeActive = true;
                 }
 
                 wasPlaying = isPlaying;
@@ -4247,6 +4257,15 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                 tGain = presetTransitionGain;
                 if (presetTransitionGain >= 1.0f)
                     presetTransitionState = PresetTransitionState::Idle;
+            }
+
+            // v1.0.6: Transport fade-in after scrub/seek (issue #103)
+            if (transportFadeActive)
+            {
+                transportFadeGain = std::min (1.0f, transportFadeGain + transportFadeStep);
+                tGain *= transportFadeGain;
+                if (transportFadeGain >= 1.0f)
+                    transportFadeActive = false;
             }
 
             float dw       = perSampleDW[si];
