@@ -1470,16 +1470,17 @@ void OpenSpatialDelayProcessor::timerCallback()
 OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     : AudioProcessor (
         // VST3 symmetric bus layout (issue #111): REAPER/Cubase only negotiate
-        // symmetric layouts (input channels == output channels). An asymmetric
-        // default (stereo-in / 9.1.6-out) causes the host to fall back to stereo.
-        // Fix: declare symmetric 9.1.6 in+out for VST3 so hosts accept 16 channels.
+        // symmetric layouts (input channels == output channels). Additionally,
+        // discreteChannels() has no VST3 SpeakerArrangement mapping, while
+        // ambisonic(order) maps to kAmbiNthOrderACN. Use ambisonic(6) (49ch) as
+        // the VST3 default so hosts can negotiate up to 6th-order Ambisonics.
         // Extra input channels are ignored — processBlock only reads channels 0-1.
-        // AU keeps asymmetric layout (stereo-in / discrete-50-out) for HOA support.
+        // AU keeps asymmetric layout (stereo-in / discrete-50-out) for HOA + stereo-pair support.
         // Runtime check because JUCE compiles shared code once for all formats.
         juce::PluginHostType::getPluginLoadedAs() == juce::AudioProcessor::wrapperType_VST3
             ? BusesProperties()
-                .withInput  ("Input",  juce::AudioChannelSet::create9point1point6(), true)
-                .withOutput ("Output", juce::AudioChannelSet::create9point1point6(), true)
+                .withInput  ("Input",  juce::AudioChannelSet::ambisonic (6), true)
+                .withOutput ("Output", juce::AudioChannelSet::ambisonic (6), true)
             : BusesProperties()
                 .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                 .withOutput ("Output", juce::AudioChannelSet::discreteChannels (50), true)),
@@ -2048,6 +2049,16 @@ bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layou
     if (outputSet == juce::AudioChannelSet::discreteChannels (36)) return true;  // 5th order
     if (outputSet == juce::AudioChannelSet::discreteChannels (49)) return true;  // 6th order
     if (outputSet == juce::AudioChannelSet::discreteChannels (50)) return true;  // v0.8: 6OA stereo-pair (25×2)
+
+    // v1.0.3: VST3 Ambisonics bus support (issue #111) — ambisonic() channel sets
+    // map to VST3 kAmbiNthOrderACN speaker arrangements. discreteChannels() cannot
+    // be represented in VST3, so these entries are required for VST3 HOA negotiation.
+    if (outputSet == juce::AudioChannelSet::ambisonic (1)) return true;  // FOA (4ch)
+    if (outputSet == juce::AudioChannelSet::ambisonic (2)) return true;  // SOA (9ch)
+    if (outputSet == juce::AudioChannelSet::ambisonic (3)) return true;  // 3rd order (16ch)
+    if (outputSet == juce::AudioChannelSet::ambisonic (4)) return true;  // 4th order (25ch)
+    if (outputSet == juce::AudioChannelSet::ambisonic (5)) return true;  // 5th order (36ch)
+    if (outputSet == juce::AudioChannelSet::ambisonic (6)) return true;  // 6th order (49ch)
 
     return false;
 }
