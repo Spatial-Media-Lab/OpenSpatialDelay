@@ -1675,6 +1675,11 @@ void GlobalTapDrawerComponent::setupKnob (juce::Slider& s, juce::Label& l,
     s.setSliderStyle (juce::Slider::RotaryVerticalDrag);
     s.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 58, 11);
     s.setRange (min, max, step);
+    s.textFromValueFunction = [&s](double value) {
+        if (value == 0.0) value = 0.0;  // normalize IEEE 754 negative zero
+        int dec = s.getNumDecimalPlacesToDisplay();
+        return dec > 0 ? juce::String (value, dec) : juce::String (juce::roundToInt (value));
+    };
     s.setValue (0.0);
     s.setColour (juce::Slider::thumbColourId, Colours_OSD::accentGlobal);
     s.setColour (juce::Slider::textBoxTextColourId, Colours_OSD::accentGlobalDim);
