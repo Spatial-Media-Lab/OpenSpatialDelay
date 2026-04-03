@@ -1684,6 +1684,7 @@ void GlobalTapDrawerComponent::setupKnob (juce::Slider& s, juce::Label& l,
         return text;
     };
     s.setValue (0.0);
+    s.updateText();  // force text refresh through textFromValueFunction (issue #126)
     s.setColour (juce::Slider::thumbColourId, Colours_OSD::accentGlobal);
     s.setColour (juce::Slider::textBoxTextColourId, Colours_OSD::accentGlobalDim);
     s.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
