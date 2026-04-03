@@ -1557,6 +1557,75 @@ TEST_CASE ("Drift diagnostic: feedback repeats maintain consistent timing", "[dr
 // AudioChannelSets instead of the 50-channel discrete default.
 // ============================================================================
 
+TEST_CASE ("isBusesLayoutSupported accepts VST3 default layout (9.1.6)", "[bus]")
+{
+    auto proc = std::make_unique<Proc>();
+    juce::AudioProcessor::BusesLayout layout;
+    layout.inputBuses.add (juce::AudioChannelSet::stereo());
+    layout.outputBuses.add (juce::AudioChannelSet::create9point1point6());
+    CHECK (proc->checkBusesLayoutSupported (layout));
+}
+
+TEST_CASE ("isBusesLayoutSupported accepts symmetric layouts for VST3 (issue #111)", "[bus]")
+{
+    auto proc = std::make_unique<Proc>();
+
+    // Symmetric 7.1 in/out — REAPER proposes this on an 8ch track
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::create7point1());
+        layout.outputBuses.add (juce::AudioChannelSet::create7point1());
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+
+    // Symmetric 9.1.6 in/out — REAPER proposes this on a 16ch track
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::create9point1point6());
+        layout.outputBuses.add (juce::AudioChannelSet::create9point1point6());
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+
+    // Asymmetric multichannel in / different out — now accepted (IEM approach, issue #111)
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::create7point1());
+        layout.outputBuses.add (juce::AudioChannelSet::create9point1point6());
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+
+    // Mono/stereo input still works with any supported output
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::stereo());
+        layout.outputBuses.add (juce::AudioChannelSet::create7point1());
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+}
+
+TEST_CASE ("isBusesLayoutSupported accepts ambisonic() channel sets for VST3 (issue #111)", "[bus]")
+{
+    auto proc = std::make_unique<Proc>();
+
+    // ambisonic(1-6) must be accepted for VST3 HOA negotiation
+    for (int order = 1; order <= 6; ++order)
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::stereo());
+        layout.outputBuses.add (juce::AudioChannelSet::ambisonic (order));
+        INFO ("Ambisonics order " << order << " (" << ((order + 1) * (order + 1)) << "ch)");
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+
+    // Symmetric ambisonic(6) in/out — VST3 default on a 49ch track
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::ambisonic (6));
+        layout.outputBuses.add (juce::AudioChannelSet::ambisonic (6));
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+}
+
 TEST_CASE ("Constrained bus: 7.1 rear speakers receive signal (8ch buffer)", "[bus][regression]")
 {
     struct TestPoint { float azDeg; int expectedChannel; const char* name; };
