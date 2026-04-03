@@ -983,11 +983,11 @@ void BinauralRenderer::prepare (double sampleRate, int maxBlockSize)
     convTmpR.resize (static_cast<size_t> (maxBlockSize), 0.0f);
 }
 
-void BinauralRenderer::setProfile (int profileIndex, HRTFDatabase& hrtfDb)
+void BinauralRenderer::setProfile (int profileIndex)
 {
     activeProfile = profileIndex;
 
-    if (profileIndex == 0 || ! hrtfDb.isLoaded())
+    if (profileIndex == 0 || ! hrtfDatabase.isLoaded())
     {
         // Simple mode — no convolution needed
         storedNormGain = 1.0f;
@@ -1002,7 +1002,7 @@ void BinauralRenderer::setProfile (int profileIndex, HRTFDatabase& hrtfDb)
     // ITD is extracted and applied separately for smooth crossfading.
     itdActive = true;
 
-    int irLen = hrtfDb.getIRLength();
+    int irLen = hrtfDatabase.getIRLength();
     storedIRLength = irLen;
 
     // =========================================================================
@@ -1029,8 +1029,8 @@ void BinauralRenderer::setProfile (int profileIndex, HRTFDatabase& hrtfDb)
     for (int d = 0; d < NUM_REF_DIRS; ++d)
     {
         float delayL = 0.0f, delayR = 0.0f;
-        hrtfDb.getInterpolatedHRIR (refDirs[d][0], refDirs[d][1],
-                                     tmpIRL.data(), tmpIRR.data(), delayL, delayR);
+        hrtfDatabase.getInterpolatedHRIR (refDirs[d][0], refDirs[d][1],
+                                         tmpIRL.data(), tmpIRR.data(), delayL, delayR);
         for (int n = 0; n < irLen; ++n)
         {
             totalEnergy += (double) tmpIRL[static_cast<size_t> (n)] * tmpIRL[static_cast<size_t> (n)];
@@ -1073,8 +1073,7 @@ void BinauralRenderer::setProfile (int profileIndex, HRTFDatabase& hrtfDb)
          + " (per-source direct binaural)");
 }
 
-void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elRad,
-                                          HRTFDatabase& db)
+void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elRad)
 {
     if (sourceIndex < 0 || sourceIndex >= MAX_SOURCES || storedIRLength <= 0)
         return;
@@ -1101,9 +1100,9 @@ void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elR
 
     // v1.0: Use ITD-free HRIRs for smooth crossfading (no comb-filtering from ITD misalignment)
     if (itdActive)
-        db.getAlignedHRIR (azRad, elRad, tmpL.data(), tmpR.data(), delayL, delayR);
+        hrtfDatabase.getAlignedHRIR (azRad, elRad, tmpL.data(), tmpR.data(), delayL, delayR);
     else
-        db.getInterpolatedHRIR (azRad, elRad, tmpL.data(), tmpR.data(), delayL, delayR);
+        hrtfDatabase.getInterpolatedHRIR (azRad, elRad, tmpL.data(), tmpR.data(), delayL, delayR);
 
     // Apply cross-profile normalization
     for (int n = 0; n < storedIRLength; ++n)
@@ -1258,8 +1257,8 @@ void OpenSpatialDelayProcessor::loadHRTFProfileIntoRenderer (
 {
     if (profileIndex == 0)
     {
-        hrtfDatabase.unload();
-        renderer.setProfile (0, hrtfDatabase);
+        renderer.hrtfDatabase.unload();
+        renderer.setProfile (0);
         DBG ("HRTF: Switched to Simple (Woodworth) profile");
         return;
     }
@@ -1283,15 +1282,15 @@ void OpenSpatialDelayProcessor::loadHRTFProfileIntoRenderer (
     }
 
     float sampleRate = static_cast<float> (currentSampleRate);
-    bool success = hrtfDatabase.loadFromMemory (sofaData, sofaSize, sampleRate);
+    bool success = renderer.hrtfDatabase.loadFromMemory (sofaData, sofaSize, sampleRate);
 
     if (success)
     {
-        renderer.setProfile (profileIndex, hrtfDatabase);
+        renderer.setProfile (profileIndex);
         DBG ("HRTF: Loaded profile " + juce::String (profileIndex)
              + " (" + juce::String (hrtfProfileNames[profileIndex]) + ")"
-             + " — " + juce::String (hrtfDatabase.getNumPositions()) + " positions"
-             + ", IR=" + juce::String (hrtfDatabase.getIRLength()) + " samples");
+             + " — " + juce::String (renderer.hrtfDatabase.getNumPositions()) + " positions"
+             + ", IR=" + juce::String (renderer.hrtfDatabase.getIRLength()) + " samples");
     }
     else
     {
@@ -2780,113 +2779,115 @@ static bool invert3x3 (const float m[3][3], float inv[3][3])
 // projected up); the 9 ear-level speakers provide full 360° horizontal coverage.
 const std::vector<VBAPTriplet>& OpenSpatialDelayProcessor::getVBAPTriplets()
 {
-    static std::vector<VBAPTriplet> triplets;
-    static bool initialized = false;
+    // C++11 guarantees thread-safe initialization of function-local statics,
+    // eliminating the race condition when multiple instances call this
+    // simultaneously (issue #96).
+    static const std::vector<VBAPTriplet> triplets = []() {
+        std::vector<VBAPTriplet> result;
 
-    if (initialized)
-        return triplets;
+        // Speaker indices for reference:
+        //  0: C (0°)      1: L (30°)      2: R (-30°)
+        //  3: Lw (60°)    4: Rw (-60°)    5: Ls (90°)
+        //  6: Rs (-90°)   7: Lrs (135°)   8: Rrs (-135°)
+        //  9: Tfl (45°)  10: Tfr (-45°)  11: Tsl (90°)
+        // 12: Tsr (-90°) 13: Trl (135°)  14: Trr (-135°)
+        // 15: T (zenith)
 
-    // Speaker indices for reference:
-    //  0: C (0°)      1: L (30°)      2: R (-30°)
-    //  3: Lw (60°)    4: Rw (-60°)    5: Ls (90°)
-    //  6: Rs (-90°)   7: Lrs (135°)   8: Rrs (-135°)
-    //  9: Tfl (45°)  10: Tfr (-45°)  11: Tsl (90°)
-    // 12: Tsr (-90°) 13: Trl (135°)  14: Trr (-135°)
-    // 15: T (zenith)
+        // Triangulation connectivity:
+        // Tier 1: Ear-level ring to top ring (connect adjacent ear-level pairs
+        //         to the top speaker that sits above the arc between them)
+        // Tier 2: Top ring to zenith (6 triangles forming the dome cap)
+        const int tris[][3] = {
+            // --- Tier 1: Ear-level ↔ Top ring ---
+            // Front sector
+            { 0,  1,  9 },  // C + L → Tfl
+            { 0,  2, 10 },  // C + R → Tfr
+            { 1,  3,  9 },  // L + Lw → Tfl
+            { 2,  4, 10 },  // R + Rw → Tfr
+            // Side sector
+            { 3,  5,  9 },  // Lw + Ls → Tfl (Tfl bridges front-to-side left)
+            { 4,  6, 10 },  // Rw + Rs → Tfr (Tfr bridges front-to-side right)
+            { 5,  7, 11 },  // Ls + Lrs → Tsl
+            { 6,  8, 12 },  // Rs + Rrs → Tsr
+            // Rear sector
+            { 7,  8, 13 },  // Lrs + Rrs → Trl (using Trl at 135°)
+            { 7,  8, 14 },  // Lrs + Rrs → Trr (using Trr at -135°)
+            // Bridging: connect top speakers to each other through ear-level ring
+            { 5,  9, 11 },  // Ls + Tfl + Tsl
+            { 6, 10, 12 },  // Rs + Tfr + Tsr
+            { 7, 11, 13 },  // Lrs + Tsl + Trl
+            { 8, 12, 14 },  // Rrs + Tsr + Trr
+            // Front bridging between Tfl/Tfr through C
+            { 0,  9, 10 },  // C + Tfl + Tfr
+            // Rear bridging between Trl/Trr through rear ear-level
+            { 7, 13, 14 },  // Lrs + Trl + Trr  (left rear bridge)
+            { 8, 13, 14 },  // Rrs + Trl + Trr  (right rear bridge)
 
-    // Triangulation connectivity:
-    // Tier 1: Ear-level ring to top ring (connect adjacent ear-level pairs
-    //         to the top speaker that sits above the arc between them)
-    // Tier 2: Top ring to zenith (6 triangles forming the dome cap)
-    const int tris[][3] = {
-        // --- Tier 1: Ear-level ↔ Top ring ---
-        // Front sector
-        { 0,  1,  9 },  // C + L → Tfl
-        { 0,  2, 10 },  // C + R → Tfr
-        { 1,  3,  9 },  // L + Lw → Tfl
-        { 2,  4, 10 },  // R + Rw → Tfr
-        // Side sector
-        { 3,  5,  9 },  // Lw + Ls → Tfl (Tfl bridges front-to-side left)
-        { 4,  6, 10 },  // Rw + Rs → Tfr (Tfr bridges front-to-side right)
-        { 5,  7, 11 },  // Ls + Lrs → Tsl
-        { 6,  8, 12 },  // Rs + Rrs → Tsr
-        // Rear sector
-        { 7,  8, 13 },  // Lrs + Rrs → Trl (using Trl at 135°)
-        { 7,  8, 14 },  // Lrs + Rrs → Trr (using Trr at -135°)
-        // Bridging: connect top speakers to each other through ear-level ring
-        { 5,  9, 11 },  // Ls + Tfl + Tsl
-        { 6, 10, 12 },  // Rs + Tfr + Tsr
-        { 7, 11, 13 },  // Lrs + Tsl + Trl
-        { 8, 12, 14 },  // Rrs + Tsr + Trr
-        // Front bridging between Tfl/Tfr through C
-        { 0,  9, 10 },  // C + Tfl + Tfr
-        // Rear bridging between Trl/Trr through rear ear-level
-        { 7, 13, 14 },  // Lrs + Trl + Trr  (left rear bridge)
-        { 8, 13, 14 },  // Rrs + Trl + Trr  (right rear bridge)
+            // --- Tier 2: Top ring → Zenith (dome cap) ---
+            {  9, 10, 15 }, // Tfl + Tfr + T  (front cap)
+            {  9, 11, 15 }, // Tfl + Tsl + T  (front-left cap)
+            { 10, 12, 15 }, // Tfr + Tsr + T  (front-right cap)
+            { 11, 13, 15 }, // Tsl + Trl + T  (rear-left cap)
+            { 12, 14, 15 }, // Tsr + Trr + T  (rear-right cap)
+            { 13, 14, 15 }, // Trl + Trr + T  (rear cap)
 
-        // --- Tier 2: Top ring → Zenith (dome cap) ---
-        {  9, 10, 15 }, // Tfl + Tfr + T  (front cap)
-        {  9, 11, 15 }, // Tfl + Tsl + T  (front-left cap)
-        { 10, 12, 15 }, // Tfr + Tsr + T  (front-right cap)
-        { 11, 13, 15 }, // Tsl + Trl + T  (rear-left cap)
-        { 12, 14, 15 }, // Tsr + Trr + T  (rear-right cap)
-        { 13, 14, 15 }, // Trl + Trr + T  (rear cap)
-
-        // --- Below-horizon fallback triangles ---
-        // For sources below the ear plane, these triangles between adjacent
-        // ear-level speakers provide panning across the lower hemisphere.
-        // (The signal is effectively "projected" into the ear-level ring.)
-        { 0,  1,  2 },  // C + L + R (front)
-        { 1,  2,  3 },  // L + R + Lw
-        { 2,  3,  4 },  // R + Lw + Rw
-        { 3,  4,  5 },  // Lw + Rw + Ls
-        { 4,  5,  6 },  // Rw + Ls + Rs
-        { 5,  6,  7 },  // Ls + Rs + Lrs
-        { 6,  7,  8 },  // Rs + Lrs + Rrs
-        { 0,  7,  8 },  // C + Lrs + Rrs (rear wrap — through C for full coverage)
-        { 0,  1,  7 },  // C + L + Lrs (left rear quadrant)
-        { 0,  2,  8 },  // C + R + Rrs (right rear quadrant)
-    };
-
-    constexpr int numTris = sizeof(tris) / sizeof(tris[0]);
-
-    for (int t = 0; t < numTris; ++t)
-    {
-        VBAPTriplet tri;
-        tri.i = tris[t][0];
-        tri.j = tris[t][1];
-        tri.k = tris[t][2];
-
-        // Build 3x3 matrix of speaker direction vectors
-        // Convention: (sin(az)*cos(el), cos(az)*cos(el), sin(el))
-        // Matches computeVBAPGains3D and activateLayout toCart lambda
-        auto toCart = [](float az, float el) -> std::array<float, 3> {
-            return { std::cos(el) * std::sin(az),
-                     std::cos(el) * std::cos(az),
-                     std::sin(el) };
+            // --- Below-horizon fallback triangles ---
+            // For sources below the ear plane, these triangles between adjacent
+            // ear-level speakers provide panning across the lower hemisphere.
+            // (The signal is effectively "projected" into the ear-level ring.)
+            { 0,  1,  2 },  // C + L + R (front)
+            { 1,  2,  3 },  // L + R + Lw
+            { 2,  3,  4 },  // R + Lw + Rw
+            { 3,  4,  5 },  // Lw + Rw + Ls
+            { 4,  5,  6 },  // Rw + Ls + Rs
+            { 5,  6,  7 },  // Ls + Rs + Lrs
+            { 6,  7,  8 },  // Rs + Lrs + Rrs
+            { 0,  7,  8 },  // C + Lrs + Rrs (rear wrap — through C for full coverage)
+            { 0,  1,  7 },  // C + L + Lrs (left rear quadrant)
+            { 0,  2,  8 },  // C + R + Rrs (right rear quadrant)
         };
 
-        auto ci = toCart (virtualSpeakers[static_cast<size_t> (tri.i)].azimuthRad, virtualSpeakers[static_cast<size_t> (tri.i)].elevationRad);
-        auto cj = toCart (virtualSpeakers[static_cast<size_t> (tri.j)].azimuthRad, virtualSpeakers[static_cast<size_t> (tri.j)].elevationRad);
-        auto ck = toCart (virtualSpeakers[static_cast<size_t> (tri.k)].azimuthRad, virtualSpeakers[static_cast<size_t> (tri.k)].elevationRad);
+        constexpr int numTris = sizeof(tris) / sizeof(tris[0]);
 
-        float xi = ci[0], yi = ci[1], zi = ci[2];
-        float xj = cj[0], yj = cj[1], zj = cj[2];
-        float xk = ck[0], yk = ck[1], zk = ck[2];
+        for (int t = 0; t < numTris; ++t)
+        {
+            VBAPTriplet tri;
+            tri.i = tris[t][0];
+            tri.j = tris[t][1];
+            tri.k = tris[t][2];
 
-        // Matrix L = [spk_i | spk_j | spk_k] as columns for g = L^-1 * p
-        // (Pulkki 1997: p = L*g → g = L^-1 * p; speakers must be columns)
-        float L[3][3] = {
-            { xi, xj, xk },
-            { yi, yj, yk },
-            { zi, zj, zk }
-        };
+            // Build 3x3 matrix of speaker direction vectors
+            // Convention: (sin(az)*cos(el), cos(az)*cos(el), sin(el))
+            // Matches computeVBAPGains3D and activateLayout toCart lambda
+            auto toCart = [](float az, float el) -> std::array<float, 3> {
+                return { std::cos(el) * std::sin(az),
+                         std::cos(el) * std::cos(az),
+                         std::sin(el) };
+            };
 
-        if (invert3x3 (L, tri.inv))
-            triplets.push_back (tri);
-    }
+            auto ci = toCart (virtualSpeakers[static_cast<size_t> (tri.i)].azimuthRad, virtualSpeakers[static_cast<size_t> (tri.i)].elevationRad);
+            auto cj = toCart (virtualSpeakers[static_cast<size_t> (tri.j)].azimuthRad, virtualSpeakers[static_cast<size_t> (tri.j)].elevationRad);
+            auto ck = toCart (virtualSpeakers[static_cast<size_t> (tri.k)].azimuthRad, virtualSpeakers[static_cast<size_t> (tri.k)].elevationRad);
 
-    initialized = true;
+            float xi = ci[0], yi = ci[1], zi = ci[2];
+            float xj = cj[0], yj = cj[1], zj = cj[2];
+            float xk = ck[0], yk = ck[1], zk = ck[2];
+
+            // Matrix L = [spk_i | spk_j | spk_k] as columns for g = L^-1 * p
+            // (Pulkki 1997: p = L*g → g = L^-1 * p; speakers must be columns)
+            float L[3][3] = {
+                { xi, xj, xk },
+                { yi, yj, yk },
+                { zi, zj, zk }
+            };
+
+            if (invert3x3 (L, tri.inv))
+                result.push_back (tri);
+        }
+
+        return result;
+    }();
+
     return triplets;
 }
 
@@ -4399,7 +4400,7 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
         {
             float azRad = juce::degreesToRadians (objects[t].azimuthDeg);
             float elRad = juce::degreesToRadians (objects[t].elevationDeg);
-            activeRenderer.updateSourceHRIR (t, azRad, elRad, hrtfDatabase);
+            activeRenderer.updateSourceHRIR (t, azRad, elRad);
         }
     }
 

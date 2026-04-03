@@ -410,18 +410,21 @@ public:
 
     BinauralRenderer() = default;
 
+    /** Per-renderer HRTF database (issue #96: eliminates shared-state race
+        between timer thread loading and audio thread HRIR lookups). */
+    HRTFDatabase hrtfDatabase;
+
     /** Prepare all convolvers for the given sample rate and block size. */
     void prepare (double sampleRate, int maxBlockSize);
 
     /** Load a new HRTF profile. Computes normGain and prepares source convolvers.
         v0.3: No longer sets up virtual speaker or SH convolvers. */
-    void setProfile (int profileIndex, HRTFDatabase& hrtfDb);
+    void setProfile (int profileIndex);
 
     /** Update a single source's HRIR based on its current 3D position.
         Realtime-safe: KD-tree lookup + in-place FFT, no allocation.
         Called from processBlock at block boundaries when position changes. */
-    void updateSourceHRIR (int sourceIndex, float azRad, float elRad,
-                           HRTFDatabase& db);
+    void updateSourceHRIR (int sourceIndex, float azRad, float elRad);
 
     /** Render per-source accumulation buffers through HRTF convolvers.
         sourceBufs: [numSources][numSamples], outL/outR: [numSamples]
@@ -769,7 +772,7 @@ private:
     SpatializationAlgorithm* algorithms[NUM_ALGORITHMS] = {};
 
     //--- SPATIAL FRAMEWORK: HRTF convolution (double-buffered for thread safety) ---
-    HRTFDatabase   hrtfDatabase;
+    // HRTFDatabase is now per-renderer (issue #96: eliminates shared-state race)
     BinauralRenderer binauralRenderers[2];
     std::atomic<int> activeRendererIndex { 0 };
     int prepareRendererIndex = 1;
