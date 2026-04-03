@@ -204,8 +204,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             return juce::String (juce::CharPointer_UTF8 ("-\xe2\x88\x9e dB"));
         return juce::String (value, 1) + " dB";
     };
+    auto parseDbInf = [](const juce::String& text) {
+        if (text.containsChar (0x221E) || text.contains ("inf"))  // ∞
+            return -100.0f;
+        return text.getFloatValue();
+    };
     auto fmtPct01 = [](float value, int) {
         return juce::String (juce::roundToInt (value * 100.0f)) + "%";
+    };
+    auto parsePct01 = [](const juce::String& text) {
+        return text.getFloatValue() / 100.0f;
     };
     auto fmtPct100 = [](float value, int) {
         if (value < 10.0f) return juce::String (value, 1) + "%";
@@ -215,6 +223,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         if (value >= 1000.0f)
             return juce::String (value / 1000.0f, 1) + " kHz";
         return juce::String (juce::roundToInt (value)) + " Hz";
+    };
+    auto parseFreq = [](const juce::String& text) {
+        if (text.containsIgnoreCase ("kHz") || text.containsIgnoreCase ("khz"))
+            return text.getFloatValue() * 1000.0f;
+        return text.getFloatValue();
     };
     auto fmtDeg = [](float value, int) {
         return juce::String (value, 1) + juce::String::charToString (0x00B0);
@@ -228,12 +241,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("delayTime", 1), "Delay Time",
         juce::NormalisableRange<float> (1.0f, 2000.0f, 0.1f, 0.3f), 500.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-            [](float value, int) {
-                if (value >= 1000.0f)
-                    return juce::String (value / 1000.0f, 2) + " s";
-                return juce::String (juce::roundToInt (value)) + " ms";
-            })));
+        juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction (
+                [](float value, int) {
+                    if (value >= 1000.0f)
+                        return juce::String (value / 1000.0f, 2) + " s";
+                    return juce::String (juce::roundToInt (value)) + " ms";
+                })
+            .withValueFromStringFunction (
+                [](const juce::String& text) {
+                    if (text.containsIgnoreCase ("s") && ! text.containsIgnoreCase ("ms"))
+                        return text.getFloatValue() * 1000.0f;
+                    return text.getFloatValue();
+                })));
 
     // G2: Delay Sync (was "Tempo Sync")
     params.push_back (std::make_unique<juce::AudioParameterBool> (
@@ -268,7 +288,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("feedback", 5), "Feedback",
         juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.3f,
-        juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
+        juce::AudioParameterFloatAttributes().withLabel ("%")
+            .withStringFromValueFunction (fmtPct01)
+            .withValueFromStringFunction (parsePct01)));
 
     // G6: Filter On (was "Filter Enabled" — moved before filter params, enable→configure)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -279,7 +301,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterHP", 7), "High-Pass Frequency",
         juce::NormalisableRange<float> (20.0f, 5000.0f, 1.0f, 0.3f), 50.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtFreq)));
+        juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction (fmtFreq)
+            .withValueFromStringFunction (parseFreq)));
 
     // G8: High-Pass Resonance (was "HP Resonance")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -292,7 +316,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterLP", 9), "Low-Pass Frequency",
         juce::NormalisableRange<float> (200.0f, 20000.0f, 1.0f, 0.3f), 5000.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtFreq)));
+        juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction (fmtFreq)
+            .withValueFromStringFunction (parseFreq)));
 
     // G10: Low-Pass Resonance (was "LP Resonance")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -305,19 +331,25 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("dryWet", 11), "Dry/Wet",
         juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f,
-        juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
+        juce::AudioParameterFloatAttributes().withLabel ("%")
+            .withStringFromValueFunction (fmtPct01)
+            .withValueFromStringFunction (parsePct01)));
 
     // G12: Input Gain (-100 dB shown as -∞ to +40 dB)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("inputGain", 12), "Input Gain",
         juce::NormalisableRange<float> (-100.0f, 40.0f, 0.1f, 3.0f), 0.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDbInf)));
+        juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction (fmtDbInf)
+            .withValueFromStringFunction (parseDbInf)));
 
     // G13: Output Gain (-100 dB shown as -∞ to +12 dB)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("outputGain", 13), "Output Gain",
         juce::NormalisableRange<float> (-100.0f, 12.0f, 0.1f, 3.0f), 0.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDbInf)));
+        juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction (fmtDbInf)
+            .withValueFromStringFunction (parseDbInf)));
 
     // Issue #68: Algorithm, HRTF Profile, Output Format, and Input Format removed from APVTS.
     // They are now stored as raw std::atomic<int> members (configAlgorithm, configHrtfProfile,
@@ -423,7 +455,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("dopplerAmount", 4), name ("Doppler Amount"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.0f,
-            juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
+            juce::AudioParameterFloatAttributes().withLabel ("%")
+                .withStringFromValueFunction (fmtPct01)
+                .withValueFromStringFunction (parsePct01)));
 
         // T7: Tap Pitch Shift
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -2012,44 +2046,16 @@ void OpenSpatialDelayProcessor::rebuildCategorizedOrder()
 //==============================================================================
 bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    // Input can be mono or stereo (stereo will be summed to mono internally)
-    auto inputSet = layouts.getMainInputChannelSet();
-    if (inputSet != juce::AudioChannelSet::mono() &&
-        inputSet != juce::AudioChannelSet::stereo())
-        return false;
-
-    // v0.2: Stable set of output bus layouts. DO NOT ADD NEW ENTRIES HERE.
-    // Adding entries causes DAWs to renegotiate bus layouts during playback,
-    // which triggers prepareToPlay() mid-session and zeros the delay buffer.
-    // See docs/BUS_LAYOUT_BUG.md for full explanation.
-    //
-    // New output formats (5.0, 7.0, 5.1.2, Ambisonics, etc.) are handled
-    // INTERNALLY via the output format dropdown — they render to whatever
-    // channels the bus provides without needing DAW-level bus support.
-    auto outputSet = layouts.getMainOutputChannelSet();
-    if (outputSet == juce::AudioChannelSet::stereo())              return true;
-    if (outputSet == juce::AudioChannelSet::quadraphonic())        return true;
-    if (outputSet == juce::AudioChannelSet::create5point1())       return true;
-    if (outputSet == juce::AudioChannelSet::create7point1())       return true;
-    if (outputSet == juce::AudioChannelSet::create7point1point4()) return true;
-    if (outputSet == juce::AudioChannelSet::create9point1point6()) return true;
-    if (outputSet == juce::AudioChannelSet::octagonal())           return true;
-    if (outputSet == juce::AudioChannelSet::discreteChannels (8))  return true;
-
-    // v1.0: SpatialMediaLab 13.1 / 7.1.6 (14 channels)
-    if (outputSet == juce::AudioChannelSet::discreteChannels (14)) return true;
-
-    // v0.5: Ambisonics discrete channel buses (FOA through 6th order)
-    if (outputSet == juce::AudioChannelSet::discreteChannels (4))  return true;  // FOA
-    if (outputSet == juce::AudioChannelSet::discreteChannels (9))  return true;  // SOA
-    if (outputSet == juce::AudioChannelSet::discreteChannels (16)) return true;  // HOA (3rd)
-    if (outputSet == juce::AudioChannelSet::discreteChannels (25)) return true;  // 4th order
-    if (outputSet == juce::AudioChannelSet::discreteChannels (26)) return true;  // v0.8: 4OA stereo-pair (13×2)
-    if (outputSet == juce::AudioChannelSet::discreteChannels (36)) return true;  // 5th order
-    if (outputSet == juce::AudioChannelSet::discreteChannels (49)) return true;  // 6th order
-    if (outputSet == juce::AudioChannelSet::discreteChannels (50)) return true;  // v0.8: 6OA stereo-pair (25×2)
-
-    return false;
+    // v1.0.3: Accept any layout the host proposes (issue #111).
+    // This is the IEM Plugin Suite / SPARTA approach for multichannel VST3 support.
+    // VST3 hosts (REAPER, Cubase) use the channel count from getBusInfo() to allocate
+    // channels, then call setBusArrangements() with host-chosen arrangements that may
+    // not match our predefined set. Accepting everything lets the host provide whatever
+    // channel count the track supports. Output format selection and channel routing are
+    // handled internally via resolveEffectiveFormat() and the output format dropdown.
+    // processBlock only reads input channels 0-1 regardless of bus width.
+    juce::ignoreUnused (layouts);
+    return true;
 }
 
 //==============================================================================
