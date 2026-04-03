@@ -36,7 +36,8 @@ bash scripts/build_version.sh <commit-hash> v1.0.Z O10Z
 - v1.0.6 / O106 — transport fade-in to prevent scrub/seek click (issue #103, commit 7901a0a)
 - v1.0.8 / O108 — fix Ableton crash + automation reset (issue #122, commit 0d3cc53)
 - v1.0.9 / O109 — re-sign bundles after plist patching for Ableton VST3 visibility (issue #120)
-- Next available: **v1.0.10 / O110**
+- v1.0.10 / O110 — reduce automatable params to 64 for Ableton auto-populate (issue #122, commit 99543ac)
+- Next available: **v1.0.11 / O111**
 
 ### Running tests
 
