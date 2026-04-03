@@ -528,6 +528,7 @@ private:
     static constexpr int kPadding          = 8;
 
     void timerCallback() override;
+    void visibilityChanged() override;
 
     // Helper for drawing Corner selection box
     void drawSelectionBox (juce::Graphics& g, juce::Component& label, juce::Component& slider);
@@ -539,7 +540,7 @@ private:
 
     OpenSpatialDelayProcessor& processorRef;
 
-    OSDLookAndFeel osdLookAndFeel;
+    juce::SharedResourcePointer<OSDLookAndFeel> osdLookAndFeel;
 
     // UI components
     SpatialMapComponent spatialMap;
