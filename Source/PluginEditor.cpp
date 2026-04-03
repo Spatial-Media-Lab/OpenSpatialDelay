@@ -1122,16 +1122,18 @@ void SpatialMapComponent::paint (juce::Graphics& g)
         }
         else if (ts.shape == 10 && processor != nullptr)
         {
-            // Random look-ahead trail: evaluate noise at future time values
-            constexpr int kLookaheadSamples = 120;
-            constexpr float kLookaheadSeconds = 2.0f;  // ~2s look-ahead (compact, like other shapes)
+            // Symmetric time-windowed trail: look-back + look-ahead centered on randomTime
+            constexpr int kRandomSamples = 240;
+            constexpr float kHalfWindow = 2.0f;    // ±2s from current time (4s total)
+            constexpr float kDecayRate = 3.0f;      // glow covers ~1/6 of window (matches other shapes)
 
-            juce::Point<float> prevPx;
-            float prevEl = 0.0f;
-            for (int s = 0; s <= kLookaheadSamples; ++s)
+            struct RndPathPoint { juce::Point<float> px; float elDeg; float timeOffset; };
+            RndPathPoint rndPath[kRandomSamples];
+
+            for (int s = 0; s < kRandomSamples; ++s)
             {
-                float futureOffset = (float) s / (float) kLookaheadSamples * kLookaheadSeconds;
-                float sampleTime = ts.randomTime + futureOffset;
+                float timeOffset = -kHalfWindow + (float) s / (float) (kRandomSamples - 1) * (2.0f * kHalfWindow);
+                float sampleTime = ts.randomTime + timeOffset;
                 auto rp = processor->evaluateRandomNoise (selectedObject, sampleTime);
                 float az   = ts.originAzDeg + rp.azDeg;
                 float el   = juce::jlimit (-90.0f, 90.0f, ts.originElDeg + rp.elDeg);
@@ -1139,27 +1141,34 @@ void SpatialMapComponent::paint (juce::Graphics& g)
                 while (az > 180.0f)  az -= 360.0f;
                 while (az < -180.0f) az += 360.0f;
 
-                auto px = spatialToPixel (az, dist);
+                rndPath[s].px         = spatialToPixel (az, dist);
+                rndPath[s].elDeg      = el;
+                rndPath[s].timeOffset = timeOffset;
+            }
 
-                if (s > 0)
-                {
-                    if (prevPx.getDistanceFrom (px) > radius * 0.8f)
-                    { prevPx = px; prevEl = el; continue; }
+            for (int s = 0; s < kRandomSamples - 1; ++s)
+            {
+                auto& p0 = rndPath[s];
+                auto& p1 = rndPath[s + 1];
 
-                    // Brightness fades with distance into the future
-                    float futureNorm = futureOffset / kLookaheadSeconds;
-                    float glowAlpha = 0.45f * (1.0f - futureNorm);  // bright now, dim far ahead
+                // Skip segments that wrap across the map
+                if (p0.px.getDistanceFrom (p1.px) > radius * 0.8f)
+                    continue;
 
-                    float avgEl = (prevEl + el) * 0.5f;
-                    float elNorm = (avgEl + 90.0f) / 180.0f;
-                    float elOpacity = 0.3f + elNorm * 0.7f;
-                    float thickness = 1.0f + elNorm * 4.5f;
+                // Brightness: proximity to current time (timeOffset == 0)
+                float proximity = 1.0f - std::abs (p0.timeOffset) * kDecayRate;
+                proximity = juce::jlimit (0.0f, 1.0f, proximity);
+                float glowAlpha = 0.05f + proximity * 0.55f;
 
-                    g.setColour (objCol.withAlpha (glowAlpha * elOpacity));
-                    g.drawLine (prevPx.x, prevPx.y, px.x, px.y, thickness);
-                }
-                prevPx = px;
-                prevEl = el;
+                // Elevation encoding: opacity + thickness (same as other shapes)
+                float avgEl = (p0.elDeg + p1.elDeg) * 0.5f;
+                float elNorm = (avgEl + 90.0f) / 180.0f;
+                float elOpacity = 0.3f + elNorm * 0.7f;
+                float thickness = 1.0f + elNorm * 4.5f;
+
+                float finalAlpha = glowAlpha * elOpacity;
+                g.setColour (objCol.withAlpha (finalAlpha));
+                g.drawLine (p0.px.x, p0.px.y, p1.px.x, p1.px.y, thickness);
             }
         }
 
