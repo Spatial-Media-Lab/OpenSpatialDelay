@@ -2099,7 +2099,10 @@ bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layou
         return true;
     }
 
-    // AU / standalone path: explicit layout whitelist
+    // AU / standalone path: accept any channel count usable by at least one format.
+    // The UI dropdown greys out formats whose requiredChannels > maxBusChannels,
+    // so bus negotiation only needs to confirm the channel count is viable.
+    // This handles REAPER's even-only track widths (e.g. 26ch enables 4th Order Ambi at 25ch).
     auto inputSet = layouts.getMainInputChannelSet();
     if (inputSet != juce::AudioChannelSet::mono() &&
         inputSet != juce::AudioChannelSet::stereo())
@@ -2108,15 +2111,11 @@ bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layou
             return false;
     }
 
-    // Accept any output channel count that matches a format in the registry,
-    // plus 50-channel discrete as a catch-all for all formats.
-    // This keeps AU in sync with outputFormatRegistry automatically.
     auto outputSet = layouts.getMainOutputChannelSet();
     int numCh = outputSet.size();
 
-    if (numCh == 50) return true;
     for (const auto& info : outputFormatRegistry)
-        if (info.requiredChannels == numCh)
+        if (info.requiredChannels <= numCh)
             return true;
 
     return false;

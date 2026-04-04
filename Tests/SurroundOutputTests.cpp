@@ -1558,7 +1558,7 @@ TEST_CASE ("Drift diagnostic: feedback repeats maintain consistent timing", "[dr
 // AudioChannelSets instead of the 50-channel discrete default.
 // ============================================================================
 
-TEST_CASE ("AU bus: accepts discrete channels for every registry channel count", "[bus]")
+TEST_CASE ("AU bus: accepts exact registry channel counts", "[bus]")
 {
     auto proc = std::make_unique<Proc>();
 
@@ -1579,31 +1579,43 @@ TEST_CASE ("AU bus: accepts discrete channels for every registry channel count",
             CHECK (proc->checkBusesLayoutSupported (layout));
         }
     }
-
-    // 50-channel discrete catch-all must also be accepted
-    {
-        juce::AudioProcessor::BusesLayout layout;
-        layout.inputBuses.add (juce::AudioChannelSet::stereo());
-        layout.outputBuses.add (juce::AudioChannelSet::discreteChannels (50));
-        CHECK (proc->checkBusesLayoutSupported (layout));
-    }
 }
 
-TEST_CASE ("AU bus: rejects channel counts not in registry", "[bus]")
+TEST_CASE ("AU bus: accepts even channel counts between registry values (REAPER)", "[bus]")
 {
     auto proc = std::make_unique<Proc>();
 
-    // Channel counts that do NOT appear in any output format's requiredChannels
-    int rejected[] = { 3, 11, 13, 15, 17, 18, 20, 24, 32, 48 };
+    // REAPER only offers even track widths. Channel counts between registry
+    // values must be accepted so the UI can enable formats that fit.
+    // e.g. 26ch track enables 4th Order Ambi (25ch), 34ch enables 5th (36ch won't fit
+    // but 25ch will), etc.
+    int reaper[] = { 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32,
+                     34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64 };
 
-    for (int numCh : rejected)
+    for (int numCh : reaper)
     {
         SECTION ("discrete(" + std::to_string (numCh) + ")")
         {
             juce::AudioProcessor::BusesLayout layout;
             layout.inputBuses.add (juce::AudioChannelSet::stereo());
             layout.outputBuses.add (juce::AudioChannelSet::discreteChannels (numCh));
-            INFO ("Channel count " << numCh << " should be rejected");
+            CHECK (proc->checkBusesLayoutSupported (layout));
+        }
+    }
+}
+
+TEST_CASE ("AU bus: rejects channel count below minimum (< 2)", "[bus]")
+{
+    auto proc = std::make_unique<Proc>();
+
+    // 0 and 1 channels are below the minimum format requirement (Binaural = 2ch)
+    for (int numCh : { 1 })
+    {
+        SECTION ("discrete(" + std::to_string (numCh) + ")")
+        {
+            juce::AudioProcessor::BusesLayout layout;
+            layout.inputBuses.add (juce::AudioChannelSet::mono());
+            layout.outputBuses.add (juce::AudioChannelSet::discreteChannels (numCh));
             CHECK_FALSE (proc->checkBusesLayoutSupported (layout));
         }
     }
