@@ -501,6 +501,17 @@ private:
     int itdWritePos[MAX_SOURCES] = {};
     bool itdActive = false;  // true when using aligned HRIRs (non-Simple profiles)
 
+    // v1.0.11 (issue #89, Phase 3): Low-frequency bypass for profiles with short IRs.
+    // Profiles 1 (MIT KEMAR), 3 (CIPIC), 4 (HUTUBS) have IRs too short to represent
+    // bass below ~300 Hz. Bass is extracted from mono input via 1st-order LP and added
+    // equally to both convolved channels. No HP needed — short HRIRs already have
+    // negligible bass, so there's no double-counting.
+    // Profiles 2 (SADIE) and 5 (Bernschuetz) are excluded — no bass issues.
+    static constexpr float kLFBypassCrossoverHz = 250.0f;
+    bool lfBypassActive = false;
+    float lfBypassAlpha = 0.0f;  // LP coefficient: alpha = 1 - exp(-2*pi*fc/sr)
+    float lfLPStateIn[MAX_SOURCES] = {};   // Per-source LP state (extract bass)
+
 };
 
 // #############################################################################

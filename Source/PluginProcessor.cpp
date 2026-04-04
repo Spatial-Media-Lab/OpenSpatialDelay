@@ -1149,9 +1149,25 @@ void BinauralRenderer::setProfile (int profileIndex)
         std::memset (itdBufferR[i], 0, sizeof (itdBufferR[i]));
     }
 
+    // v1.0.11 (issue #89, Phase 3): Enable LF bypass for profiles with bass-deficient IRs.
+    // Profiles 1 (MIT KEMAR), 3 (CIPIC), 4 (HUTUBS) have short IRs that can't represent bass.
+    // Profiles 2 (SADIE) and 5 (Bernschuetz) are excluded — no low-end issues.
+    lfBypassActive = (profileIndex == 1 || profileIndex == 3 || profileIndex == 4);
+    if (lfBypassActive)
+    {
+        // 1st-order one-pole LP coefficient: alpha = 1 - exp(-2*pi*fc/sr)
+        lfBypassAlpha = 1.0f - std::exp (-juce::MathConstants<float>::twoPi
+                                          * kLFBypassCrossoverHz
+                                          / static_cast<float> (currentSampleRate));
+    }
+    // NOTE: Do NOT clear lfLPStateIn here — this renderer was previously active
+    // and its LP state is warm from audio processing. Clearing it would create a
+    // bass dropout during the renderer-level crossfade (issue #90 regression).
+
     DBG ("BinauralRenderer: Profile " + juce::String (profileIndex)
          + " loaded — IR=" + juce::String (irLen)
          + ", normGain=" + juce::String (storedNormGain, 4)
+         + ", lfBypass=" + juce::String (lfBypassActive ? "ON" : "OFF")
          + " (per-source direct binaural)");
 }
 
@@ -1244,6 +1260,31 @@ void BinauralRenderer::renderSourceBuffers (const float* const* sourceBufs,
         sourceConvL[src].process (sourceBufs[src], convTmpL.data(), numSamples);
         sourceConvR[src].process (sourceBufs[src], convTmpR.data(), numSamples);
 
+        // v1.0.11 (issue #89, Phase 3): LF bypass for short-IR profiles.
+        // Short HRIRs naturally attenuate bass (can't represent < ~300 Hz).
+        // Extract bass from mono input via 1st-order LP and add it equally to
+        // both convolved channels at reduced gain (normGain) to avoid level
+        // increase during profile transitions. No HP on convolved output needed
+        // — the short HRIR already has negligible bass.
+        if (lfBypassActive)
+        {
+            float a = lfBypassAlpha;
+            float lpState = lfLPStateIn[src];
+            float bassGain = storedNormGain * 0.5f;  // Gentle bass fill, avoid level increase
+
+            for (int s = 0; s < numSamples; ++s)
+            {
+                float monoIn = sourceBufs[src][s];
+                lpState += a * (monoIn - lpState);
+
+                float bass = lpState * bassGain;
+                convTmpL[static_cast<size_t> (s)] += bass;
+                convTmpR[static_cast<size_t> (s)] += bass;
+            }
+
+            lfLPStateIn[src] = lpState;
+        }
+
         // v1.0: Apply ITD as fractional-sample delay if using aligned HRIRs.
         // ITD is smoothly interpolated per-sample from currentITD to targetITD
         // to prevent timing discontinuities during rapid position changes.
@@ -1316,6 +1357,7 @@ void BinauralRenderer::reset()
         itdWritePos[i] = 0;
         std::memset (itdBufferL[i], 0, sizeof (itdBufferL[i]));
         std::memset (itdBufferR[i], 0, sizeof (itdBufferR[i]));
+        lfLPStateIn[i] = 0.0f;
     }
 }
 
@@ -1335,6 +1377,7 @@ void BinauralRenderer::invalidateSources()
         itdWritePos[i] = 0;
         std::memset (itdBufferL[i], 0, sizeof (itdBufferL[i]));
         std::memset (itdBufferR[i], 0, sizeof (itdBufferR[i]));
+        lfLPStateIn[i] = 0.0f;
     }
 }
 

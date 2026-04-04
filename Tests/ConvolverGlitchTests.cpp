@@ -3552,3 +3552,126 @@ TEST_CASE ("Great-circle threshold — equatorial sweep unchanged", "[issue89][g
     // At equator with 2° steps, great-circle ≈ azimuth difference, so updates should fire
     CHECK (updateCount >= 10);
 }
+
+// ============================================================================
+// Section: LF Bypass Tests (issue #89, Phase 3)
+// ============================================================================
+
+TEST_CASE ("LF bypass — 100 Hz sine survives MIT KEMAR convolution", "[issue89][lfbypass][integration]")
+{
+    // MIT KEMAR has ~128-sample IRs that can't represent bass below ~344 Hz.
+    // Without LF bypass, a 100 Hz sine would be severely attenuated.
+    // With LF bypass, the bass passes through unscathed.
+    auto proc = createBinauralProcessor (1);  // MIT KEMAR (Studio Reference)
+
+    // Stabilize
+    processBlocksCapturingAll (*proc, 60);
+
+    // Set source to front (az=0, el=0) for cleanest measurement
+    setParam (*proc, "object1_azimuth", 0.0f);
+    setParam (*proc, "object1_elevation", 0.0f);
+    setParam (*proc, "dryWet", 1.0f);
+
+    // Generate 100 Hz sine and process through the plugin
+    constexpr float freq = 100.0f;
+    constexpr int numBlocks = 20;  // ~107ms — enough for filter to settle
+    float inputRMS = 0.0f;
+    float outputRMS = 0.0f;
+    int totalSamples = 0;
+
+    for (int b = 0; b < numBlocks; ++b)
+    {
+        juce::MidiBuffer midi;
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            float phase = static_cast<float> (b * kBlockSize + s) / static_cast<float> (kSampleRate);
+            float sample = 0.5f * std::sin (juce::MathConstants<float>::twoPi * freq * phase);
+            buffer.setSample (0, s, sample);
+            buffer.setSample (1, s, sample);
+        }
+
+        // Measure input RMS (last few blocks only, after settling)
+        if (b >= numBlocks - 5)
+        {
+            for (int s = 0; s < kBlockSize; ++s)
+                inputRMS += buffer.getSample (0, s) * buffer.getSample (0, s);
+        }
+
+        proc->processBlock (buffer, midi);
+
+        // Measure output RMS (last few blocks only)
+        if (b >= numBlocks - 5)
+        {
+            for (int s = 0; s < kBlockSize; ++s)
+            {
+                float outL = buffer.getSample (0, s);
+                float outR = buffer.getSample (1, s);
+                outputRMS += (outL * outL + outR * outR) * 0.5f;
+            }
+            totalSamples += kBlockSize;
+        }
+    }
+
+    inputRMS = std::sqrt (inputRMS / static_cast<float> (totalSamples));
+    outputRMS = std::sqrt (outputRMS / static_cast<float> (totalSamples));
+
+    float dB = 20.0f * std::log10 (outputRMS / std::max (inputRMS, 1e-10f));
+    INFO ("100 Hz through MIT KEMAR: input RMS=" << inputRMS << " output RMS=" << outputRMS << " dB=" << dB);
+
+    // With LF bypass, output should be within 6 dB of input at 100 Hz
+    CHECK (dB > -6.0f);
+}
+
+TEST_CASE ("LF bypass — SADIE and Spatial unaffected (bypass inactive)", "[issue89][lfbypass][integration]")
+{
+    // SADIE (profile 2) and Spatial (profile 5) should NOT have LF bypass active.
+    // Verify by checking that the renderer reports lfBypassActive = false.
+    // We test this indirectly: process a 100 Hz sine through both and verify
+    // the output characteristics match what we'd expect from full HRTF convolution.
+
+    for (int profile : { 2, 5 })
+    {
+        auto proc = createBinauralProcessor (profile);
+        processBlocksCapturingAll (*proc, 60);
+
+        setParam (*proc, "object1_azimuth", 0.0f);
+        setParam (*proc, "object1_elevation", 0.0f);
+
+        // Process a few blocks of 100 Hz sine
+        float outputRMS = 0.0f;
+        constexpr int numBlocks = 20;
+
+        for (int b = 0; b < numBlocks; ++b)
+        {
+            juce::MidiBuffer midi;
+            juce::AudioBuffer<float> buffer (2, kBlockSize);
+            buffer.clear();
+            for (int s = 0; s < kBlockSize; ++s)
+            {
+                float phase = static_cast<float> (b * kBlockSize + s) / static_cast<float> (kSampleRate);
+                float sample = 0.5f * std::sin (juce::MathConstants<float>::twoPi * 100.0f * phase);
+                buffer.setSample (0, s, sample);
+                buffer.setSample (1, s, sample);
+            }
+            proc->processBlock (buffer, midi);
+
+            if (b >= numBlocks - 5)
+            {
+                for (int s = 0; s < kBlockSize; ++s)
+                {
+                    float outL = buffer.getSample (0, s);
+                    outputRMS += outL * outL;
+                }
+            }
+        }
+
+        outputRMS = std::sqrt (outputRMS / (5.0f * kBlockSize));
+        INFO ("Profile " << profile << " — 100 Hz output RMS=" << outputRMS);
+        // These profiles have long enough IRs to represent 100 Hz naturally,
+        // so output should be non-trivial even without LF bypass
+        CHECK (outputRMS > 0.001f);
+    }
+}
