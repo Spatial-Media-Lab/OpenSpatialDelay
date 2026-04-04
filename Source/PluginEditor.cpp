@@ -3121,35 +3121,37 @@ void OpenSpatialDelayEditor::timerCallback()
             if (isStereoVariant)
             {
                 // Stereo modes only — IDs match param indices + 1
-                algorithmBox.addItem ("Equal Power",  7);   // param index 6
-                algorithmBox.addItem ("Stereo VBAP",  8);   // param index 7
-                algorithmBox.addItem ("XY Pair",      9);   // param index 8
-                algorithmBox.addItem ("MS Encode",    10);  // param index 9
-                algorithmBox.addItem ("Blumlein",     11);  // param index 10
+                algorithmBox.addItem ("Equal Power",  8);   // param index 7
+                algorithmBox.addItem ("Stereo VBAP",  9);   // param index 8
+                algorithmBox.addItem ("XY Pair",      10);  // param index 9
+                algorithmBox.addItem ("MS Encode",    11);  // param index 10
+                algorithmBox.addItem ("Blumlein",     12);  // param index 11
             }
             else  // Surround
             {
                 // Surround algorithms only — IDs match param indices + 1
+                // Constant Power shown first (default for surround)
+                algorithmBox.addItem ("Constant Power", 2); // param index 1
                 algorithmBox.addItem ("Ambisonics",   1);   // param index 0
-                algorithmBox.addItem ("DBAP",         2);   // param index 1
-                algorithmBox.addItem ("KNN",          3);   // param index 2
-                algorithmBox.addItem ("MDAP",         4);   // param index 3
-                algorithmBox.addItem ("VBAP",         5);   // param index 4
-                algorithmBox.addItem ("VBIP",         6);   // param index 5
+                algorithmBox.addItem ("DBAP",         3);   // param index 2
+                algorithmBox.addItem ("KNN",          4);   // param index 3
+                algorithmBox.addItem ("MDAP",         5);   // param index 4
+                algorithmBox.addItem ("VBAP",         6);   // param index 5
+                algorithmBox.addItem ("VBIP",         7);   // param index 6
             }
         }
 
         // Validate algorithm against current output mode every tick
         // (preset loading can write an out-of-range value)
-        if (isStereoVariant && algoIdx < 6)
+        if (isStereoVariant && algoIdx < 7)
         {
-            algoIdx = 6;  // Equal Power
+            algoIdx = 7;  // Equal Power
             processorRef.configAlgorithm.store (algoIdx, std::memory_order_relaxed);
             processorRef.markConfigStateDirty();
         }
-        else if (! isStereoVariant && algoIdx > 5)
+        else if (! isStereoVariant && algoIdx > 6)
         {
-            algoIdx = 4;  // VBAP
+            algoIdx = 1;  // Constant Power (default for surround)
             processorRef.configAlgorithm.store (algoIdx, std::memory_order_relaxed);
             processorRef.markConfigStateDirty();
         }

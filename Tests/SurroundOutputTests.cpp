@@ -353,9 +353,9 @@ TEST_CASE ("Layout: VBAP triplets are non-empty for 3D layouts", "[layout]")
 // ============================================================================
 
 // Algorithm parameter indices (from createParameterLayout line 305):
-// 0=Ambisonics, 1=DBAP, 2=KNN, 3=MDAP, 4=VBAP, 5=VBIP
+// 0=Ambisonics, 1=ConstantPower, 2=DBAP, 3=KNN, 4=MDAP, 5=VBAP, 6=VBIP
 namespace AlgoIdx {
-    constexpr int Ambisonics = 0, DBAP = 1, KNN = 2, MDAP = 3, VBAP = 4, VBIP = 5;
+    constexpr int Ambisonics = 0, ConstantPower = 1, DBAP = 2, KNN = 3, MDAP = 4, VBAP = 5, VBIP = 6;
 }
 
 // --- VBAP Tests ---
@@ -752,18 +752,85 @@ TEST_CASE ("Ambisonics: source at speaker position has that speaker loudest", "[
     CHECK (loudest == 3);
 }
 
+// --- Constant Power Tests ---
+
+TEST_CASE ("ConstantPower: source at L speaker (30deg) on 7.1 has L as loudest", "[algorithm][constpower]")
+{
+    auto proc = createTestProcessor (6 /*7.1*/, AlgoIdx::ConstantPower);
+    const auto& state = proc->getActiveLayout();
+    auto ctx = makeLayoutCtx (state);
+
+    ConstantPowerAlgorithm cp;
+    SourcePosition src { 30.0f * kDeg2Rad, 0.0f, 0.5f };
+    float gains[16] = {};
+    cp.computeGains (src, ctx, gains, state.layout.numSpeakers);
+
+    int loudest = findLoudestSpeaker (gains, state.layout.numSpeakers);
+    CHECK (loudest == 0);  // L is speaker index 0 on 7.1
+}
+
+TEST_CASE ("ConstantPower: constant-power normalization", "[algorithm][constpower]")
+{
+    auto proc = createTestProcessor (6 /*7.1*/, AlgoIdx::ConstantPower);
+    const auto& state = proc->getActiveLayout();
+    auto ctx = makeLayoutCtx (state);
+
+    ConstantPowerAlgorithm cp;
+    SourcePosition src { 45.0f * kDeg2Rad, 0.0f, 0.5f };
+    float gains[16] = {};
+    cp.computeGains (src, ctx, gains, state.layout.numSpeakers);
+
+    float sumSq = sumOfSquaredGains (gains, state.layout.numSpeakers);
+    CHECK_THAT (sumSq, WithinAbs (1.0f, 0.01f));
+}
+
+TEST_CASE ("ConstantPower: activates multiple speakers (wider than VBAP)", "[algorithm][constpower]")
+{
+    auto proc = createTestProcessor (6 /*7.1*/, AlgoIdx::ConstantPower);
+    const auto& state = proc->getActiveLayout();
+    auto ctx = makeLayoutCtx (state);
+
+    ConstantPowerAlgorithm cp;
+    SourcePosition src { 0.0f, 0.0f, 0.5f };  // Front center
+    float gains[16] = {};
+    cp.computeGains (src, ctx, gains, state.layout.numSpeakers);
+
+    int active = countNonZeroGains (gains, state.layout.numSpeakers);
+    CHECK (active > 2);  // Should activate multiple speakers in hemisphere
+}
+
+TEST_CASE ("ConstantPower: hemisphere cutoff — rear speakers quiet for front source", "[algorithm][constpower]")
+{
+    auto proc = createTestProcessor (6 /*7.1*/, AlgoIdx::ConstantPower);
+    const auto& state = proc->getActiveLayout();
+    auto ctx = makeLayoutCtx (state);
+
+    ConstantPowerAlgorithm cp;
+    SourcePosition src { 0.0f, 0.0f, 0.5f };  // Front center (0 deg azimuth)
+    float gains[16] = {};
+    cp.computeGains (src, ctx, gains, state.layout.numSpeakers);
+
+    // Front center (speaker 2 at 0°) should be loudest
+    int loudest = findLoudestSpeaker (gains, state.layout.numSpeakers);
+    CHECK (loudest == 2);  // C speaker
+
+    // Rear speakers (indices 5,6 at ±135°) should have zero gain (> 90° from front)
+    CHECK (gains[5] < 0.001f);  // Rear left
+    CHECK (gains[6] < 0.001f);  // Rear right
+}
+
 // --- Cross-Algorithm: All algorithms on all surround formats at cardinal positions ---
 
 TEST_CASE ("All algorithms: source at L (30deg) has L as loudest on all formats", "[algorithm][cardinal]")
 {
     // Formats that have L at 30° as speaker index 0
     int formats[] = { 4 /*5.1*/, 5 /*7.0*/, 6 /*7.1*/, 12 /*7.1.4*/, 15 /*9.1.6*/ };
-    int algos[] = { AlgoIdx::VBAP, AlgoIdx::VBIP, AlgoIdx::KNN, AlgoIdx::DBAP, AlgoIdx::MDAP };
-    const char* algoNames[] = { "VBAP", "VBIP", "KNN", "DBAP", "MDAP" };
+    int algos[] = { AlgoIdx::VBAP, AlgoIdx::VBIP, AlgoIdx::KNN, AlgoIdx::DBAP, AlgoIdx::MDAP, AlgoIdx::ConstantPower };
+    const char* algoNames[] = { "VBAP", "VBIP", "KNN", "DBAP", "MDAP", "ConstantPower" };
 
     for (int fi = 0; fi < 5; ++fi)
     {
-        for (int ai = 0; ai < 5; ++ai)
+        for (int ai = 0; ai < 6; ++ai)
         {
             SECTION (std::string (Proc::outputFormatRegistry[static_cast<size_t>(formats[fi])].name)
                      + " + " + algoNames[ai])
@@ -777,7 +844,7 @@ TEST_CASE ("All algorithms: source at L (30deg) has L as loudest on all formats"
 
                 // Use the actual algorithm instance
                 VBAPAlgorithm vbap; VBIPAlgorithm vbip; KNNAlgorithm knn;
-                DBAPAlgorithm dbap; MDAPAlgorithm mdap;
+                DBAPAlgorithm dbap; MDAPAlgorithm mdap; ConstantPowerAlgorithm constPow;
                 SpatializationAlgorithm* algo = nullptr;
                 switch (algos[ai])
                 {
@@ -786,6 +853,7 @@ TEST_CASE ("All algorithms: source at L (30deg) has L as loudest on all formats"
                     case AlgoIdx::KNN:  algo = &knn;  break;
                     case AlgoIdx::DBAP: algo = &dbap; break;
                     case AlgoIdx::MDAP: algo = &mdap; break;
+                    case AlgoIdx::ConstantPower: algo = &constPow; break;
                 }
 
                 algo->computeGains (src, ctx, gains, state.layout.numSpeakers);
@@ -1791,10 +1859,10 @@ TEST_CASE ("Constrained bus: 7.1.4 rear speakers receive signal (12ch buffer)", 
 TEST_CASE ("Constrained bus: all algorithms route to Lrs on 7.1 (8ch)", "[bus][algorithm]")
 {
     int algos[] = { AlgoIdx::VBAP, AlgoIdx::VBIP, AlgoIdx::KNN,
-                    AlgoIdx::DBAP, AlgoIdx::MDAP };
-    const char* names[] = { "VBAP", "VBIP", "KNN", "DBAP", "MDAP" };
+                    AlgoIdx::DBAP, AlgoIdx::MDAP, AlgoIdx::ConstantPower };
+    const char* names[] = { "VBAP", "VBIP", "KNN", "DBAP", "MDAP", "ConstantPower" };
 
-    for (int a = 0; a < 5; ++a)
+    for (int a = 0; a < 6; ++a)
     {
         SECTION (names[a])
         {
@@ -1881,10 +1949,10 @@ TEST_CASE ("SML 13.1: LFE receives low-pass filtered signal", "[sml][lfe]")
 TEST_CASE ("SML 13.1: all algorithms produce signal", "[sml][algorithm]")
 {
     int algos[] = { AlgoIdx::VBAP, AlgoIdx::VBIP, AlgoIdx::KNN,
-                    AlgoIdx::DBAP, AlgoIdx::MDAP };
-    const char* names[] = { "VBAP", "VBIP", "KNN", "DBAP", "MDAP" };
+                    AlgoIdx::DBAP, AlgoIdx::MDAP, AlgoIdx::ConstantPower };
+    const char* names[] = { "VBAP", "VBIP", "KNN", "DBAP", "MDAP", "ConstantPower" };
 
-    for (int a = 0; a < 5; ++a)
+    for (int a = 0; a < 6; ++a)
     {
         SECTION (names[a])
         {

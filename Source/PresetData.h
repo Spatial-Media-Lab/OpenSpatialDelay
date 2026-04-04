@@ -29,7 +29,7 @@ struct PresetData
     bool  wobbleEnabled = false; // v0.8: Wobble modulation enable toggle
     float wobbleAmount = 0.0f;   // v0.8: Wobble modulation depth (0..100)
     float wobbleMorph = 0.0f;    // v0.8: Wobble waveform morph (0..100)
-    int   algorithm = 4;       // VBAP
+    int   algorithm = 1;       // Constant Power
     int   hrtfProfile = 0;
     // Per-tap data
     struct TapData
