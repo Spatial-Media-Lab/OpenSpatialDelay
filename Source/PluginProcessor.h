@@ -261,6 +261,17 @@ public:
     juce::String getName() const override { return "MDAP"; }
 };
 
+/** Constant Power Panning — cosine-distance all-speaker weighting.
+    Activates all speakers within 90 degrees of the source with natural
+    cosine rolloff, constant-power normalized. Smooth, wide image. */
+class ConstantPowerAlgorithm : public SpatializationAlgorithm
+{
+public:
+    void computeGains (const SourcePosition& source, const LayoutContext& ctx,
+                       float* outputGains, int numSpeakers) const override;
+    juce::String getName() const override { return "Constant Power"; }
+};
+
 // #############################################################################
 // SPATIAL MEDIA LIBRARY — HRTF & binaural rendering infrastructure
 // HRTFDatabase, PartitionedConvolver, and BinauralRenderer are reusable
@@ -659,7 +670,7 @@ public:
 
     // Issue #68: Config params stored outside APVTS to hide from DAW automation lists.
     // Saved/restored in getStateInformation/setStateInformation.
-    std::atomic<int> configAlgorithm { 0 };
+    std::atomic<int> configAlgorithm { 1 };  // Constant Power (default for surround)
     std::atomic<int> configHrtfProfile { 0 };
     std::atomic<int> configOutputFormat { 0 };
     std::atomic<int> configInputFormat { 0 };
@@ -768,7 +779,7 @@ private:
     void activateLayout (OutputFormat format);
 
     //--- SPATIAL FRAMEWORK: Spatialization algorithms (polymorphic dispatch) ---
-    // 4 user-facing algorithms (alphabetical): Ambisonics (0), KNN (1), VBAP (2), VBIP (3)
+    // 7 user-facing algorithms (alphabetical): Ambisonics (0), ConstPower (1), DBAP (2), KNN (3), MDAP (4), VBAP (5), VBIP (6)
     // DirectBinaural is internal-only — used for Woodworth binaural cache in "Simple (Low CPU)"
     DirectBinauralAlgorithm  algDirectBinaural;  // Kept for Simple profile Woodworth gains
     VBAPAlgorithm            algVBAP;
@@ -777,7 +788,8 @@ private:
     KNNAlgorithm             algKNN;
     DBAPAlgorithm            algDBAP;            // v0.4: Distance-Based Amplitude Panning
     MDAPAlgorithm            algMDAP;            // v0.5: Multiple-Direction Amplitude Panning
-    static constexpr int NUM_ALGORITHMS = 6;
+    ConstantPowerAlgorithm   algConstantPower;   // v1.1: Constant Power panning
+    static constexpr int NUM_ALGORITHMS = 7;
     SpatializationAlgorithm* algorithms[NUM_ALGORITHMS] = {};
 
     //--- SPATIAL FRAMEWORK: HRTF convolution (double-buffered for thread safety) ---

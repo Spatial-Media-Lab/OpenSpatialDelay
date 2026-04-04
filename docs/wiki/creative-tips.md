@@ -180,7 +180,7 @@ Helix trajectories make each tap slowly orbit while moving up and down through t
 
 1. Set output format to **7.1.4 Atmos** (or your Atmos bed format)
 2. Configure the track in your DAW for the matching channel count (12 for 7.1.4)
-3. Set algorithm to **VBAP** for precise placement
+3. Set algorithm to **Constant Power** (default) for smooth panning, or **VBAP** for precise placement
 4. Position taps at bed speaker positions or anywhere in the 3D field
 
 ### Atmos Renderer Integration
