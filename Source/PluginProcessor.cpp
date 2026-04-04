@@ -2113,6 +2113,7 @@ bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layou
     if (outputSet == juce::AudioChannelSet::quadraphonic())        return true;
     if (outputSet == juce::AudioChannelSet::create5point1())       return true;
     if (outputSet == juce::AudioChannelSet::create7point1())       return true;
+    if (outputSet == juce::AudioChannelSet::discreteChannels (10)) return true;  // 9.1, 5.1.4, 7.1.2
     if (outputSet == juce::AudioChannelSet::create7point1point4()) return true;
     if (outputSet == juce::AudioChannelSet::create9point1point6()) return true;
     if (outputSet == juce::AudioChannelSet::octagonal())           return true;
