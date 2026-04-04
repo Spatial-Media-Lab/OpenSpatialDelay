@@ -1,5 +1,10 @@
 # OpenSpatialDelay User Manual Update Plan
 
+> **STATUS: COMPLETED** (2026-04-04, issue #86)
+> All items below have been implemented. Wiki pages, README, generate_manual.js,
+> DOCX, and PDF have been updated. Fresh screenshots captured. Signal flow diagram
+> and cover page redesigned with "Orbital Cartography" visual identity.
+
 ## Context
 
 The current manual (`docs/OpenSpatialDelay_Manual_v1.0.docx/pdf`) was drafted during v0.9 development. Several major features have been added or rewritten since the initial manual was created. This plan outlines the updates needed to bring the manual to v1.0 release quality, following modern audio plugin documentation standards.

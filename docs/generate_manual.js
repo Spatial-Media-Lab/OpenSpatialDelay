@@ -82,6 +82,7 @@ function loadImage(filename) {
 
 const signalFlowImg = loadImage("signal-flow.png");
 const logoImg = loadImage("sml-logo.png");
+const coverImg = loadImage("manual-cover.png");
 const screenshotFullImg = loadImage("screenshot.png");
 const screenshotAnnotatedImg = loadImage("screenshot_annotated.png");
 const screenshotHeaderImg = loadImage("screenshot_header.png");
@@ -382,73 +383,56 @@ function dataTable(headers, rows, opts = {}) {
 // ============================================================================
 
 function buildCover() {
-  const children = [
-    spacer(40),
-  ];
+  const children = [];
 
-  // Logo
-  if (logoImg) {
+  // Full-page cover image (Orbital Cartography design)
+  if (coverImg) {
     children.push(new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { after: 200 },
       children: [new ImageRun({
         type: "png",
-        data: logoImg,
-        transformation: { width: 180, height: 91 },
-        altText: { title: "Spatial Media Lab Logo", description: "Logo for Spatial Media Lab", name: "sml-logo" },
+        data: coverImg,
+        transformation: { width: 595, height: 842 },  // A4 proportions in points
+        altText: { title: "OpenSpatialDelay v1.0 User Manual Cover", description: "Cover page showing spatial map with 12 delay taps positioned in 3D space", name: "manual-cover" },
       })],
     }));
   } else {
+    // Fallback: text-based cover
+    children.push(spacer(40));
+    if (logoImg) {
+      children.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 200 },
+        children: [new ImageRun({
+          type: "png",
+          data: logoImg,
+          transformation: { width: 180, height: 91 },
+          altText: { title: "Spatial Media Lab Logo", description: "Logo for Spatial Media Lab", name: "sml-logo" },
+        })],
+      }));
+    }
     children.push(new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { after: 400 },
-      children: [new TextRun({ text: "SPATIAL MEDIA LAB", font: FONT_BODY, size: 28, color: C.cyan, bold: true })],
+      spacing: { after: 80 },
+      children: [new TextRun({ text: "OpenSpatialDelay", font: FONT_BODY, size: 72, color: C.navy, bold: true })],
+    }));
+    children.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 140 },
+      children: [new TextRun({ text: "v1.0  User Manual", font: FONT_BODY, size: 32, color: C.subheading })],
+    }));
+    children.push(screenshotImage(screenshotFullImg, 420, 297,
+      "OpenSpatialDelay Interface",
+      "Full plugin UI showing spatial map, controls, and tap selector"));
+    children.push(spacer(20));
+    children.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      children: [
+        externalLink("spatialmedialab.org", "https://spatialmedialab.org"),
+        new TextRun({ text: "  |  2026", font: FONT_BODY, size: 20, color: C.dimText }),
+      ],
     }));
   }
-
-  // Title
-  children.push(new Paragraph({
-    alignment: AlignmentType.CENTER,
-    spacing: { after: 80 },
-    children: [new TextRun({ text: "OpenSpatialDelay", font: FONT_BODY, size: 72, color: C.navy, bold: true })],
-  }));
-
-  // Version
-  children.push(new Paragraph({
-    alignment: AlignmentType.CENTER,
-    spacing: { after: 140 },
-    children: [new TextRun({ text: "v1.0  User Manual", font: FONT_BODY, size: 32, color: C.subheading })],
-  }));
-
-  // Tagline
-  children.push(new Paragraph({
-    alignment: AlignmentType.CENTER,
-    spacing: { after: 200 },
-    children: [new TextRun({
-      text: "Spatial Delay Effect for 3D Audio Production",
-      font: FONT_BODY, size: 24, color: C.dimText, italics: true,
-    })],
-  }));
-
-  // App screenshot
-  children.push(screenshotImage(screenshotFullImg, 420, 297,
-    "OpenSpatialDelay Interface",
-    "Full plugin UI showing spatial map, controls, and tap selector"));
-
-  // Footer info
-  children.push(spacer(20));
-  children.push(new Paragraph({
-    alignment: AlignmentType.CENTER,
-    spacing: { after: 60 },
-    children: [new TextRun({ text: "Part of the Spatial Media Library Suite", font: FONT_BODY, size: 20, color: C.dimText })],
-  }));
-  children.push(new Paragraph({
-    alignment: AlignmentType.CENTER,
-    children: [
-      externalLink("spatialmedialab.org", "https://spatialmedialab.org"),
-      new TextRun({ text: "  |  2026", font: FONT_BODY, size: 20, color: C.dimText }),
-    ],
-  }));
 
   return children;
 }
@@ -698,7 +682,7 @@ function buildWhatIs() {
     bodyText("\u2014 each positioned anywhere in 3D space, with its own trajectory animation, pitch shift, Doppler amount, and input channel selection."),
   ]));
   items.push(bodyPara([
-    boldText("22 output formats "),
+    boldText("23 output formats "),
     bodyText("\u2014 from binaural headphones to 9.1.6 Dolby Atmos, SpatialMediaLab 13.1, and 6th-order Ambisonics."),
   ]));
   items.push(bodyPara([
@@ -803,7 +787,7 @@ function buildOutputFormats() {
 
   items.push(bodyPara([
     bodyText("OpenSpatialDelay supports "),
-    boldText("22 output formats"),
+    boldText("23 output formats"),
     bodyText(" organized into four categories. The plugin automatically selects the correct rendering path based on the format you choose in the header dropdown."),
   ]));
 
@@ -857,7 +841,7 @@ function buildOutputFormats() {
   // Surround formats
   items.push(heading2("Surround Formats", "surround-formats"));
   items.push(bodyPara([
-    bodyText("14 discrete surround formats, from Quadraphonic to 9.1.6 Atmos and SpatialMediaLab 13.1. Formats with an LFE channel (marked with .1) derive it as a mono sum of all tap outputs through a 120 Hz low-pass filter at \u221210 dB. Choose a "),
+    bodyText("15 discrete surround formats, from Quadraphonic to 9.1.6 Atmos and SpatialMediaLab 13.1. Formats with an LFE channel (marked with .1) derive it as a mono sum of all tap outputs through a 120 Hz low-pass filter at \u221210 dB. Choose a "),
     internalLink("spatialization algorithm", "algorithms"),
     bodyText(" from the Algorithm dropdown."),
   ]));
@@ -870,6 +854,7 @@ function buildOutputFormats() {
       ["5.1 Surround", "6", "Yes", "None"],
       ["7.0 Surround", "7", "No", "None"],
       ["7.1 Surround", "8", "Yes", "None"],
+      ["9.1 Surround", "10", "Yes", "None (9 ear-level, ITU-R BS.2051 System H)"],
       ["Octaphonic", "8", "No", "None (ring at 45\u00b0 intervals)"],
       ["5.1.2", "8", "Yes", "2 top"],
       ["7.1.2 Atmos", "10", "Yes", "2 top"],
@@ -1108,9 +1093,9 @@ function buildControlsReference() {
       ["ELEV", "\u221290 to +90\u00b0", "0\u00b0", "Vertical angle"],
       ["DIST", "0.1\u20133.0", "0.5", "Distance from listener (affects attenuation)"],
       ["DOPPLER", "0\u2013100%", "0%", "Doppler effect intensity for moving taps"],
-      ["PITCH", "\u221224 to +24 st", "0 st", "Per-tap pitch offset (adds to global pitch)"],
+      ["PITCH", "\u221212 to +12 st", "0 st", "Per-tap pitch offset (adds to global pitch)"],
       ["INPUT", "L+R / L / R", "L+R", "Which stereo input channel feeds this tap"],
-      ["TRAJ", "13 shapes", "None", "Trajectory animation shape"],
+      ["TRAJ", "14 shapes", "None", "Trajectory animation shape"],
       ["SPEED", "0.00\u20135.00 Hz", "0.30 Hz", "Trajectory animation speed"],
       ["DIR", "Fwd / Rev", "Fwd", "Trajectory direction (forward or reverse)"],
     ],
@@ -1232,7 +1217,7 @@ function buildPresets() {
 
   items.push(bodyPara([
     bodyText("OpenSpatialDelay includes "),
-    boldText("60 factory presets"),
+    boldText("70 factory presets"),
     bodyText(" across 9 categories: Classic Delays, Spatial Movement, Ambient + Texture, Height + 3D, Surround Production, Wobble + Modulated, Creative + Experimental, Rhythmic, and User."),
   ]));
 
