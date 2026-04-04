@@ -1130,13 +1130,24 @@ void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elR
     if (sourceIndex < 0 || sourceIndex >= MAX_SOURCES || storedIRLength <= 0)
         return;
 
-    // v1.0.2: ~1° threshold (reduced from ~2°) — more frequent, smaller HRIR changes
-    // produce less audible spectral transitions during azimuth/elevation sweeps (issue #47)
+    // v1.0.11 (issue #89): Great-circle angular distance threshold replaces independent
+    // azimuth/elevation comparison. The old check treated 1° of azimuth equally at equator
+    // and pole, but at elevation 89° a 1° azimuth change is only ~0.017° of actual angular
+    // movement on the sphere. This caused constant HRIR switching at poles (zenith stuck
+    // centered, erratic nadir jumps). Great-circle distance naturally handles the pole
+    // singularity — azimuth changes near ±90° elevation produce near-zero angular distance.
     constexpr float THRESHOLD = 0.017f;  // ~1 degree in radians
-    if (sourceConvReady[sourceIndex]
-        && std::abs (azRad - cachedSourceAz[sourceIndex]) < THRESHOLD
-        && std::abs (elRad - cachedSourceEl[sourceIndex]) < THRESHOLD)
-        return;
+    if (sourceConvReady[sourceIndex])
+    {
+        float cachedAz = cachedSourceAz[sourceIndex];
+        float cachedEl = cachedSourceEl[sourceIndex];
+        float dot = std::cos (elRad) * std::cos (cachedEl) * std::cos (azRad - cachedAz)
+                  + std::sin (elRad) * std::sin (cachedEl);
+        dot = juce::jlimit (-1.0f, 1.0f, dot);
+        float angularDist = std::acos (dot);
+        if (angularDist < THRESHOLD)
+            return;
+    }
 
     // Query HRTF at exact source direction (realtime-safe: KD-tree lookup, no malloc)
     float delayL = 0.0f, delayR = 0.0f;
