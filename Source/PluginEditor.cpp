@@ -699,7 +699,7 @@ void OSDLookAndFeel::getIdealPopupMenuItemSize (const juce::String& text, bool i
 
 void OSDLookAndFeel::drawComboBox (juce::Graphics& g, int width, int height, bool /*isButtonDown*/,
                                    int /*buttonX*/, int /*buttonY*/, int /*buttonW*/, int /*buttonH*/,
-                                   juce::ComboBox& /*box*/)
+                                   juce::ComboBox& box)
 {
     auto bounds = juce::Rectangle<float> (0, 0, (float) width, (float) height);
 
@@ -711,22 +711,27 @@ void OSDLookAndFeel::drawComboBox (juce::Graphics& g, int width, int height, boo
     g.setColour (findColour (juce::ComboBox::outlineColourId));
     g.drawRoundedRectangle (bounds.reduced (0.5f), 4.0f, 1.0f);
 
-    // Small dropdown arrow
-    float arrowX = (float) width - 12.0f;
-    float arrowY = (float) height * 0.5f;
-    juce::Path arrow;
-    arrow.addTriangle (arrowX - 3.0f, arrowY - 1.5f,
-                       arrowX + 3.0f, arrowY - 1.5f,
-                       arrowX,        arrowY + 2.5f);
-    g.setColour (findColour (juce::ComboBox::arrowColourId));
-    g.fillPath (arrow);
+    // Small dropdown arrow — hidden when combo is disabled (e.g. Ambisonics mode)
+    if (box.isEnabled())
+    {
+        float arrowX = (float) width - 12.0f;
+        float arrowY = (float) height * 0.5f;
+        juce::Path arrow;
+        arrow.addTriangle (arrowX - 3.0f, arrowY - 1.5f,
+                           arrowX + 3.0f, arrowY - 1.5f,
+                           arrowX,        arrowY + 2.5f);
+        g.setColour (findColour (juce::ComboBox::arrowColourId));
+        g.fillPath (arrow);
+    }
 }
 
 void OSDLookAndFeel::positionComboBoxText (juce::ComboBox& box, juce::Label& label)
 {
-    // Reserve only 20px for arrow (our triangle is 6px wide centered at width-12)
-    // instead of JUCE's default 30px — fixes "Figure-8" truncation
-    label.setBounds (1, 1, box.getWidth() - 20, box.getHeight() - 2);
+    // Reserve 20px for arrow when enabled; use full width when disabled (no arrow)
+    if (box.isEnabled())
+        label.setBounds (1, 1, box.getWidth() - 20, box.getHeight() - 2);
+    else
+        label.setBounds (0, 1, box.getWidth(), box.getHeight() - 2);
     label.setFont (getComboBoxFont (box));
 }
 
@@ -3104,13 +3109,20 @@ void OpenSpatialDelayEditor::timerCallback()
         algorithmBox.setVisible (true);
         algorithmLabel.setVisible (true);
         algorithmBox.setEnabled (false);
+        algorithmBox.setAlpha (0.5f);
         algorithmBox.setText ("Ambisonics Encode", juce::dontSendNotification);
+        if (fmtCategory != lastAlgoCategoryShown)
+        {
+            lastAlgoCategoryShown = fmtCategory;
+            algorithmBox.resized();   // re-trigger positionComboBoxText for full-width label
+        }
     }
     else
     {
         algorithmBox.setVisible (true);
         algorithmLabel.setVisible (true);
         algorithmBox.setEnabled (true);
+        algorithmBox.setAlpha (1.0f);
 
         // Rebuild combo items only when format category changes
         if (fmtCategory != lastAlgoCategoryShown)
@@ -3139,6 +3151,8 @@ void OpenSpatialDelayEditor::timerCallback()
                 algorithmBox.addItem ("VBAP",         6);   // param index 5
                 algorithmBox.addItem ("VBIP",         7);   // param index 6
             }
+
+            algorithmBox.resized();   // restore arrow-reserved label width
         }
 
         // Validate algorithm against current output mode every tick
