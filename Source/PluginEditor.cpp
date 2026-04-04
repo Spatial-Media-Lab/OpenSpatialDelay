@@ -3111,7 +3111,11 @@ void OpenSpatialDelayEditor::timerCallback()
         algorithmBox.setEnabled (false);
         algorithmBox.setAlpha (0.5f);
         algorithmBox.setText ("Ambisonics Encode", juce::dontSendNotification);
-
+        if (fmtCategory != lastAlgoCategoryShown)
+        {
+            lastAlgoCategoryShown = fmtCategory;
+            algorithmBox.resized();   // re-trigger positionComboBoxText for full-width label
+        }
     }
     else
     {
@@ -3145,6 +3149,8 @@ void OpenSpatialDelayEditor::timerCallback()
                 algorithmBox.addItem ("VBAP",         5);   // param index 4
                 algorithmBox.addItem ("VBIP",         6);   // param index 5
             }
+
+            algorithmBox.resized();   // restore arrow-reserved label width
         }
 
         // Validate algorithm against current output mode every tick
