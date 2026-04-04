@@ -2,7 +2,7 @@
 name: spatial-audio-dsp
 description: >
   Expert in spatial audio DSP for JUCE C++ audio plugins (VST3/AU).
-  Covers 7 spatialization algorithms (VBAP, VBIP, KNN, Ambisonics HOA, DBAP, MDAP, Direct Binaural),
+  Covers 8 spatialization algorithms (Constant Power, VBAP, VBIP, KNN, Ambisonics HOA, DBAP, MDAP, Direct Binaural),
   HRTF convolution via SOFA/libmysofa, SH-domain rendering (ACN/SN3D),
   virtual speaker deployment, binaural rendering pipelines,
   ADM-OSC protocol integration, coordinate system conventions (ADM/ITU-R),
@@ -40,9 +40,23 @@ This skill provides deep expertise in spatial audio algorithm implementation, HR
 
 ## 1. Spatialization Algorithms
 
-Seven algorithms implemented, each with distinct mathematical foundations and use cases.
+Eight algorithms implemented, each with distinct mathematical foundations and use cases.
 
-### 1.1 VBAP — Vector Base Amplitude Panning (Pulkki 1997, JAES)
+### 1.1 Constant Power — Cosine-Distance All-Speaker Panning (Default)
+
+All-speaker weighting using cosine of angular distance with hemisphere cutoff:
+1. Convert source and all speakers to unit Cartesian vectors
+2. For each speaker: `rawGain = max(0, dot(source, speaker))`
+3. Speakers beyond 90° from source get zero gain (hemisphere cutoff)
+4. Constant-power normalization: `scale = 1 / sqrt(Σ rawGain²)`
+
+**Effect:** Activates all speakers within 90° of the source with natural cosine rolloff. Produces wider, smoother spatial images than VBAP's 2-3 speaker selection. Computationally lightest of all algorithms (no sorting, no triangulation, no Euclidean distance).
+
+**Best for:** Most surround work. Default algorithm for all surround output formats. Natural-sounding panning with smooth transitions between speakers.
+
+**Industry precedent:** Steinberg Nuendo/Cubase "Constant Power" surround panner.
+
+### 1.3 VBAP — Vector Base Amplitude Panning (Pulkki 1997, JAES)
 
 **2D (flat layouts: Quad, 5.1, 7.1):**
 Find the speaker pair spanning the source azimuth. Gains via sine law:
@@ -68,7 +82,7 @@ Determinant threshold: skip triplets with `|det| < 0.01` (near-collinear speaker
 
 **Known limitation:** Zenith centering problem above ~60° elevation when highest physical speakers are at +45°. Solution (not yet implemented): imaginary zenith speaker with `1/sqrt(M)` downmix to top ring (Pulkki's documented approach).
 
-### 1.2 VBIP — Vector Base Intensity Panning
+### 1.3 VBIP — Vector Base Intensity Panning
 
 Intensity-weighted variant of VBAP. Steps:
 1. Compute standard VBAP gains (2D or 3D)
@@ -77,7 +91,7 @@ Intensity-weighted variant of VBAP. Steps:
 
 **Effect:** Tighter spatial focus by de-emphasizing distant speakers. Intensity proportional to squared amplitude. Perceptually sharper than VBAP — useful for discrete spatial events (delay taps).
 
-### 1.3 KNN — K-Nearest Neighbor Panning (K=3)
+### 1.4 KNN — K-Nearest Neighbor Panning (K=3)
 
 1. Convert source and all speakers to unit Cartesian vectors
 2. Compute angular distance for each speaker: `dist = acos(dot(source, speaker))`
@@ -89,7 +103,7 @@ Intensity-weighted variant of VBAP. Steps:
 
 **Best for:** Irregular/non-standard speaker layouts where VBAP triangulation is ill-conditioned. Graceful zenith handling (no degenerate triplets). Produces more diffuse images than VBAP (activates 3 speakers always).
 
-### 1.4 Ambisonics — 3rd-Order HOA (ACN/SN3D)
+### 1.5 Ambisonics — 3rd-Order HOA (ACN/SN3D)
 
 **Encoding:** For source at (az, el), compute 16 SH coefficients:
 ```
@@ -111,7 +125,7 @@ Gauss-Jordan elimination with partial pivoting for matrix inversion.
 
 **Reference:** Daniel, J. (2000). "Representation de champs acoustiques," PhD thesis.
 
-### 1.5 DBAP — Distance-Based Amplitude Panning (Lossius et al., ICMC 2009)
+### 1.6 DBAP — Distance-Based Amplitude Panning (Lossius et al., ICMC 2009)
 
 1. Convert source and speakers to 3D Cartesian
 2. Compute Euclidean distance from source to each speaker
@@ -120,7 +134,7 @@ Gauss-Jordan elimination with partial pivoting for matrix inversion.
 
 **Best for:** Arbitrary non-standard layouts with no sweet spot assumption. Concert installations, art installations, experimental speaker deployments. Works with any speaker placement — no triangulation, no regularity assumption.
 
-### 1.6 MDAP — Multiple-Direction Amplitude Panning (Pulkki 2000)
+### 1.7 MDAP — Multiple-Direction Amplitude Panning (Pulkki 2000)
 
 VBAP with source spread for wider spatial images:
 1. For desired direction D, place 8 auxiliary sources on a ring around D on the unit sphere
@@ -131,7 +145,7 @@ VBAP with source spread for wider spatial images:
 
 **Spread radius:** Currently fixed. Future: user-controllable parameter.
 
-### 1.7 Direct Binaural — Woodworth ITD+ILD (Internal Only)
+### 1.8 Direct Binaural — Woodworth ITD+ILD (Internal Only)
 
 Simplified binaural model for "Simple (Low CPU)" monitoring:
 
@@ -195,7 +209,7 @@ For each sample:
   LFE: mono wet sum → 120Hz LP (2nd-order Butterworth) → -10dB → LFE channel
 ```
 
-No HRTF. User selects algorithm (VBAP/VBIP/KNN/Ambisonics/DBAP/MDAP).
+No HRTF. User selects algorithm (Constant Power/VBAP/VBIP/KNN/Ambisonics/DBAP/MDAP).
 
 ### Algorithm-to-Pipeline Selection Matrix
 
