@@ -41,6 +41,13 @@ if grep -q 'handler->restartComponent (flags)' "${VST3_WRAPPER}" 2>/dev/null; th
     perl -i -p0e 's/(flags &= ~pluginShouldBeMarkedDirtyFlag;\r?\n\r?\n)\s*(if \(auto\* handler = componentHandler\.get\(\)\)\r?\n\s*handler->restartComponent \(flags\);)/$1        if (flags != 0)\r\n            if (auto* handler = componentHandler.get())\r\n                handler->restartComponent (flags);/s' "${VST3_WRAPPER}"
 fi
 
+# Issue #88: Patch JUCE AU wrapper — raise channel probe limit from 16 to 64
+# so AU hosts discover support for high-order Ambisonics (25/36/49ch).
+AU_SHARED="JUCE/modules/juce_audio_processors/format_types/juce_AU_Shared.h"
+if grep -q 'maxNumChanToCheckFor = 16' "${AU_SHARED}" 2>/dev/null; then
+    sed -i '' 's/maxNumChanToCheckFor = 16/maxNumChanToCheckFor = 64/' "${AU_SHARED}"
+fi
+
 # Step 2: Patch CMakeLists.txt with version-specific name, plugin code, and bundle ID
 sed -i '' "s/PLUGIN_CODE Os10/PLUGIN_CODE ${PLUGIN_CODE}/" CMakeLists.txt
 sed -i '' "s/PRODUCT_NAME \"OpenSpatialDelay v1.0\"/PRODUCT_NAME \"${PLUGIN_NAME}\"/" CMakeLists.txt
