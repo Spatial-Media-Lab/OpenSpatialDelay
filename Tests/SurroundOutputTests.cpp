@@ -1558,6 +1558,84 @@ TEST_CASE ("Drift diagnostic: feedback repeats maintain consistent timing", "[dr
 // AudioChannelSets instead of the 50-channel discrete default.
 // ============================================================================
 
+TEST_CASE ("AU bus: accepts discrete channels for every registry channel count", "[bus]")
+{
+    auto proc = std::make_unique<Proc>();
+
+    // Collect unique requiredChannels from the registry
+    std::set<int> registryCounts;
+    for (const auto& info : Proc::outputFormatRegistry)
+        registryCounts.insert (info.requiredChannels);
+
+    // Every channel count in the registry must be accepted via discreteChannels(N)
+    for (int numCh : registryCounts)
+    {
+        SECTION ("discrete(" + std::to_string (numCh) + ")")
+        {
+            juce::AudioProcessor::BusesLayout layout;
+            layout.inputBuses.add (juce::AudioChannelSet::stereo());
+            layout.outputBuses.add (juce::AudioChannelSet::discreteChannels (numCh));
+            INFO ("Channel count " << numCh << " from registry");
+            CHECK (proc->checkBusesLayoutSupported (layout));
+        }
+    }
+
+    // 50-channel discrete catch-all must also be accepted
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::stereo());
+        layout.outputBuses.add (juce::AudioChannelSet::discreteChannels (50));
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+}
+
+TEST_CASE ("AU bus: rejects channel counts not in registry", "[bus]")
+{
+    auto proc = std::make_unique<Proc>();
+
+    // Channel counts that do NOT appear in any output format's requiredChannels
+    int rejected[] = { 3, 11, 13, 15, 17, 18, 20, 24, 32, 48 };
+
+    for (int numCh : rejected)
+    {
+        SECTION ("discrete(" + std::to_string (numCh) + ")")
+        {
+            juce::AudioProcessor::BusesLayout layout;
+            layout.inputBuses.add (juce::AudioChannelSet::stereo());
+            layout.outputBuses.add (juce::AudioChannelSet::discreteChannels (numCh));
+            INFO ("Channel count " << numCh << " should be rejected");
+            CHECK_FALSE (proc->checkBusesLayoutSupported (layout));
+        }
+    }
+}
+
+TEST_CASE ("AU bus: accepts named JUCE channel sets matching registry", "[bus]")
+{
+    auto proc = std::make_unique<Proc>();
+
+    struct NamedLayout { const char* name; juce::AudioChannelSet set; };
+    NamedLayout named[] = {
+        { "stereo (2ch)",       juce::AudioChannelSet::stereo() },
+        { "quad (4ch)",         juce::AudioChannelSet::quadraphonic() },
+        { "5.1 (6ch)",          juce::AudioChannelSet::create5point1() },
+        { "7.1 (8ch)",          juce::AudioChannelSet::create7point1() },
+        { "octagonal (8ch)",    juce::AudioChannelSet::octagonal() },
+        { "7.1.4 (12ch)",       juce::AudioChannelSet::create7point1point4() },
+        { "9.1.6 (16ch)",       juce::AudioChannelSet::create9point1point6() },
+    };
+
+    for (const auto& n : named)
+    {
+        SECTION (n.name)
+        {
+            juce::AudioProcessor::BusesLayout layout;
+            layout.inputBuses.add (juce::AudioChannelSet::stereo());
+            layout.outputBuses.add (n.set);
+            CHECK (proc->checkBusesLayoutSupported (layout));
+        }
+    }
+}
+
 TEST_CASE ("isBusesLayoutSupported accepts VST3 default layout (9.1.6)", "[bus]")
 {
     auto proc = std::make_unique<Proc>();
