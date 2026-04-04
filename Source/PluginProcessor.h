@@ -670,7 +670,7 @@ public:
 
     // Issue #68: Config params stored outside APVTS to hide from DAW automation lists.
     // Saved/restored in getStateInformation/setStateInformation.
-    std::atomic<int> configAlgorithm { 0 };
+    std::atomic<int> configAlgorithm { 1 };  // Constant Power (default for surround)
     std::atomic<int> configHrtfProfile { 0 };
     std::atomic<int> configOutputFormat { 0 };
     std::atomic<int> configInputFormat { 0 };
