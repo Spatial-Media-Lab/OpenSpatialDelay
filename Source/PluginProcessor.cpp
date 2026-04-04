@@ -645,7 +645,7 @@ void HRTFDatabase::convertToMinPhase (float* ir, int irLength, int fftOrder, flo
     if (irLength <= 0 || fftOrder <= 0) return;
 
     const int N = 1 << fftOrder;  // FFT size (must be >= 2 * irLength)
-    juce::dsp::FFT fft (fftOrder);
+    auto fftPtr = getSharedFFTCache().getOrCreate (fftOrder);
 
     // workBuf layout: N Complex<float> = N * 2 floats
     auto* cBuf = reinterpret_cast<std::complex<float>*> (workBuf);
@@ -655,7 +655,7 @@ void HRTFDatabase::convertToMinPhase (float* ir, int irLength, int fftOrder, flo
         cBuf[i] = (i < irLength) ? std::complex<float> (ir[i], 0.0f) : std::complex<float> (0.0f, 0.0f);
 
     // Step 2: Forward FFT
-    fft.perform (cBuf, cBuf, false);
+    fftPtr->perform (cBuf, cBuf, false);
 
     // Step 3: Compute log-magnitude (real cepstrum input)
     for (int k = 0; k < N; ++k)
@@ -666,7 +666,7 @@ void HRTFDatabase::convertToMinPhase (float* ir, int irLength, int fftOrder, flo
     }
 
     // Step 4: IFFT to get real cepstrum
-    fft.perform (cBuf, cBuf, true);
+    fftPtr->perform (cBuf, cBuf, true);
 
     // Step 5: Apply minimum-phase window to cepstrum
     // c_mp[0] unchanged, c_mp[1..N/2-1] doubled, c_mp[N/2] unchanged, c_mp[N/2+1..N-1] zeroed
@@ -677,7 +677,7 @@ void HRTFDatabase::convertToMinPhase (float* ir, int irLength, int fftOrder, flo
         cBuf[n] = std::complex<float> (0.0f, 0.0f);
 
     // Step 6: Forward FFT
-    fft.perform (cBuf, cBuf, false);
+    fftPtr->perform (cBuf, cBuf, false);
 
     // Step 7: Exponentiate to get minimum-phase spectrum
     for (int k = 0; k < N; ++k)
@@ -691,7 +691,7 @@ void HRTFDatabase::convertToMinPhase (float* ir, int irLength, int fftOrder, flo
     }
 
     // Step 8: IFFT to get minimum-phase IR
-    fft.perform (cBuf, cBuf, true);
+    fftPtr->perform (cBuf, cBuf, true);
 
     // Step 9: Copy first irLength samples back (real part only)
     for (int i = 0; i < irLength; ++i)
@@ -702,22 +702,28 @@ void HRTFDatabase::convertToMinPhase (float* ir, int irLength, int fftOrder, flo
 // PartitionedConvolver implementation — overlap-save FFT convolution
 //==============================================================================
 
-// Process-global lock for vDSP FFT setup create/destroy (issue #137).
-// Apple's vDSP FFT setup functions are not documented as thread-safe.
-// JUCE already protects FFTW with a CriticalSection but omits vDSP.
-// With multiple plugin instances, concurrent setup create/destroy from the
-// timer thread can race with FFT operations on the audio thread, corrupting
-// vDSP's internal allocator state (manifests as free_list_checksum_botch).
-static juce::CriticalSection& getVDSPSetupLock()
+// Process-global FFT cache (issue #131).  Apple's vDSP shares internal
+// twiddle factor memory across FFT setups of the same order.  Destroying the
+// last setup of a given order frees the shared table even while another
+// thread's vDSP_fft_zrip is reading from it.  The cache creates each order
+// once and holds a permanent shared_ptr so the vDSP twiddle tables are never
+// freed while the process is alive.  Individual convolvers also hold
+// shared_ptrs, providing redundant safety.
+std::shared_ptr<juce::dsp::FFT> SharedFFTCache::getOrCreate (int fftOrder)
 {
-    static juce::CriticalSection cs;
-    return cs;
+    juce::SpinLock::ScopedLockType sl (lock);
+    auto it = cache.find (fftOrder);
+    if (it != cache.end())
+        return it->second;
+    auto ptr = std::make_shared<juce::dsp::FFT> (fftOrder);
+    cache[fftOrder] = ptr;
+    return ptr;
 }
 
-PartitionedConvolver::~PartitionedConvolver()
+SharedFFTCache& getSharedFFTCache()
 {
-    juce::ScopedLock sl (getVDSPSetupLock());
-    fft.reset();
+    static SharedFFTCache instance;
+    return instance;
 }
 
 void PartitionedConvolver::prepare (int maxBlockSize, int irLength_)
@@ -737,10 +743,7 @@ void PartitionedConvolver::prepare (int maxBlockSize, int irLength_)
     fftSize = 1 << fftOrder;
 
     if (orderChanged)
-    {
-        juce::ScopedLock sl (getVDSPSetupLock());
-        fft = std::make_unique<juce::dsp::FFT> (fftOrder);
-    }
+        fft = getSharedFFTCache().getOrCreate (fftOrder);
 
     // v1.0.5: Allocate dual convolution slots (issue #50)
     for (int s = 0; s < 2; ++s)
@@ -1009,8 +1012,11 @@ void BinauralRenderer::prepare (double sampleRate, int maxBlockSize)
     currentSampleRate = sampleRate;
     currentBlockSize = maxBlockSize;
 
-    convTmpL.resize (static_cast<size_t> (maxBlockSize), 0.0f);
-    convTmpR.resize (static_cast<size_t> (maxBlockSize), 0.0f);
+    // Pre-allocate to max(blockSize, 512) to cover typical IR lengths
+    // and avoid audio-thread allocation in renderSourceBuffers / updateSourceHRIR.
+    size_t preAllocSize = static_cast<size_t> (std::max (maxBlockSize, 512));
+    convTmpL.resize (preAllocSize, 0.0f);
+    convTmpR.resize (preAllocSize, 0.0f);
 }
 
 void BinauralRenderer::setProfile (int profileIndex)
@@ -1124,6 +1130,7 @@ void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elR
     // Ensure work buffers are large enough for IR
     if ((int) tmpL.size() < storedIRLength)
     {
+        jassertfalse;  // Audio thread allocation — should have been pre-allocated in prepare()
         tmpL.resize (static_cast<size_t> (storedIRLength));
         tmpR.resize (static_cast<size_t> (storedIRLength));
     }
@@ -1168,6 +1175,7 @@ void BinauralRenderer::renderSourceBuffers (const float* const* sourceBufs,
 
     if (convTmpL.size() < static_cast<size_t> (numSamples))
     {
+        jassertfalse;  // Audio thread allocation — should have been pre-allocated in prepare()
         convTmpL.resize (static_cast<size_t> (numSamples));
         convTmpR.resize (static_cast<size_t> (numSamples));
     }
@@ -2601,6 +2609,10 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     // HRTF convolution: prepare both renderers (double-buffered)
     binauralRenderers[0].prepare (sampleRate, samplesPerBlock);
     binauralRenderers[1].prepare (sampleRate, samplesPerBlock);
+
+    // Pre-allocate renderer crossfade buffers (issue #131: avoid audio-thread allocation)
+    xfadeWetL_.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+    xfadeWetR_.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
 
     // v0.5: Contiguous per-source accumulation buffers for direct binaural
     sourceAccumBufStorage.resize (static_cast<size_t> (MAX_OBJECTS * samplesPerBlock), 0.0f);

@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include <array>
 #include <vector>
+#include "SharedFFTCache.h"
 #include "PresetData.h"
 #include "PhaseVocoderPitchShifter.h"
 #include "DopplerVelocity.h"
@@ -322,7 +323,6 @@ class PartitionedConvolver
 {
 public:
     PartitionedConvolver() = default;
-    ~PartitionedConvolver();
 
     /** Prepare the convolver for a given max block size and IR length. */
     void prepare (int maxBlockSize, int irLength);
@@ -347,7 +347,7 @@ public:
     bool isPrepared() const { return fftSize > 0; }
 
 private:
-    std::unique_ptr<juce::dsp::FFT> fft;  // Owned via unique_ptr for locked destruction (issue #137)
+    std::shared_ptr<juce::dsp::FFT> fft;  // Shared via process-global FFT cache (issue #131)
     int fftOrder = 1;
     int fftSize = 0;                 // 2^fftOrder
     int irLen = 0;
