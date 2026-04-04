@@ -16,7 +16,7 @@ The header bar spans the top of the plugin and contains navigation, routing, and
 | Prev/Next Arrows | Buttons | Step through presets sequentially. |
 | Save | Button | Opens the preset save overlay to save the current settings. |
 | OSC RECV | Toggle | Enables ADM-OSC receive. See [ADM-OSC Integration](adm-osc.md). |
-| Output Format | Dropdown | Selects one of 22 output formats. See [Output Formats](output-formats.md). |
+| Output Format | Dropdown | Selects one of 23 output formats. See [Output Formats](output-formats.md). |
 | Algorithm / HRTF Profile | Dropdown | Context-dependent: shows spatialization algorithm for surround formats (Constant Power, Ambisonics, DBAP, KNN, MDAP, VBAP, VBIP — defaults to Constant Power), HRTF profile for Binaural, stereo mode for Stereo. Hidden when not applicable. See [Output Formats](output-formats.md) for algorithm details. |
 | SML Badge | Button | Links to spatialmedialab.org. |
 
@@ -96,7 +96,7 @@ The bottom panel shows controls for the currently selected tap. Click a tap numb
 | ELEV | -90.0 - +90.0 deg | 0 deg | Elevation angle. 0 = ear level, +90 = directly above, -90 = directly below. Only audible in binaural and surround formats with height speakers. |
 | DIST | 0.00 - 1.00 | 0.50 | Distance from the listener (normalized). Affects perceived loudness and, when AIR is enabled, high-frequency attenuation. |
 | DOPPLER | 0 - 100% | 0% | Doppler effect intensity. When a tap is moving (via trajectory or OSC), its pitch shifts based on approach/recede velocity, simulating the real-world Doppler effect. |
-| PITCH | -24 - +24 st | 0 st | Per-tap pitch shift in semitones. Added on top of the global cumulative pitch. Uses WSOLA (time-stretching) to preserve timing -- the delay rhythm stays locked regardless of pitch shift amount. |
+| PITCH | -12 - +12 st | 0 st | Per-tap pitch shift in semitones. Added on top of the global cumulative pitch. Uses Phase Vocoder (STFT with Laroche-Dolson phase locking) to preserve timing -- the delay rhythm stays locked regardless of pitch shift amount. |
 | INPUT | L+R / L / R | L+R | Input channel routing (only active when the DAW provides a stereo input). L+R = summed mono. L = left channel only. R = right channel only. |
 | TRAJ | 14 shapes | None | Trajectory shape for automated spatial movement. See [Trajectories](trajectories.md) for all shapes. |
 | SPEED | 0.00 - 5.00 Hz | 0.30 Hz | Trajectory animation speed. Higher values = faster movement. |
@@ -128,7 +128,7 @@ Click the handle strip labeled **GLOBAL** on the left edge of the spatial map. T
 | ELEV | Elevation | +/-90 deg | Clamps at +/-90 |
 | DIST | Distance | +/-1.0 | Clamps at parameter limits |
 | DOPPLER | Doppler Amount | +/-1.0 | Clamps at parameter limits |
-| PITCH | Pitch Shift | +/-24 st | Clamps at +/-24 semitones |
+| PITCH | Pitch Shift | +/-12 st | Clamps at +/-12 semitones |
 | SPEED | Trajectory Speed | +/-5.0 Hz | Clamps at parameter limits |
 
 ### Important Details
@@ -143,7 +143,7 @@ Click the handle strip labeled **GLOBAL** on the left edge of the spatial map. T
 
 ### Per-Tap Pitch Shift
 
-Each tap has an independent pitch shift (+/-24 semitones) using WSOLA time-stretching. This preserves the delay rhythm -- the tap's timing stays locked regardless of pitch shift amount. The global PITCH knob in the drawer offsets all enabled taps simultaneously.
+Each tap has an independent pitch shift (+/-12 semitones) using Phase Vocoder (STFT with Laroche-Dolson phase locking). This preserves the delay rhythm -- the tap's timing stays locked regardless of pitch shift amount. The global PITCH knob in the drawer offsets all enabled taps simultaneously.
 
 ### Feedback Read Position
 

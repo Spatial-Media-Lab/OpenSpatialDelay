@@ -9,15 +9,15 @@ OpenSpatialDelay is the first plugin in the **Spatial Media Library**, an open-s
 ## Key Features
 
 - **12 independent delay taps** positioned anywhere in 3D space
-- **22 output formats** -- Binaural, Stereo, Surround (Quad through 9.1.6), and Ambisonics (1st through 6th order)
+- **23 output formats** -- Binaural, Stereo, Surround (Quad through 9.1.6), and Ambisonics (1st through 6th order)
 - **6 HRTF profiles** from measured SOFA files for realistic headphone spatialization
 - **8 spatialization algorithms** for surround rendering (Constant Power, VBAP, VBIP, MDAP, KNN, DBAP, Ambisonics, Direct Binaural)
-- **13 trajectory shapes** per tap for automated spatial movement
+- **14 trajectory shapes** per tap for automated spatial movement
 - **Tempo-synced or free-running delay** with cumulative pitch shifting
 - **Per-tap pitch shift** that preserves timing, layered on top of global pitch
 - **Wobble modulation** with morphable waveform (sine to square)
 - **ADM-OSC** receive and send for integration with spatial audio workstations
-- **60 factory presets** across 9 categories, plus user preset save/load
+- **70 factory presets** across 9 categories, plus user preset save/load
 - **Stereo input routing** with per-tap L/R channel selection
 - **Doppler effect** with distance-based air absorption
 
@@ -32,9 +32,9 @@ OpenSpatialDelay is the first plugin in the **Spatial Media Library**, an open-s
 |------|-------------|
 | [Getting Started](getting-started.md) | Installation, loading in your DAW, first sound in 2 minutes |
 | [Spatial Map](spatial-map.md) | The spatial map visualization and interaction |
-| [Output Formats](output-formats.md) | All 22 output formats, rendering paths, and algorithm selection |
+| [Output Formats](output-formats.md) | All 23 output formats, rendering paths, and algorithm selection |
 | [Controls Reference](controls-reference.md) | Complete parameter reference organized by UI section |
-| [Trajectories](trajectories.md) | All 13 trajectory shapes, speed, direction, and visualization |
+| [Trajectories](trajectories.md) | All 14 trajectory shapes, speed, direction, and visualization |
 | [Presets](presets.md) | Factory presets, saving, loading, and file format |
 | [ADM-OSC Integration](adm-osc.md) | External position control via ADM-OSC protocol |
 | [Creative Tips](creative-tips.md) | Sound design recipes and production techniques |

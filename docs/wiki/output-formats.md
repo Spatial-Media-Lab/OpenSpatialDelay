@@ -1,6 +1,6 @@
 # Output Formats
 
-OpenSpatialDelay supports 22 output formats organized into four categories: Binaural, Stereo, Surround, and Ambisonics. The active format is selected from the dropdown in the header bar.
+OpenSpatialDelay supports 23 output formats organized into four categories: Binaural, Stereo, Surround, and Ambisonics. The active format is selected from the dropdown in the header bar.
 
 ## Five Rendering Paths
 
@@ -66,6 +66,7 @@ Surround formats output discrete speaker signals. The plugin computes per-speake
 | 5.1 Surround | 6 | Yes | No | Standard film/broadcast surround |
 | 7.0 Surround | 7 | No | No | Extended surround without LFE |
 | 7.1 Surround | 8 | Yes | No | Standard high-channel surround |
+| 9.1 Surround | 10 | Yes | No | ITU-R BS.2051 System H -- 9 ear-level speakers + LFE |
 | Octaphonic | 8 | No | No | 8 equidistant speakers (ring), art/research |
 | 5.1.2 Atmos | 8 | Yes | Yes | Entry-level Atmos with 2 height speakers |
 | 5.1.4 Atmos | 10 | Yes | Yes | Atmos with 4 height speakers |

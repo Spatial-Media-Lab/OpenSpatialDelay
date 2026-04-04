@@ -87,6 +87,25 @@ static void setParam (Proc& proc, const juce::String& paramId, float value)
 }
 
 // ============================================================================
+// Section 1b: SharedFFTCache Unit Tests (issue #131)
+// ============================================================================
+
+TEST_CASE ("SharedFFTCache — returns same instance for same order", "[fft][issue131]")
+{
+    auto& cache = getSharedFFTCache();
+    auto fft1 = cache.getOrCreate (11);
+    auto fft2 = cache.getOrCreate (11);
+    REQUIRE (fft1.get() == fft2.get());
+
+    auto fft3 = cache.getOrCreate (10);
+    REQUIRE (fft3.get() != fft1.get());
+
+    // Different order also cached
+    auto fft4 = cache.getOrCreate (10);
+    REQUIRE (fft4.get() == fft3.get());
+}
+
+// ============================================================================
 // Section 2: PartitionedConvolver Unit Tests
 // ============================================================================
 
