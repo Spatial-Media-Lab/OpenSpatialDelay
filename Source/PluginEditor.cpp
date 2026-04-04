@@ -727,9 +727,9 @@ void OSDLookAndFeel::drawComboBox (juce::Graphics& g, int width, int height, boo
 
 void OSDLookAndFeel::positionComboBoxText (juce::ComboBox& box, juce::Label& label)
 {
-    // Reserve only 20px for arrow (our triangle is 6px wide centered at width-12)
-    // instead of JUCE's default 30px — fixes "Figure-8" truncation
-    label.setBounds (1, 1, box.getWidth() - 20, box.getHeight() - 2);
+    // Reserve 20px for arrow when enabled; use full width when disabled (no arrow)
+    int rightPad = box.isEnabled() ? 20 : 4;
+    label.setBounds (1, 1, box.getWidth() - rightPad, box.getHeight() - 2);
     label.setFont (getComboBoxFont (box));
 }
 
