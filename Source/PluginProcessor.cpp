@@ -603,6 +603,25 @@ void HRTFDatabase::getAlignedHRIR (float azimuthRad, float elevationRad,
     int shiftL = static_cast<int> (delayL);
     int shiftR = static_cast<int> (delayR);
 
+    // v1.0.11 (issue #89): If SOFA reports zero delay for both channels,
+    // the ITD is baked into the HRIR waveform (confirmed for MIT KEMAR,
+    // likely CIPIC/HUTUBS/Bernschuetz). Detect onset from the waveform
+    // itself so the dual-slot crossfade blends time-aligned HRIRs.
+    // SADIE II KU100 reports non-zero delays and bypasses this fallback.
+    // NOTE: Check raw float delays, not integer-truncated — SADIE reports
+    // fractional delays (e.g., 0.3/0.7) that truncate to int 0 but are valid.
+    if (delayL < 0.001f && delayR < 0.001f)
+    {
+        int onsetL = detectOnset (irL, irLength, 0.1f);
+        int onsetR = detectOnset (irR, irLength, 0.1f);
+        int minOnset = std::min (onsetL, onsetR);
+        shiftL = onsetL - minOnset;
+        shiftR = onsetR - minOnset;
+        // Report detected ITD for the ITD delay line in renderSourceBuffers()
+        delayL = static_cast<float> (onsetL);
+        delayR = static_cast<float> (onsetR);
+    }
+
     // Shift left channel: move samples backward by shiftL
     if (shiftL > 0 && shiftL < irLength)
     {
@@ -696,6 +715,39 @@ void HRTFDatabase::convertToMinPhase (float* ir, int irLength, int fftOrder, flo
     // Step 9: Copy first irLength samples back (real part only)
     for (int i = 0; i < irLength; ++i)
         ir[i] = cBuf[i].real();
+}
+
+int HRTFDatabase::detectOnset (const float* ir, int length, float thresholdFraction)
+{
+    if (ir == nullptr || length <= 0)
+        return 0;
+
+    // Find peak absolute value
+    float peak = 0.0f;
+    for (int i = 0; i < length; ++i)
+    {
+        float absVal = std::abs (ir[i]);
+        if (absVal > peak)
+            peak = absVal;
+    }
+
+    if (peak < 1e-20f)
+        return 0;  // Silent IR
+
+    // Scan forward for first sample exceeding threshold * peak
+    float thresh = thresholdFraction * peak;
+    for (int i = 0; i < length; ++i)
+    {
+        if (std::abs (ir[i]) >= thresh)
+        {
+            // Clamp: if onset is past halfway, IR has no clear leading edge
+            if (i > length / 2)
+                return 0;
+            return i;
+        }
+    }
+
+    return 0;
 }
 
 //==============================================================================
@@ -1108,13 +1160,24 @@ void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elR
     if (sourceIndex < 0 || sourceIndex >= MAX_SOURCES || storedIRLength <= 0)
         return;
 
-    // v1.0.2: ~1° threshold (reduced from ~2°) — more frequent, smaller HRIR changes
-    // produce less audible spectral transitions during azimuth/elevation sweeps (issue #47)
+    // v1.0.11 (issue #89): Great-circle angular distance threshold replaces independent
+    // azimuth/elevation comparison. The old check treated 1° of azimuth equally at equator
+    // and pole, but at elevation 89° a 1° azimuth change is only ~0.017° of actual angular
+    // movement on the sphere. This caused constant HRIR switching at poles (zenith stuck
+    // centered, erratic nadir jumps). Great-circle distance naturally handles the pole
+    // singularity — azimuth changes near ±90° elevation produce near-zero angular distance.
     constexpr float THRESHOLD = 0.017f;  // ~1 degree in radians
-    if (sourceConvReady[sourceIndex]
-        && std::abs (azRad - cachedSourceAz[sourceIndex]) < THRESHOLD
-        && std::abs (elRad - cachedSourceEl[sourceIndex]) < THRESHOLD)
-        return;
+    if (sourceConvReady[sourceIndex])
+    {
+        float cachedAz = cachedSourceAz[sourceIndex];
+        float cachedEl = cachedSourceEl[sourceIndex];
+        float dot = std::cos (elRad) * std::cos (cachedEl) * std::cos (azRad - cachedAz)
+                  + std::sin (elRad) * std::sin (cachedEl);
+        dot = juce::jlimit (-1.0f, 1.0f, dot);
+        float angularDist = std::acos (dot);
+        if (angularDist < THRESHOLD)
+            return;
+    }
 
     // Query HRTF at exact source direction (realtime-safe: KD-tree lookup, no malloc)
     float delayL = 0.0f, delayR = 0.0f;
