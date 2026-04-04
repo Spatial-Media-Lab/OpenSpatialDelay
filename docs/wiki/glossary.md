@@ -40,6 +40,9 @@ A mathematical operation that combines two signals -- in spatial audio, typicall
 **Cutoff Frequency**
 The frequency at which a filter begins to attenuate the signal, typically defined as the -3 dB point. In OpenSpatialDelay, the LP (low-pass) and HP (high-pass) knobs set cutoff frequencies for the feedback filters.
 
+**Constant Power Panning**
+The default spatialization algorithm for surround output. Computes speaker gains using the cosine of the angular distance between the source and each speaker, with a hemisphere cutoff at 90 degrees. Activates all speakers within the forward hemisphere with natural rolloff, producing smoother, wider spatial images than VBAP. Constant-power normalized so total radiated energy stays constant regardless of source position.
+
 **DAW (Digital Audio Workstation)**
 Software for recording, editing, and mixing audio. Examples include Reaper, Logic Pro, Ableton Live, Cubase, and Pro Tools. OpenSpatialDelay runs as a plugin within a DAW.
 
