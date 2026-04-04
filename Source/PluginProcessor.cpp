@@ -58,6 +58,8 @@ const std::array<OpenSpatialDelayProcessor::OutputFormatInfo,
     { OutputFormat::Surround7_1,    "7.1 Surround",     "7.1",    8, true,  false, false, 0, false },
     // --- Octaphonic ---
     { OutputFormat::Octaphonic,     "Octaphonic",       "Oct",    8, false, false, false, 0, false },
+    // --- 9.1 Surround (ITU-R BS.2051 System H — ear level only, no height) ---
+    { OutputFormat::Surround9_1,    "9.1 Surround",     "9.1",   10, true,  false, false, 0, false },
     // --- Atmos / Immersive (ascending channel count) ---
     { OutputFormat::Surround5_1_2,  "5.1.2 Atmos",      "5.1.2",  8, true,  true,  false, 0, false },
     { OutputFormat::Surround5_1_4,  "5.1.4 Atmos",      "5.1.4", 10, true,  true,  false, 0, false },
@@ -123,7 +125,7 @@ const std::array<VirtualSpeaker, OpenSpatialDelayProcessor::NUM_VIRTUAL_SPEAKERS
 struct SpeakerDef { float azDeg; float elDeg; int chIdx; };
 struct LayoutDef { int numSpeakers; int lfeIdx; int totalChs; SpeakerDef speakers[16]; };
 
-enum LayoutID { Quad, S5_0, S5_1, S7_0, S7_1, S5_1_2, S5_1_4, S7_1_2, S7_1_4, S7_1_6, S9_1_4, S9_1_6, Octaphonic, SML13_1, NUM_LAYOUT_DEFS };
+enum LayoutID { Quad, S5_0, S5_1, S7_0, S7_1, S9_1, S5_1_2, S5_1_4, S7_1_2, S7_1_4, S7_1_6, S9_1_4, S9_1_6, Octaphonic, SML13_1, NUM_LAYOUT_DEFS };
 
 static const LayoutDef layoutDefs[NUM_LAYOUT_DEFS] = {
     // Quad (4.0) — symmetric 90° spacing
@@ -136,6 +138,8 @@ static const LayoutDef layoutDefs[NUM_LAYOUT_DEFS] = {
     { 7, -1, 7, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,3}, {-90,0,4}, { 135,0,5}, {-135,0,6}} },
     // 7.1 (LFE=ch3)
     { 7,  3, 8, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,4}, {-90,0,5}, { 135,0,6}, {-135,0,7}} },
+    // 9.1 (LFE=ch3) — ITU-R BS.2051 System H, 9 ear-level speakers + LFE, no height
+    { 9, 3, 10, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,4}, {-90,0,5}, { 135,0,6}, {-135,0,7}, { 60,0,8}, {-60,0,9}} },
     // 5.1.2 (LFE=ch3)
     { 7,  3, 8, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 110,0,4}, {-110,0,5}, { 90,45,6}, {-90,45,7}} },
     // 5.1.4 (LFE=ch3)
@@ -2330,6 +2334,7 @@ void OpenSpatialDelayProcessor::activateLayout (OutputFormat format)
         case OutputFormat::Surround5_1:   buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S5_1]);       break;
         case OutputFormat::Surround7_0:   buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S7_0]);       break;
         case OutputFormat::Surround7_1:   buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S7_1]);       break;
+        case OutputFormat::Surround9_1:   buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S9_1]);       break;
         case OutputFormat::Surround5_1_2: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S5_1_2]);     break;
         case OutputFormat::Surround5_1_4: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S5_1_4]);     break;
         case OutputFormat::Surround7_1_2: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S7_1_2]);     break;
@@ -5274,7 +5279,7 @@ void OpenSpatialDelayProcessor::handleOSCPosition (int objIdx, float azDeg, floa
 void OpenSpatialDelayProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
-    state.setProperty ("pluginStateVersion", 20, nullptr);  // v1.0 state format (20 = config params moved out of APVTS)
+    state.setProperty ("pluginStateVersion", 21, nullptr);  // v1.0 state format (21 = 9.1 Surround added, issue #88)
     // Issue #68: Config params stored as top-level properties (not APVTS children)
     state.setProperty ("configAlgorithm", configAlgorithm.load (std::memory_order_relaxed), nullptr);
     state.setProperty ("configHrtfProfile", configHrtfProfile.load (std::memory_order_relaxed), nullptr);
@@ -5820,6 +5825,16 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
         configHrtfProfile.store (static_cast<int> (tree.getProperty ("configHrtfProfile", 0)), std::memory_order_relaxed);
         configOutputFormat.store (static_cast<int> (tree.getProperty ("configOutputFormat", 0)), std::memory_order_relaxed);
         configInputFormat.store (static_cast<int> (tree.getProperty ("configInputFormat", 0)), std::memory_order_relaxed);
+    }
+
+    // Issue #88: Migrate outputFormat from 22-item to 23-item (9.1 Surround inserted at index 8)
+    // Old indices 0-7 stay the same. Old indices 8-21 (Atmos, SML, Ambisonics) shift to 9-22.
+    if (savedVersion < 21)
+    {
+        int oldIdx = configOutputFormat.load (std::memory_order_relaxed);
+        int newIdx = (oldIdx >= 8) ? oldIdx + 1 : oldIdx;
+        configOutputFormat.store (newIdx, std::memory_order_relaxed);
+        tree.setProperty ("configOutputFormat", newIdx, nullptr);
     }
 
     // v0.6: Restore OSC receive port (non-APVTS property)

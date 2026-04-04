@@ -529,7 +529,7 @@ public:
     }
 
     // Output formats — Binaural, Stereo, Surround, Octaphonic, Atmos, SML, Ambisonics
-    // 1 Binaural + 1 Stereo + 14 Surround + 6 Ambisonics = 22 total
+    // 1 Binaural + 1 Stereo + 15 Surround + 6 Ambisonics = 23 total
     // Stereo mode (Equal Power, VBAP, XY, MS, Blumlein) selected via algorithm parameter
     enum class OutputFormat {
         // Binaural (HRTF head model) — default
@@ -540,6 +540,8 @@ public:
         Quad, Surround5_0, Surround5_1, Surround7_0, Surround7_1,
         // Octaphonic
         Octaphonic,
+        // 9.1 Surround (ITU-R BS.2051 System H — ear level only, no height)
+        Surround9_1,
         // Atmos / Immersive (ascending channel count)
         Surround5_1_2, Surround5_1_4, Surround7_1_2,
         Surround7_1_4, Surround7_1_6, Surround9_1_4, Surround9_1_6,
@@ -563,7 +565,7 @@ public:
         int  ambiOrder;             // 0 for non-ambi, 1-6 for Ambisonics output
         bool isStereoVariant;       // true for Stereo (single entry, mode via algorithm param)
     };
-    static constexpr int NUM_OUTPUT_FORMATS = 22;
+    static constexpr int NUM_OUTPUT_FORMATS = 23;
     static const std::array<OutputFormatInfo, NUM_OUTPUT_FORMATS> outputFormatRegistry;
 
     // Double-buffered layout state for lock-free audio thread reads
