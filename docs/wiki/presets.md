@@ -1,6 +1,6 @@
 # Presets
 
-OpenSpatialDelay includes 60 factory presets across 9 categories, plus a user preset system for saving and loading your own settings.
+OpenSpatialDelay includes 70 factory presets across 9 categories, plus a user preset system for saving and loading your own settings.
 
 ## Factory Presets
 
@@ -9,25 +9,25 @@ OpenSpatialDelay includes 60 factory presets across 9 categories, plus a user pr
 | Category | Count | Description |
 |---|---|---|
 | Classic Delays | 8 | Traditional delay effects adapted for spatial audio -- ping-pong, slapback, dotted eighth, tape echo, dub, and more |
-| Spatial Movement | 7 | Taps with trajectories and spatial animation -- orbits, spirals, figure-8 weaves, bouncing patterns |
-| Ambient + Texture | 8 | Atmospheric, evolving textures -- shimmer, frozen cascades, dark matter, grain clouds, cathedral spaces |
-| Height + 3D | 6 | Presets that emphasize vertical movement and 3D positioning -- falling cascades, ascending stairs, dome rings, vertical ping-pong |
-| Surround Production | 5 | Designed for surround speaker layouts -- 5.1, 7.1, 7.1.4 Atmos, quad swirl, and wide stereo |
+| Spatial Movement | 18 | Taps with trajectories and spatial animation -- orbits, spirals, figure-8 weaves, bouncing patterns, and showcases of all 14 trajectory shapes |
+| Ambient + Texture | 8 | Atmospheric, evolving textures -- shimmer, frozen cascades, dark matter, grain clouds, echo chambers |
+| Height + 3D | 6 | Presets that emphasize vertical movement and 3D positioning -- falling cascades, overhead arcs, dome rings, vertical ping-pong |
+| Surround Production | 6 | Designed for surround speaker layouts -- 5.1, 7.1, 7.1.4 Atmos, quad swirl, rhythmic, and wide stereo |
 | Wobble + Modulated | 6 | Tape-inspired and LFO-modulated delay effects -- tape wow, flutter, warped echo, chorus delay, seasick, subtle motion |
 | Creative + Experimental | 8 | Extreme and unusual effects -- self-oscillation, reverse spirals, stereo split, pitch ladders, Doppler storms |
 | Rhythmic | 10 | Rhythmically patterned delays -- tresillo, cinquillo, polyrhythms, clave patterns, Morse code, Fibonacci spacing |
 
 ### Full Preset List
 
-**Classic Delays:** Default, Stereo Ping-Pong, Slapback, Dotted Eighth, Tape Echo, Dub Delay, Quarter Note Bounce, Multi-Tap Cascade
+**Classic Delays:** Quad Ping-Pong, Stereo Ping-Pong, Slapback, Dotted Eighth, Tape Echo, Dub Delay, Quarter Note Bounce, Multi-Tap Cascade
 
-**Spatial Movement:** Circle (Quad), Rising Spiral, Orbit Dance, Figure-8 Weave, Bouncing Ball, Spiral Descent, Random Walk, Pendulum
+**Spatial Movement:** Cardinal, Rising Spiral, Orbit Dance, Figure-8 Weave, Bouncing Balls, Spiral Descent, Random Walk, Pendulum, Heartbeat, Box Step, Trigonometry, Crossing Paths, Merry-Go-Round, Lemniscate, Back and Forth, Corkscrew Duo, Comet Trail, Kaleidoscope
 
-**Ambient + Texture:** Shimmer, Frozen Cascade, Dark Matter, Ethereal Wash, Grain Cloud, Cathedral, Drift, Fifth Ghost
+**Ambient + Texture:** Shimmer, Frozen Cascade, Dark Matter, Ethereal Wash, Grain Cloud, Echo Chamber, Drift, Fifth Ghost
 
-**Height + 3D:** Falling Cascade, Rain, Hemisphere Spread, Ascending Staircase, Dome Ring, Vertical Ping-Pong
+**Height + 3D:** Falling Cascade, Rain, Hemisphere Spread, Overhead Arc, Dome Ring, Vertical Ping-Pong
 
-**Surround Production:** Surround 5.1, Surround 7.1, Atmos 7.1.4, Quad Swirl, Wide Stereo
+**Surround Production:** Surround 5.1, Surround 7.1, Atmos 7.1.4, Quad Swirl, 5.1 Rhythmic, Wide Stereo
 
 **Wobble + Modulated:** Tape Wow, Tape Flutter, Warped Echo, Chorus Delay, Seasick, Subtle Motion
 
