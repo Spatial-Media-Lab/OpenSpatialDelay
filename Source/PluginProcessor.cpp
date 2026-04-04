@@ -1630,13 +1630,14 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
       apvts (*this, nullptr, "Parameters", createParameterLayout())
 {
     // Initialize polymorphic algorithm pointer array (O(1) index lookup)
-    // 6 algorithms (alphabetical): Ambisonics (0), DBAP (1), KNN (2), MDAP (3), VBAP (4), VBIP (5)
+    // 7 algorithms (alphabetical): Ambisonics (0), ConstPower (1), DBAP (2), KNN (3), MDAP (4), VBAP (5), VBIP (6)
     algorithms[0] = &algAmbisonics;
-    algorithms[1] = &algDBAP;
-    algorithms[2] = &algKNN;
-    algorithms[3] = &algMDAP;
-    algorithms[4] = &algVBAP;
-    algorithms[5] = &algVBIP;
+    algorithms[1] = &algConstantPower;
+    algorithms[2] = &algDBAP;
+    algorithms[3] = &algKNN;
+    algorithms[4] = &algMDAP;
+    algorithms[5] = &algVBAP;
+    algorithms[6] = &algVBIP;
 
     // Cache per-object parameter pointers (stable for APVTS lifetime, avoids string lookups in processBlock)
     for (int i = 0; i < MAX_OBJECTS; ++i)
@@ -3610,6 +3611,49 @@ void DBAPAlgorithm::computeGains (const SourcePosition& source, const LayoutCont
 }
 
 //==============================================================================
+// ConstantPowerAlgorithm — Cosine-distance all-speaker panning
+// All speakers within 90 degrees of the source receive a cosine-weighted gain,
+// constant-power normalized. Produces smooth, diffuse spatial images.
+//==============================================================================
+void ConstantPowerAlgorithm::computeGains (const SourcePosition& source, const LayoutContext& ctx,
+                                            float* outputGains, int numSpeakers) const
+{
+    for (int s = 0; s < numSpeakers; ++s)
+        outputGains[s] = 0.0f;
+
+    if (numSpeakers == 0) return;
+
+    // Source direction as unit Cartesian vector
+    float px = std::cos (source.elevationRad) * std::sin (source.azimuthRad);
+    float py = std::cos (source.elevationRad) * std::cos (source.azimuthRad);
+    float pz = std::sin (source.elevationRad);
+
+    // Cosine-distance weighting: dot product = cos(angular distance)
+    // Hemisphere cutoff: speakers beyond 90 degrees get zero gain
+    float totalPower = 0.0f;
+
+    for (int s = 0; s < numSpeakers; ++s)
+    {
+        float sx = std::cos (ctx.layout.speakers[s].elevationRad) * std::sin (ctx.layout.speakers[s].azimuthRad);
+        float sy = std::cos (ctx.layout.speakers[s].elevationRad) * std::cos (ctx.layout.speakers[s].azimuthRad);
+        float sz = std::sin (ctx.layout.speakers[s].elevationRad);
+
+        float dot = juce::jlimit (-1.0f, 1.0f, px * sx + py * sy + pz * sz);
+        float rawGain = std::max (0.0f, dot);
+        outputGains[s] = rawGain;
+        totalPower += rawGain * rawGain;
+    }
+
+    // Constant-power normalization
+    if (totalPower > 1e-12f)
+    {
+        float scale = 1.0f / std::sqrt (totalPower);
+        for (int s = 0; s < numSpeakers; ++s)
+            outputGains[s] *= scale;
+    }
+}
+
+//==============================================================================
 // MDAPAlgorithm — Multiple-Direction Amplitude Panning (Pulkki 2000)
 // Creates source spread using N auxiliary VBAP sources on a ring around the
 // main direction. Produces wider, more stable spatial images than point VBAP.
@@ -4057,7 +4101,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     // For surround output, fall back if algorithm doesn't support speakers
     if (! isBinaural && ! isStereoVariant && ! algo->supportsSurround())
-        algo = algorithms[4];  // Fall back to VBAP (index 4 in alphabetical order)
+        algo = algorithms[5];  // Fall back to VBAP (index 5 in alphabetical order)
 
     // --- HRTF profile management (block-rate, binaural only) ---
     bool useHRTF = false;
@@ -4344,7 +4388,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     if (isStereoVariant)
     {
         // Stereo mode from algorithm parameter: indices 6-10 → modes 0-4
-        int stereoMode = juce::jlimit (6, 10, algorithmIndex) - 6;
+        int stereoMode = juce::jlimit (7, 11, algorithmIndex) - 7;
         renderStereoVariant (buffer, numSamples, objects, objDistGain,
                              stereoMode);
     }
@@ -5343,7 +5387,7 @@ void OpenSpatialDelayProcessor::handleOSCPosition (int objIdx, float azDeg, floa
 void OpenSpatialDelayProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
-    state.setProperty ("pluginStateVersion", 22, nullptr);  // v1.0 state format (22 = 9.1 Surround reordered before Octaphonic, issue #88)
+    state.setProperty ("pluginStateVersion", 23, nullptr);  // v1.1 state format (23 = Constant Power algorithm inserted at index 1)
     // Issue #68: Config params stored as top-level properties (not APVTS children)
     state.setProperty ("configAlgorithm", configAlgorithm.load (std::memory_order_relaxed), nullptr);
     state.setProperty ("configHrtfProfile", configHrtfProfile.load (std::memory_order_relaxed), nullptr);
@@ -5909,6 +5953,18 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
         else if (idx == 8) idx = 7;   // 9.1 Surround → 7
         configOutputFormat.store (idx, std::memory_order_relaxed);
         tree.setProperty ("configOutputFormat", idx, nullptr);
+    }
+
+    // v1.1: Migrate algorithm index for Constant Power insertion at index 1
+    // Old: [0=Ambi, 1=DBAP, 2=KNN, 3=MDAP, 4=VBAP, 5=VBIP, 6..10=stereo]
+    // New: [0=Ambi, 1=ConstPow, 2=DBAP, 3=KNN, 4=MDAP, 5=VBAP, 6=VBIP, 7..11=stereo]
+    // All old indices >= 1 shift up by 1
+    if (savedVersion < 23)
+    {
+        int oldAlgo = configAlgorithm.load (std::memory_order_relaxed);
+        int newAlgo = (oldAlgo >= 1) ? oldAlgo + 1 : oldAlgo;
+        configAlgorithm.store (newAlgo, std::memory_order_relaxed);
+        tree.setProperty ("configAlgorithm", newAlgo, nullptr);
     }
 
     // v0.6: Restore OSC receive port (non-APVTS property)
