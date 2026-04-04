@@ -236,14 +236,15 @@ static const LayoutExpectation layoutExpectations[] = {
     { "7.0",        5,   7,  7, -1, false },
     { "7.1",        6,   7,  8,  3, false },
     { "Octaphonic",  7,  8,  8, -1, false },
-    { "5.1.2",      8,   7,  8,  3, true  },
-    { "5.1.4",       9,  9, 10,  3, true  },
-    { "7.1.2",      10,  9, 10,  3, true  },
-    { "7.1.4",      11, 11, 12,  3, true  },
-    { "7.1.6",      12, 13, 14,  3, true  },
-    { "9.1.4",      13, 13, 14,  3, true  },
-    { "9.1.6",      14, 15, 16,  3, true  },
-    { "SML 13.1",   15, 13, 14, 13, true  },
+    { "9.1",        8,   9, 10,  3, false },
+    { "5.1.2",      9,   7,  8,  3, true  },
+    { "5.1.4",      10,  9, 10,  3, true  },
+    { "7.1.2",      11,  9, 10,  3, true  },
+    { "7.1.4",      12, 11, 12,  3, true  },
+    { "7.1.6",      13, 13, 14,  3, true  },
+    { "9.1.4",      14, 13, 14,  3, true  },
+    { "9.1.6",      15, 15, 16,  3, true  },
+    { "SML 13.1",   16, 13, 14, 13, true  },
 };
 
 TEST_CASE ("Layout: speaker count and channel count match spec", "[layout]")
@@ -424,7 +425,7 @@ TEST_CASE ("VBAP: source at rear (135deg) on 7.1 activates Lrs", "[algorithm][vb
 
 TEST_CASE ("VBAP: source at height position on 7.1.4 activates height speaker", "[algorithm][vbap]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     const auto& state = proc->getActiveLayout();
     auto ctx = makeLayoutCtx (state);
 
@@ -574,7 +575,7 @@ TEST_CASE ("KNN: source at speaker position has that speaker loudest", "[algorit
 
 TEST_CASE ("KNN: activates exactly k=3 speakers (between speakers)", "[algorithm][knn]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::KNN);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::KNN);
     const auto& state = proc->getActiveLayout();
     auto ctx = makeLayoutCtx (state);
 
@@ -680,7 +681,7 @@ TEST_CASE ("MDAP: source at speaker position has that speaker loudest", "[algori
 
 TEST_CASE ("MDAP: wider spread than VBAP (more non-zero gains)", "[algorithm][mdap]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     const auto& state = proc->getActiveLayout();
     auto ctx = makeLayoutCtx (state);
 
@@ -756,7 +757,7 @@ TEST_CASE ("Ambisonics: source at speaker position has that speaker loudest", "[
 TEST_CASE ("All algorithms: source at L (30deg) has L as loudest on all formats", "[algorithm][cardinal]")
 {
     // Formats that have L at 30° as speaker index 0
-    int formats[] = { 4 /*5.1*/, 5 /*7.0*/, 6 /*7.1*/, 11 /*7.1.4*/, 14 /*9.1.6*/ };
+    int formats[] = { 4 /*5.1*/, 5 /*7.0*/, 6 /*7.1*/, 12 /*7.1.4*/, 15 /*9.1.6*/ };
     int algos[] = { AlgoIdx::VBAP, AlgoIdx::VBIP, AlgoIdx::KNN, AlgoIdx::DBAP, AlgoIdx::MDAP };
     const char* algoNames[] = { "VBAP", "VBIP", "KNN", "DBAP", "MDAP" };
 
@@ -828,7 +829,7 @@ TEST_CASE ("Elevation: VBAP triplets are populated for all height formats", "[el
 
 TEST_CASE ("Elevation: VBAP horizontal source gives zero gain to height speakers on 7.1.4", "[elevation][vbap]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     const auto& state = proc->getActiveLayout();
     auto ctx = makeLayoutCtx (state);
     auto heightIndices = findHeightSpeakerIndices (state.layout);
@@ -857,7 +858,7 @@ TEST_CASE ("Elevation: VBAP horizontal source gives zero gain to height speakers
 
 TEST_CASE ("Elevation: VBIP horizontal source gives zero gain to height speakers on 7.1.4", "[elevation][vbip]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBIP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBIP);
     const auto& state = proc->getActiveLayout();
     auto ctx = makeLayoutCtx (state);
     auto heightIndices = findHeightSpeakerIndices (state.layout);
@@ -884,7 +885,7 @@ TEST_CASE ("Elevation: VBIP horizontal source gives zero gain to height speakers
 
 TEST_CASE ("Elevation: integration — horizontal source silent in height channels on 7.1.4", "[elevation][integration]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     setParam (*proc, "delayTime", 1.0f);
     setParam (*proc, "dryWet", 1.0f);
     setParam (*proc, "feedback", 0.0f);
@@ -909,7 +910,7 @@ TEST_CASE ("Elevation: integration — horizontal source silent in height channe
 TEST_CASE ("Elevation: integration — elevated source activates height channels on 7.1.4", "[elevation][integration]")
 {
     // Source at (45°, 0°) — height channels should be silent
-    auto proc0 = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc0 = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     setParam (*proc0, "delayTime", 1.0f);
     setParam (*proc0, "dryWet", 1.0f);
     setParam (*proc0, "feedback", 0.0f);
@@ -918,7 +919,7 @@ TEST_CASE ("Elevation: integration — elevated source activates height channels
     auto out0 = processBlocksConstrained (*proc0, 8, 512, 12);
 
     // Source at (45°, 45°) — height channels should be active
-    auto proc45 = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc45 = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     setParam (*proc45, "delayTime", 1.0f);
     setParam (*proc45, "dryWet", 1.0f);
     setParam (*proc45, "feedback", 0.0f);
@@ -974,7 +975,7 @@ TEST_CASE ("Elevation: all height formats — horizontal source excludes height 
 
 TEST_CASE ("Elevation: VBAP gain to Tfl increases monotonically 0->45 on 7.1.4", "[elevation]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     const auto& state = proc->getActiveLayout();
     auto ctx = makeLayoutCtx (state);
 
@@ -1001,7 +1002,7 @@ TEST_CASE ("Elevation: VBAP gain to Tfl increases monotonically 0->45 on 7.1.4",
 
 TEST_CASE ("Elevation: all algorithms — height isolation for horizontal source on 7.1.4", "[elevation]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     const auto& state = proc->getActiveLayout();
     auto ctx = makeLayoutCtx (state);
     auto heightIdx = findHeightSpeakerIndices (state.layout);
@@ -1197,7 +1198,7 @@ TEST_CASE ("Integration: 7.1 VBAP tap at 90deg routes to ch4 (Ls)", "[integratio
 
 TEST_CASE ("Integration: 7.1.4 VBAP tap at height routes to height channel", "[integration]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     REQUIRE (proc->getActiveOutputFormat() == OF::Surround7_1_4);
 
     setParam (*proc, "delayTime", 1.0f);
@@ -1217,7 +1218,7 @@ TEST_CASE ("Integration: 7.1.4 VBAP tap at height routes to height channel", "[i
 
 TEST_CASE ("Integration: 9.1.6 VBAP tap at wide (60deg) routes to ch8 (Lw)", "[integration]")
 {
-    auto proc = createTestProcessor (14 /*9.1.6*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (15 /*9.1.6*/, AlgoIdx::VBAP);
     REQUIRE (proc->getActiveOutputFormat() == OF::Surround9_1_6);
 
     setParam (*proc, "delayTime", 1.0f);
@@ -1386,7 +1387,7 @@ TEST_CASE ("Channel ordering: 7.1.4 — sweep all speakers including height", "[
     {
         SECTION (pt.name)
         {
-            auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+            auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
             setParam (*proc, "delayTime", 1.0f);
             setParam (*proc, "dryWet", 1.0f);
             setParam (*proc, "feedback", 0.0f);
@@ -1429,7 +1430,7 @@ TEST_CASE ("Channel ordering: 9.1.6 — sweep all speakers including wide + heig
     {
         SECTION (pt.name)
         {
-            auto proc = createTestProcessor (14 /*9.1.6*/, AlgoIdx::VBAP);
+            auto proc = createTestProcessor (15 /*9.1.6*/, AlgoIdx::VBAP);
             setParam (*proc, "delayTime", 1.0f);
             setParam (*proc, "dryWet", 1.0f);
             setParam (*proc, "feedback", 0.0f);
@@ -1679,7 +1680,7 @@ TEST_CASE ("Constrained bus: 7.1.4 rear speakers receive signal (12ch buffer)", 
     {
         SECTION (pt.name)
         {
-            auto proc = createConstrainedProcessor (11 /*7.1.4*/, AlgoIdx::VBAP,
+            auto proc = createConstrainedProcessor (12 /*7.1.4*/, AlgoIdx::VBAP,
                                                      juce::AudioChannelSet::create7point1point4());
             setParam (*proc, "delayTime", 1.0f);
             setParam (*proc, "dryWet", 1.0f);
@@ -1755,7 +1756,7 @@ TEST_CASE ("Channel ordering: SML 13.1 — sweep all speakers including zenith",
     {
         SECTION (pt.name)
         {
-            auto proc = createTestProcessor (15 /*SML 13.1*/, AlgoIdx::VBAP);
+            auto proc = createTestProcessor (16 /*SML 13.1*/, AlgoIdx::VBAP);
             setParam (*proc, "delayTime", 1.0f);
             setParam (*proc, "dryWet", 1.0f);
             setParam (*proc, "feedback", 0.0f);
@@ -1774,7 +1775,7 @@ TEST_CASE ("Channel ordering: SML 13.1 — sweep all speakers including zenith",
 
 TEST_CASE ("SML 13.1: LFE receives low-pass filtered signal", "[sml][lfe]")
 {
-    auto proc = createTestProcessor (15 /*SML 13.1*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (16 /*SML 13.1*/, AlgoIdx::VBAP);
     setParam (*proc, "delayTime", 1.0f);
     setParam (*proc, "dryWet", 1.0f);
     setParam (*proc, "feedback", 0.0f);
@@ -1797,7 +1798,7 @@ TEST_CASE ("SML 13.1: all algorithms produce signal", "[sml][algorithm]")
     {
         SECTION (names[a])
         {
-            auto proc = createTestProcessor (15 /*SML 13.1*/, algos[a]);
+            auto proc = createTestProcessor (16 /*SML 13.1*/, algos[a]);
             setParam (*proc, "delayTime", 1.0f);
             setParam (*proc, "dryWet", 1.0f);
             setParam (*proc, "feedback", 0.0f);
