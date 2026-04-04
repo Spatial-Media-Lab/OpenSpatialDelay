@@ -45,7 +45,7 @@ Each repeat drops a fourth, creating a descending spiral into low frequencies. T
 - PITCH (global): 0 ct
 - Per-tap PITCH: Set different values per tap (e.g., tap 1 = 0 st, tap 2 = +7 st, tap 3 = +12 st)
 
-Since per-tap pitch uses WSOLA (time-domain stretching), the delay timing stays perfectly locked while each tap produces a different pitch. This creates chord-like harmonizations in the echo pattern.
+Since per-tap pitch uses Phase Vocoder (STFT-based pitch shifting), the delay timing stays perfectly locked while each tap produces a different pitch. This creates chord-like harmonizations in the echo pattern.
 
 ## Wobble and Tape Effects
 
