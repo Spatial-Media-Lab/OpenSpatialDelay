@@ -2108,16 +2108,17 @@ bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layou
             return false;
     }
 
+    // Accept any output channel count that matches a format in the registry,
+    // plus 50-channel discrete as a catch-all for all formats.
+    // This keeps AU in sync with outputFormatRegistry automatically.
     auto outputSet = layouts.getMainOutputChannelSet();
-    if (outputSet == juce::AudioChannelSet::stereo())              return true;
-    if (outputSet == juce::AudioChannelSet::quadraphonic())        return true;
-    if (outputSet == juce::AudioChannelSet::create5point1())       return true;
-    if (outputSet == juce::AudioChannelSet::create7point1())       return true;
-    if (outputSet == juce::AudioChannelSet::discreteChannels (10)) return true;  // 9.1, 5.1.4, 7.1.2
-    if (outputSet == juce::AudioChannelSet::create7point1point4()) return true;
-    if (outputSet == juce::AudioChannelSet::create9point1point6()) return true;
-    if (outputSet == juce::AudioChannelSet::octagonal())           return true;
-    if (outputSet == juce::AudioChannelSet::discreteChannels (50)) return true;
+    int numCh = outputSet.size();
+
+    if (numCh == 50) return true;
+    for (const auto& info : outputFormatRegistry)
+        if (info.requiredChannels == numCh)
+            return true;
+
     return false;
 }
 
