@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JuceHeader.h>
+#include "SharedFFTCache.h"
 #include <cmath>
 #include <cstring>
 #include <algorithm>
@@ -29,8 +30,8 @@ public:
     static constexpr int kNumBins   = kFFTSize / 2 + 1;      // 1025
 
     PhaseVocoderPitchShifter()
-        : fft (kFFTOrder)
     {
+        fft = getSharedFFTCache().getOrCreate (kFFTOrder);
         // v1.0.8: Generate periodic Hann window (N denominator, not N-1).
         // JUCE's WindowingFunction::hann uses symmetric (N-1), which creates a
         // ~-66 dB COLA ripple at the hop rate (93.75 Hz @ 48kHz/512 hop).
@@ -168,7 +169,7 @@ private:
     static constexpr float kPi         = 3.14159265358979323846f;
     static constexpr float kTwoPi      = 2.0f * kPi;
 
-    juce::dsp::FFT fft;
+    std::shared_ptr<juce::dsp::FFT> fft;  // Shared via process-global FFT cache (issue #131)
     float windowData[kFFTSize] = {};  // Periodic Hann window (generated in constructor)
 
     // Input ring buffer (stores last kFFTSize samples)
@@ -268,7 +269,7 @@ private:
         // =====================================================================
         // 2. Forward FFT
         // =====================================================================
-        fft.performRealOnlyForwardTransform (fftData);
+        fft->performRealOnlyForwardTransform (fftData);
 
         // =====================================================================
         // 3. Analysis: compute magnitude and instantaneous frequency per bin
@@ -448,7 +449,7 @@ private:
         // =====================================================================
         // 7. Inverse FFT
         // =====================================================================
-        fft.performRealOnlyInverseTransform (fftData);
+        fft->performRealOnlyInverseTransform (fftData);
 
         // =====================================================================
         // 8. Apply synthesis window and overlap-add
