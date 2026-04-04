@@ -56,10 +56,10 @@ const std::array<OpenSpatialDelayProcessor::OutputFormatInfo,
     { OutputFormat::Surround5_1,    "5.1 Surround",     "5.1",    6, true,  false, false, 0, false },
     { OutputFormat::Surround7_0,    "7.0 Surround",     "7.0",    7, false, false, false, 0, false },
     { OutputFormat::Surround7_1,    "7.1 Surround",     "7.1",    8, true,  false, false, 0, false },
-    // --- Octaphonic ---
-    { OutputFormat::Octaphonic,     "Octaphonic",       "Oct",    8, false, false, false, 0, false },
     // --- 9.1 Surround (ITU-R BS.2051 System H — ear level only, no height) ---
     { OutputFormat::Surround9_1,    "9.1 Surround",     "9.1",   10, true,  false, false, 0, false },
+    // --- Octaphonic ---
+    { OutputFormat::Octaphonic,     "Octaphonic",       "Oct",    8, false, false, false, 0, false },
     // --- Atmos / Immersive (ascending channel count) ---
     { OutputFormat::Surround5_1_2,  "5.1.2 Atmos",      "5.1.2",  8, true,  true,  false, 0, false },
     { OutputFormat::Surround5_1_4,  "5.1.4 Atmos",      "5.1.4", 10, true,  true,  false, 0, false },
@@ -5279,7 +5279,7 @@ void OpenSpatialDelayProcessor::handleOSCPosition (int objIdx, float azDeg, floa
 void OpenSpatialDelayProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
-    state.setProperty ("pluginStateVersion", 21, nullptr);  // v1.0 state format (21 = 9.1 Surround added, issue #88)
+    state.setProperty ("pluginStateVersion", 22, nullptr);  // v1.0 state format (22 = 9.1 Surround reordered before Octaphonic, issue #88)
     // Issue #68: Config params stored as top-level properties (not APVTS children)
     state.setProperty ("configAlgorithm", configAlgorithm.load (std::memory_order_relaxed), nullptr);
     state.setProperty ("configHrtfProfile", configHrtfProfile.load (std::memory_order_relaxed), nullptr);
@@ -5835,6 +5835,16 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
         int newIdx = (oldIdx >= 8) ? oldIdx + 1 : oldIdx;
         configOutputFormat.store (newIdx, std::memory_order_relaxed);
         tree.setProperty ("configOutputFormat", newIdx, nullptr);
+    }
+
+    // Issue #88: Reorder 9.1 Surround (7) before Octaphonic (8) so surround formats group together
+    if (savedVersion < 22)
+    {
+        int idx = configOutputFormat.load (std::memory_order_relaxed);
+        if (idx == 7)      idx = 8;   // Octaphonic → 8
+        else if (idx == 8) idx = 7;   // 9.1 Surround → 7
+        configOutputFormat.store (idx, std::memory_order_relaxed);
+        tree.setProperty ("configOutputFormat", idx, nullptr);
     }
 
     // v0.6: Restore OSC receive port (non-APVTS property)

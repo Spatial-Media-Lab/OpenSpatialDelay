@@ -538,10 +538,10 @@ public:
         Stereo,
         // Surround (ascending channel count)
         Quad, Surround5_0, Surround5_1, Surround7_0, Surround7_1,
-        // Octaphonic
-        Octaphonic,
         // 9.1 Surround (ITU-R BS.2051 System H — ear level only, no height)
         Surround9_1,
+        // Octaphonic
+        Octaphonic,
         // Atmos / Immersive (ascending channel count)
         Surround5_1_2, Surround5_1_4, Surround7_1_2,
         Surround7_1_4, Surround7_1_6, Surround9_1_4, Surround9_1_6,
