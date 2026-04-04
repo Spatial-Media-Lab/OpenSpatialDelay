@@ -728,8 +728,10 @@ void OSDLookAndFeel::drawComboBox (juce::Graphics& g, int width, int height, boo
 void OSDLookAndFeel::positionComboBoxText (juce::ComboBox& box, juce::Label& label)
 {
     // Reserve 20px for arrow when enabled; use full width when disabled (no arrow)
-    int rightPad = box.isEnabled() ? 20 : 4;
-    label.setBounds (1, 1, box.getWidth() - rightPad, box.getHeight() - 2);
+    if (box.isEnabled())
+        label.setBounds (1, 1, box.getWidth() - 20, box.getHeight() - 2);
+    else
+        label.setBounds (0, 1, box.getWidth(), box.getHeight() - 2);
     label.setFont (getComboBoxFont (box));
 }
 
@@ -3109,6 +3111,7 @@ void OpenSpatialDelayEditor::timerCallback()
         algorithmBox.setEnabled (false);
         algorithmBox.setAlpha (0.5f);
         algorithmBox.setText ("Ambisonics Encode", juce::dontSendNotification);
+
     }
     else
     {
