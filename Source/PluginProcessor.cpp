@@ -750,6 +750,77 @@ int HRTFDatabase::detectOnset (const float* ir, int length, float thresholdFract
     return 0;
 }
 
+void HRTFDatabase::correctLowFrequency (float* ir, int irLength, int fftOrder,
+                                         float sampleRate, float* workBuf,
+                                         float lfCutoffHz, float hfCutoffHz)
+{
+    if (ir == nullptr || irLength <= 0 || fftOrder <= 0)
+        return;
+
+    const int N = 1 << fftOrder;
+    juce::dsp::FFT fft (fftOrder);
+
+    auto* cBuf = reinterpret_cast<std::complex<float>*> (workBuf);
+
+    // Step 1: Copy IR into complex buffer, zero-pad
+    for (int i = 0; i < N; ++i)
+        cBuf[i] = (i < irLength) ? std::complex<float> (ir[i], 0.0f)
+                                 : std::complex<float> (0.0f, 0.0f);
+
+    // Step 2: Forward FFT
+    fft.perform (cBuf, cBuf, false);
+
+    // Step 3: Identify frequency bin ranges
+    float binHz = sampleRate / static_cast<float> (N);
+    int lfBin = static_cast<int> (lfCutoffHz / binHz);
+    int hfBin = static_cast<int> (hfCutoffHz / binHz);
+
+    if (lfBin < 1) lfBin = 1;
+    if (hfBin <= lfBin) hfBin = lfBin + 1;
+    if (hfBin > N / 2) hfBin = N / 2;
+
+    // Step 4: Compute mean magnitude in the reference range (100-300 Hz)
+    float sumMag = 0.0f;
+    int magCount = 0;
+    for (int k = lfBin; k < hfBin; ++k)
+    {
+        sumMag += std::abs (cBuf[k]);
+        ++magCount;
+    }
+    float meanMag = (magCount > 0) ? sumMag / static_cast<float> (magCount) : 0.0f;
+
+    // Step 5: Magnitude-only correction below lfCutoff.
+    // Scale each bin's magnitude up to meanMag while preserving its original phase.
+    // This avoids the phase discontinuities between adjacent positions that caused
+    // glitches when full phase extrapolation was used (same issue as min-phase, #47).
+    for (int k = 0; k < lfBin; ++k)
+    {
+        float currentMag = std::abs (cBuf[k]);
+        if (currentMag < 1e-20f)
+        {
+            // Bin has essentially zero energy — set to meanMag with zero phase
+            cBuf[k] = std::complex<float> (meanMag, 0.0f);
+        }
+        else
+        {
+            // Scale magnitude up to meanMag, preserve original phase
+            float scale = meanMag / currentMag;
+            cBuf[k] *= scale;
+        }
+
+        // Mirror to negative frequencies (conjugate symmetry for real output)
+        if (k > 0 && (N - k) < N)
+            cBuf[N - k] = std::conj (cBuf[k]);
+    }
+
+    // Step 6: Inverse FFT
+    fft.perform (cBuf, cBuf, true);
+
+    // Step 7: Copy back to IR (real part only, original length)
+    for (int i = 0; i < irLength; ++i)
+        ir[i] = cBuf[i].real();
+}
+
 //==============================================================================
 // PartitionedConvolver implementation — overlap-save FFT convolution
 //==============================================================================
@@ -1155,9 +1226,36 @@ void BinauralRenderer::setProfile (int profileIndex)
         std::memset (itdBufferR[i], 0, sizeof (itdBufferR[i]));
     }
 
+    // v1.0.11 (issue #89, Phase 3): Low-shelf bass compensation for MIT KEMAR.
+    // KEMAR has a 24 dB deficit at 50 Hz and 6 dB at 100 Hz (measurement limitation).
+    // Design a low-shelf biquad filter to boost post-convolution output.
+    // Applied per-source to the convolved signal — bass remains spatialized since
+    // it amplifies whatever LF the HRTF captured at each direction.
+    lfShelfActive = (profileIndex == 1);  // Only MIT KEMAR needs compensation
+    if (lfShelfActive)
+    {
+        // Low-shelf: +12 dB at 200 Hz, Q=0.7 (gentle slope)
+        auto coeffs = juce::dsp::IIR::Coefficients<float>::makeLowShelf (
+            currentSampleRate, 200.0f, 0.7f, juce::Decibels::decibelsToGain (12.0f));
+        lfShelfB[0] = coeffs->coefficients[0];
+        lfShelfB[1] = coeffs->coefficients[1];
+        lfShelfB[2] = coeffs->coefficients[2];
+        lfShelfA[0] = 1.0f;  // a0 normalized
+        lfShelfA[1] = coeffs->coefficients[3];
+        lfShelfA[2] = coeffs->coefficients[4];
+
+        // Clear filter state
+        for (int i = 0; i < MAX_SOURCES; ++i)
+        {
+            lfShelfStateL[i][0] = lfShelfStateL[i][1] = 0.0f;
+            lfShelfStateR[i][0] = lfShelfStateR[i][1] = 0.0f;
+        }
+    }
+
     DBG ("BinauralRenderer: Profile " + juce::String (profileIndex)
          + " loaded — IR=" + juce::String (irLen)
          + ", normGain=" + juce::String (storedNormGain, 4)
+         + ", lfShelf=" + juce::String (lfShelfActive ? "ON" : "OFF")
          + " (per-source direct binaural)");
 }
 
@@ -1252,6 +1350,29 @@ void BinauralRenderer::renderSourceBuffers (const float* const* sourceBufs,
         sourceConvL[src].process (sourceBufs[src], convTmpL.data(), numSamples);
         sourceConvR[src].process (sourceBufs[src], convTmpR.data(), numSamples);
 
+        // v1.0.11 (issue #89, Phase 3): Low-shelf bass boost for KEMAR.
+        // Amplifies the residual LF content in the convolved output. Bass stays
+        // spatialized because the boost is applied to the per-direction HRTF output.
+        if (lfShelfActive)
+        {
+            for (int s = 0; s < numSamples; ++s)
+            {
+                // Transposed Direct Form II biquad — left channel
+                float xL = convTmpL[static_cast<size_t> (s)];
+                float yL = lfShelfB[0] * xL + lfShelfStateL[src][0];
+                lfShelfStateL[src][0] = lfShelfB[1] * xL - lfShelfA[1] * yL + lfShelfStateL[src][1];
+                lfShelfStateL[src][1] = lfShelfB[2] * xL - lfShelfA[2] * yL;
+                convTmpL[static_cast<size_t> (s)] = yL;
+
+                // Right channel
+                float xR = convTmpR[static_cast<size_t> (s)];
+                float yR = lfShelfB[0] * xR + lfShelfStateR[src][0];
+                lfShelfStateR[src][0] = lfShelfB[1] * xR - lfShelfA[1] * yR + lfShelfStateR[src][1];
+                lfShelfStateR[src][1] = lfShelfB[2] * xR - lfShelfA[2] * yR;
+                convTmpR[static_cast<size_t> (s)] = yR;
+            }
+        }
+
         // v1.0: Apply ITD as fractional-sample delay if using aligned HRIRs.
         // ITD is smoothly interpolated per-sample from currentITD to targetITD
         // to prevent timing discontinuities during rapid position changes.
@@ -1324,6 +1445,8 @@ void BinauralRenderer::reset()
         itdWritePos[i] = 0;
         std::memset (itdBufferL[i], 0, sizeof (itdBufferL[i]));
         std::memset (itdBufferR[i], 0, sizeof (itdBufferR[i]));
+        lfShelfStateL[i][0] = lfShelfStateL[i][1] = 0.0f;
+        lfShelfStateR[i][0] = lfShelfStateR[i][1] = 0.0f;
     }
 }
 
@@ -1343,6 +1466,8 @@ void BinauralRenderer::invalidateSources()
         itdWritePos[i] = 0;
         std::memset (itdBufferL[i], 0, sizeof (itdBufferL[i]));
         std::memset (itdBufferR[i], 0, sizeof (itdBufferR[i]));
+        lfShelfStateL[i][0] = lfShelfStateL[i][1] = 0.0f;
+        lfShelfStateR[i][0] = lfShelfStateR[i][1] = 0.0f;
     }
 }
 
