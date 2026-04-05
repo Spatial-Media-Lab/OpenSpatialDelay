@@ -542,7 +542,9 @@ bool HRTFDatabase::loadFromMemory (const void* data, int dataSize, float targetS
 
     if (easyHandle == nullptr || err != MYSOFA_OK)
     {
+      #if JUCE_DEBUG
         DBG ("HRTFDatabase: Failed to load SOFA data, error code: " + juce::String (err));
+      #endif
         easyHandle = nullptr;
         loaded = false;
         return false;
@@ -556,8 +558,10 @@ bool HRTFDatabase::loadFromMemory (const void* data, int dataSize, float targetS
     numPositions = static_cast<int> (easyHandle->hrtf->M);
     loaded = true;
 
+  #if JUCE_DEBUG
     DBG ("HRTFDatabase: Loaded " + juce::String (numPositions) + " positions, "
          + "IR length = " + juce::String (irLength) + " samples");
+  #endif
 
     return true;
 }
@@ -1252,11 +1256,13 @@ void BinauralRenderer::setProfile (int profileIndex)
         }
     }
 
+  #if JUCE_DEBUG
     DBG ("BinauralRenderer: Profile " + juce::String (profileIndex)
          + " loaded — IR=" + juce::String (irLen)
          + ", normGain=" + juce::String (storedNormGain, 4)
          + ", lfShelf=" + juce::String (lfShelfActive ? "ON" : "OFF")
          + " (per-source direct binaural)");
+  #endif
 }
 
 void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elRad)
@@ -1485,7 +1491,9 @@ void OpenSpatialDelayProcessor::loadHRTFProfileIntoRenderer (
     {
         renderer.hrtfDatabase.unload();
         renderer.setProfile (0);
+      #if JUCE_DEBUG
         DBG ("HRTF: Switched to Simple (Woodworth) profile");
+      #endif
         return;
     }
 
@@ -1504,7 +1512,11 @@ void OpenSpatialDelayProcessor::loadHRTFProfileIntoRenderer (
                  sofaSize = HRTFData::hutubs_pp2_sofaSize;             break;
         case 5:  sofaData = HRTFData::bernschuetz_ku100_sofa;
                  sofaSize = HRTFData::bernschuetz_ku100_sofaSize;      break;
-        default: DBG ("HRTF: Invalid profile index " + juce::String (profileIndex)); return;
+        default:
+          #if JUCE_DEBUG
+            DBG ("HRTF: Invalid profile index " + juce::String (profileIndex));
+          #endif
+            return;
     }
 
     float sampleRate = static_cast<float> (currentSampleRate);
@@ -1513,15 +1525,19 @@ void OpenSpatialDelayProcessor::loadHRTFProfileIntoRenderer (
     if (success)
     {
         renderer.setProfile (profileIndex);
+      #if JUCE_DEBUG
         DBG ("HRTF: Loaded profile " + juce::String (profileIndex)
              + " (" + juce::String (hrtfProfileNames[profileIndex]) + ")"
              + " — " + juce::String (renderer.hrtfDatabase.getNumPositions()) + " positions"
              + ", IR=" + juce::String (renderer.hrtfDatabase.getIRLength()) + " samples");
+      #endif
     }
     else
     {
+      #if JUCE_DEBUG
         DBG ("HRTF: Failed to load profile " + juce::String (profileIndex)
              + ", falling back to Simple");
+      #endif
     }
 }
 

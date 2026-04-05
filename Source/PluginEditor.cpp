@@ -69,6 +69,10 @@ namespace Colours_OSD
     static const juce::Colour selectionBox (0x40ffffff);
 }
 
+// OSC port validation bounds
+static constexpr int kMinPort = 1024;
+static constexpr int kMaxPort = 65535;
+
 // Helper: create a Font from a specific Typeface with height and optional kerning
 static juce::Font makeFont (juce::Typeface::Ptr tf, float height, float kerning = 0.0f)
 {
@@ -1146,8 +1150,7 @@ void SpatialMapComponent::paint (juce::Graphics& g)
                 float el   = juce::jlimit (-90.0f, 90.0f, ts.originElDeg + rp.elDeg);
                 float distScaleR = 1.0f - ts.originDist;  // match tick() distance scaling
                 float dist = juce::jlimit (0.0f, 1.0f, ts.originDist + rp.dist * distScaleR);
-                while (az > 180.0f)  az -= 360.0f;
-                while (az < -180.0f) az += 360.0f;
+                az = wrapAzimuth (az);
 
                 rndPath[s].px         = spatialToPixel (az, dist);
                 rndPath[s].elDeg      = el;
@@ -1699,8 +1702,7 @@ void GlobalTapDrawerComponent::setupKnob (juce::Slider& s, juce::Label& l,
         float delta = val - prevValues[knobIdx];
         if (knobIdx == kAzimuth)
         {
-            if (delta > 180.0f)  delta -= 360.0f;
-            if (delta < -180.0f) delta += 360.0f;
+            delta = unwrapAzimuthDelta (delta);
         }
         prevValues[knobIdx] = val;
         if (onGlobalDelta && std::abs (delta) > 1e-6f)
@@ -2324,7 +2326,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     {
         auto text = oscPortLabel.getText().trim();
         int port = text.getIntValue();
-        if (port >= 1024 && port <= 65535)
+        if (port >= kMinPort && port <= kMaxPort)
         {
             processorRef.setOscReceivePort (port);
         }
@@ -2399,7 +2401,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     oscSendPortLabel.onTextChange = [this]
     {
         int port = oscSendPortLabel.getText().trim().getIntValue();
-        if (port >= 1024 && port <= 65535)
+        if (port >= kMinPort && port <= kMaxPort)
             processorRef.setOscSendPort (port);
         else
             oscSendPortLabel.setText (juce::String (processorRef.getOscSendPort()), juce::dontSendNotification);
@@ -2903,8 +2905,7 @@ void OpenSpatialDelayEditor::applyGlobalTapDelta (int knobIndex, float delta)
         // Azimuth wrapping
         if (wraps)
         {
-            while (newVal >  180.0f) newVal -= 360.0f;
-            while (newVal < -180.0f) newVal += 360.0f;
+            newVal = wrapAzimuth (newVal);
         }
 
         // convertTo0to1 handles NormalisableRange clamping for non-wrapping params
@@ -2936,8 +2937,7 @@ void OpenSpatialDelayEditor::syncGlobalTapOffsetsFromOSC()
         // Azimuth wrapping
         if (i == GlobalTapDrawerComponent::kAzimuth)
         {
-            if (delta >  180.0f) delta -= 360.0f;
-            if (delta < -180.0f) delta += 360.0f;
+            delta = unwrapAzimuthDelta (delta);
         }
 
         if (std::abs (delta) > 1e-6f)
