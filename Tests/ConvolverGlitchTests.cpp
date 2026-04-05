@@ -3557,11 +3557,10 @@ TEST_CASE ("Great-circle threshold — equatorial sweep unchanged", "[issue89][g
 // Section: LF Bypass Tests (issue #89, Phase 3)
 // ============================================================================
 
-TEST_CASE ("LF bypass — 100 Hz sine survives MIT KEMAR convolution", "[issue89][lfbypass][integration]")
+TEST_CASE ("LF shelf — 100 Hz improved through MIT KEMAR convolution", "[issue89][lfshelf][integration]")
 {
-    // MIT KEMAR has ~128-sample IRs that can't represent bass below ~344 Hz.
-    // Without LF bypass, a 100 Hz sine would be severely attenuated.
-    // With LF bypass, the bass passes through unscathed.
+    // MIT KEMAR has a 24 dB bass deficit at 50 Hz (measurement limitation).
+    // A +12 dB low-shelf at 200 Hz boosts the convolved output's LF content.
     auto proc = createBinauralProcessor (1);  // MIT KEMAR (Studio Reference)
 
     // Stabilize
@@ -3621,13 +3620,14 @@ TEST_CASE ("LF bypass — 100 Hz sine survives MIT KEMAR convolution", "[issue89
     float dB = 20.0f * std::log10 (outputRMS / std::max (inputRMS, 1e-10f));
     INFO ("100 Hz through MIT KEMAR: input RMS=" << inputRMS << " output RMS=" << outputRMS << " dB=" << dB);
 
-    // With LF bypass, output should be within 6 dB of input at 100 Hz
-    CHECK (dB > -6.0f);
+    // With +12 dB low-shelf, 100 Hz should be significantly boosted.
+    // Without shelf: ~-20 dB. With shelf: should be within ~10 dB of input.
+    CHECK (dB > -12.0f);
 }
 
-TEST_CASE ("LF bypass — SADIE and Spatial unaffected (bypass inactive)", "[issue89][lfbypass][integration]")
+TEST_CASE ("LF shelf — SADIE and Spatial unaffected (shelf inactive)", "[issue89][lfshelf][integration]")
 {
-    // SADIE (profile 2) and Spatial (profile 5) should NOT have LF bypass active.
+    // SADIE (profile 2) and Spatial (profile 5) should NOT have LF shelf active.
     // Verify by checking that the renderer reports lfBypassActive = false.
     // We test this indirectly: process a 100 Hz sine through both and verify
     // the output characteristics match what we'd expect from full HRTF convolution.

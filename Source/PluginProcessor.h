@@ -313,6 +313,16 @@ public:
         Returns 0 if no clear onset found or if onset > irLength/2. */
     static int detectOnset (const float* ir, int length, float thresholdFraction = 0.1f);
 
+    /** Apply low-frequency correction to an HRIR in-place (Xie 2009 method).
+        Below lfCutoffHz: magnitude is set to the mean of the lfCutoffHz-to-hfCutoffHz
+        range, and phase is linearly extrapolated from that range. This restores
+        physically plausible bass response for datasets with weak LF content (e.g.,
+        MIT KEMAR). workBuf must be >= fftSize * 2 floats. */
+    static void correctLowFrequency (float* ir, int irLength, int fftOrder,
+                                      float sampleRate, float* workBuf,
+                                      float lfCutoffHz = 100.0f,
+                                      float hfCutoffHz = 300.0f);
+
 private:
     MYSOFA_EASY* easyHandle = nullptr;
     int irLength = 0;
@@ -501,16 +511,18 @@ private:
     int itdWritePos[MAX_SOURCES] = {};
     bool itdActive = false;  // true when using aligned HRIRs (non-Simple profiles)
 
-    // v1.0.11 (issue #89, Phase 3): Low-frequency bypass for profiles with short IRs.
-    // Profiles 1 (MIT KEMAR), 3 (CIPIC), 4 (HUTUBS) have IRs too short to represent
-    // bass below ~300 Hz. Bass is extracted from mono input via 1st-order LP and added
-    // equally to both convolved channels. No HP needed — short HRIRs already have
-    // negligible bass, so there's no double-counting.
-    // Profiles 2 (SADIE) and 5 (Bernschuetz) are excluded — no bass issues.
-    static constexpr float kLFBypassCrossoverHz = 250.0f;
-    bool lfBypassActive = false;
-    float lfBypassAlpha = 0.0f;  // LP coefficient: alpha = 1 - exp(-2*pi*fc/sr)
-    float lfLPStateIn[MAX_SOURCES] = {};   // Per-source LP state (extract bass)
+    // v1.0.11 (issue #89, Phase 3): Low-shelf bass compensation for bass-deficient HRTFs.
+    // MIT KEMAR has a 24 dB deficit at 50 Hz (measurement limitation). A low-shelf
+    // filter boosts the convolver output below 200 Hz to compensate. Applied post-
+    // convolution (on the output), not per-HRIR, so it doesn't interfere with
+    // the dual-slot crossfade. Bass remains spatialized since it amplifies whatever
+    // LF content the HRTF did capture at each direction.
+    bool lfShelfActive = false;
+    // Per-source IIR state for 2nd-order low-shelf (biquad)
+    float lfShelfStateL[MAX_SOURCES][2] = {};  // z^-1, z^-2 for left channel
+    float lfShelfStateR[MAX_SOURCES][2] = {};  // z^-1, z^-2 for right channel
+    float lfShelfB[3] = {};  // feedforward coefficients
+    float lfShelfA[3] = {};  // feedback coefficients (a[0] = 1.0)
 
 };
 
