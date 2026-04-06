@@ -230,19 +230,8 @@ TEST_CASE ("OSC: /osd/global/outputgain sets output gain", "[osc][global]")
     REQUIRE_THAT (readParam (*proc, "outputGain"), WithinAbs (-3.0f, 0.5f));
 }
 
-TEST_CASE ("OSC: /osd/global/algorithm sets algorithm", "[osc][global]")
-{
-    auto proc = createOscProcessor();
-    sendOSC (*proc, "/osd/global/algorithm", { 2.0f });  // KNN
-    REQUIRE (proc->configAlgorithm.load (std::memory_order_relaxed) == 2);
-}
-
-TEST_CASE ("OSC: /osd/global/hrtfprofile sets HRTF profile", "[osc][global]")
-{
-    auto proc = createOscProcessor();
-    sendOSC (*proc, "/osd/global/hrtfprofile", { 3.0f });  // CIPIC
-    REQUIRE (proc->configHrtfProfile.load (std::memory_order_relaxed) == 3);
-}
+// Algorithm, HRTF profile, and output format are configuration-level settings
+// — not controllable via OSC (no send or receive).
 
 TEST_CASE ("OSC: /osd/global/air sets air absorption toggle", "[osc][global]")
 {
@@ -284,13 +273,6 @@ TEST_CASE ("OSC: /osd/global/syncmode sets sync mode", "[osc][global]")
     auto proc = createOscProcessor();
     sendOSC (*proc, "/osd/global/syncmode", { 2.0f });  // Triplet
     REQUIRE_THAT (readParam (*proc, "syncMode"), WithinAbs (2.0f, 0.5f));
-}
-
-TEST_CASE ("OSC: /osd/global/outputformat sets output format", "[osc][global]")
-{
-    auto proc = createOscProcessor();
-    sendOSC (*proc, "/osd/global/outputformat", { 5.0f });  // Binaural
-    REQUIRE (proc->configOutputFormat.load (std::memory_order_relaxed) == 5);
 }
 
 // ============================================================================

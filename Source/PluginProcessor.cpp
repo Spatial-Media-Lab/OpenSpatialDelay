@@ -1713,8 +1713,7 @@ void OpenSpatialDelayProcessor::timerCallback()
             if (cachedParam_dryWet)         sendGlobal ("drywet",        cachedParam_dryWet->load(),         pg.dryWet);
             if (cachedParam_inputGain)      sendGlobal ("inputgain",     cachedParam_inputGain->load(),      pg.inputGain);
             if (cachedParam_outputGain)     sendGlobal ("outputgain",    cachedParam_outputGain->load(),     pg.outputGain);
-            sendGlobal ("algorithm",     static_cast<float> (configAlgorithm.load (std::memory_order_relaxed)),  pg.algorithm);
-            sendGlobal ("hrtfprofile",   static_cast<float> (configHrtfProfile.load (std::memory_order_relaxed)), pg.hrtfProfile);
+            // Algorithm and HRTF profile are configuration-level — not sent via OSC.
             if (cachedParam_airAbsorption)  sendGlobal ("air",           cachedParam_airAbsorption->load(),  pg.airAbsorption);
             if (cachedParam_wobbleEnabled)  sendGlobal ("wobble",        cachedParam_wobbleEnabled->load(),  pg.wobbleEnabled);
             if (cachedParam_wobbleAmount)   sendGlobal ("wobbleamount",  cachedParam_wobbleAmount->load(),   pg.wobbleAmount);
@@ -5447,9 +5446,8 @@ void OpenSpatialDelayProcessor::oscMessageReceived (const juce::OSCMessage& mess
         else if (property == "/drywet")        handleOSCParam ("dryWet", val);
         else if (property == "/inputgain")     handleOSCParam ("inputGain", val);
         else if (property == "/outputgain")    handleOSCParam ("outputGain", val);
-        else if (property == "/algorithm")    { configAlgorithm.store (juce::roundToInt (val), std::memory_order_relaxed); markConfigStateDirty(); }
-        else if (property == "/hrtfprofile")  { configHrtfProfile.store (juce::roundToInt (val), std::memory_order_relaxed); markConfigStateDirty(); }
-        else if (property == "/outputformat") { configOutputFormat.store (juce::roundToInt (val), std::memory_order_relaxed); markConfigStateDirty(); }
+        // Algorithm, HRTF profile, and output format are configuration-level settings
+        // — not controllable via OSC (no send or receive).
         else if (property == "/air")           handleOSCParam ("airAbsorption", val);
         else if (property == "/wobble")        handleOSCParam ("wobbleEnabled", val);
         else if (property == "/wobbleamount")  handleOSCParam ("wobbleAmount", val);
