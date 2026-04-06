@@ -4116,6 +4116,16 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     auto numSamples       = buffer.getNumSamples();
     auto numInputChannels = getTotalNumInputChannels();
 
+    // Issue #155: Expose channel count to editor and auto-detect input format
+    lastKnownInputChannels.store (numInputChannels, std::memory_order_relaxed);
+    if (! inputFormatSetByPreset.load (std::memory_order_relaxed))
+    {
+        // Auto-detect: default to Stereo on stereo tracks, Mono on mono tracks
+        int autoFormat = (numInputChannels >= 2) ? 1 : 0;
+        configInputFormat.store (autoFormat, std::memory_order_relaxed);
+        inputFormatSetByPreset.store (true, std::memory_order_relaxed);
+    }
+
     if (delayBufferL.empty() || numSamples <= 0)
         return;
 
@@ -6070,6 +6080,7 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
         configHrtfProfile.store (static_cast<int> (tree.getProperty ("configHrtfProfile", 0)), std::memory_order_relaxed);
         configOutputFormat.store (static_cast<int> (tree.getProperty ("configOutputFormat", 0)), std::memory_order_relaxed);
         configInputFormat.store (static_cast<int> (tree.getProperty ("configInputFormat", 0)), std::memory_order_relaxed);
+        inputFormatSetByPreset.store (true, std::memory_order_relaxed);  // Issue #155: don't override preset value
     }
 
     // Issue #88: Migrate outputFormat from 22-item to 23-item (9.1 Surround inserted at index 8)

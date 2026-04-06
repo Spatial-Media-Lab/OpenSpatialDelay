@@ -698,6 +698,11 @@ public:
     std::atomic<int> configOutputFormat { 0 };
     std::atomic<int> configInputFormat { 0 };
 
+    // Issue #155: Channel count from processBlock for UI (grey out Stereo on mono tracks)
+    std::atomic<int> lastKnownInputChannels { 0 };
+    // True once a preset has set configInputFormat — prevents auto-detect from overriding
+    std::atomic<bool> inputFormatSetByPreset { false };
+
     // Issue #122: Debounce updateHostDisplay — set by editor/OSC, flushed in timerCallback
     std::atomic<bool> configStateDirty { false };
     void markConfigStateDirty() { configStateDirty.store (true, std::memory_order_relaxed); }
