@@ -847,6 +847,7 @@ private:
     void handleOSCPosition (int objectIndex, float azDeg, float elDeg, float dist);
     void handleOSCParam (const juce::String& paramID, float denormValue);
     void syncGlobalTapOffsetAtomic (int index, float value);
+#if JUCE_UNIT_TESTS
 public:
     // v1.0: Public test entry point — forwards to oscMessageReceived
     void testProcessOSCMessage (const juce::OSCMessage& msg) { oscMessageReceived (msg); }
@@ -856,6 +857,7 @@ public:
 
     // v1.0.3: Synchronous HRTF profile load for tests (timer thread doesn't fire in test harness)
     void testLoadHRTFProfile (int profileIndex) { loadHRTFProfile (profileIndex); }
+#endif
 private:
 
     juce::OSCReceiver oscReceiver;

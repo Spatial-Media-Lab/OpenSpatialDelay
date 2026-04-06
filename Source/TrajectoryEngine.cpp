@@ -75,8 +75,7 @@ void TrajectoryEngine::tick (int t, const ObjectInput& input, float dt)
         float distScaleR = 1.0f - input.originDist;
         finalDist_[t] = juce::jlimit (0.0f, 1.0f, input.originDist + dist * distScaleR);
 
-        while (finalAz_[t] > 180.0f)  finalAz_[t] -= 360.0f;
-        while (finalAz_[t] < -180.0f) finalAz_[t] += 360.0f;
+        finalAz_[t] = wrapAzimuth (finalAz_[t]);
     }
     else
     {
@@ -449,8 +448,7 @@ TrajectoryEngine::computeTrajectory (int shape, float phase,
             break;
     }
 
-    while (r.azDeg > 180.0f)  r.azDeg -= 360.0f;
-    while (r.azDeg < -180.0f) r.azDeg += 360.0f;
+    r.azDeg = wrapAzimuth (r.azDeg);
     r.elDeg = juce::jlimit (-90.0f, 90.0f, r.elDeg);
     r.dist  = juce::jlimit (0.0f, 1.0f, r.dist);
 

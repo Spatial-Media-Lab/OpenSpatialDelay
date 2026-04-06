@@ -4,48 +4,11 @@
 #include "../Source/PhaseVocoderPitchShifter.h"
 #include "../Source/DopplerVelocity.h"
 #include "../Source/FilterBank.h"
+#include "TestUtilities.h"
 #include <cmath>
 #include <vector>
 
 using Catch::Matchers::WithinAbs;
-
-static constexpr float kPi = 3.14159265358979323846f;
-static constexpr double kSampleRate = 48000.0;
-static constexpr int kBlockSize = 256;
-
-// ============================================================================
-// Shared Utilities (redefined locally — no shared test header in this project)
-// ============================================================================
-
-static float computeRMS (const float* buffer, int numSamples)
-{
-    float sumSq = 0.0f;
-    for (int i = 0; i < numSamples; ++i)
-        sumSq += buffer[i] * buffer[i];
-    return std::sqrt (sumSq / static_cast<float> (numSamples));
-}
-
-static void fillSine (float* buffer, int numSamples, float freq, float sampleRate,
-                      float amplitude, int startSample)
-{
-    for (int i = 0; i < numSamples; ++i)
-    {
-        float phase = 2.0f * kPi * freq * static_cast<float> (startSample + i) / sampleRate;
-        buffer[i] = amplitude * std::sin (phase);
-    }
-}
-
-static std::vector<int> detectGlitches (const float* buffer, int numSamples, float threshold = 0.15f)
-{
-    std::vector<int> glitchIndices;
-    for (int i = 1; i < numSamples; ++i)
-    {
-        float diff = std::abs (buffer[i] - buffer[i - 1]);
-        if (diff > threshold)
-            glitchIndices.push_back (i);
-    }
-    return glitchIndices;
-}
 
 // Estimate dominant frequency by counting zero crossings
 static float estimateFrequency (const float* buffer, int numSamples, float sampleRate)
