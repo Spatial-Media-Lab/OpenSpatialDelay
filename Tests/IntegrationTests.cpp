@@ -3,44 +3,17 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include "../Source/PluginProcessor.h"
 #include "../Source/PresetData.h"
+#include "TestUtilities.h"
 #include <cmath>
 #include <vector>
 
 using Proc = OpenSpatialDelayProcessor;
 using Catch::Matchers::WithinAbs;
 
-static constexpr float kPi = juce::MathConstants<float>::pi;
-static constexpr double kSampleRate = 48000.0;
-static constexpr int kBlockSize = 256;
-
-// ============================================================================
-// Shared Utilities (redefined locally)
-// ============================================================================
-
 static void setParam (Proc& proc, const juce::String& paramId, float value)
 {
     if (auto* p = proc.apvts.getParameter (paramId))
         p->setValueNotifyingHost (p->convertTo0to1 (value));
-}
-
-static float computeRMS (const float* buffer, int numSamples)
-{
-    float sumSq = 0.0f;
-    for (int i = 0; i < numSamples; ++i)
-        sumSq += buffer[i] * buffer[i];
-    return std::sqrt (sumSq / static_cast<float> (numSamples));
-}
-
-static std::vector<int> detectGlitches (const float* buffer, int numSamples, float threshold = 0.15f)
-{
-    std::vector<int> glitchIndices;
-    for (int i = 1; i < numSamples; ++i)
-    {
-        float diff = std::abs (buffer[i] - buffer[i - 1]);
-        if (diff > threshold)
-            glitchIndices.push_back (i);
-    }
-    return glitchIndices;
 }
 
 // Process blocks capturing all output (both channels)

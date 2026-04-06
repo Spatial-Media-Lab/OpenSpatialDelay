@@ -217,6 +217,7 @@ if(BUILD_OSD_TESTS)
     )
 
     target_compile_definitions(OpenSpatialDelayTests PRIVATE
+        JUCE_UNIT_TESTS=1
         JUCE_STANDALONE_APPLICATION=1
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
