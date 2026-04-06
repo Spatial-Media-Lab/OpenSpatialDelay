@@ -6069,7 +6069,7 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
         configAlgorithm.store (static_cast<int> (tree.getProperty ("configAlgorithm", 1)), std::memory_order_relaxed);
         configHrtfProfile.store (static_cast<int> (tree.getProperty ("configHrtfProfile", 0)), std::memory_order_relaxed);
         configOutputFormat.store (static_cast<int> (tree.getProperty ("configOutputFormat", 0)), std::memory_order_relaxed);
-        configInputFormat.store (static_cast<int> (tree.getProperty ("configInputFormat", 0)), std::memory_order_relaxed);
+        configInputFormat.store (static_cast<int> (tree.getProperty ("configInputFormat", 1)), std::memory_order_relaxed);
     }
 
     // Issue #88: Migrate outputFormat from 22-item to 23-item (9.1 Surround inserted at index 8)
