@@ -360,11 +360,11 @@ function buildHRTFDatasets() {
   items.push(dataTable(
     ["Profile", "Dataset", "License", "Source Institution"],
     [
-      ["Studio Reference", "MIT KEMAR Large Pinna", "MIT License", "MIT Media Lab"],
       ["Immersive", "SADIE II D2 KU100", "Apache License 2.0", "University of York"],
       ["Natural", "CIPIC Subject 003", "Public Domain", "UC Davis CIPIC Lab"],
       ["Precise", "HUTUBS PP2", "CC BY 4.0", "TU Berlin"],
       ["Spatial", "Bernschuetz KU100 2\u00b0", "CC BY 3.0", "TH K\u00f6ln"],
+      ["Studio Reference", "MIT KEMAR Large Pinna", "MIT License", "MIT Media Lab"],
     ],
     { colWidths: [1600, 2400, 1800, 3226] }
   ));
