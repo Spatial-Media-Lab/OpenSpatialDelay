@@ -40,7 +40,8 @@ bash scripts/build_version.sh <commit-hash> v1.0.Z O10Z
 - v1.0.7 / O107 — 4-layer tape wobble emulation (issue #92, commit 893acb2)
 - v1.0.14 / O114 — shared LookAndFeel + visibility throttle for multi-instance crash (issue #131)
 - v1.0.17 / O117 — shared FFT cache for multi-instance vDSP stability (issue #131, commit e8ee6ec)
-- Next available: **v1.0.18 / O118**
+- v1.0.20 / O120 — default Input to Stereo on stereo tracks, disable on mono (issue #155, commit f2d80f2)
+- Next available: **v1.0.21 / O121**
 
 ### Running tests
 
