@@ -9,7 +9,7 @@ OpenSpatialDelay uses **semantic versioning vX.Y.Z**:
 - **Y (Minor):** New features, new output formats, new algorithms
 - **Z (Bugfix):** Bug fixes, threshold tweaks, documentation updates
 
-**Current release: v1.0.0** (commit 3ef9c79, 2026-04-02)
+**Current release: v1.0.0** (pre-release, shipping end of week 2026-04-10)
 
 All prior bugfix builds (v1.0.1–v1.0.2 for issues #76, #77) have been collapsed into v1.0.0. The next bugfix build will be v1.0.1.
 

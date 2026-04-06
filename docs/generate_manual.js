@@ -930,11 +930,11 @@ function buildOutputFormats() {
     ["Profile", "Source", "Character", "CPU"],
     [
       ["Simple (Low CPU)", "Woodworth head model", "No convolution \u2014 ITD+ILD only, lowest latency", "Minimal"],
-      ["Studio Reference", "MIT KEMAR Large Pinna", "Neutral, classic reference standard", "Normal"],
       ["Immersive", "SADIE II D2 KU100", "Rich spatial detail, strong elevation cues", "Normal"],
       ["Natural", "CIPIC Subject 003", "Organic, realistic binaural rendering", "Normal"],
       ["Precise", "HUTUBS PP2", "Detailed, analytical spatial accuracy", "Normal"],
       ["Spatial", "Bernschuetz KU100", "Dense full-sphere measurement, widest coverage", "Normal"],
+      ["Studio Reference", "MIT KEMAR Large Pinna", "Neutral, classic reference standard", "Normal"],
     ],
     { colWidths: [1800, 2200, 3226, 1800] }
   ));

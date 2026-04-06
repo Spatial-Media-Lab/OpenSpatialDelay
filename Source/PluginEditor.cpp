@@ -2071,7 +2071,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         }
     };
     {
-        juce::StringArray hrtfItems { "Simple", "Studio Ref", "Immersive", "Natural", "Precise", "Spatial" };
+        juce::StringArray hrtfItems { "Simple", "Immersive", "Natural", "Precise", "Spatial", "Studio Ref" };
         for (int i = 0; i < hrtfItems.size(); ++i)
             hrtfProfileBox.addItem (hrtfItems[i], i + 1);
         hrtfProfileBox.setLookAndFeel (&*osdLookAndFeel);
