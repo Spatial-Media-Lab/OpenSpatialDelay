@@ -677,4 +677,40 @@ Active source in `Source/`:
 - `Tests/ConvolverGlitchTests.cpp` (21 Catch2 convolver glitch tests)
 
 ### Output
-- 22 output formats (1 binaural + 1 stereo + 14 surround + 6 Ambisonics)
+- 23 output formats (1 binaural + 1 stereo + 15 surround + 6 Ambisonics)
+
+---
+
+### Post-Baseline Updates (April 2026)
+
+After the v1.0 real-world testing release, the following features and fixes were merged:
+
+#### New Features
+- **Constant Power panning algorithm (Issue #141):** 8th spatialization algorithm, now the default for surround output. Uses cosine-distance weighting to all speakers within 90 degrees for smooth, natural panning. Added to algorithm dropdown, glossary, controls reference, and output formats documentation.
+- **Low-frequency bypass for HRTF profiles (Issue #89):** Automatic bass preservation for HRTF measurements that lack low-frequency content. Crossover at 200 Hz routes bass directly to output, bypassing the HRTF convolution. Also adds great-circle threshold for HRIR update near elevation poles and onset-detection ITD alignment for zero-delay datasets.
+- **9.1 Surround output format (Issue #88):** ITU-R BS.2051 System H. 23rd output format. AU bus layout expanded for 10-channel discrete. Reordered before Octaphonic in format list.
+
+#### UI Improvements
+- **Ambisonics algorithm dropdown (Issue #143):** Greyed out and dropdown arrow hidden when Ambisonics output is selected (algorithm is always Ambisonics for Ambisonics formats). Full label width used when arrow is hidden.
+
+#### Bug Fixes
+- **Wobble modulation fix (Issue #92):** 4-layer tape wobble emulation. LFO rate decoupled from delay time, depth reduced for subtler effect.
+- **Transport fade-in (Issue #103):** 5 ms fade-in after transport start prevents click/pop artifacts during scrub and seek operations.
+- **Ableton compatibility (Issues #120, #122):** Fixed crash on plugin deletion, re-signed plugin bundles after plist patching for VST3 visibility, reduced automatable parameters to 64 for auto-populate compatibility, fixed automation reset.
+- **Direction toggle (Issue #100):** Fixed Bounce (diagonal flip instead of phase offset), Line, and Random trajectory direction behavior.
+- **Preset chirp (Issue #99):** Reset phase vocoder pitch shifters during preset crossfade to eliminate chirp artifact.
+- **Dry signal attenuation (Issue #97):** Fixed dry signal being attenuated at 0% wet by moving output limiter to wet path only.
+- **HRTF profile switch clipping (Issue #90):** Renderer-level crossfade eliminates click during HRTF profile changes.
+- **Multi-instance buzzing (Issues #96, #137):** Moved HRTFDatabase into BinauralRenderer; fixed heap corruption in PartitionedConvolver::prepare().
+- **Global knob persistence (Issue #95):** Fixed global tap drawer knobs resetting on UI close/reopen.
+- **Knob text input (Issue #119):** Added valueFromString parsers for all knobs.
+- **Negative zero display (Issue #126):** Fixed -0.00 display on global drawer knobs and DIST knob.
+- **Random trail (Issue #110):** Fixed distance scaling and glow to use symmetric proximity-based rendering.
+- **VST3 multichannel bus (Issues #111, #122):** Conditional bus layout and negotiation for dynamic channel detection.
+- **Algorithm dropdown (Issue #93):** Stopped preset loading from overwriting algorithm selection.
+- **Global pitch range (Issue #101):** Fixed Global Pitch knob range from +/-24 st to +/-12 st.
+
+#### Infrastructure
+- **Shared FFT cache (Issue #131):** Thread-safe singleton FFT cache for multi-instance vDSP stability. Shared LookAndFeel and visibility throttle for CoreGraphics crash prevention.
+- **23 output formats** (was 22 at baseline, added 9.1 Surround)
+- **8 spatialization algorithms** (was 7, added Constant Power as default)

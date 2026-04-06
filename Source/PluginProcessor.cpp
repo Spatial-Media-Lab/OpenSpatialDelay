@@ -19,11 +19,11 @@ extern "C" {
 //==============================================================================
 const char* const OpenSpatialDelayProcessor::hrtfProfileNames[NUM_HRTF_PROFILES] = {
     "Simple (Low CPU)",   // 0: Woodworth ITD+ILD (no convolution) — default
-    "Studio Reference",   // 1: MIT KEMAR
-    "Immersive",          // 2: SADIE II D2 KU100
-    "Natural",            // 3: CIPIC Subject003
-    "Precise",            // 4: HUTUBS PP2
-    "Spatial"             // 5: Bernschuetz KU100
+    "Immersive",          // 1: SADIE II D2 KU100
+    "Natural",            // 2: CIPIC Subject003
+    "Precise",            // 3: HUTUBS PP2
+    "Spatial",            // 4: Bernschuetz KU100
+    "Studio Reference"    // 5: MIT KEMAR
 };
 
 //==============================================================================
@@ -31,11 +31,11 @@ const char* const OpenSpatialDelayProcessor::hrtfProfileNames[NUM_HRTF_PROFILES]
 // (Used by profile 0 "Simple" — Woodworth fallback)
 //==============================================================================
 const std::array<BinauralProfile, 5> OpenSpatialDelayProcessor::binauralProfiles = {{
-    { 0.0875f, 1.0f, 1500.0f, "Studio Reference" },   // MIT KEMAR-inspired
     { 0.0920f, 1.3f, 1200.0f, "Immersive" },           // KU100-inspired (wider)
     { 0.0850f, 0.8f, 1800.0f, "Natural" },             // Human subject, subtler
     { 0.0900f, 1.1f, 1400.0f, "Precise" },             // Cross-validated, balanced
     { 0.0875f, 1.5f, 1100.0f, "Spatial" },             // High-res, exaggerated cues
+    { 0.0875f, 1.0f, 1500.0f, "Studio Reference" },    // MIT KEMAR-inspired
 }};
 
 //==============================================================================
@@ -1502,16 +1502,16 @@ void OpenSpatialDelayProcessor::loadHRTFProfileIntoRenderer (
 
     switch (profileIndex)
     {
-        case 1:  sofaData = HRTFData::mit_kemar_large_pinna_sofa;
-                 sofaSize = HRTFData::mit_kemar_large_pinna_sofaSize;  break;
-        case 2:  sofaData = HRTFData::sadie_d2_ku100_sofa;
+        case 1:  sofaData = HRTFData::sadie_d2_ku100_sofa;
                  sofaSize = HRTFData::sadie_d2_ku100_sofaSize;         break;
-        case 3:  sofaData = HRTFData::cipic_subject_003_sofa;
+        case 2:  sofaData = HRTFData::cipic_subject_003_sofa;
                  sofaSize = HRTFData::cipic_subject_003_sofaSize;      break;
-        case 4:  sofaData = HRTFData::hutubs_pp2_sofa;
+        case 3:  sofaData = HRTFData::hutubs_pp2_sofa;
                  sofaSize = HRTFData::hutubs_pp2_sofaSize;             break;
-        case 5:  sofaData = HRTFData::bernschuetz_ku100_sofa;
+        case 4:  sofaData = HRTFData::bernschuetz_ku100_sofa;
                  sofaSize = HRTFData::bernschuetz_ku100_sofaSize;      break;
+        case 5:  sofaData = HRTFData::mit_kemar_large_pinna_sofa;
+                 sofaSize = HRTFData::mit_kemar_large_pinna_sofaSize;  break;
         default:
           #if JUCE_DEBUG
             DBG ("HRTF: Invalid profile index " + juce::String (profileIndex));
@@ -6083,7 +6083,7 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
         configAlgorithm.store (static_cast<int> (tree.getProperty ("configAlgorithm", 1)), std::memory_order_relaxed);
         configHrtfProfile.store (static_cast<int> (tree.getProperty ("configHrtfProfile", 0)), std::memory_order_relaxed);
         configOutputFormat.store (static_cast<int> (tree.getProperty ("configOutputFormat", 0)), std::memory_order_relaxed);
-        configInputFormat.store (static_cast<int> (tree.getProperty ("configInputFormat", 0)), std::memory_order_relaxed);
+        configInputFormat.store (static_cast<int> (tree.getProperty ("configInputFormat", 1)), std::memory_order_relaxed);
     }
 
     // Issue #88: Migrate outputFormat from 22-item to 23-item (9.1 Surround inserted at index 8)

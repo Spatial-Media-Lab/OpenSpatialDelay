@@ -517,6 +517,7 @@ function buildTOC() {
     tocEntry("Receive (Incoming Control)", "adm-osc", 2),
     tocEntry("Send (Broadcast Positions)", "adm-osc", 2),
     tocEntry("Troubleshooting", "troubleshooting"),
+    tocEntry("Third-Party Notices", "legal-notices"),
   ];
   return entries;
 }
@@ -686,8 +687,8 @@ function buildWhatIs() {
     bodyText("\u2014 from binaural headphones to 9.1.6 Dolby Atmos, SpatialMediaLab 13.1, and 6th-order Ambisonics."),
   ]));
   items.push(bodyPara([
-    boldText("7 spatialization algorithms "),
-    bodyText("\u2014 VBAP, VBIP, MDAP, KNN, DBAP, Ambisonics, and direct binaural HRTF convolution with 6 measured profiles."),
+    boldText("8 spatialization algorithms "),
+    bodyText("\u2014 Constant Power, VBAP, VBIP, MDAP, KNN, DBAP, Ambisonics, and direct binaural HRTF convolution with 6 measured profiles."),
   ]));
   items.push(bodyPara([
     boldText("Open source "),
@@ -898,6 +899,7 @@ function buildOutputFormats() {
   items.push(dataTable(
     ["Algorithm", "Best For", "Character"],
     [
+      ["Constant Power", "Most surround work (default)", "Cosine-distance weighting, wide natural rolloff"],
       ["VBAP", "Precise point sources, production mixing", "Focused, sharp localization"],
       ["VBIP", "Off-axis listener stability", "VBAP with intensity weighting, smoother"],
       ["MDAP", "Wide, stable spatial images", "VBAP + 8 spread sub-sources around main position"],
@@ -910,9 +912,9 @@ function buildOutputFormats() {
   items.push(spacer(8));
 
   items.push(calloutBox("Which algorithm should I use?", [
-    "For most surround work, start with VBAP \u2014 it produces the most focused spatial images and is the industry standard for object-based audio.",
-    "For wider, more stable sources, try MDAP. For non-standard or irregular speaker arrangements, use DBAP.",
-    "The algorithm dropdown only appears for surround and Ambisonics formats. For binaural output, HRTF convolution handles spatialization directly.",
+    "Start with Constant Power (the default) \u2014 it provides smooth, natural panning suitable for most surround work.",
+    "For sharper, more focused point sources, switch to VBAP. For wider, more stable sources, try MDAP. For non-standard or irregular speaker arrangements, use DBAP.",
+    "The algorithm dropdown only appears for surround formats. For Ambisonics output, the algorithm is always Ambisonics. For binaural output, HRTF convolution handles spatialization directly.",
   ], C.cyan));
   items.push(spacer(8));
 
@@ -928,11 +930,11 @@ function buildOutputFormats() {
     ["Profile", "Source", "Character", "CPU"],
     [
       ["Simple (Low CPU)", "Woodworth head model", "No convolution \u2014 ITD+ILD only, lowest latency", "Minimal"],
-      ["Studio Reference", "MIT KEMAR Large Pinna", "Neutral, classic reference standard", "Normal"],
       ["Immersive", "SADIE II D2 KU100", "Rich spatial detail, strong elevation cues", "Normal"],
       ["Natural", "CIPIC Subject 003", "Organic, realistic binaural rendering", "Normal"],
       ["Precise", "HUTUBS PP2", "Detailed, analytical spatial accuracy", "Normal"],
       ["Spatial", "Bernschuetz KU100", "Dense full-sphere measurement, widest coverage", "Normal"],
+      ["Studio Reference", "MIT KEMAR Large Pinna", "Neutral, classic reference standard", "Normal"],
     ],
     { colWidths: [1800, 2200, 3226, 1800] }
   ));
@@ -942,6 +944,12 @@ function buildOutputFormats() {
     "Start with Studio Reference for mixing. Switch to Simple if you need lower CPU usage.",
     "Different profiles suit different head shapes. Try each to find the one that sounds most natural to you \u2014 what works best is personal.",
   ], C.violet));
+  items.push(spacer(8));
+
+  items.push(bodyPara([
+    boldText("Low-frequency bypass: "),
+    bodyText("Some HRTF measurements lack low-frequency content below 200 Hz. OpenSpatialDelay automatically detects this and routes bass directly to the output, bypassing the HRTF convolution. This ensures solid bass regardless of which HRTF profile you choose."),
+  ]));
 
   return items;
 }
@@ -1400,7 +1408,143 @@ function buildGlossary() {
 }
 
 // ============================================================================
-// SECTION 12: BACK PAGE
+// SECTION 12: THIRD-PARTY NOTICES
+// ============================================================================
+
+function buildLegalNotices() {
+  const items = [];
+  items.push(heading1("Third-Party Notices", "legal-notices"));
+
+  items.push(bodyPara("OpenSpatialDelay incorporates the following third-party software, data, and fonts. This section provides the required license notices and attributions."));
+
+  // Software Libraries
+  items.push(heading2("Software Libraries"));
+  items.push(dataTable(
+    ["Component", "License", "Copyright"],
+    [
+      ["JUCE 8 (Audio Plugin Framework)", "GPL-3.0 / Commercial", "Raw Material Software Limited"],
+      ["libmysofa v1.3.2 (SOFA File Reader)", "BSD-3-Clause", "Christian Hoene, Symonics GmbH"],
+      ["zlib (Compression)", "zlib License", "Jean-loup Gailly, Mark Adler"],
+    ],
+    { colWidths: [3600, 2400, 3026] }
+  ));
+  items.push(spacer(8));
+
+  items.push(bodyPara([
+    boldText("JUCE: "),
+    bodyText("JUCE is dual-licensed under the GNU General Public License v3.0 and a commercial license. OpenSpatialDelay uses JUCE under the GPL-3.0. See "),
+    externalLink("juce.com", "https://juce.com/"),
+    bodyText(" for details."),
+  ]));
+
+  items.push(bodyPara([
+    boldText("libmysofa: "),
+    bodyText("Copyright (c) 2016-2024 Christian Hoene, Symonics GmbH. Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met: (1) Redistributions of source code must retain the above copyright notice, this list of conditions, and the following disclaimer. (2) Redistributions in binary form must reproduce the above copyright notice, this list of conditions, and the following disclaimer in the documentation and/or other materials provided with the distribution. (3) Neither the name of Symonics GmbH nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission."),
+  ]));
+
+  items.push(bodyPara([
+    boldText("zlib: "),
+    bodyText("Copyright (c) 1995-2024 Jean-loup Gailly and Mark Adler. This software is provided 'as-is', without any express or implied warranty. Permission is granted to anyone to use this software for any purpose, including commercial applications, and to alter it and redistribute it freely, subject to the following restrictions: (1) The origin of this software must not be misrepresented. (2) Altered source versions must be plainly marked as such. (3) This notice may not be removed or altered from any source distribution."),
+  ]));
+
+  // HRTF Datasets
+  items.push(heading2("HRTF Datasets"));
+  items.push(bodyPara("The following Head-Related Transfer Function datasets are embedded in the plugin for binaural spatialization:"));
+
+  items.push(dataTable(
+    ["Profile Name", "Dataset", "License", "Source"],
+    [
+      ["Studio Reference", "MIT KEMAR Large Pinna", "MIT", "MIT Media Lab"],
+      ["Immersive", "SADIE II D2 KU100", "Apache 2.0", "University of York"],
+      ["Natural", "CIPIC Subject 003", "Public Domain", "UC Davis CIPIC Lab"],
+      ["Precise", "HUTUBS PP2", "CC BY 4.0", "TU Berlin"],
+      ["Spatial", "Bernschuetz KU100 2\u00b0", "CC BY 3.0", "TH K\u00f6ln"],
+    ],
+    { colWidths: [1800, 2400, 1600, 3226] }
+  ));
+  items.push(spacer(8));
+
+  items.push(bodyPara([
+    boldText("MIT KEMAR (MIT License): "),
+    bodyText("Measurements by the MIT Media Lab. Permission is hereby granted, free of charge, to any person obtaining a copy of this data, to deal in the data without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies, subject to the above copyright notice and this permission notice being included in all copies. See "),
+    externalLink("sound.media.mit.edu/resources/KEMAR.html", "https://sound.media.mit.edu/resources/KEMAR.html"),
+    bodyText("."),
+  ]));
+
+  items.push(bodyPara([
+    boldText("SADIE II (Apache 2.0): "),
+    bodyText("Gavin Kearney, Tony Doyle, University of York. Licensed under the Apache License, Version 2.0. You may obtain a copy of the License at "),
+    externalLink("apache.org/licenses/LICENSE-2.0", "https://www.apache.org/licenses/LICENSE-2.0"),
+    bodyText(". See "),
+    externalLink("york.ac.uk/sadie-project/database2", "https://www.york.ac.uk/sadie-project/database2.html"),
+    bodyText("."),
+  ]));
+
+  items.push(bodyPara([
+    boldText("CIPIC Subject 003 (Public Domain): "),
+    bodyText("UC Davis CIPIC Interface Laboratory. This dataset is in the public domain with no restrictions on use. See "),
+    externalLink("ucdavis.edu/cipic", "https://www.ece.ucdavis.edu/cipic/"),
+    bodyText("."),
+  ]));
+
+  items.push(bodyPara([
+    boldText("HUTUBS PP2 (CC BY 4.0): "),
+    bodyText("Fabian Brinkmann, Alexander Lindau, Stefan Weinzierl, et al., TU Berlin Audio Communication Group. Licensed under the Creative Commons Attribution 4.0 International License. You must give appropriate credit, provide a link to the license, and indicate if changes were made. See "),
+    externalLink("depositonce.tu-berlin.de", "https://depositonce.tu-berlin.de/items/21a596ec-b7af-4e48-a8ed-4c4d68ce57a5"),
+    bodyText("."),
+  ]));
+
+  items.push(bodyPara([
+    boldText("Bernschuetz KU100 (CC BY 3.0): "),
+    bodyText("Benjamin Bernsch\u00fctz, TH K\u00f6ln (Cologne University of Applied Sciences). Licensed under the Creative Commons Attribution 3.0 Unported License. You must give appropriate credit and indicate if changes were made. See "),
+    externalLink("audiogroup.web.th-koeln.de", "https://audiogroup.web.th-koeln.de/"),
+    bodyText("."),
+  ]));
+
+  // Fonts
+  items.push(heading2("Fonts"));
+  items.push(dataTable(
+    ["Font", "License", "Copyright"],
+    [
+      ["DM Sans (Regular, Medium, SemiBold, Bold)", "SIL Open Font License 1.1", "Colophon Foundry, Google"],
+      ["JetBrains Mono (Regular, Medium, Bold)", "SIL Open Font License 1.1", "JetBrains s.r.o."],
+      ["Roboto (Medium)", "Apache License 2.0", "Google LLC"],
+    ],
+    { colWidths: [3600, 2400, 3026] }
+  ));
+  items.push(spacer(8));
+
+  items.push(bodyPara([
+    boldText("SIL Open Font License 1.1: "),
+    bodyText("DM Sans and JetBrains Mono are licensed under the SIL Open Font License, Version 1.1. This license is available at "),
+    externalLink("openfontlicense.org", "https://openfontlicense.org/"),
+    bodyText(". The fonts may be used, modified, and distributed freely, provided that they are not sold by themselves and any derivative fonts carry a different name."),
+  ]));
+
+  items.push(bodyPara([
+    boldText("Apache License 2.0: "),
+    bodyText("Roboto is licensed under the Apache License, Version 2.0. You may obtain a copy of the License at "),
+    externalLink("apache.org/licenses/LICENSE-2.0", "https://www.apache.org/licenses/LICENSE-2.0"),
+    bodyText("."),
+  ]));
+
+  // Project License note
+  items.push(heading2("Project License"));
+  items.push(bodyPara([
+    bodyText("OpenSpatialDelay itself is dual-licensed under the "),
+    boldText("GNU General Public License v3.0"),
+    bodyText(" (for open-source use) and a "),
+    boldText("Commercial License"),
+    bodyText(" (for proprietary/closed-source projects). The full GPL-3.0 text is included in the LICENSE file distributed with the source code. For commercial licensing, contact "),
+    externalLink("Spatial Media Lab", "https://spatialmedialab.org"),
+    bodyText("."),
+  ]));
+
+  return items;
+}
+
+// ============================================================================
+// SECTION 13: BACK PAGE
 // ============================================================================
 
 function buildBackPage() {
@@ -1546,6 +1690,8 @@ async function buildManual() {
     ...buildADMOSC(),
     new Paragraph({ children: [new PageBreak()] }),
     ...buildTroubleshooting(),
+    new Paragraph({ children: [new PageBreak()] }),
+    ...buildLegalNotices(),
     new Paragraph({ children: [new PageBreak()] }),
     ...buildBackPage(),
   ];

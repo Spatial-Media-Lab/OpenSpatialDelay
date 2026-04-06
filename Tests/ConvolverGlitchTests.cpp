@@ -3191,8 +3191,8 @@ TEST_CASE ("Binaural HRTF — no volume swell on profile switch (issue #90)", "[
     float p1Peak = peakAbs (ss1L, ss1R);
     REQUIRE (p1Peak > 0.001f);  // Sanity: signal is audible
 
-    // Switch to Profile 2 (SADIE KU100)
-    proc->testLoadHRTFProfile (2);
+    // Switch to Profile 1 (SADIE KU100 — Immersive)
+    proc->testLoadHRTFProfile (1);
 
     // Capture transition window (10 blocks ≈ 53ms, covers the 4-block crossfade)
     auto [txL, txR] = processBlocksCapturingAll (*proc, 10);
@@ -3303,7 +3303,7 @@ TEST_CASE ("detectOnset — unit: immediate onset returns 0", "[issue89][onset][
 
 TEST_CASE ("ITD onset detection — MIT KEMAR returns non-zero delays at az=90deg", "[issue89][onset][integration]")
 {
-    auto proc = createBinauralProcessor (1);  // MIT KEMAR (Studio Reference)
+    auto proc = createBinauralProcessor (5);  // MIT KEMAR (Studio Reference)
 
     // Stabilize
     processBlocksCapturingAll (*proc, 60);
@@ -3339,7 +3339,7 @@ TEST_CASE ("ITD onset detection — MIT KEMAR returns non-zero delays at az=90de
 
 TEST_CASE ("ITD onset detection — SADIE bypasses fallback (non-zero SOFA delays)", "[issue89][onset][integration]")
 {
-    auto proc = createBinauralProcessor (2);  // SADIE II KU100 (Immersive)
+    auto proc = createBinauralProcessor (1);  // SADIE II KU100 (Immersive)
 
     // Stabilize
     processBlocksCapturingAll (*proc, 60);
@@ -3373,7 +3373,7 @@ TEST_CASE ("ITD onset detection — SADIE bypasses fallback (non-zero SOFA delay
 
 TEST_CASE ("ITD onset detection — symmetric positions produce symmetric delays", "[issue89][onset][integration]")
 {
-    auto proc = createBinauralProcessor (1);  // MIT KEMAR
+    auto proc = createBinauralProcessor (5);  // MIT KEMAR (Studio Reference)
 
     // Stabilize
     processBlocksCapturingAll (*proc, 60);
