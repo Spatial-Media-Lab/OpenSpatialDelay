@@ -2287,6 +2287,11 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         objTrajectoryRevButton->setToggleState (true, juce::dontSendNotification);
         objTrajectoryFwdButton->setToggleState (false, juce::dontSendNotification);
     };
+    objTrajectoryDirBox.onChange = [this] {
+        int sel = objTrajectoryDirBox.getSelectedId();  // 1=Forward, 2=Reverse
+        if (objTrajectoryFwdButton) objTrajectoryFwdButton->setToggleState (sel == 1, juce::dontSendNotification);
+        if (objTrajectoryRevButton) objTrajectoryRevButton->setToggleState (sel == 2, juce::dontSendNotification);
+    };
 
     styleSlider (objTrajectorySpeedSlider, *osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
     addAndMakeVisible (objTrajectorySpeedSlider);

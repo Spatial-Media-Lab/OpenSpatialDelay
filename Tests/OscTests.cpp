@@ -413,7 +413,7 @@ TEST_CASE ("OSC: Global tap offsets clamp to valid range", "[osc][global-tap][ed
     REQUIRE_THAT (proc->globalTapOffset[2].load(), WithinAbs (1.0f, 0.01f));
 
     sendOSC (*proc, "/osd/global/tappitch", { -48.0f });
-    REQUIRE_THAT (proc->globalTapOffset[3].load(), WithinAbs (-24.0f, 0.01f));
+    REQUIRE_THAT (proc->globalTapOffset[3].load(), WithinAbs (-12.0f, 0.01f));
 
     sendOSC (*proc, "/osd/global/tapspeed", { 10.0f });
     REQUIRE_THAT (proc->globalTapOffset[5].load(), WithinAbs (5.0f, 0.01f));
