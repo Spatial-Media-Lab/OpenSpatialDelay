@@ -2300,9 +2300,9 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     oscToggleAttach = std::make_unique<ButtonAttachment> (processorRef.apvts, "admOscEnabled",
                                                           *oscToggleButton);
 
-    // v0.6: Editable OSC port label (double-click to edit, Enter to commit)
+    // v0.6: Editable OSC port label (single-click to edit, Enter to commit)
     oscPortLabel.setText (juce::String (processorRef.getOscReceivePort()), juce::dontSendNotification);
-    oscPortLabel.setEditable (false, true, false);  // single-click no, double-click yes, return-key commits
+    oscPortLabel.setEditable (true, false, false);  // single-click yes, double-click no, loss-of-focus commits
     oscPortLabel.setFont (makeFont (osdLookAndFeel->jetbrainsRegular, 11.0f));
     oscPortLabel.setColour (juce::Label::textColourId, Colours_OSD::textSecondary);
     oscPortLabel.setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
@@ -2353,7 +2353,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     addAndMakeVisible (*oscSendToggleButton);
 
     oscSendIPLabel.setText (processorRef.getOscSendIP(), juce::dontSendNotification);
-    oscSendIPLabel.setEditable (false, true, false);
+    oscSendIPLabel.setEditable (true, false, false);
     oscSendIPLabel.setFont (makeFont (osdLookAndFeel->jetbrainsRegular, 11.0f));
     oscSendIPLabel.setColour (juce::Label::textColourId, Colours_OSD::textSecondary);
     oscSendIPLabel.setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
@@ -2378,7 +2378,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     addAndMakeVisible (oscSendIPLabel);
 
     oscSendPortLabel.setText (juce::String (processorRef.getOscSendPort()), juce::dontSendNotification);
-    oscSendPortLabel.setEditable (false, true, false);
+    oscSendPortLabel.setEditable (true, false, false);
     oscSendPortLabel.setFont (makeFont (osdLookAndFeel->jetbrainsRegular, 11.0f));
     oscSendPortLabel.setColour (juce::Label::textColourId, Colours_OSD::textSecondary);
     oscSendPortLabel.setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
