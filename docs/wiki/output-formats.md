@@ -25,11 +25,11 @@ When Binaural is selected, the rightmost dropdown in the header bar becomes the 
 | Profile | Source | Character |
 |---|---|---|
 | Simple (Low CPU) | Woodworth model | Lightweight ITD+ILD only -- no convolution. Good for low-latency monitoring or when CPU is limited. Less spatial realism. |
-| Studio Reference | MIT KEMAR | Industry-standard dummy head measurement. Neutral, accurate localization. Good starting point. |
 | Immersive | SADIE II D2 (KU100) | Neumann KU100 dummy head. Rich low end, wide spatial image. Excellent for music production. |
 | Natural | CIPIC Subject003 | Human subject measurement. Organic, realistic externalization. Good for dialogue and field recordings. |
 | Precise | HUTUBS PP2 | High-resolution measurement. Tight localization, analytical character. Useful for spatial design work. |
 | Spatial | Bernschuetz KU100 | Full 2-degree resolution KU100. Smooth, even coverage. Great all-rounder for spatial mixing. |
+| Studio Reference | MIT KEMAR | Industry-standard dummy head measurement. Neutral, accurate localization. Good starting point. |
 
 > **Tip:** HRTF perception is highly individual. Try each profile and choose the one where you can most clearly locate sounds in space. The "right" profile depends on your head and ear shape.
 
