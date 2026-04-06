@@ -2523,7 +2523,6 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
                                         juce::dontSendNotification);
     inputFormatBox.onChange = [this] {
         processorRef.configInputFormat.store (inputFormatBox.getSelectedItemIndex(), std::memory_order_relaxed);
-        processorRef.inputFormatSetByPreset.store (true, std::memory_order_relaxed);  // Issue #155: user chose explicitly
         processorRef.markConfigStateDirty();
     };
 
@@ -2998,25 +2997,9 @@ void OpenSpatialDelayEditor::timerCallback()
     updateObjectButtonColours();
 
     // v0.8: Show/hide input channel button based on Input Format (Mono=hide, Stereo=show)
-    // Issue #155: Disable Stereo option on mono tracks; sync dropdown with auto-detected value
     {
         int inputFmt = processorRef.configInputFormat.load (std::memory_order_relaxed);
         if (objInputChannelButton) objInputChannelButton->setVisible (inputFmt == 1);
-
-        int numCh = processorRef.lastKnownInputChannels.load (std::memory_order_relaxed);
-        if (numCh > 0)
-        {
-            bool isMono = (numCh == 1);
-            inputFormatBox.setItemEnabled (2, ! isMono);  // itemId 2 = "Stereo"
-
-            // Force Mono if currently on Stereo but track is mono
-            if (isMono && inputFormatBox.getSelectedItemIndex() == 1)
-                inputFormatBox.setSelectedItemIndex (0, juce::sendNotificationSync);
-
-            // Sync dropdown with processor value (handles auto-detect on first buffer)
-            if (inputFormatBox.getSelectedItemIndex() != inputFmt)
-                inputFormatBox.setSelectedItemIndex (inputFmt, juce::dontSendNotification);
-        }
     }
 
     // v0.8: Show/hide trajectory direction arrows — only when a trajectory is active (not None)
