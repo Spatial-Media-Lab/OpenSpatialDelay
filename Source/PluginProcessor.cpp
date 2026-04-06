@@ -1616,7 +1616,7 @@ void OpenSpatialDelayProcessor::timerCallback()
     // and eliminating 60Hz staircase buzz in Doppler velocity.
 
     // --- SPATIAL MEDIA LIBRARY: ADM-OSC Send — broadcast object positions at 30Hz ---
-    if (oscSendEnabled && admEnabled && oscSendConnected && ++oscSendTickCounter >= 2)
+    if (oscSendEnabled && oscSendConnected && ++oscSendTickCounter >= 2)
     {
         oscSendTickCounter = 0;
         for (int t = 0; t < MAX_OBJECTS; ++t)

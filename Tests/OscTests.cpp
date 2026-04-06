@@ -275,6 +275,13 @@ TEST_CASE ("OSC: /osd/global/syncmode sets sync mode", "[osc][global]")
     REQUIRE_THAT (readParam (*proc, "syncMode"), WithinAbs (2.0f, 0.5f));
 }
 
+TEST_CASE ("OSC: /osd/global/notedivision sets note division", "[osc][global]")
+{
+    auto proc = createOscProcessor();
+    sendOSC (*proc, "/osd/global/notedivision", { 8.0f });  // 1/2 note
+    REQUIRE_THAT (readParam (*proc, "noteDivision"), WithinAbs (8.0f, 0.5f));
+}
+
 // ============================================================================
 // Section 5: Edge Cases & Boundary Conditions
 // ============================================================================
@@ -379,6 +386,34 @@ TEST_CASE ("OSC: /osd/global/tapspeed sets global SPEED offset", "[osc][global-t
     auto proc = createOscProcessor();
     sendOSC (*proc, "/osd/global/tapspeed", { 2.5f });
     REQUIRE_THAT (proc->globalTapOffset[5].load(), WithinAbs (2.5f, 0.01f));
+}
+
+TEST_CASE ("OSC: Trajectory indices map correctly for all shapes", "[osc][per-object][edge]")
+{
+    auto proc = createOscProcessor();
+    // Verify a spread of trajectory indices: None(0), Bounce(1), Circle(2), Orbit(9), Triangle(13)
+    float indices[] = { 0.0f, 1.0f, 2.0f, 9.0f, 13.0f };
+    for (float idx : indices)
+    {
+        sendOSC (*proc, "/osd/obj/1/trajectory", { idx });
+        REQUIRE_THAT (readParam (*proc, "object1_trajectoryShape"), WithinAbs (idx, 0.5f));
+    }
+}
+
+TEST_CASE ("OSC: Algorithm, HRTF profile, and output format are ignored", "[osc][edge]")
+{
+    auto proc = createOscProcessor();
+    int prevAlgo = proc->configAlgorithm.load (std::memory_order_relaxed);
+    int prevHrtf = proc->configHrtfProfile.load (std::memory_order_relaxed);
+    int prevFmt  = proc->configOutputFormat.load (std::memory_order_relaxed);
+
+    sendOSC (*proc, "/osd/global/algorithm", { 5.0f });
+    sendOSC (*proc, "/osd/global/hrtfprofile", { 3.0f });
+    sendOSC (*proc, "/osd/global/outputformat", { 10.0f });
+
+    REQUIRE (proc->configAlgorithm.load (std::memory_order_relaxed) == prevAlgo);
+    REQUIRE (proc->configHrtfProfile.load (std::memory_order_relaxed) == prevHrtf);
+    REQUIRE (proc->configOutputFormat.load (std::memory_order_relaxed) == prevFmt);
 }
 
 TEST_CASE ("OSC: Global tap offsets clamp to valid range", "[osc][global-tap][edge]")
