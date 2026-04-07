@@ -1,7 +1,7 @@
 # OpenSpatialDelay Release Test Checklist
 
 Reusable manual listening/visual test checklist for validating builds before release.
-Automated tests (244 Catch2 tests) cover DSP correctness; this checklist covers
+Automated tests (162 Catch2 tests, 1255 assertions) cover DSP correctness; this checklist covers
 perceptual quality, DAW integration, and UI behavior that require human evaluation.
 
 ---
@@ -12,7 +12,7 @@ perceptual quality, DAW integration, and UI behavior that require human evaluati
 
 ---
 
-## A. Output Format Verification (22 formats)
+## A. Output Format Verification (23 formats)
 
 **Method:** Load a preset with active taps. Switch output format via header dropdown.
 Verify signal appears on correct channels via REAPER routing matrix or channel meters.
@@ -24,21 +24,22 @@ Verify signal appears on correct channels via REAPER routing matrix or channel m
 - [ ] A5.  5.1 -- 6ch (5.0 + LFE on ch4)
 - [ ] A6.  7.0 -- 7ch (L/C/R/Lss/Rss/Lrs/Rrs)
 - [ ] A7.  7.1 -- 8ch (7.0 + LFE on ch4)
-- [ ] A8.  Octaphonic -- 8ch (45-degree spaced ring)
-- [ ] A9.  5.1.2 -- 8ch (5.1 + Lts/Rts height)
-- [ ] A10. 5.1.4 -- 10ch (5.1 + 4 height)
-- [ ] A11. 7.1.2 -- 10ch (7.1 + 2 height)
-- [ ] A12. 7.1.4 Atmos -- 12ch (7.1 + 4 height)
-- [ ] A13. 7.1.6 -- 14ch (7.1 + 6 height)
-- [ ] A14. 9.1.4 -- 14ch (9.1 + 4 height)
-- [ ] A15. 9.1.6 -- 16ch (9.1 + 6 height)
-- [ ] A16. SML 13.1 -- 14ch (SML multi-use room)
-- [ ] A17. FOA (1st order ambi) -- 4ch ACN/SN3D
-- [ ] A18. SOA (2nd order ambi) -- 9ch ACN/SN3D
-- [ ] A19. HOA (3rd order ambi) -- 16ch ACN/SN3D
-- [ ] A20. 4OA (4th order ambi) -- 25ch ACN/SN3D
-- [ ] A21. 5OA (5th order ambi) -- 36ch ACN/SN3D
-- [ ] A22. 6OA (6th order ambi) -- 49ch ACN/SN3D
+- [ ] A8.  9.1 -- 10ch (ITU-R BS.2051 System H, ear-level only)
+- [ ] A9.  Octaphonic -- 8ch (45-degree spaced ring)
+- [ ] A10. 5.1.2 -- 8ch (5.1 + Lts/Rts height)
+- [ ] A11. 5.1.4 -- 10ch (5.1 + 4 height)
+- [ ] A12. 7.1.2 -- 10ch (7.1 + 2 height)
+- [ ] A13. 7.1.4 Atmos -- 12ch (7.1 + 4 height)
+- [ ] A14. 7.1.6 -- 14ch (7.1 + 6 height)
+- [ ] A15. 9.1.4 -- 14ch (9.1 + 4 height)
+- [ ] A16. 9.1.6 -- 16ch (9.1 + 6 height)
+- [ ] A17. SML 13.1 -- 14ch (SML multi-use room)
+- [ ] A18. FOA (1st order ambi) -- 4ch ACN/SN3D
+- [ ] A19. SOA (2nd order ambi) -- 9ch ACN/SN3D
+- [ ] A20. HOA (3rd order ambi) -- 16ch ACN/SN3D
+- [ ] A21. 4OA (4th order ambi) -- 25ch ACN/SN3D
+- [ ] A22. 5OA (5th order ambi) -- 36ch ACN/SN3D
+- [ ] A23. 6OA (6th order ambi) -- 49ch ACN/SN3D
 
 **Notes:** ________________________________________________________
 
@@ -49,12 +50,12 @@ Verify signal appears on correct channels via REAPER routing matrix or channel m
 **Method:** Set Binaural output. Play pink noise or a drum loop.
 Switch profiles via header dropdown. Listen for artifacts on switch.
 
-- [ ] B1.  Simple (Woodworth) -- baseline, fast CPU
-- [ ] B2.  MIT KEMAR Large Pinna -- wider image
-- [ ] B3.  SADIE II D2 KU100 -- Neumann head
-- [ ] B4.  CIPIC Subject 003 -- individual HRTF
-- [ ] B5.  HUTUBS PP2 -- individual HRTF
-- [ ] B6.  Bernschuetz KU100 -- room measurement
+- [ ] B1.  Simple (Low CPU) -- Woodworth ITD+ILD, no convolution
+- [ ] B2.  Studio Reference -- MIT KEMAR, neutral classic standard
+- [ ] B3.  Immersive -- SADIE II D2 KU100, rich spatial detail
+- [ ] B4.  Natural -- CIPIC Subject 003, organic rendering
+- [ ] B5.  Precise -- HUTUBS PP2, analytical accuracy
+- [ ] B6.  Spatial -- Bernschuetz KU100, widest coverage
 
 Per-profile verification:
 - [ ] B7.  No click/pop on profile switch (crossfade functional)
