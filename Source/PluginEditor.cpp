@@ -2304,8 +2304,11 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     oscToggleButton = std::make_unique<IndicatorToggle> ("RECEIVE", Colours_OSD::accentGreen,
                                                           osdLookAndFeel->jetbrainsMedium);
     addAndMakeVisible (*oscToggleButton);
-    oscToggleAttach = std::make_unique<ButtonAttachment> (processorRef.apvts, "admOscEnabled",
-                                                          *oscToggleButton);
+    oscToggleButton->setToggleState (processorRef.getOscReceiveEnabled(), juce::dontSendNotification);
+    oscToggleButton->onClick = [this]
+    {
+        processorRef.setOscReceiveEnabled (oscToggleButton->getToggleState());
+    };
 
     // v0.6: Editable OSC port label (single-click to edit, Enter to commit)
     oscPortLabel.setText (juce::String (processorRef.getOscReceivePort()), juce::dontSendNotification);
@@ -2353,6 +2356,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     // --- v0.7: ADM-OSC Send toggle (IndicatorToggle) -------------------------
     oscSendToggleButton = std::make_unique<IndicatorToggle> ("SEND", Colours_OSD::accentGreen,
                                                               osdLookAndFeel->jetbrainsMedium);
+    oscSendToggleButton->setToggleState (processorRef.getOscSendEnabled(), juce::dontSendNotification);
     oscSendToggleButton->onClick = [this]
     {
         processorRef.setOscSendEnabled (oscSendToggleButton->getToggleState());

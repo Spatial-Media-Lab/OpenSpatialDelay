@@ -678,7 +678,9 @@ public:
                ? oscOverrideActive[objectIndex].load (std::memory_order_relaxed) : false;
     }
 
-    // v0.6: OSC port configuration (editable from editor)
+    // v0.6: OSC receive configuration (editable from editor)
+    bool getOscReceiveEnabled() const { return oscReceiveEnabled; }
+    void setOscReceiveEnabled (bool enabled);
     int getOscReceivePort() const { return oscReceivePort; }
     void setOscReceivePort (int port);
 
@@ -864,8 +866,9 @@ private:
     int  oscReceivePort = 4002;                         // Default ADM-OSC receive port
     bool globalDrawerOpen = false;                      // v1.0: global tap drawer visibility
     bool oscConnected = false;                          // Current connection state
-    bool prevAdmOscEnabled = false;                     // Edge-detect for enable/disable transitions
-    std::atomic<float>* cachedParam_admOscEnabled = nullptr;
+    bool oscReceiveEnabled = false;                     // v1.0: OSC Receive enable (non-APVTS, issue E20)
+    bool prevOscReceiveEnabled = false;                 // Edge-detect for enable/disable transitions
+    bool oscReceiveStateLoaded = false;                 // E20: guard against undo restoring OSC receive settings
 
     //--- SPATIAL MEDIA LIBRARY: ADM-OSC Send state ---
     juce::OSCSender oscSender;
