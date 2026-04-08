@@ -15,8 +15,8 @@ The current manual (`docs/OpenSpatialDelay_Manual_v1.0.docx/pdf`) was drafted du
 
 | Section | What Changed | Priority |
 |---------|-------------|----------|
-| **Trajectory System** | Complete rewrite: 13 shapes (was 6), origin-point architecture, direction control (fwd/rev), crosshair origin markers, glow trails | P0 |
-| **Factory Presets** | 60 presets across 9 categories (Ambient Spaces, Deep Dub, Experimental, Glitch & Stutter, Immersive FX, Rhythmic, Simple, Spatial Movement, Surround). Build-time installation. | P0 |
+| **Trajectory System** | Complete rewrite: 14 shapes (was 6), origin-point architecture, direction control (fwd/rev), crosshair origin markers, glow trails | P0 |
+| **Factory Presets** | 70 presets across 9 categories (Classic Delays, Spatial Movement, Ambient + Texture, Height + 3D, Surround Production, Wobble + Modulated, Creative + Experimental, Rhythmic, Template). Build-time installation. | P0 |
 | **Signal Flow Diagram** | WSOLA-lite per-tap pitch, split pitch architecture (varispeed global + WSOLA per-tap). New signal flow diagram needed. | P0 |
 
 ### Section Updates

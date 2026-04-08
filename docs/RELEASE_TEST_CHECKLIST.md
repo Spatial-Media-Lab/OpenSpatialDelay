@@ -1,7 +1,7 @@
 # OpenSpatialDelay Release Test Checklist
 
 Reusable manual listening/visual test checklist for validating builds before release.
-Automated tests (162 Catch2 tests, 1255 assertions) cover DSP correctness; this checklist covers
+Automated tests (291 Catch2 tests, 110,205 assertions) cover DSP correctness; this checklist covers
 perceptual quality, DAW integration, and UI behavior that require human evaluation.
 
 ---

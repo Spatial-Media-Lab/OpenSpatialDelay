@@ -10,7 +10,7 @@
 
 - **macOS build:** Working (AU + VST3, arm64, ad-hoc signed)
 - **Windows CI:** Blocked (GitHub Actions billing — free minutes exhausted on private repo)
-- **Tests:** 162 Catch2 tests, 1255 assertions — all passing
+- **Tests:** 291 Catch2 tests, 110,205 assertions — all passing (1 pre-existing bus layout test excluded)
 - **Open issues:** 1 (#59 — refactor, explicitly post-v1.0 scope)
 - **Closed bugs:** 30+ since v0.9
 - **Manual:** PDF + DOCX generated, update plan marked COMPLETED
@@ -141,10 +141,11 @@ Since Windows CI can only run after the repo goes public, and there is no local 
 | `docs/OpenSpatialDelay_Manual_v1.0.pdf` | Current | Manual update plan marked COMPLETED |
 | `docs/OpenSpatialDelay_Legal_Notices.docx` | Current | All third-party licenses covered |
 | `LICENSE` | Current | Dual GPL-3.0 / Commercial header |
+| `docs/RELEASE_NOTES_v1.0.0.md` | Current | Created 2026-04-08, referenced by `gh release create` |
 
-### Known Documentation Discrepancy
+### Documentation Discrepancy — RESOLVED (2026-04-08)
 
-The manual generator (`docs/generate_manual.js`) was updated in a previous PR to show 22 formats (removed 9.1), 7 algorithms (removed Constant Power), and 60 presets. The source code has 23 formats, 8 algorithms, and 70 presets. **Before regenerating the manual, confirm whether these removals were intentional editorial decisions or errors.** The README matches the source code.
+The manual generator (`docs/generate_manual.js`) now correctly shows 23 formats, 8 spatialization approaches (7 user-selectable algorithms in the table + Direct Binaural HRTF in the intro text), and 70 factory presets. All counts match the source code. No action needed before regenerating the manual.
 
 ---
 
@@ -152,10 +153,10 @@ The manual generator (`docs/generate_manual.js`) was updated in a previous PR to
 
 Based on test coverage analysis, these gaps should be addressed before or shortly after release:
 
-**High priority (pre-release if time permits):**
-- Stereo input routing tests (L+R, L, R per tap) — no dedicated coverage
-- SML 13.1 and 9.1 surround format tests — untested formats
-- Higher-order Ambisonics (HOA, 4OA–6OA) initialization tests — buffer overrun risk
+**High priority — COMPLETED (2026-04-08, `Tests/PreReleaseTests.cpp`):**
+- ~~Stereo input routing tests (L+R, L, R per tap)~~ — 4 tests added
+- ~~SML 13.1 and 9.1 surround format tests~~ — 7 tests added
+- ~~Higher-order Ambisonics (HOA, 4OA–6OA) initialization tests~~ — 5 tests added
 
 **Medium priority (post-release):**
 - HRTF profile pair-wise switching stress test
