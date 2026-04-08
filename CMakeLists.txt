@@ -195,6 +195,7 @@ if(BUILD_OSD_TESTS)
         Tests/ConvolverGlitchTests.cpp
         Tests/DSPUnitTests.cpp
         Tests/IntegrationTests.cpp
+        Tests/PreReleaseTests.cpp
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/PresetData.cpp
