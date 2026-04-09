@@ -2747,7 +2747,19 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     smoothedOutputGain.reset (sampleRate, 0.02);
 
     // Read current parameter values so smoothing starts at the right position
-    float initDelayMs = apvts.getRawParameterValue ("delayTime")->load();
+    // E18: Use tempo-synced value when tempo sync is active — the raw knob value
+    // may differ from the actual delay time, causing a stale ramp on first block.
+    float initDelayMs;
+    bool tempoSyncInit = apvts.getRawParameterValue ("tempoSync")->load() > 0.5f;
+    if (tempoSyncInit)
+    {
+        int ndivInit = static_cast<int> (apvts.getRawParameterValue ("noteDivision")->load());
+        initDelayMs = getTempoSyncedDelayMs (ndivInit);
+    }
+    else
+    {
+        initDelayMs = apvts.getRawParameterValue ("delayTime")->load();
+    }
     float initDryWet  = apvts.getRawParameterValue ("dryWet")->load();
     float initFb      = apvts.getRawParameterValue ("feedback")->load();
     float initInGain  = juce::Decibels::decibelsToGain (apvts.getRawParameterValue ("inputGain")->load());
@@ -4171,6 +4183,23 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                     // delay buffer discontinuity after scrub/seek (issue #103)
                     transportFadeGain = 0.0f;
                     transportFadeActive = true;
+
+                    // E18: Snap delay time to correct value on transport start.
+                    // Without this, smoothedDelayTime ramps from its stale value
+                    // over 100ms, sweeping the read position through old buffer
+                    // content (audible chirp at tempos other than the previous one).
+                    {
+                        bool tsync = cachedParam_tempoSync->load() > 0.5f;
+                        if (tsync)
+                        {
+                            int ndiv = static_cast<int> (cachedParam_noteDivision->load());
+                            smoothedDelayTime.setCurrentAndTargetValue (getTempoSyncedDelayMs (ndiv));
+                        }
+                        else
+                        {
+                            smoothedDelayTime.setCurrentAndTargetValue (cachedParam_delayTime->load());
+                        }
+                    }
                 }
 
                 wasPlaying = isPlaying;
