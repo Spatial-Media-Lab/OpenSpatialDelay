@@ -3066,6 +3066,27 @@ void OpenSpatialDelayEditor::syncGlobalTapOffsetsFromOSC()
     }
 }
 
+// issue #164: Sync global tap knobs from APVTS on host undo / external param change.
+// Unlike syncGlobalTapOffsetsFromOSC(), this does NOT call applyGlobalTapDelta() —
+// per-object params are already correct after undo, we only need the UI + atomics.
+void OpenSpatialDelayEditor::syncGlobalTapKnobsFromAPVTS()
+{
+    static const char* tapParamIds[] = { "globalTapAzimuth", "globalTapElevation", "globalTapDistance",
+                                         "globalTapPitch",   "globalTapDoppler",   "globalTapSpeed" };
+    for (int i = 0; i < GlobalTapDrawerComponent::kNumKnobs; ++i)
+    {
+        auto* rawParam = processorRef.apvts.getRawParameterValue (tapParamIds[i]);
+        if (rawParam == nullptr) continue;
+        float apvtsVal = rawParam->load();
+        float knobVal  = globalTapDrawer.getKnobValue (i);
+        if (std::abs (apvtsVal - knobVal) > 1e-6f)
+        {
+            globalTapDrawer.setKnobValueSilent (i, apvtsVal);
+            processorRef.globalTapOffset[i].store (apvtsVal, std::memory_order_relaxed);
+        }
+    }
+}
+
 void OpenSpatialDelayEditor::syncForScreenshot()
 {
     updateMapFromParameters();
@@ -3342,6 +3363,9 @@ void OpenSpatialDelayEditor::timerCallback()
     {
         syncGlobalTapOffsetsFromOSC();
     }
+
+    // issue #164: Sync knobs from APVTS on host undo / external param change
+    syncGlobalTapKnobsFromAPVTS();
 
     repaint();
 }

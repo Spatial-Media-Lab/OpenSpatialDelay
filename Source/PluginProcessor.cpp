@@ -6163,6 +6163,20 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
         setOscSendEnabled (true);
 
     apvts.replaceState (tree);
+
+    // issue #164: Sync global tap offset atomics from restored APVTS values.
+    // Without this, atomics are stale after undo and OSC Send uses old values.
+    // Do NOT set globalTapOffsetChanged — that would trigger syncGlobalTapOffsetsFromOSC
+    // which re-applies deltas to per-object params (incorrect for undo).
+    {
+        static const char* ids[] = { "globalTapAzimuth", "globalTapElevation", "globalTapDistance",
+                                     "globalTapPitch",   "globalTapDoppler",   "globalTapSpeed" };
+        for (int i = 0; i < kNumGlobalTapOffsets; ++i)
+        {
+            if (auto* p = apvts.getRawParameterValue (ids[i]))
+                globalTapOffset[i].store (p->load(), std::memory_order_relaxed);
+        }
+    }
 }
 
 //==============================================================================

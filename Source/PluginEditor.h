@@ -552,6 +552,7 @@ private:
     void applyGlobalTapDelta (int knobIndex, float delta);  // v1.0: IEM-style delta application
     void resetGlobalTapAPVTSParams();                       // issue #95: zero APVTS + atomics on preset change
     void syncGlobalTapOffsetsFromOSC();                     // v1.0: processor → editor OSC sync
+    void syncGlobalTapKnobsFromAPVTS();                    // issue #164: sync knobs from APVTS on undo
 
     // Global controls — ordered by signal flow
     juce::Slider inputGainSlider, outputGainSlider;
