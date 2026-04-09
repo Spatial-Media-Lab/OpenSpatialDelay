@@ -722,11 +722,11 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
         1.1f, false, 4.0f, 0, 0.0f, 20000.0f, 20.0f, 0.707f, 0.707f, 1.0f, 1.3f, 0.0f,
         false, false, false, 0.0f, 0.0f, 1, 0,
         {
-            { true,    0.0f,    0.0f, 0.25f, 0.0f,   0.0f, 0, 1.0f, 0, 1 /*L*/ },  // Unison: center
+            { true,    0.0f,    0.0f, 0.25f, 0.0f,   0.0f, 0, 1.0f, 0, 0 /*L+R*/ },  // Unison: center
             { true,   45.0f,   45.0f, 0.5f,  0.0f,  12.0f, 0, 1.0f, 0, 1 /*L*/ },  // +12st: upper-right
-            { true,  -22.5f,   22.5f, 0.5f,  0.0f,   7.0f, 0, 1.0f, 0, 1 /*L*/ },  // +7st: upper-left
+            { true,  -22.5f,   22.5f, 0.5f,  0.0f,   7.0f, 0, 1.0f, 0, 2 /*R*/ },  // +7st: upper-left
             { true,   22.5f,  -22.5f, 0.5f,  0.0f,  -5.0f, 0, 1.0f, 0, 1 /*L*/ },  // -5st: lower-right
-            { true,  -45.0f,  -45.0f, 0.5f,  0.0f, -12.0f, 0, 1.0f, 0, 1 /*L*/ },  // -12st: lower-left
+            { true,  -45.0f,  -45.0f, 0.5f,  0.0f, -12.0f, 0, 1.0f, 0, 2 /*R*/ },  // -12st: lower-left
             {}, {}, {}, {}, {}, {}, {}
         }
     },
