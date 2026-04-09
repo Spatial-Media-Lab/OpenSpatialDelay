@@ -1637,51 +1637,51 @@ TEST_CASE ("Drift diagnostic: feedback repeats maintain consistent timing", "[dr
 // AudioChannelSets instead of the 50-channel discrete default.
 // ============================================================================
 
-TEST_CASE ("AU bus: accepts exact registry channel counts", "[bus]")
+TEST_CASE ("AU bus: accepts named layouts for standard surround formats", "[bus]")
 {
     auto proc = std::make_unique<Proc>();
 
-    // Collect unique requiredChannels from the registry
-    std::set<int> registryCounts;
-    for (const auto& info : Proc::outputFormatRegistry)
-        registryCounts.insert (info.requiredChannels);
+    // Issue #189: AU path now rejects discrete layouts (so JUCE advertises named
+    // layout tags to Ableton). Test with named AudioChannelSets instead.
+    auto check = [&](const char* label, juce::AudioChannelSet set) {
+        SECTION (label)
+        {
+            juce::AudioProcessor::BusesLayout layout;
+            layout.inputBuses.add (juce::AudioChannelSet::stereo());
+            layout.outputBuses.add (set);
+            CHECK (proc->checkBusesLayoutSupported (layout));
+        }
+    };
 
-    // Every channel count in the registry must be accepted via discreteChannels(N)
-    for (int numCh : registryCounts)
+    check ("stereo (2ch)",           juce::AudioChannelSet::stereo());
+    check ("quadraphonic (4ch)",     juce::AudioChannelSet::quadraphonic());
+    check ("5.1 (6ch)",             juce::AudioChannelSet::create5point1());
+    check ("7.1 (8ch)",             juce::AudioChannelSet::create7point1());
+    check ("7.1.4 (12ch)",          juce::AudioChannelSet::create7point1point4());
+    check ("9.1.6 (16ch)",          juce::AudioChannelSet::create9point1point6());
+}
+
+TEST_CASE ("AU bus: rejects discrete layouts (issue #189)", "[bus]")
+{
+    auto proc = std::make_unique<Proc>();
+
+    // Discrete layouts are rejected in the AU path so JUCE advertises named
+    // layout tags. Ambisonics (discrete 4/9/16/25/36/49) should use VST3.
+    for (int numCh : { 2, 4, 8, 16, 25, 50 })
     {
         SECTION ("discrete(" + std::to_string (numCh) + ")")
         {
             juce::AudioProcessor::BusesLayout layout;
             layout.inputBuses.add (juce::AudioChannelSet::stereo());
             layout.outputBuses.add (juce::AudioChannelSet::discreteChannels (numCh));
-            INFO ("Channel count " << numCh << " from registry");
-            CHECK (proc->checkBusesLayoutSupported (layout));
+            CHECK_FALSE (proc->checkBusesLayoutSupported (layout));
         }
     }
 }
 
-TEST_CASE ("AU bus: accepts even channel counts between registry values (REAPER)", "[bus]")
-{
-    auto proc = std::make_unique<Proc>();
-
-    // REAPER only offers even track widths. Channel counts between registry
-    // values must be accepted so the UI can enable formats that fit.
-    // e.g. 26ch track enables 4th Order Ambi (25ch), 34ch enables 5th (36ch won't fit
-    // but 25ch will), etc.
-    int reaper[] = { 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32,
-                     34, 36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64 };
-
-    for (int numCh : reaper)
-    {
-        SECTION ("discrete(" + std::to_string (numCh) + ")")
-        {
-            juce::AudioProcessor::BusesLayout layout;
-            layout.inputBuses.add (juce::AudioChannelSet::stereo());
-            layout.outputBuses.add (juce::AudioChannelSet::discreteChannels (numCh));
-            CHECK (proc->checkBusesLayoutSupported (layout));
-        }
-    }
-}
+// Note: The old "REAPER even channel counts" test used discreteChannels() which is
+// now rejected in the AU/standalone path (issue #189). REAPER multichannel uses VST3
+// where all layouts are accepted. AU named layout acceptance is covered above.
 
 TEST_CASE ("AU bus: rejects channel count below minimum (< 2)", "[bus]")
 {

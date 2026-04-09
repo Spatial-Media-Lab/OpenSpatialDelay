@@ -630,6 +630,7 @@ public:
 
     //--------------------------------------------------------------------------
     OpenSpatialDelayProcessor();
+    explicit OpenSpatialDelayProcessor (bool abletonMode);  // for testing (issue #189)
     ~OpenSpatialDelayProcessor() override;
 
     //--------------------------------------------------------------------------
@@ -756,7 +757,7 @@ public:
     static const std::array<VirtualSpeaker, NUM_VIRTUAL_SPEAKERS> virtualSpeakers;
 
 private:
-    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout (bool abletonMode = false);
 
     //--- DELAY-SPECIFIC: DSP helpers ------------------------------------------
     void   writeDelayLine (float sampleL, float sampleR);
