@@ -54,7 +54,7 @@ sed -i '' "s/PRODUCT_NAME \"OpenSpatialDelay v1.0\"/PRODUCT_NAME \"${PLUGIN_NAME
 
 # v1.0.7: Compute unique bundle ID suffix for post-build plist patching (issue #62)
 BUNDLE_SUFFIX=$(echo "${VERSION}" | tr '.' '-')  # e.g., v1.0.7 → v1-0-7
-UNIQUE_BUNDLE_ID="com.SpatialMediaLibrary.OpenSpatialDelay.${BUNDLE_SUFFIX}"
+UNIQUE_BUNDLE_ID="com.spatialmedialab.OpenSpatialDelay.${BUNDLE_SUFFIX}"
 
 # Step 3: Patch install script with version-specific name
 sed -i '' "s/PLUGIN_NAME=\"OpenSpatialDelay v1.0\"/PLUGIN_NAME=\"${PLUGIN_NAME}\"/" scripts/install_plugins.sh
