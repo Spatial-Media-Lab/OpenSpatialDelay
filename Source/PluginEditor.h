@@ -23,6 +23,7 @@ public:
     void paint (juce::Graphics& g) override;
     void mouseDown (const juce::MouseEvent& e) override;
     void mouseDrag (const juce::MouseEvent& e) override;
+    void mouseUp (const juce::MouseEvent& e) override;
 
     void setObjectState (int index, float azimuthDeg, float elevationDeg,
                          float distance, bool enabled);
@@ -31,6 +32,10 @@ public:
 
     void addListener (Listener* l)    { listeners.add (l); }
     void removeListener (Listener* l) { listeners.remove (l); }
+
+    // Callbacks: fired on object drag start/end — used for gesture wrapping (issue E15)
+    std::function<void (int objectIndex)> onDragStarted;
+    std::function<void (int objectIndex)> onDragEnded;
 
 private:
     struct ObjectInfo
@@ -272,6 +277,10 @@ public:
     /** Callback when user drags LP Q vertically. */
     std::function<void (float q)> onLPQChanged;
 
+    // Callbacks: fired on filter handle drag start/end — used for gesture wrapping (issue E15)
+    std::function<void()> onFilterDragStarted;
+    std::function<void()> onFilterDragEnded;
+
     /** Enable/disable the filter display (dims when off). */
     void setEnabled (bool enabled) { filterEnabled = enabled; repaint(); }
 
@@ -443,6 +452,9 @@ public:
     std::function<void (int knobIndex, float delta)> onGlobalDelta;
     // Callback: fired when drawer toggles open/close (called on each animation frame)
     std::function<void()> onToggle;
+    // Callbacks: fired on knob drag start/end — used for gesture wrapping (issue E15)
+    std::function<void (int knobIndex)> onDragStarted;
+    std::function<void (int knobIndex)> onDragEnded;
 
     static constexpr int kClosedWidth = 14;
     static constexpr int kOpenWidth   = 78;
@@ -540,6 +552,7 @@ private:
     void applyGlobalTapDelta (int knobIndex, float delta);  // v1.0: IEM-style delta application
     void resetGlobalTapAPVTSParams();                       // issue #95: zero APVTS + atomics on preset change
     void syncGlobalTapOffsetsFromOSC();                     // v1.0: processor → editor OSC sync
+    void syncGlobalTapKnobsFromAPVTS();                    // issue #164: sync knobs from APVTS on undo
 
     // Global controls — ordered by signal flow
     juce::Slider inputGainSlider, outputGainSlider;
@@ -679,6 +692,11 @@ private:
 
     // v0.9: Filter active state — driven by filterEnabled parameter
     bool filterIsActive = false;  // default OFF (matches filterEnabled param default)
+
+    // Issue E15: Gesture tracking for undo grouping
+    std::vector<juce::RangedAudioParameter*> activeGlobalGestureParams;   // Global Tap Drawer drag
+    std::array<juce::RangedAudioParameter*, 2> activeSpatialGestureParams { nullptr, nullptr }; // Spatial Map drag
+    std::vector<juce::RangedAudioParameter*> activeFilterGestureParams;   // Filter Graph drag
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OpenSpatialDelayEditor)
 };
