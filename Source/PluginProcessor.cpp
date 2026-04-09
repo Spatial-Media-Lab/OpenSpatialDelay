@@ -386,11 +386,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
-    // G18: OSC Receive (true=enabled, false=disabled; default OFF)
-    // [non-automatable: never automated, issue #122]
-    params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("admOscEnabled", 18), "OSC Receive", false,
-        juce::AudioParameterBoolAttributes().withAutomatable (false)));
+    // G18: OSC Receive moved to non-APVTS member (oscReceiveEnabled) — issue E20
+    // Removing from APVTS keeps it out of the DAW undo stack.
 
     // G19–G24: Global Tap Offsets (promoted from OSC-only atomics to APVTS)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -1576,16 +1573,15 @@ void OpenSpatialDelayProcessor::timerCallback()
     }
 
     // --- v0.6: ADM-OSC connection management (edge-detect enable/disable) ---
-    bool admEnabled = cachedParam_admOscEnabled != nullptr
-                      && cachedParam_admOscEnabled->load() >= 0.5f;
-    if (admEnabled && ! prevAdmOscEnabled)
+    // oscReceiveEnabled is a plain member (not APVTS) so it stays out of the DAW undo stack (issue E20)
+    if (oscReceiveEnabled && ! prevOscReceiveEnabled)
     {
         // Transition OFF→ON: connect
         oscConnected = oscReceiver.connect (oscReceivePort);
         if (oscConnected)
             oscReceiver.addListener (this);
     }
-    else if (! admEnabled && prevAdmOscEnabled)
+    else if (! oscReceiveEnabled && prevOscReceiveEnabled)
     {
         // Transition ON→OFF: disconnect
         oscReceiver.disconnect();
@@ -1595,10 +1591,10 @@ void OpenSpatialDelayProcessor::timerCallback()
         for (int t = 0; t < MAX_OBJECTS; ++t)
             oscOverrideActive[t].store (false, std::memory_order_relaxed);
     }
-    prevAdmOscEnabled = admEnabled;
+    prevOscReceiveEnabled = oscReceiveEnabled;
 
     // --- v0.6: OSC override timeout (500ms since last receive → release override) ---
-    if (admEnabled)
+    if (oscReceiveEnabled)
     {
         double now = juce::Time::getMillisecondCounterHiRes();
         for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -1820,7 +1816,7 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     cachedParam_feedback        = apvts.getRawParameterValue ("feedback");
     cachedParam_inputGain       = apvts.getRawParameterValue ("inputGain");
     cachedParam_outputGain      = apvts.getRawParameterValue ("outputGain");
-    cachedParam_admOscEnabled   = apvts.getRawParameterValue ("admOscEnabled");
+    // admOscEnabled removed from APVTS — now oscReceiveEnabled member (issue E20)
     // issue #68: Cache global tap offset APVTS pointers
     cachedParam_globalTapAzimuth   = apvts.getRawParameterValue ("globalTapAzimuth");
     cachedParam_globalTapElevation = apvts.getRawParameterValue ("globalTapElevation");
@@ -1881,6 +1877,12 @@ OpenSpatialDelayProcessor::~OpenSpatialDelayProcessor()
 //==============================================================================
 // v0.6: OSC port change — reconnect if currently connected
 //==============================================================================
+void OpenSpatialDelayProcessor::setOscReceiveEnabled (bool enabled)
+{
+    oscReceiveEnabled = enabled;
+    // Connection lifecycle handled in processBlock via edge-detect
+}
+
 void OpenSpatialDelayProcessor::setOscReceivePort (int port)
 {
     if (port == oscReceivePort)
@@ -5544,6 +5546,7 @@ void OpenSpatialDelayProcessor::getStateInformation (juce::MemoryBlock& destData
     state.setProperty ("configHrtfProfile", configHrtfProfile.load (std::memory_order_relaxed), nullptr);
     state.setProperty ("configOutputFormat", configOutputFormat.load (std::memory_order_relaxed), nullptr);
     state.setProperty ("configInputFormat", configInputFormat.load (std::memory_order_relaxed), nullptr);
+    state.setProperty ("oscReceiveEnabled", oscReceiveEnabled, nullptr);  // v1.0: persist OSC receive enable (issue E20)
     state.setProperty ("oscReceivePort", oscReceivePort, nullptr);  // v0.6: persist OSC port
     state.setProperty ("globalDrawerOpen", globalDrawerOpen, nullptr);  // v1.0: persist drawer state
     state.setProperty ("currentPresetIndex", currentPresetIndex, nullptr);  // v0.6: persist preset selection
@@ -6118,8 +6121,17 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
         tree.setProperty ("configAlgorithm", newAlgo, nullptr);
     }
 
-    // v0.6: Restore OSC receive port (non-APVTS property)
-    oscReceivePort = static_cast<int> (tree.getProperty ("oscReceivePort", 4002));
+    // v0.6: Restore OSC receive settings (non-APVTS properties, issue E20)
+    // Only restore on first call (project load) — skip on undo/redo to keep
+    // OSC receive settings out of the DAW undo stack.
+    if (! oscReceiveStateLoaded)
+    {
+        oscReceivePort = static_cast<int> (tree.getProperty ("oscReceivePort", 4002));
+        bool savedReceiveEnabled = static_cast<bool> (tree.getProperty ("oscReceiveEnabled", false));
+        if (savedReceiveEnabled)
+            setOscReceiveEnabled (true);
+        oscReceiveStateLoaded = true;
+    }
     globalDrawerOpen = static_cast<bool> (tree.getProperty ("globalDrawerOpen", false));
 
     // v0.6: Restore preset index (non-APVTS property)

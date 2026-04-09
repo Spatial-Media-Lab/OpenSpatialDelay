@@ -663,7 +663,7 @@ private:
     std::unique_ptr<ComboBoxAttachment> objTrajectoryDirAttach;  // v0.8
 
     // v0.6: ADM-OSC toggle attachment
-    std::unique_ptr<ButtonAttachment> oscToggleAttach;
+    // oscToggleAttach removed — oscReceiveEnabled is now non-APVTS (issue E20)
 
     void selectObject (int index);
     void updateObjectButtonColours();
