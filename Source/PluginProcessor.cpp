@@ -2456,10 +2456,20 @@ bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layou
         return true;
     }
 
-    // AU / standalone path: accept any channel count usable by at least one format.
+    // Issue #189: Reject discrete layouts for AU.
+    // JUCE's AU wrapper calls busIgnoresLayout() which tests discreteChannels(N).
+    // If accepted, JUCE reports zero named layout tags via
+    // kAudioUnitProperty_SupportedChannelLayoutTags. Ableton requires explicit
+    // named tags (kAudioChannelLayoutTag_Stereo, etc.) and rejects plugins with
+    // empty tag lists. Rejecting discrete makes busIgnoresLayout() return false,
+    // so JUCE enumerates and advertises named tags.
+    // Ambisonics (discrete 4/9/16/25/36/49) is unaffected — use VST3 for that.
+    if (layouts.getMainOutputChannelSet().isDiscreteLayout())
+        return false;
+
+    // AU / standalone path: accept any named channel count usable by at least one format.
     // The UI dropdown greys out formats whose requiredChannels > maxBusChannels,
     // so bus negotiation only needs to confirm the channel count is viable.
-    // This handles REAPER's even-only track widths (e.g. 26ch enables 4th Order Ambi at 25ch).
     auto inputSet = layouts.getMainInputChannelSet();
     if (inputSet != juce::AudioChannelSet::mono() &&
         inputSet != juce::AudioChannelSet::stereo())
