@@ -70,6 +70,17 @@ static std::unique_ptr<Proc> createConstrainedProcessor (int outputFormat, int a
     return proc;
 }
 
+// Create a processor with wrapperType_VST3 for testing VST3-specific bus logic.
+// Uses JUCE's setTypeOfNextNewPlugin() — the canonical seam for controlling
+// wrapperType in unit tests (same mechanism used by all plugin wrapper entry points).
+static std::unique_ptr<Proc> createVST3Processor()
+{
+    juce::AudioProcessor::setTypeOfNextNewPlugin (juce::AudioProcessor::wrapperType_VST3);
+    auto proc = std::make_unique<Proc>();
+    juce::AudioProcessor::setTypeOfNextNewPlugin (juce::AudioProcessor::wrapperType_Undefined);
+    return proc;
+}
+
 // Process blocks with a buffer matching the constrained bus channel count.
 // Includes warmup period to fill the delay line and let parameter smoothing settle.
 static juce::AudioBuffer<float> processBlocksConstrained (Proc& proc, int numBlocks, int blockSize,
@@ -1718,7 +1729,7 @@ TEST_CASE ("AU bus: accepts named JUCE channel sets matching registry", "[bus]")
 
 TEST_CASE ("isBusesLayoutSupported accepts VST3 default layout (9.1.6)", "[bus]")
 {
-    auto proc = std::make_unique<Proc>();
+    auto proc = createVST3Processor();
     juce::AudioProcessor::BusesLayout layout;
     layout.inputBuses.add (juce::AudioChannelSet::stereo());
     layout.outputBuses.add (juce::AudioChannelSet::create9point1point6());
@@ -1727,7 +1738,7 @@ TEST_CASE ("isBusesLayoutSupported accepts VST3 default layout (9.1.6)", "[bus]"
 
 TEST_CASE ("isBusesLayoutSupported accepts symmetric layouts for VST3 (issue #111)", "[bus]")
 {
-    auto proc = std::make_unique<Proc>();
+    auto proc = createVST3Processor();
 
     // Symmetric 7.1 in/out — REAPER proposes this on an 8ch track
     {
@@ -1764,7 +1775,7 @@ TEST_CASE ("isBusesLayoutSupported accepts symmetric layouts for VST3 (issue #11
 
 TEST_CASE ("isBusesLayoutSupported accepts ambisonic() channel sets for VST3 (issue #111)", "[bus]")
 {
-    auto proc = std::make_unique<Proc>();
+    auto proc = createVST3Processor();
 
     // ambisonic(1-6) must be accepted for VST3 HOA negotiation
     for (int order = 1; order <= 6; ++order)
