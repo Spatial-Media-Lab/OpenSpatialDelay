@@ -1973,6 +1973,32 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
 
     const PresetData* preset = &allPresets[static_cast<size_t> (index)];
 
+    // Issue E15: Begin gestures on all params we're about to set, so the host
+    // groups the entire preset load into a single undo entry.
+    std::vector<juce::RangedAudioParameter*> presetGestures;
+    auto beginGesture = [&] (const juce::String& paramId) {
+        if (auto* p = apvts.getParameter (paramId))
+        {
+            p->beginChangeGesture();
+            presetGestures.push_back (p);
+        }
+    };
+
+    // Collect all params that will be set
+    for (const char* id : { "delayTime", "tempoSync", "noteDivision", "syncMode",
+                            "feedback", "filterLP", "filterHP", "filterLPQ", "filterHPQ",
+                            "dryWet", "inputGain", "outputGain", "airAbsorption",
+                            "filterEnabled", "wobbleEnabled", "wobbleAmount", "wobbleMorph" })
+        beginGesture (id);
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+    {
+        auto prefix = "object" + juce::String (i + 1) + "_";
+        for (const char* suffix : { "enabled", "azimuth", "elevation", "distance",
+                                    "dopplerAmount", "pitchShift", "trajectoryShape",
+                                    "trajectorySpeed", "trajectoryDirection", "inputChannel" })
+            beginGesture (prefix + suffix);
+    }
+
     // Helpers — use convertTo0to1() to handle skewed NormalisableRanges correctly
     auto setFloat = [&] (const juce::String& paramId, float value) {
         if (auto* p = apvts.getParameter (paramId))
@@ -2029,6 +2055,10 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
         setChoice (prefix + "trajectoryDirection", tap.trajectoryDirection);
         setChoice (prefix + "inputChannel",        tap.inputChannel);
     }
+
+    // Issue E15: End all gestures — host groups the entire preset load as one undo entry
+    for (auto* p : presetGestures)
+        p->endChangeGesture();
 
     // v1.0.1: Reset trajectory state FIRST so processBlock doesn't read stale
     // animated positions from the old preset while prevAzimuth already points to

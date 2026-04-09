@@ -1360,7 +1360,11 @@ void SpatialMapComponent::mouseDown (const juce::MouseEvent& e)
 {
     draggedObject = findObjectAt (e.position);
     if (draggedObject >= 0)
+    {
         listeners.call ([this](Listener& l) { l.objectSelected (draggedObject); });
+        // Issue E15: Signal drag start for gesture wrapping (undo grouping)
+        if (onDragStarted) onDragStarted (draggedObject);
+    }
 }
 
 void SpatialMapComponent::mouseDrag (const juce::MouseEvent& e)
@@ -1377,6 +1381,14 @@ void SpatialMapComponent::mouseDrag (const juce::MouseEvent& e)
     listeners.call ([this, azDeg, dist](Listener& l) {
         l.objectPositionChanged (draggedObject, azDeg, dist);
     });
+}
+
+void SpatialMapComponent::mouseUp (const juce::MouseEvent&)
+{
+    // Issue E15: Signal drag end for gesture wrapping (undo grouping)
+    if (draggedObject >= 0 && onDragEnded)
+        onDragEnded (draggedObject);
+    draggedObject = -1;
 }
 
 //==============================================================================
@@ -1603,6 +1615,10 @@ void FilterGraphComponent::mouseDown (const juce::MouseEvent& e)
 
     dragStartY = static_cast<float> (e.y);
     dragStartQ = (currentDrag == HP) ? hpQ : lpQ;
+
+    // Issue E15: Signal drag start for gesture wrapping (undo grouping)
+    if (currentDrag != None && onFilterDragStarted)
+        onFilterDragStarted();
 }
 
 void FilterGraphComponent::mouseDrag (const juce::MouseEvent& e)
@@ -1639,6 +1655,9 @@ void FilterGraphComponent::mouseDrag (const juce::MouseEvent& e)
 
 void FilterGraphComponent::mouseUp (const juce::MouseEvent&)
 {
+    // Issue E15: Signal drag end for gesture wrapping (undo grouping)
+    if (currentDrag != None && onFilterDragEnded)
+        onFilterDragEnded();
     currentDrag = None;
 }
 
@@ -1708,6 +1727,9 @@ void GlobalTapDrawerComponent::setupKnob (juce::Slider& s, juce::Label& l,
         if (onGlobalDelta && std::abs (delta) > 1e-6f)
             onGlobalDelta (knobIdx, delta);
     };
+    // Issue E15: Signal drag start/end for gesture wrapping (undo grouping)
+    s.onDragStart = [this, knobIdx] { if (onDragStarted) onDragStarted (knobIdx); };
+    s.onDragEnd   = [this, knobIdx] { if (onDragEnded)  onDragEnded (knobIdx); };
     prevValues[knobIdx] = static_cast<float> (s.getValue());  // sync tracking to initial value
 
     l.setText (name, juce::dontSendNotification);
@@ -1948,6 +1970,19 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     // --- Spatial map ---------------------------------------------------------
     addAndMakeVisible (spatialMap);
     spatialMap.addListener (this);
+    // Issue E15: Gesture wrapping for spatial map drag (undo grouping)
+    spatialMap.onDragStarted = [this] (int objectIndex) {
+        auto prefix = "object" + juce::String (objectIndex + 1) + "_";
+        activeSpatialGestureParams[0] = processorRef.apvts.getParameter (prefix + "azimuth");
+        activeSpatialGestureParams[1] = processorRef.apvts.getParameter (prefix + "distance");
+        for (auto* p : activeSpatialGestureParams)
+            if (p != nullptr) p->beginChangeGesture();
+    };
+    spatialMap.onDragEnded = [this] (int /*objectIndex*/) {
+        for (auto* p : activeSpatialGestureParams)
+            if (p != nullptr) p->endChangeGesture();
+        activeSpatialGestureParams = { nullptr, nullptr };
+    };
     spatialMap.setProcessor (&processorRef);
 
     // --- Global tap drawer (overlays left edge of spatial map) ---------------
@@ -1966,6 +2001,41 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
                 globalTapDrawer.setKnobValueSilent (i, p->load());
         }
     }
+    // Issue E15: Begin gestures on all affected per-object params when a global knob drag starts
+    globalTapDrawer.onDragStarted = [this] (int knobIndex) {
+        static const char* suffixes[] = {
+            "azimuth", "elevation", "distance",
+            "pitchShift", "dopplerAmount", "trajectorySpeed"
+        };
+        if (knobIndex < 0 || knobIndex >= 6) return;
+        activeGlobalGestureParams.clear();
+        for (int i = 0; i < SpatialMapComponent::MAX_OBJECTS; ++i)
+        {
+            auto enabledId = "object" + juce::String (i + 1) + "_enabled";
+            if (processorRef.apvts.getRawParameterValue (enabledId)->load() < 0.5f)
+                continue;
+            auto paramId = "object" + juce::String (i + 1) + "_" + suffixes[knobIndex];
+            if (auto* param = processorRef.apvts.getParameter (paramId))
+            {
+                param->beginChangeGesture();
+                activeGlobalGestureParams.push_back (param);
+            }
+        }
+        // Also begin gesture on the globalTap APVTS param itself
+        static const char* tapParamIds[] = { "globalTapAzimuth", "globalTapElevation", "globalTapDistance",
+                                             "globalTapPitch",   "globalTapDoppler",   "globalTapSpeed" };
+        if (auto* param = processorRef.apvts.getParameter (tapParamIds[knobIndex]))
+        {
+            param->beginChangeGesture();
+            activeGlobalGestureParams.push_back (param);
+        }
+    };
+    // Issue E15: End gestures when global knob drag ends
+    globalTapDrawer.onDragEnded = [this] (int /*knobIndex*/) {
+        for (auto* param : activeGlobalGestureParams)
+            param->endChangeGesture();
+        activeGlobalGestureParams.clear();
+    };
     globalTapDrawer.onGlobalDelta = [this] (int idx, float delta) {
         applyGlobalTapDelta (idx, delta);
         // Sync absolute knob value to processor atomic (for OSC Send)
@@ -2175,7 +2245,11 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         if (newState) syncTripletButton->setToggleState (false, juce::dontSendNotification);
         int mode = newState ? 1 : 0;
         if (auto* param = processorRef.apvts.getParameter ("syncMode"))
+        {
+            param->beginChangeGesture();
             param->setValueNotifyingHost (param->convertTo0to1 ((float) mode));
+            param->endChangeGesture();
+        }
         repaint();
     };
     // Triplet button: toggle → set syncMode to 2 (Triplet) or 0 (Straight)
@@ -2185,7 +2259,11 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         if (newState) syncDottedButton->setToggleState (false, juce::dontSendNotification);
         int mode = newState ? 2 : 0;
         if (auto* param = processorRef.apvts.getParameter ("syncMode"))
+        {
+            param->beginChangeGesture();
             param->setValueNotifyingHost (param->convertTo0to1 ((float) mode));
+            param->endChangeGesture();
+        }
         repaint();
     };
 
@@ -2422,8 +2500,10 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         auto* fltParam = processorRef.apvts.getParameter ("filterEnabled");
         if (fltParam != nullptr)
         {
+            fltParam->beginChangeGesture();
             float current = processorRef.apvts.getRawParameterValue ("filterEnabled")->load();
             fltParam->setValueNotifyingHost (current < 0.5f ? 1.0f : 0.0f);
+            fltParam->endChangeGesture();
         }
     };
     addAndMakeVisible (*fltToggle);
@@ -2442,8 +2522,10 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         auto* param = processorRef.apvts.getParameter ("wobbleEnabled");
         if (param != nullptr)
         {
+            param->beginChangeGesture();
             float cur = processorRef.apvts.getRawParameterValue ("wobbleEnabled")->load();
             param->setValueNotifyingHost (cur > 0.5f ? 0.0f : 1.0f);
+            param->endChangeGesture();
         }
     };
     addAndMakeVisible (*modToggle);
@@ -2471,6 +2553,24 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         if (auto* param = processorRef.apvts.getParameter ("filterLPQ"))
             param->setValueNotifyingHost (param->convertTo0to1 (q));
         repaint();  // update painted readout
+    };
+    // Issue E15: Gesture wrapping for filter graph drag (undo grouping)
+    filterGraph.onFilterDragStarted = [this] {
+        activeFilterGestureParams.clear();
+        // Begin gestures on all 4 filter params — both freq and Q may change during a drag
+        for (const char* id : { "filterHP", "filterLP", "filterHPQ", "filterLPQ" })
+        {
+            if (auto* param = processorRef.apvts.getParameter (id))
+            {
+                param->beginChangeGesture();
+                activeFilterGestureParams.push_back (param);
+            }
+        }
+    };
+    filterGraph.onFilterDragEnded = [this] {
+        for (auto* param : activeFilterGestureParams)
+            param->endChangeGesture();
+        activeFilterGestureParams.clear();
     };
 
     // --- v0.7: Per-object pitch shift knob (bottom panel) --------------------
@@ -2923,11 +3023,24 @@ void OpenSpatialDelayEditor::resetGlobalTapAPVTSParams()
 {
     static const char* tapParamIds[] = { "globalTapAzimuth", "globalTapElevation", "globalTapDistance",
                                          "globalTapPitch",   "globalTapDoppler",   "globalTapSpeed" };
+    // Issue E15: Wrap in gestures so the host groups the reset as one undo entry
+    std::array<juce::RangedAudioParameter*, 6> gestures {};
+    for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
+    {
+        gestures[static_cast<size_t> (i)] = processorRef.apvts.getParameter (tapParamIds[i]);
+        if (gestures[static_cast<size_t> (i)] != nullptr)
+            gestures[static_cast<size_t> (i)]->beginChangeGesture();
+    }
     for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
     {
         processorRef.globalTapOffset[i].store (0.0f, std::memory_order_relaxed);
-        if (auto* param = processorRef.apvts.getParameter (tapParamIds[i]))
-            param->setValueNotifyingHost (param->convertTo0to1 (0.0f));
+        if (gestures[static_cast<size_t> (i)] != nullptr)
+            gestures[static_cast<size_t> (i)]->setValueNotifyingHost (gestures[static_cast<size_t> (i)]->convertTo0to1 (0.0f));
+    }
+    for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
+    {
+        if (gestures[static_cast<size_t> (i)] != nullptr)
+            gestures[static_cast<size_t> (i)]->endChangeGesture();
     }
 }
 
