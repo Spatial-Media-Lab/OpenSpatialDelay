@@ -873,6 +873,7 @@ private:
     //--- SPATIAL MEDIA LIBRARY: ADM-OSC Send state ---
     juce::OSCSender oscSender;
     bool oscSendEnabled = false;
+    bool oscSendStateLoaded = false;                    // E14: guard against undo restoring OSC send settings
     bool oscSendConnected = false;
     int  oscSendPort = 4003;
     juce::String oscSendIP = "127.0.0.1";

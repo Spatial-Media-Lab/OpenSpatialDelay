@@ -1880,6 +1880,7 @@ OpenSpatialDelayProcessor::~OpenSpatialDelayProcessor()
 void OpenSpatialDelayProcessor::setOscReceiveEnabled (bool enabled)
 {
     oscReceiveEnabled = enabled;
+    markConfigStateDirty();  // E14: notify DAW so state is re-captured on save
     // Connection lifecycle handled in processBlock via edge-detect
 }
 
@@ -1889,6 +1890,7 @@ void OpenSpatialDelayProcessor::setOscReceivePort (int port)
         return;
 
     oscReceivePort = port;
+    markConfigStateDirty();  // E14: notify DAW so state is re-captured on save
 
     // If currently connected, reconnect on the new port
     if (oscConnected)
@@ -1910,6 +1912,7 @@ void OpenSpatialDelayProcessor::setOscSendEnabled (bool enabled)
         return;
 
     oscSendEnabled = enabled;
+    markConfigStateDirty();  // E14: notify DAW so state is re-captured on save
     if (enabled)
     {
         oscSendConnected = oscSender.connect (oscSendIP, oscSendPort);
@@ -1926,6 +1929,7 @@ void OpenSpatialDelayProcessor::setOscSendPort (int port)
     if (port == oscSendPort)
         return;
     oscSendPort = port;
+    markConfigStateDirty();  // E14: notify DAW so state is re-captured on save
     if (oscSendEnabled)
     {
         oscSender.disconnect();
@@ -1938,6 +1942,7 @@ void OpenSpatialDelayProcessor::setOscSendIP (const juce::String& ip)
     if (ip == oscSendIP)
         return;
     oscSendIP = ip;
+    markConfigStateDirty();  // E14: notify DAW so state is re-captured on save
     if (oscSendEnabled)
     {
         oscSender.disconnect();
@@ -6137,12 +6142,16 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
     // v0.6: Restore preset index (non-APVTS property)
     currentPresetIndex = static_cast<int> (tree.getProperty ("currentPresetIndex", 0));
 
-    // v0.7: Restore OSC Send settings
-    oscSendPort = static_cast<int> (tree.getProperty ("oscSendPort", 4003));
-    oscSendIP   = tree.getProperty ("oscSendIP", "127.0.0.1").toString();
-    bool savedSendEnabled = static_cast<bool> (tree.getProperty ("oscSendEnabled", false));
-    if (savedSendEnabled)
-        setOscSendEnabled (true);
+    // v0.7: Restore OSC Send settings (E14: guard against undo restoring send settings)
+    if (! oscSendStateLoaded)
+    {
+        oscSendPort = static_cast<int> (tree.getProperty ("oscSendPort", 4003));
+        oscSendIP   = tree.getProperty ("oscSendIP", "127.0.0.1").toString();
+        bool savedSendEnabled = static_cast<bool> (tree.getProperty ("oscSendEnabled", false));
+        if (savedSendEnabled)
+            setOscSendEnabled (true);
+        oscSendStateLoaded = true;
+    }
 
     apvts.replaceState (tree);
 }
