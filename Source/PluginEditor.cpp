@@ -2379,12 +2379,32 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         if (auto* ed = oscSendIPLabel.getCurrentTextEditor())
         {
             ed->setJustification (juce::Justification::centred);
+            ed->setInputFilter (new juce::TextEditor::LengthAndCharacterRestriction (15, "0123456789."), true);
             ed->setHighlightedRegion ({ 0, oscSendIPLabel.getText().length() });
         }
     };
     oscSendIPLabel.onTextChange = [this]
     {
-        processorRef.setOscSendIP (oscSendIPLabel.getText().trim());
+        auto text = oscSendIPLabel.getText().trim();
+        auto octets = juce::StringArray::fromTokens (text, ".", "");
+        bool valid = (octets.size() == 4);
+        if (valid)
+        {
+            for (auto& o : octets)
+            {
+                int val = o.getIntValue();
+                if (o.isEmpty() || o.length() > 3 || val < 0 || val > 255
+                    || (o.length() > 1 && o[0] == '0'))
+                {
+                    valid = false;
+                    break;
+                }
+            }
+        }
+        if (valid)
+            processorRef.setOscSendIP (text);
+        else
+            oscSendIPLabel.setText (processorRef.getOscSendIP(), juce::dontSendNotification);
     };
     addAndMakeVisible (oscSendIPLabel);
 
