@@ -719,7 +719,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     // 44: POG in Space — EHX POG-inspired spatial harmonizer, diagonal 3D cross
     {
         "POG in Space", "Creative + Experimental",
-        1.1f, false, 4.0f, 0, 0.0f, 20000.0f, 20.0f, 0.707f, 0.707f, 1.0f, 1.3f, 0.0f,
+        1.1f, false, 4.0f, 0, 0.0f, 20000.0f, 20.0f, 0.707f, 0.707f, 1.0f, 1.0f, 0.0f,
         false, false, false, 0.0f, 0.0f, 1, 0,
         {
             { true,    0.0f,    0.0f, 0.25f, 0.0f,   0.0f, 0, 1.0f, 0, 0 /*L+R*/ },  // Unison: center
