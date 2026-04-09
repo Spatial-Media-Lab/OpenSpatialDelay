@@ -22,12 +22,29 @@ TEST_CASE ("All parameters have non-empty names", "[params]")
     }
 }
 
-// Issue #122: 79 params marked non-automatable to stay within Ableton's 64-param
-// auto-populate threshold. Automatable: 16 global + 4 per-tap × 12 = 64.
-// Issue E20: admOscEnabled (non-automatable) removed from APVTS → 79 non-automatable.
-TEST_CASE ("64 automatable + 79 non-automatable", "[params]")
+// Issue #189: Parameter automatability is DAW-conditional via PluginHostType.
+// In Ableton: 64 automatable, 79 non-automatable (fits auto-populate limit, issue #122).
+// In all other DAWs: all 143 automatable (REAPER, Logic, Pro Tools, Nuendo).
+// Test harness is not Ableton, so the default processor has all 143 automatable.
+
+TEST_CASE ("Non-Ableton: all 143 automatable", "[params]")
 {
     auto proc = std::make_unique<OpenSpatialDelayProcessor>();
+    int automatable = 0, nonAutomatable = 0;
+    for (auto* p : proc->getParameters())
+    {
+        if (p->isAutomatable())
+            ++automatable;
+        else
+            ++nonAutomatable;
+    }
+    CHECK (automatable == 143);
+    CHECK (nonAutomatable == 0);
+}
+
+TEST_CASE ("Ableton mode: 64 automatable + 79 non-automatable", "[params]")
+{
+    auto proc = std::make_unique<OpenSpatialDelayProcessor> (true);
     int automatable = 0, nonAutomatable = 0;
     for (auto* p : proc->getParameters())
     {

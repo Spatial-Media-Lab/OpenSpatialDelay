@@ -198,9 +198,26 @@ static SpeakerLayout makeLayoutFromDef (const LayoutDef& def)
 // Parameter layout
 //==============================================================================
 juce::AudioProcessorValueTreeState::ParameterLayout
-    OpenSpatialDelayProcessor::createParameterLayout()
+    OpenSpatialDelayProcessor::createParameterLayout (bool abletonMode)
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+
+    // Issue #189: Only limit automatable params to 64 when running in Ableton Live.
+    // Other DAWs (REAPER, Logic, Pro Tools, Nuendo) have no such limit and should
+    // see all 143 params as automatable. Mirrors the DAW-conditional bus layout
+    // pattern in isBusesLayoutSupported() (issue #122).
+    auto boolNonAuto = [&]() {
+        return abletonMode ? juce::AudioParameterBoolAttributes().withAutomatable (false)
+                           : juce::AudioParameterBoolAttributes();
+    };
+    auto floatNonAuto = [&]() {
+        return abletonMode ? juce::AudioParameterFloatAttributes().withAutomatable (false)
+                           : juce::AudioParameterFloatAttributes();
+    };
+    auto choiceNonAuto = [&]() {
+        return abletonMode ? juce::AudioParameterChoiceAttributes().withAutomatable (false)
+                           : juce::AudioParameterChoiceAttributes();
+    };
 
     // Shared string-from-value formatters (DRY)
     auto fmtDbInf = [](float value, int) {
@@ -259,10 +276,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout
                     return text.getFloatValue();
                 })));
 
-    // G2: Delay Sync (was "Tempo Sync")  [non-automatable: toggle state, issue #122]
+    // G2: Delay Sync (was "Tempo Sync")  [non-automatable in Ableton only: toggle state, issue #122 / #189]
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID ("tempoSync", 2), "Delay Sync", false,
-        juce::AudioParameterBoolAttributes().withAutomatable (false)));
+        boolNonAuto()));
 
     // G3: Delay Division (was "Note Division")
     // Value = number of 16th notes. Range: 0.5 (1/32) to 32 (2/1)
@@ -284,11 +301,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
                 return juce::String (sixteenths, 1) + "/16";
             })));
 
-    // G4: Sync Mode  [non-automatable: state selector, issue #122]
+    // G4: Sync Mode  [non-automatable in Ableton only: state selector, issue #122 / #189]
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
         juce::ParameterID ("syncMode", 4), "Sync Mode",
         juce::StringArray { "Straight", "Dotted", "Triplet" }, 0,
-        juce::AudioParameterChoiceAttributes().withAutomatable (false)));
+        choiceNonAuto()));
 
     // G5: Feedback
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -299,11 +316,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             .withValueFromStringFunction (parsePct01)));
 
     // G6: Filter On (was "Filter Enabled" — moved before filter params, enable→configure)
-    // [non-automatable: toggle state, issue #122]
+    // [non-automatable in Ableton only: toggle state, issue #122 / #189]
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterEnabled", 6), "Filter On",
         juce::NormalisableRange<float> (0.0f, 1.0f, 1.0f), 0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable (false)));
+        floatNonAuto()));
 
     // G7: High-Pass Frequency (was "High-Pass Filter" — HP grouped before LP)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -363,16 +380,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     // They are now stored as raw std::atomic<int> members (configAlgorithm, configHrtfProfile,
     // configOutputFormat, configInputFormat) to hide them from DAW automation lists.
 
-    // G14: Air Absorption  [non-automatable: toggle state, issue #122]
+    // G14: Air Absorption  [non-automatable in Ableton only: toggle state, issue #122 / #189]
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID ("airAbsorption", 14), "Air Absorption", false,
-        juce::AudioParameterBoolAttributes().withAutomatable (false)));
+        boolNonAuto()));
 
     // G15: Wobble On (was "Wobble Enabled" — moved before wobble params, enable→configure)
-    // [non-automatable: toggle state, issue #122]
+    // [non-automatable in Ableton only: toggle state, issue #122 / #189]
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID ("wobbleEnabled", 15), "Wobble On", false,
-        juce::AudioParameterBoolAttributes().withAutomatable (false)));
+        boolNonAuto()));
 
     // G16: Wobble Amount
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -413,12 +430,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("globalTapDoppler", 23), "Global Tap Doppler",
         juce::NormalisableRange<float> (-100.0f, 100.0f, 0.1f), 0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable (false).withLabel ("%").withStringFromValueFunction (fmtPct100)));
+        floatNonAuto().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("globalTapSpeed", 24), "Global Tap Speed",
         juce::NormalisableRange<float> (-5.0f, 5.0f, 0.01f), 0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable (false).withLabel ("Hz").withStringFromValueFunction (
+        floatNonAuto().withLabel ("Hz").withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2) + " Hz"; })));
 
     // --- Per-tap parameters (issue #68: "Object N" → "Tap 0N") ---------------
@@ -438,10 +455,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         // Initial spatial spread is applied in constructor after APVTS creation.
         float defaultAz = 0.0f;
 
-        // T1: Tap On (was "Object N Enabled")  [non-automatable: toggle state, issue #122]
+        // T1: Tap On (was "Object N Enabled")  [non-automatable in Ableton only: toggle state, issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterBool> (
             id ("enabled", 0), name ("On"), defaultEnabled,
-            juce::AudioParameterBoolAttributes().withAutomatable (false)));
+            boolNonAuto()));
 
         // T2: Per-tap Time — REMOVED (orphaned param, issue #68)
 
@@ -462,11 +479,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             id ("distance", 3), name ("Distance"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f));
 
-        // T6: Tap Doppler Amount  [non-automatable: issue #122]
+        // T6: Tap Doppler Amount  [non-automatable in Ableton only: issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("dopplerAmount", 4), name ("Doppler Amount"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.0f,
-            juce::AudioParameterFloatAttributes().withAutomatable (false).withLabel ("%")
+            floatNonAuto().withLabel ("%")
                 .withStringFromValueFunction (fmtPct01)
                 .withValueFromStringFunction (parsePct01)));
 
@@ -477,31 +494,31 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             juce::AudioParameterFloatAttributes().withStringFromValueFunction (
                 [](float value, int) { return juce::String (juce::roundToInt (value)) + " st"; })));
 
-        // T8: Tap Trajectory Shape  [non-automatable: state selector, issue #122]
+        // T8: Tap Trajectory Shape  [non-automatable in Ableton only: state selector, issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("trajectoryShape", 6), name ("Trajectory Shape"),
             juce::StringArray { "None", "Bounce", "Circle", "Cross", "Figure-8", "Heart", "Helix",
                                 "Infinity", "Line", "Orbit", "Random", "Spiral", "Square", "Triangle" }, 0,
-            juce::AudioParameterChoiceAttributes().withAutomatable (false)));
+            choiceNonAuto()));
 
-        // T9: Tap Trajectory Speed  [non-automatable: issue #122]
+        // T9: Tap Trajectory Speed  [non-automatable in Ableton only: issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("trajectorySpeed", 7), name ("Trajectory Speed"),
             juce::NormalisableRange<float> (0.0f, 5.0f, 0.01f), 0.3f,
-            juce::AudioParameterFloatAttributes().withAutomatable (false).withLabel ("Hz").withStringFromValueFunction (
+            floatNonAuto().withLabel ("Hz").withStringFromValueFunction (
                 [](float value, int) { return juce::String (value, 2) + " Hz"; })));
 
-        // T10: Tap Trajectory Direction  [non-automatable: state toggle, issue #122]
+        // T10: Tap Trajectory Direction  [non-automatable in Ableton only: state toggle, issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("trajectoryDirection", 8), name ("Trajectory Direction"),
             juce::StringArray { "Forward", "Reverse" }, 0,
-            juce::AudioParameterChoiceAttributes().withAutomatable (false)));
+            choiceNonAuto()));
 
-        // T11: Tap Input Channel  [non-automatable: state selector, issue #122]
+        // T11: Tap Input Channel  [non-automatable in Ableton only: state selector, issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("inputChannel", 9), name ("Input Channel"),
             juce::StringArray { "L+R", "L", "R" }, 0,
-            juce::AudioParameterChoiceAttributes().withAutomatable (false)));
+            choiceNonAuto()));
     }
 
     return { params.begin(), params.end() };
@@ -1771,7 +1788,7 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     : AudioProcessor (BusesProperties()
                         .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                         .withOutput ("Output", juce::AudioChannelSet::discreteChannels (50), true)),
-      apvts (*this, nullptr, "Parameters", createParameterLayout())
+      apvts (*this, nullptr, "Parameters", createParameterLayout (juce::PluginHostType().isAbletonLive()))
 {
     // Initialize polymorphic algorithm pointer array (O(1) index lookup)
     // 7 algorithms (alphabetical): Ambisonics (0), ConstPower (1), DBAP (2), KNN (3), MDAP (4), VBAP (5), VBIP (6)
@@ -1851,6 +1868,88 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     // v1.0: Default preset selection — find "Quad Ping-Pong" by name so fresh instances
     // start on it regardless of alphabetical category ordering.
     // State restoration (setStateInformation) overwrites this for saved sessions.
+    for (int i = 0; i < static_cast<int> (allPresets.size()); ++i)
+    {
+        if (allPresets[static_cast<size_t> (i)].name == "Quad Ping-Pong")
+        {
+            currentPresetIndex = i;
+            break;
+        }
+    }
+}
+
+// Issue #189: Test constructor — allows forcing abletonMode for automated tests.
+OpenSpatialDelayProcessor::OpenSpatialDelayProcessor (bool abletonMode)
+    : AudioProcessor (BusesProperties()
+                        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                        .withOutput ("Output", juce::AudioChannelSet::discreteChannels (50), true)),
+      apvts (*this, nullptr, "Parameters", createParameterLayout (abletonMode))
+{
+    algorithms[0] = &algAmbisonics;
+    algorithms[1] = &algConstantPower;
+    algorithms[2] = &algDBAP;
+    algorithms[3] = &algKNN;
+    algorithms[4] = &algMDAP;
+    algorithms[5] = &algVBAP;
+    algorithms[6] = &algVBIP;
+
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+    {
+        auto prefix = "object" + juce::String (i + 1) + "_";
+        cachedObj[i].enabled       = apvts.getRawParameterValue (prefix + "enabled");
+        cachedObj[i].azimuth       = apvts.getRawParameterValue (prefix + "azimuth");
+        cachedObj[i].elevation     = apvts.getRawParameterValue (prefix + "elevation");
+        cachedObj[i].distance      = apvts.getRawParameterValue (prefix + "distance");
+        cachedObj[i].dopplerAmount = apvts.getRawParameterValue (prefix + "dopplerAmount");
+        cachedObj[i].pitchShift    = apvts.getRawParameterValue (prefix + "pitchShift");
+        cachedParam_trajectoryShape[i] = apvts.getRawParameterValue (prefix + "trajectoryShape");
+        cachedParam_trajectorySpeed[i] = apvts.getRawParameterValue (prefix + "trajectorySpeed");
+        cachedParam_trajectoryDirection[i] = apvts.getRawParameterValue (prefix + "trajectoryDirection");
+        cachedObj[i].inputChannel      = apvts.getRawParameterValue (prefix + "inputChannel");
+    }
+
+    cachedParam_tempoSync       = apvts.getRawParameterValue ("tempoSync");
+    cachedParam_noteDivision    = apvts.getRawParameterValue ("noteDivision");
+    cachedParam_filterLP        = apvts.getRawParameterValue ("filterLP");
+    cachedParam_filterHP        = apvts.getRawParameterValue ("filterHP");
+    cachedParam_filterHPQ       = apvts.getRawParameterValue ("filterHPQ");
+    cachedParam_filterLPQ       = apvts.getRawParameterValue ("filterLPQ");
+    cachedParam_filterEnabled   = apvts.getRawParameterValue ("filterEnabled");
+    cachedParam_airAbsorption   = apvts.getRawParameterValue ("airAbsorption");
+    cachedParam_wobbleEnabled   = apvts.getRawParameterValue ("wobbleEnabled");
+    cachedParam_wobbleAmount    = apvts.getRawParameterValue ("wobbleAmount");
+    cachedParam_wobbleMorph     = apvts.getRawParameterValue ("wobbleMorph");
+    cachedParam_delayTime       = apvts.getRawParameterValue ("delayTime");
+    cachedParam_dryWet          = apvts.getRawParameterValue ("dryWet");
+    cachedParam_feedback        = apvts.getRawParameterValue ("feedback");
+    cachedParam_inputGain       = apvts.getRawParameterValue ("inputGain");
+    cachedParam_outputGain      = apvts.getRawParameterValue ("outputGain");
+    cachedParam_globalTapAzimuth   = apvts.getRawParameterValue ("globalTapAzimuth");
+    cachedParam_globalTapElevation = apvts.getRawParameterValue ("globalTapElevation");
+    cachedParam_globalTapDistance   = apvts.getRawParameterValue ("globalTapDistance");
+    cachedParam_globalTapPitch     = apvts.getRawParameterValue ("globalTapPitch");
+    cachedParam_globalTapDoppler   = apvts.getRawParameterValue ("globalTapDoppler");
+    cachedParam_globalTapSpeed     = apvts.getRawParameterValue ("globalTapSpeed");
+
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+    {
+        auto prefix = "object" + juce::String (i + 1) + "_";
+        trajParam_azimuth[i]   = apvts.getParameter (prefix + "azimuth");
+        oscSendAddress[i] = "/adm/obj/" + juce::String (i + 1) + "/aed";
+    }
+
+    {
+        static const float initAz[] = {-45.0f, 45.0f, -135.0f, 135.0f,
+                                         0.0f, 90.0f, -90.0f, 180.0f,
+                                        -30.0f, 30.0f, -60.0f, 60.0f};
+        for (int i = 0; i < MAX_OBJECTS; ++i)
+            if (trajParam_azimuth[i] != nullptr)
+                trajParam_azimuth[i]->setValueNotifyingHost (
+                    trajParam_azimuth[i]->convertTo0to1 (initAz[i]));
+    }
+
+    loadAllPresets();
+
     for (int i = 0; i < static_cast<int> (allPresets.size()); ++i)
     {
         if (allPresets[static_cast<size_t> (i)].name == "Quad Ping-Pong")
