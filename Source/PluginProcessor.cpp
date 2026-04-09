@@ -1787,7 +1787,13 @@ void OpenSpatialDelayProcessor::timerCallback()
 OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     : AudioProcessor (BusesProperties()
                         .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                        .withOutput ("Output", juce::AudioChannelSet::discreteChannels (50), true)),
+                        .withOutput ("Output",
+                            // Issue #189: Ableton AU can't negotiate from discreteChannels(50).
+                            // Default to stereo in Ableton; other DAWs keep 50ch for high-order Ambisonics.
+                            juce::PluginHostType().isAbletonLive()
+                                ? juce::AudioChannelSet::stereo()
+                                : juce::AudioChannelSet::discreteChannels (50),
+                            true)),
       apvts (*this, nullptr, "Parameters", createParameterLayout (juce::PluginHostType().isAbletonLive()))
 {
     // Initialize polymorphic algorithm pointer array (O(1) index lookup)
@@ -1882,7 +1888,10 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
 OpenSpatialDelayProcessor::OpenSpatialDelayProcessor (bool abletonMode)
     : AudioProcessor (BusesProperties()
                         .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                        .withOutput ("Output", juce::AudioChannelSet::discreteChannels (50), true)),
+                        .withOutput ("Output",
+                            abletonMode ? juce::AudioChannelSet::stereo()
+                                        : juce::AudioChannelSet::discreteChannels (50),
+                            true)),
       apvts (*this, nullptr, "Parameters", createParameterLayout (abletonMode))
 {
     algorithms[0] = &algAmbisonics;
