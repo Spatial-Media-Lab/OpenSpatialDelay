@@ -5721,6 +5721,13 @@ void OpenSpatialDelayProcessor::handleOSCPosition (int objIdx, float azDeg, floa
 //==============================================================================
 void OpenSpatialDelayProcessor::captureUndoState (const juce::String& name)
 {
+    // Issue #182: Suppress spurious captures during state restores (DAW undo,
+    // internal undo). replaceState() fires parameter listeners whose onChange
+    // callbacks would otherwise create ghost entries that wipe redo history.
+    if (internalUndoInProgress.load (std::memory_order_relaxed)
+        || stateRestoreInProgress.load (std::memory_order_relaxed))
+        return;
+
     pluginUndo.captureState (apvts, configAlgorithm, configHrtfProfile,
                              configOutputFormat, configInputFormat,
                              currentPresetIndex, name);

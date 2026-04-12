@@ -34,7 +34,10 @@ Registry collapsed to v1.0.0 on 2026-04-02 after issue #77.
 | v1.0.31 | O131 | Issue #182 retry (failed — no undo stack, minimal fixes) | a73554f |
 | v1.0.32 | O132 | Issue #182: gesture hygiene + internal undo stack + v1.0.30 bug fixes | — |
 | v1.0.33 | O133 | Issue #182: ComboBox undo capture + tempoSync fix + preset name on undo | — |
+| v1.0.34 | O134 | Issue #182: manual gestures for trajectory/inputChannel + preset name sync | 76fd6cd |
+| v1.0.35 | O135 | (Same as v1.0.34, tested in Notion DB as v1.0.35) | — |
+| v1.0.36 | O136 | Issue #182: guard captureUndoState/notifyHostStateChanged + mod knobs + trajectory shape manual gestures | — |
 
 ## Next available
 
-**v1.0.34 / O134**
+**v1.0.37 / O137**

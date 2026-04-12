@@ -2131,8 +2131,11 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         wobbleAmountAttach = std::make_unique<SliderAttachment> (processorRef.apvts, "wobbleAmount", wobbleAmountSlider);
         wobbleAmountSlider.onDragStart = [this] { lastSliderDragStartTime = juce::Time::getMillisecondCounterHiRes(); };
         wobbleAmountSlider.onDragEnd = [this] {
-            if (juce::Time::getMillisecondCounterHiRes() - lastSliderDragStartTime > 100.0)
+            if (juce::Time::getMillisecondCounterHiRes() - lastSliderDragStartTime > 20.0)
+            {
                 processorRef.notifyHostStateChanged();
+                processorRef.captureUndoState ("Adjust wobbleAmount");
+            }
         };
 
         styleSlider (wobbleMorphSlider, *osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
@@ -2142,8 +2145,11 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         wobbleMorphAttach = std::make_unique<SliderAttachment> (processorRef.apvts, "wobbleMorph", wobbleMorphSlider);
         wobbleMorphSlider.onDragStart = [this] { lastSliderDragStartTime = juce::Time::getMillisecondCounterHiRes(); };
         wobbleMorphSlider.onDragEnd = [this] {
-            if (juce::Time::getMillisecondCounterHiRes() - lastSliderDragStartTime > 100.0)
+            if (juce::Time::getMillisecondCounterHiRes() - lastSliderDragStartTime > 20.0)
+            {
                 processorRef.notifyHostStateChanged();
+                processorRef.captureUndoState ("Adjust wobbleMorph");
+            }
         };
 
         // MOD section — rose/pink accent (using Colours_OSD::accentRose)
@@ -2457,11 +2463,19 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         if (objTrajectoryRevButton) objTrajectoryRevButton->setToggleState (sel == 2, juce::dontSendNotification);
     };
 
-    // Issue #182: Add notifyHostStateChanged() so the host creates a separate
-    // undo entry for trajectory shape changes (ComboBoxAttachment handles gestures).
+    // Issue #182: Use manual gesture brackets (like Direction/InputChannel) instead of
+    // ComboBoxAttachment auto-gestures that Ableton ignores.
     objTrajectoryBox.onChange = [this] {
-        processorRef.notifyHostStateChanged();
-        processorRef.captureUndoState ("Change Trajectory Shape");
+        auto prefix = "object" + juce::String (currentObjectIndex + 1) + "_";
+        if (auto* param = processorRef.apvts.getParameter (prefix + "trajectoryShape"))
+        {
+            int selectedIdx = objTrajectoryBox.getSelectedId() - 1;  // ComboBox 1-based -> 0-based
+            param->beginChangeGesture();
+            param->setValueNotifyingHost (param->convertTo0to1 (static_cast<float> (selectedIdx)));
+            param->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Change Trajectory Shape");
+        }
     };
 
     styleSlider (objTrajectorySpeedSlider, *osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
@@ -3088,7 +3102,12 @@ void OpenSpatialDelayEditor::selectObject (int index)
         s->onDragStart = makeDragStart();
         s->onDragEnd   = makeDragEnd ("perObject");
     }
-    objTrajectoryAttach      = std::make_unique<ComboBoxAttachment> (processorRef.apvts, prefix + "trajectoryShape", objTrajectoryBox);
+    // Issue #182: Manual sync replaces ComboBoxAttachment (auto-gestures fail in Ableton)
+    {
+        auto* raw = processorRef.apvts.getRawParameterValue (prefix + "trajectoryShape");
+        if (raw)
+            objTrajectoryBox.setSelectedId (static_cast<int> (raw->load()) + 1, juce::dontSendNotification);
+    }
     objTrajectorySpeedAttach = std::make_unique<SliderAttachment>   (processorRef.apvts, prefix + "trajectorySpeed", objTrajectorySpeedSlider);
     objTrajectoryDirAttach   = std::make_unique<ComboBoxAttachment> (processorRef.apvts, prefix + "trajectoryDirection", objTrajectoryDirBox);
 
@@ -3377,6 +3396,9 @@ void OpenSpatialDelayEditor::timerCallback()
         bool hasTraj = (trajShape > 0);  // 0 = None
         if (objTrajectoryFwdButton) objTrajectoryFwdButton->setVisible (hasTraj);
         if (objTrajectoryRevButton) objTrajectoryRevButton->setVisible (hasTraj);
+        // Issue #182: Sync ComboBox from APVTS (no ComboBoxAttachment)
+        if (objTrajectoryBox.getSelectedId() != trajShape + 1)
+            objTrajectoryBox.setSelectedId (trajShape + 1, juce::dontSendNotification);
     }
 
     // v0.8: MOD enable/disable — dim wobble knobs + labels when disabled

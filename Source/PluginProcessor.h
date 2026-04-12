@@ -774,6 +774,10 @@ public:
     // that override parameter-level ones and cause multi-parameter undo grouping.
     void notifyHostStateChanged()
     {
+        // Issue #182: Suppress during state restores to prevent ghost undo entries
+        if (internalUndoInProgress.load (std::memory_order_relaxed)
+            || stateRestoreInProgress.load (std::memory_order_relaxed))
+            return;
         if (wrapperType != wrapperType_AudioUnit && wrapperType != wrapperType_AudioUnitv3)
             updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true));
     }
