@@ -156,7 +156,7 @@ Create `docs/LICENSING.md` with the full content moved from CLAUDE.md.
 - Also consolidated `spatial-audio-dsp` (merged project-level enhancements into user-level)
 - Actual savings: ~2,100 tokens (262% of the ~800 estimated)
 
-**Phase 2 — user-level skill audit** ⚠️ Partial, in progress
+**Phase 2 — user-level skill audit** ✓ Complete (2026-04-12)
 
 *Working rule (set 2026-04-11 after a destructive incident):* **Claude does NOT delete, disable, or move any skill without explicit human approval.** Report and suggest only. The initial auto-delete of 7 skills caused recovery work for `last30days`, `edit-article`, `obsidian-vault` (restored) and `brand-forge` (restored from backup 2026-04-12).
 
@@ -166,7 +166,7 @@ Create `docs/LICENSING.md` with the full content moved from CLAUDE.md.
 - OSD-specific references pruned from SKILL.md files during earlier review
 - **Origin audit (2026-04-12):** Original 5 are user-authored. No upstream exists on GitHub. Zero drift risk. 3 new skills restored from backup — origin audit pending.
 - **Decision:** Move from `~/.claude/skills/` to `.claude/skills/` in each JUCE plugin project. Rationale: the user has many non-music projects; ~450+ tokens of listing overhead per non-music session is not worth it given zero maintenance burden (nothing to sync). Accept N copies across N JUCE projects as the cost.
-- **Status:** Decision made, move NOT YET EXECUTED.
+- **Status:** ✓ Executed 2026-04-12. Copied to OSD + SpatialCore project level. User-level copies retained.
 
 *Group B — JUCE/plugin infra skills — MOVE to project level* (decision 2026-04-12)
 - `cross-platform-builds`, `daw-compatibility-guide`, `juce-best-practices`, `plugin-architecture-patterns`
@@ -180,17 +180,55 @@ Create `docs/LICENSING.md` with the full content moved from CLAUDE.md.
   - `spatial-synth-architecture` — origin audit pending (restored from backup)
   - `synth-ui-components` — origin audit pending (restored from backup)
 - **Decision:** Move to project level alongside Group A. Same rationale: user's versions are intentionally condensed and won't track upstream. Drift risk is near-zero. Accept N copies across JUCE projects.
-- **Status:** Decision made, move NOT YET EXECUTED.
+- **Status:** ✓ Executed 2026-04-12. Copied to OSD + SpatialCore project level. User-level copies retained.
 
 *Group K — GSD workflow skills — KEEP at user level, re-evaluate post-v1.0*
 - 66 `gsd-*` skills are candidates for plugin-architecture conversion later
 - Decision deferred until after v1.0.0 ships (2026-04-10)
 
-*Group C — utility / workflow / Notion / superpowers skills — NOT YET REVIEWED*
-- ~30 skills still need keep/move/disable decisions (excluding plugin skills per 2026-04-11 scope change — plugin skills will stay as-is)
-- **Added 2026-04-12 (backup restore):** `multi-plugin-conductor` (multi-repo dev workflow — general-purpose, keep at user level)
-- **Added 2026-04-12 (backup restore):** `brand-forge` (brand identity design — general-purpose, keep at user level)
-- Work will resume by listing all installed skills and reviewing individually
+*Group C–I — utility / workflow / Notion / superpowers skills — ✓ REVIEWED (2026-04-12)*
+
+**C. General Engineering (6):**
+1. `design-an-interface`
+2. `improve-codebase-architecture`
+3. `multi-plugin-conductor` — restored from backup 2026-04-12
+4. `pair-programming`
+5. `setup-pre-commit`
+6. `triage-issue`
+
+**D. Process / Thinking (4):**
+1. `deep-research`
+2. `grill-me`
+3. `rubber-duck`
+4. `ubiquitous-language`
+
+**E. Git Safety (1):**
+1. `git-guardrails-claude-code`
+
+**F. PRD / Planning (4):**
+1. `prd-to-issues`
+2. `prd-to-plan`
+3. `request-refactor-plan`
+4. `write-a-prd`
+
+**G. UI / Design (3):**
+1. `brand-forge` — restored from backup 2026-04-12
+2. `macos-design`
+3. `oiloil-ui-ux-guide`
+
+**H. Content / Notes / Research (4):**
+1. `edit-article`
+2. `last30days`
+3. `notion-sml`
+4. `obsidian-vault`
+
+**I. Meta (2):**
+1. `skill-builder`
+2. `pages`
+
+**Decisions (2026-04-12):**
+- C (Engineering, 6), D (Process, 4), E (Git Safety, 1), F (PRD/Planning, 4), H (Content, 4), I (Meta, 2) — **keep at user level** (21 skills, no changes needed)
+- G (UI/Design, 3: `brand-forge`, `macos-design`, `oiloil-ui-ux-guide`) — **copied to project level** in `sml-website-redesign` + `website-rework`, pushed to both remotes. User-level copies retained.
 
 *Group J — OSD project-level skills (`.claude/skills/`) — ✓ RESOLVED 2026-04-12*
 - **Installed `document-skills@anthropic-agent-skills` plugin** — provides `docx`, `pdf`, `xlsx`, `pptx` at user level via plugin
@@ -283,23 +321,23 @@ examples:tdd-examples   # TDD examples                 — DELETED in Phase 2 in
 README                  # README viewer                — PENDING review
 ```
 
-### 6. Evaluate disabling or consolidating dual Notion integrations
+### 6. Evaluate disabling or consolidating dual Notion integrations — RESOLVED 2026-04-12
 
-**The problem:** Two Notion MCP integrations expose 37 combined tools (16 + 21). Both are deferred so the session-start cost is only ~700 tokens for tool names. But when either is invoked via ToolSearch, the full schemas load (~1,000-1,400 tokens per tool). More importantly, having two overlapping integrations creates ambiguity about which to use.
+**Outcome:** Cannot consolidate — the two integrations serve different Notion workspaces:
+- `mcp__notion-sml__*` (22 tools) → **Spatial Media Lab e.V.** workspace (Funding Opportunities, Shitty Music Catalog)
+- `mcp__claude_ai_Notion__*` (14 tools) → **Andrew Rahman HQ** workspace (OSD Release Tests, OSD Documentation Review)
 
-**Estimated savings:** ~300 tokens at session start; ~10,000-15,000 tokens avoided during Notion-heavy sessions by not loading duplicate schemas.
+Neither can replace the other. The original premise ("overlapping integrations") was incorrect — they overlap in functionality but access mutually exclusive workspaces. The `notion-sml` API version was already at `2025-09-03`, so all 22 tools work natively (no curl workarounds needed).
 
-**Risk:** Medium. Need to verify which integration the `notion-sml` skill routes to, and whether the personal Notion integration covers all needed operations. The `notion-sml` integration has additional tools (delete block, data sources) that the personal integration may lack.
+**Additional actions taken:**
+- Added `notion-sml` MCP server to `claude_desktop_config.json` (was missing — Claude Desktop had no MCP servers configured)
+- Removed `~/.claude/skills/notion-sml/` skill file — the MCP server replaces it; routing info lives in memory files
 
-**Best practice alignment:** "Keep active MCP servers to 3-5 per workflow. Prefer CLI tools over MCP where possible" [Source 5]. "Two servers with overlapping functionality create schema bloat and routing confusion" [Source 6].
+**Actual savings:** ~0 tokens from consolidation (both integrations required). Minor savings from removing the skill file from the skills listing.
 
-**Exact steps:**
-1. Check which tools `notion-sml` skill actually uses (read the skill's SKILL.md)
-2. Test whether the personal Notion integration can handle all SML operations
-3. If yes, disable `notion-sml` MCP server and update the skill to use the personal integration
-4. If no, document which operations require which integration
+### 7. Remove CLAUDE.md ↔ MEMORY.md content overlap — DEFERRED
 
-### 7. Remove CLAUDE.md ↔ MEMORY.md content overlap
+**Status:** Deferred 2026-04-12. CLAUDE.md was already slimmed during skill audit work — no architecture content remains in it. Overlap now runs the other direction: memory files (`project_structure.md`, `project_key_files.md`, `project_build_system.md`) duplicate content that CLAUDE.md covers as instructions. Proposed fix is to trim from the memory side (~600 tokens). Come back when convenient.
 
 **The problem (after recommendation #1 is applied):** Even after slimming MEMORY.md to an index, the individual memory files will still overlap with CLAUDE.md. Specifically:
 - Build commands appear in both CLAUDE.md and what would become `project_build_system.md`
@@ -316,7 +354,9 @@ README                  # README viewer                — PENDING review
 
 **Best practice alignment:** "Include what Claude cannot infer from the code; exclude what it can discover by reading files" [Source 2]. Architecture details are discoverable from the source code and code comments.
 
-### 8. Evaluate disabling Gmail and Google Calendar integrations
+### 8. Evaluate disabling Gmail and Google Calendar integrations — DEFERRED
+
+**Status:** Reviewed 2026-04-12. Not in use, but token impact is negligible (~50 tokens). Decision: keep enabled, revisit if tool listing noise becomes a concern.
 
 **The problem:** Two built-in integrations (Gmail, Google Calendar) expose 2 deferred tools total. They require authentication and have never been used in this project context.
 
