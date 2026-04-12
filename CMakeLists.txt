@@ -86,7 +86,7 @@ else()
 endif()
 
 juce_add_plugin(OpenSpatialDelay
-    COMPANY_NAME "SpatialMediaLibrary"
+    COMPANY_NAME "Spatial Media Lab"
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
@@ -195,6 +195,7 @@ if(BUILD_OSD_TESTS)
         Tests/ConvolverGlitchTests.cpp
         Tests/DSPUnitTests.cpp
         Tests/IntegrationTests.cpp
+        Tests/PreReleaseTests.cpp
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
         Source/PresetData.cpp
@@ -229,7 +230,7 @@ if(BUILD_OSD_TESTS)
         JucePlugin_IsMidiEffect=0
         JucePlugin_ManufacturerCode=0x536d6c69
         JucePlugin_PluginCode=0x4f733130
-        JucePlugin_Manufacturer="SpatialMediaLibrary"
+        JucePlugin_Manufacturer="Spatial Media Lab"
         JucePlugin_Version=1.0.0
         JucePlugin_VersionString="1.0.0"
         JucePlugin_VersionCode=0x10000
@@ -251,8 +252,8 @@ if(BUILD_OSD_TESTS)
         JucePlugin_AUExportPrefix=OSDTestAU
         JucePlugin_AUExportPrefixQuoted="OSDTestAU"
         JucePlugin_AUManufacturerCode=JucePlugin_ManufacturerCode
-        JucePlugin_CFBundleIdentifier=com.SpatialMediaLibrary.OpenSpatialDelay
-        JucePlugin_AAXIdentifier=com.SpatialMediaLibrary.OpenSpatialDelay
+        JucePlugin_CFBundleIdentifier=com.spatialmedialab.OpenSpatialDelay
+        JucePlugin_AAXIdentifier=com.spatialmedialab.OpenSpatialDelay
         JucePlugin_AAXManufacturerCode=JucePlugin_ManufacturerCode
         JucePlugin_AAXProductId=JucePlugin_PluginCode
         JucePlugin_AAXCategory=0
@@ -315,7 +316,7 @@ target_compile_definitions(screenshot_tool PRIVATE
     JucePlugin_IsMidiEffect=0
     JucePlugin_ManufacturerCode=0x536d6c69
     JucePlugin_PluginCode=0x4f733130
-    JucePlugin_Manufacturer="SpatialMediaLibrary"
+    JucePlugin_Manufacturer="Spatial Media Lab"
     JucePlugin_Version=1.0.0
     JucePlugin_VersionString="1.0.0"
     JucePlugin_VersionCode=0x10000
@@ -337,8 +338,8 @@ target_compile_definitions(screenshot_tool PRIVATE
     JucePlugin_AUExportPrefix=OSDScreenshotAU
     JucePlugin_AUExportPrefixQuoted="OSDScreenshotAU"
     JucePlugin_AUManufacturerCode=JucePlugin_ManufacturerCode
-    JucePlugin_CFBundleIdentifier=com.SpatialMediaLibrary.OpenSpatialDelay
-    JucePlugin_AAXIdentifier=com.SpatialMediaLibrary.OpenSpatialDelay
+    JucePlugin_CFBundleIdentifier=com.spatialmedialab.OpenSpatialDelay
+    JucePlugin_AAXIdentifier=com.spatialmedialab.OpenSpatialDelay
     JucePlugin_AAXManufacturerCode=JucePlugin_ManufacturerCode
     JucePlugin_AAXProductId=JucePlugin_PluginCode
     JucePlugin_AAXCategory=0

@@ -714,3 +714,4 @@ After the v1.0 real-world testing release, the following features and fixes were
 - **Shared FFT cache (Issue #131):** Thread-safe singleton FFT cache for multi-instance vDSP stability. Shared LookAndFeel and visibility throttle for CoreGraphics crash prevention.
 - **23 output formats** (was 22 at baseline, added 9.1 Surround)
 - **8 spatialization algorithms** (was 7, added Constant Power as default)
+- **291 Catch2 tests, 110,205 assertions** (was 162/1,255 at baseline). Added pre-release coverage: stereo input routing (4), 9.1/SML 13.1 surround (7), HOA 4OA–6OA initialization and stress (5).

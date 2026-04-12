@@ -498,3 +498,35 @@ TEST_CASE ("State -- global tap APVTS params survive roundtrip (issue #95)", "[s
                  == Catch::Approx (2.5f).margin (0.02f));
     }
 }
+
+TEST_CASE ("State -- global tap atomics sync after setStateInformation (issue #164)", "[state]")
+{
+    juce::MemoryBlock stateData;
+
+    // Save state with non-zero global tap values
+    {
+        auto proc = std::make_unique<Proc>();
+        proc->prepareToPlay (kSampleRate, kBlockSize);
+        setParam (*proc, "globalTapAzimuth",   45.0f);
+        setParam (*proc, "globalTapElevation", -30.0f);
+        setParam (*proc, "globalTapDistance",    0.5f);
+        setParam (*proc, "globalTapPitch",     -12.0f);
+        setParam (*proc, "globalTapDoppler",    50.0f);
+        setParam (*proc, "globalTapSpeed",       2.5f);
+        proc->getStateInformation (stateData);
+    }
+
+    // Restore — atomics must match restored APVTS values (not stale zeros)
+    {
+        auto proc = std::make_unique<Proc>();
+        proc->prepareToPlay (kSampleRate, kBlockSize);
+        proc->setStateInformation (stateData.getData(), static_cast<int> (stateData.getSize()));
+
+        REQUIRE_THAT (proc->globalTapOffset[0].load(), Catch::Matchers::WithinAbs (45.0, 0.2));
+        REQUIRE_THAT (proc->globalTapOffset[1].load(), Catch::Matchers::WithinAbs (-30.0, 0.2));
+        REQUIRE_THAT (proc->globalTapOffset[2].load(), Catch::Matchers::WithinAbs (0.5, 0.02));
+        REQUIRE_THAT (proc->globalTapOffset[3].load(), Catch::Matchers::WithinAbs (-12.0, 1.0));
+        REQUIRE_THAT (proc->globalTapOffset[4].load(), Catch::Matchers::WithinAbs (50.0, 0.2));
+        REQUIRE_THAT (proc->globalTapOffset[5].load(), Catch::Matchers::WithinAbs (2.5, 0.02));
+    }
+}

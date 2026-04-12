@@ -198,9 +198,26 @@ static SpeakerLayout makeLayoutFromDef (const LayoutDef& def)
 // Parameter layout
 //==============================================================================
 juce::AudioProcessorValueTreeState::ParameterLayout
-    OpenSpatialDelayProcessor::createParameterLayout()
+    OpenSpatialDelayProcessor::createParameterLayout (bool abletonMode)
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+
+    // Issue #189: Only limit automatable params to 64 when running in Ableton Live.
+    // Other DAWs (REAPER, Logic, Pro Tools, Nuendo) have no such limit and should
+    // see all 143 params as automatable. Mirrors the DAW-conditional bus layout
+    // pattern in isBusesLayoutSupported() (issue #122).
+    auto boolNonAuto = [&]() {
+        return abletonMode ? juce::AudioParameterBoolAttributes().withAutomatable (false)
+                           : juce::AudioParameterBoolAttributes();
+    };
+    auto floatNonAuto = [&]() {
+        return abletonMode ? juce::AudioParameterFloatAttributes().withAutomatable (false)
+                           : juce::AudioParameterFloatAttributes();
+    };
+    auto choiceNonAuto = [&]() {
+        return abletonMode ? juce::AudioParameterChoiceAttributes().withAutomatable (false)
+                           : juce::AudioParameterChoiceAttributes();
+    };
 
     // Shared string-from-value formatters (DRY)
     auto fmtDbInf = [](float value, int) {
@@ -259,10 +276,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout
                     return text.getFloatValue();
                 })));
 
-    // G2: Delay Sync (was "Tempo Sync")  [non-automatable: toggle state, issue #122]
+    // G2: Delay Sync (was "Tempo Sync")  [non-automatable in Ableton only: toggle state, issue #122 / #189]
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID ("tempoSync", 2), "Delay Sync", false,
-        juce::AudioParameterBoolAttributes().withAutomatable (false)));
+        boolNonAuto()));
 
     // G3: Delay Division (was "Note Division")
     // Value = number of 16th notes. Range: 0.5 (1/32) to 32 (2/1)
@@ -284,11 +301,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
                 return juce::String (sixteenths, 1) + "/16";
             })));
 
-    // G4: Sync Mode  [non-automatable: state selector, issue #122]
+    // G4: Sync Mode  [non-automatable in Ableton only: state selector, issue #122 / #189]
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
         juce::ParameterID ("syncMode", 4), "Sync Mode",
         juce::StringArray { "Straight", "Dotted", "Triplet" }, 0,
-        juce::AudioParameterChoiceAttributes().withAutomatable (false)));
+        choiceNonAuto()));
 
     // G5: Feedback
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -299,11 +316,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             .withValueFromStringFunction (parsePct01)));
 
     // G6: Filter On (was "Filter Enabled" — moved before filter params, enable→configure)
-    // [non-automatable: toggle state, issue #122]
+    // [non-automatable in Ableton only: toggle state, issue #122 / #189]
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterEnabled", 6), "Filter On",
         juce::NormalisableRange<float> (0.0f, 1.0f, 1.0f), 0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable (false)));
+        floatNonAuto()));
 
     // G7: High-Pass Frequency (was "High-Pass Filter" — HP grouped before LP)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -363,16 +380,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     // They are now stored as raw std::atomic<int> members (configAlgorithm, configHrtfProfile,
     // configOutputFormat, configInputFormat) to hide them from DAW automation lists.
 
-    // G14: Air Absorption  [non-automatable: toggle state, issue #122]
+    // G14: Air Absorption  [non-automatable in Ableton only: toggle state, issue #122 / #189]
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID ("airAbsorption", 14), "Air Absorption", false,
-        juce::AudioParameterBoolAttributes().withAutomatable (false)));
+        boolNonAuto()));
 
     // G15: Wobble On (was "Wobble Enabled" — moved before wobble params, enable→configure)
-    // [non-automatable: toggle state, issue #122]
+    // [non-automatable in Ableton only: toggle state, issue #122 / #189]
     params.push_back (std::make_unique<juce::AudioParameterBool> (
         juce::ParameterID ("wobbleEnabled", 15), "Wobble On", false,
-        juce::AudioParameterBoolAttributes().withAutomatable (false)));
+        boolNonAuto()));
 
     // G16: Wobble Amount
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -386,11 +403,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
-    // G18: OSC Receive (true=enabled, false=disabled; default OFF)
-    // [non-automatable: never automated, issue #122]
-    params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("admOscEnabled", 18), "OSC Receive", false,
-        juce::AudioParameterBoolAttributes().withAutomatable (false)));
+    // G18: OSC Receive moved to non-APVTS member (oscReceiveEnabled) — issue E20
+    // Removing from APVTS keeps it out of the DAW undo stack.
 
     // G19–G24: Global Tap Offsets (promoted from OSC-only atomics to APVTS)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -416,12 +430,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("globalTapDoppler", 23), "Global Tap Doppler",
         juce::NormalisableRange<float> (-100.0f, 100.0f, 0.1f), 0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable (false).withLabel ("%").withStringFromValueFunction (fmtPct100)));
+        floatNonAuto().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("globalTapSpeed", 24), "Global Tap Speed",
         juce::NormalisableRange<float> (-5.0f, 5.0f, 0.01f), 0.0f,
-        juce::AudioParameterFloatAttributes().withAutomatable (false).withLabel ("Hz").withStringFromValueFunction (
+        floatNonAuto().withLabel ("Hz").withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2) + " Hz"; })));
 
     // --- Per-tap parameters (issue #68: "Object N" → "Tap 0N") ---------------
@@ -441,10 +455,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         // Initial spatial spread is applied in constructor after APVTS creation.
         float defaultAz = 0.0f;
 
-        // T1: Tap On (was "Object N Enabled")  [non-automatable: toggle state, issue #122]
+        // T1: Tap On (was "Object N Enabled")  [non-automatable in Ableton only: toggle state, issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterBool> (
             id ("enabled", 0), name ("On"), defaultEnabled,
-            juce::AudioParameterBoolAttributes().withAutomatable (false)));
+            boolNonAuto()));
 
         // T2: Per-tap Time — REMOVED (orphaned param, issue #68)
 
@@ -465,11 +479,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             id ("distance", 3), name ("Distance"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f));
 
-        // T6: Tap Doppler Amount  [non-automatable: issue #122]
+        // T6: Tap Doppler Amount  [non-automatable in Ableton only: issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("dopplerAmount", 4), name ("Doppler Amount"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.0f,
-            juce::AudioParameterFloatAttributes().withAutomatable (false).withLabel ("%")
+            floatNonAuto().withLabel ("%")
                 .withStringFromValueFunction (fmtPct01)
                 .withValueFromStringFunction (parsePct01)));
 
@@ -480,31 +494,31 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             juce::AudioParameterFloatAttributes().withStringFromValueFunction (
                 [](float value, int) { return juce::String (juce::roundToInt (value)) + " st"; })));
 
-        // T8: Tap Trajectory Shape  [non-automatable: state selector, issue #122]
+        // T8: Tap Trajectory Shape  [non-automatable in Ableton only: state selector, issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("trajectoryShape", 6), name ("Trajectory Shape"),
             juce::StringArray { "None", "Bounce", "Circle", "Cross", "Figure-8", "Heart", "Helix",
                                 "Infinity", "Line", "Orbit", "Random", "Spiral", "Square", "Triangle" }, 0,
-            juce::AudioParameterChoiceAttributes().withAutomatable (false)));
+            choiceNonAuto()));
 
-        // T9: Tap Trajectory Speed  [non-automatable: issue #122]
+        // T9: Tap Trajectory Speed  [non-automatable in Ableton only: issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("trajectorySpeed", 7), name ("Trajectory Speed"),
             juce::NormalisableRange<float> (0.0f, 5.0f, 0.01f), 0.3f,
-            juce::AudioParameterFloatAttributes().withAutomatable (false).withLabel ("Hz").withStringFromValueFunction (
+            floatNonAuto().withLabel ("Hz").withStringFromValueFunction (
                 [](float value, int) { return juce::String (value, 2) + " Hz"; })));
 
-        // T10: Tap Trajectory Direction  [non-automatable: state toggle, issue #122]
+        // T10: Tap Trajectory Direction  [non-automatable in Ableton only: state toggle, issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("trajectoryDirection", 8), name ("Trajectory Direction"),
             juce::StringArray { "Forward", "Reverse" }, 0,
-            juce::AudioParameterChoiceAttributes().withAutomatable (false)));
+            choiceNonAuto()));
 
-        // T11: Tap Input Channel  [non-automatable: state selector, issue #122]
+        // T11: Tap Input Channel  [non-automatable in Ableton only: state selector, issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("inputChannel", 9), name ("Input Channel"),
             juce::StringArray { "L+R", "L", "R" }, 0,
-            juce::AudioParameterChoiceAttributes().withAutomatable (false)));
+            choiceNonAuto()));
     }
 
     return { params.begin(), params.end() };
@@ -1576,16 +1590,15 @@ void OpenSpatialDelayProcessor::timerCallback()
     }
 
     // --- v0.6: ADM-OSC connection management (edge-detect enable/disable) ---
-    bool admEnabled = cachedParam_admOscEnabled != nullptr
-                      && cachedParam_admOscEnabled->load() >= 0.5f;
-    if (admEnabled && ! prevAdmOscEnabled)
+    // oscReceiveEnabled is a plain member (not APVTS) so it stays out of the DAW undo stack (issue E20)
+    if (oscReceiveEnabled && ! prevOscReceiveEnabled)
     {
         // Transition OFF→ON: connect
         oscConnected = oscReceiver.connect (oscReceivePort);
         if (oscConnected)
             oscReceiver.addListener (this);
     }
-    else if (! admEnabled && prevAdmOscEnabled)
+    else if (! oscReceiveEnabled && prevOscReceiveEnabled)
     {
         // Transition ON→OFF: disconnect
         oscReceiver.disconnect();
@@ -1595,10 +1608,10 @@ void OpenSpatialDelayProcessor::timerCallback()
         for (int t = 0; t < MAX_OBJECTS; ++t)
             oscOverrideActive[t].store (false, std::memory_order_relaxed);
     }
-    prevAdmOscEnabled = admEnabled;
+    prevOscReceiveEnabled = oscReceiveEnabled;
 
     // --- v0.6: OSC override timeout (500ms since last receive → release override) ---
-    if (admEnabled)
+    if (oscReceiveEnabled)
     {
         double now = juce::Time::getMillisecondCounterHiRes();
         for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -1774,8 +1787,14 @@ void OpenSpatialDelayProcessor::timerCallback()
 OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     : AudioProcessor (BusesProperties()
                         .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                        .withOutput ("Output", juce::AudioChannelSet::discreteChannels (50), true)),
-      apvts (*this, nullptr, "Parameters", createParameterLayout())
+                        .withOutput ("Output",
+                            // Issue #189: Ableton AU can't negotiate from discreteChannels(50).
+                            // Default to stereo in Ableton; other DAWs keep 50ch for high-order Ambisonics.
+                            juce::PluginHostType().isAbletonLive()
+                                ? juce::AudioChannelSet::stereo()
+                                : juce::AudioChannelSet::discreteChannels (50),
+                            true)),
+      apvts (*this, nullptr, "Parameters", createParameterLayout (juce::PluginHostType().isAbletonLive()))
 {
     // Initialize polymorphic algorithm pointer array (O(1) index lookup)
     // 7 algorithms (alphabetical): Ambisonics (0), ConstPower (1), DBAP (2), KNN (3), MDAP (4), VBAP (5), VBIP (6)
@@ -1820,7 +1839,7 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     cachedParam_feedback        = apvts.getRawParameterValue ("feedback");
     cachedParam_inputGain       = apvts.getRawParameterValue ("inputGain");
     cachedParam_outputGain      = apvts.getRawParameterValue ("outputGain");
-    cachedParam_admOscEnabled   = apvts.getRawParameterValue ("admOscEnabled");
+    // admOscEnabled removed from APVTS — now oscReceiveEnabled member (issue E20)
     // issue #68: Cache global tap offset APVTS pointers
     cachedParam_globalTapAzimuth   = apvts.getRawParameterValue ("globalTapAzimuth");
     cachedParam_globalTapElevation = apvts.getRawParameterValue ("globalTapElevation");
@@ -1865,6 +1884,91 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     }
 }
 
+// Issue #189: Test constructor — allows forcing abletonMode for automated tests.
+OpenSpatialDelayProcessor::OpenSpatialDelayProcessor (bool abletonMode)
+    : AudioProcessor (BusesProperties()
+                        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                        .withOutput ("Output",
+                            abletonMode ? juce::AudioChannelSet::stereo()
+                                        : juce::AudioChannelSet::discreteChannels (50),
+                            true)),
+      apvts (*this, nullptr, "Parameters", createParameterLayout (abletonMode))
+{
+    algorithms[0] = &algAmbisonics;
+    algorithms[1] = &algConstantPower;
+    algorithms[2] = &algDBAP;
+    algorithms[3] = &algKNN;
+    algorithms[4] = &algMDAP;
+    algorithms[5] = &algVBAP;
+    algorithms[6] = &algVBIP;
+
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+    {
+        auto prefix = "object" + juce::String (i + 1) + "_";
+        cachedObj[i].enabled       = apvts.getRawParameterValue (prefix + "enabled");
+        cachedObj[i].azimuth       = apvts.getRawParameterValue (prefix + "azimuth");
+        cachedObj[i].elevation     = apvts.getRawParameterValue (prefix + "elevation");
+        cachedObj[i].distance      = apvts.getRawParameterValue (prefix + "distance");
+        cachedObj[i].dopplerAmount = apvts.getRawParameterValue (prefix + "dopplerAmount");
+        cachedObj[i].pitchShift    = apvts.getRawParameterValue (prefix + "pitchShift");
+        cachedParam_trajectoryShape[i] = apvts.getRawParameterValue (prefix + "trajectoryShape");
+        cachedParam_trajectorySpeed[i] = apvts.getRawParameterValue (prefix + "trajectorySpeed");
+        cachedParam_trajectoryDirection[i] = apvts.getRawParameterValue (prefix + "trajectoryDirection");
+        cachedObj[i].inputChannel      = apvts.getRawParameterValue (prefix + "inputChannel");
+    }
+
+    cachedParam_tempoSync       = apvts.getRawParameterValue ("tempoSync");
+    cachedParam_noteDivision    = apvts.getRawParameterValue ("noteDivision");
+    cachedParam_filterLP        = apvts.getRawParameterValue ("filterLP");
+    cachedParam_filterHP        = apvts.getRawParameterValue ("filterHP");
+    cachedParam_filterHPQ       = apvts.getRawParameterValue ("filterHPQ");
+    cachedParam_filterLPQ       = apvts.getRawParameterValue ("filterLPQ");
+    cachedParam_filterEnabled   = apvts.getRawParameterValue ("filterEnabled");
+    cachedParam_airAbsorption   = apvts.getRawParameterValue ("airAbsorption");
+    cachedParam_wobbleEnabled   = apvts.getRawParameterValue ("wobbleEnabled");
+    cachedParam_wobbleAmount    = apvts.getRawParameterValue ("wobbleAmount");
+    cachedParam_wobbleMorph     = apvts.getRawParameterValue ("wobbleMorph");
+    cachedParam_delayTime       = apvts.getRawParameterValue ("delayTime");
+    cachedParam_dryWet          = apvts.getRawParameterValue ("dryWet");
+    cachedParam_feedback        = apvts.getRawParameterValue ("feedback");
+    cachedParam_inputGain       = apvts.getRawParameterValue ("inputGain");
+    cachedParam_outputGain      = apvts.getRawParameterValue ("outputGain");
+    cachedParam_globalTapAzimuth   = apvts.getRawParameterValue ("globalTapAzimuth");
+    cachedParam_globalTapElevation = apvts.getRawParameterValue ("globalTapElevation");
+    cachedParam_globalTapDistance   = apvts.getRawParameterValue ("globalTapDistance");
+    cachedParam_globalTapPitch     = apvts.getRawParameterValue ("globalTapPitch");
+    cachedParam_globalTapDoppler   = apvts.getRawParameterValue ("globalTapDoppler");
+    cachedParam_globalTapSpeed     = apvts.getRawParameterValue ("globalTapSpeed");
+
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+    {
+        auto prefix = "object" + juce::String (i + 1) + "_";
+        trajParam_azimuth[i]   = apvts.getParameter (prefix + "azimuth");
+        oscSendAddress[i] = "/adm/obj/" + juce::String (i + 1) + "/aed";
+    }
+
+    {
+        static const float initAz[] = {-45.0f, 45.0f, -135.0f, 135.0f,
+                                         0.0f, 90.0f, -90.0f, 180.0f,
+                                        -30.0f, 30.0f, -60.0f, 60.0f};
+        for (int i = 0; i < MAX_OBJECTS; ++i)
+            if (trajParam_azimuth[i] != nullptr)
+                trajParam_azimuth[i]->setValueNotifyingHost (
+                    trajParam_azimuth[i]->convertTo0to1 (initAz[i]));
+    }
+
+    loadAllPresets();
+
+    for (int i = 0; i < static_cast<int> (allPresets.size()); ++i)
+    {
+        if (allPresets[static_cast<size_t> (i)].name == "Quad Ping-Pong")
+        {
+            currentPresetIndex = i;
+            break;
+        }
+    }
+}
+
 OpenSpatialDelayProcessor::~OpenSpatialDelayProcessor()
 {
     // Issue #122: Stop 60Hz timer before any member destruction to prevent
@@ -1881,12 +1985,20 @@ OpenSpatialDelayProcessor::~OpenSpatialDelayProcessor()
 //==============================================================================
 // v0.6: OSC port change — reconnect if currently connected
 //==============================================================================
+void OpenSpatialDelayProcessor::setOscReceiveEnabled (bool enabled)
+{
+    oscReceiveEnabled = enabled;
+    markConfigStateDirty();  // E14: notify DAW so state is re-captured on save
+    // Connection lifecycle handled in processBlock via edge-detect
+}
+
 void OpenSpatialDelayProcessor::setOscReceivePort (int port)
 {
     if (port == oscReceivePort)
         return;
 
     oscReceivePort = port;
+    markConfigStateDirty();  // E14: notify DAW so state is re-captured on save
 
     // If currently connected, reconnect on the new port
     if (oscConnected)
@@ -1908,6 +2020,7 @@ void OpenSpatialDelayProcessor::setOscSendEnabled (bool enabled)
         return;
 
     oscSendEnabled = enabled;
+    markConfigStateDirty();  // E14: notify DAW so state is re-captured on save
     if (enabled)
     {
         oscSendConnected = oscSender.connect (oscSendIP, oscSendPort);
@@ -1924,6 +2037,7 @@ void OpenSpatialDelayProcessor::setOscSendPort (int port)
     if (port == oscSendPort)
         return;
     oscSendPort = port;
+    markConfigStateDirty();  // E14: notify DAW so state is re-captured on save
     if (oscSendEnabled)
     {
         oscSender.disconnect();
@@ -1936,6 +2050,7 @@ void OpenSpatialDelayProcessor::setOscSendIP (const juce::String& ip)
     if (ip == oscSendIP)
         return;
     oscSendIP = ip;
+    markConfigStateDirty();  // E14: notify DAW so state is re-captured on save
     if (oscSendEnabled)
     {
         oscSender.disconnect();
@@ -1972,6 +2087,32 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
         return;
 
     const PresetData* preset = &allPresets[static_cast<size_t> (index)];
+
+    // Issue E15: Begin gestures on all params we're about to set, so the host
+    // groups the entire preset load into a single undo entry.
+    std::vector<juce::RangedAudioParameter*> presetGestures;
+    auto beginGesture = [&] (const juce::String& paramId) {
+        if (auto* p = apvts.getParameter (paramId))
+        {
+            p->beginChangeGesture();
+            presetGestures.push_back (p);
+        }
+    };
+
+    // Collect all params that will be set
+    for (const char* id : { "delayTime", "tempoSync", "noteDivision", "syncMode",
+                            "feedback", "filterLP", "filterHP", "filterLPQ", "filterHPQ",
+                            "dryWet", "inputGain", "outputGain", "airAbsorption",
+                            "filterEnabled", "wobbleEnabled", "wobbleAmount", "wobbleMorph" })
+        beginGesture (id);
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+    {
+        auto prefix = "object" + juce::String (i + 1) + "_";
+        for (const char* suffix : { "enabled", "azimuth", "elevation", "distance",
+                                    "dopplerAmount", "pitchShift", "trajectoryShape",
+                                    "trajectorySpeed", "trajectoryDirection", "inputChannel" })
+            beginGesture (prefix + suffix);
+    }
 
     // Helpers — use convertTo0to1() to handle skewed NormalisableRanges correctly
     auto setFloat = [&] (const juce::String& paramId, float value) {
@@ -2029,6 +2170,10 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
         setChoice (prefix + "trajectoryDirection", tap.trajectoryDirection);
         setChoice (prefix + "inputChannel",        tap.inputChannel);
     }
+
+    // Issue E15: End all gestures — host groups the entire preset load as one undo entry
+    for (auto* p : presetGestures)
+        p->endChangeGesture();
 
     // v1.0.1: Reset trajectory state FIRST so processBlock doesn't read stale
     // animated positions from the old preset while prevAzimuth already points to
@@ -2311,10 +2456,20 @@ bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layou
         return true;
     }
 
-    // AU / standalone path: accept any channel count usable by at least one format.
+    // Issue #189: Reject discrete layouts for AU.
+    // JUCE's AU wrapper calls busIgnoresLayout() which tests discreteChannels(N).
+    // If accepted, JUCE reports zero named layout tags via
+    // kAudioUnitProperty_SupportedChannelLayoutTags. Ableton requires explicit
+    // named tags (kAudioChannelLayoutTag_Stereo, etc.) and rejects plugins with
+    // empty tag lists. Rejecting discrete makes busIgnoresLayout() return false,
+    // so JUCE enumerates and advertises named tags.
+    // Ambisonics (discrete 4/9/16/25/36/49) is unaffected — use VST3 for that.
+    if (layouts.getMainOutputChannelSet().isDiscreteLayout())
+        return false;
+
+    // AU / standalone path: accept any named channel count usable by at least one format.
     // The UI dropdown greys out formats whose requiredChannels > maxBusChannels,
     // so bus negotiation only needs to confirm the channel count is viable.
-    // This handles REAPER's even-only track widths (e.g. 26ch enables 4th Order Ambi at 25ch).
     auto inputSet = layouts.getMainInputChannelSet();
     if (inputSet != juce::AudioChannelSet::mono() &&
         inputSet != juce::AudioChannelSet::stereo())
@@ -2740,7 +2895,19 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     smoothedOutputGain.reset (sampleRate, 0.02);
 
     // Read current parameter values so smoothing starts at the right position
-    float initDelayMs = apvts.getRawParameterValue ("delayTime")->load();
+    // E18: Use tempo-synced value when tempo sync is active — the raw knob value
+    // may differ from the actual delay time, causing a stale ramp on first block.
+    float initDelayMs;
+    bool tempoSyncInit = apvts.getRawParameterValue ("tempoSync")->load() > 0.5f;
+    if (tempoSyncInit)
+    {
+        int ndivInit = static_cast<int> (apvts.getRawParameterValue ("noteDivision")->load());
+        initDelayMs = getTempoSyncedDelayMs (ndivInit);
+    }
+    else
+    {
+        initDelayMs = apvts.getRawParameterValue ("delayTime")->load();
+    }
     float initDryWet  = apvts.getRawParameterValue ("dryWet")->load();
     float initFb      = apvts.getRawParameterValue ("feedback")->load();
     float initInGain  = juce::Decibels::decibelsToGain (apvts.getRawParameterValue ("inputGain")->load());
@@ -4164,6 +4331,23 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                     // delay buffer discontinuity after scrub/seek (issue #103)
                     transportFadeGain = 0.0f;
                     transportFadeActive = true;
+
+                    // E18: Snap delay time to correct value on transport start.
+                    // Without this, smoothedDelayTime ramps from its stale value
+                    // over 100ms, sweeping the read position through old buffer
+                    // content (audible chirp at tempos other than the previous one).
+                    {
+                        bool tsync = cachedParam_tempoSync->load() > 0.5f;
+                        if (tsync)
+                        {
+                            int ndiv = static_cast<int> (cachedParam_noteDivision->load());
+                            smoothedDelayTime.setCurrentAndTargetValue (getTempoSyncedDelayMs (ndiv));
+                        }
+                        else
+                        {
+                            smoothedDelayTime.setCurrentAndTargetValue (cachedParam_delayTime->load());
+                        }
+                    }
                 }
 
                 wasPlaying = isPlaying;
@@ -5544,6 +5728,7 @@ void OpenSpatialDelayProcessor::getStateInformation (juce::MemoryBlock& destData
     state.setProperty ("configHrtfProfile", configHrtfProfile.load (std::memory_order_relaxed), nullptr);
     state.setProperty ("configOutputFormat", configOutputFormat.load (std::memory_order_relaxed), nullptr);
     state.setProperty ("configInputFormat", configInputFormat.load (std::memory_order_relaxed), nullptr);
+    state.setProperty ("oscReceiveEnabled", oscReceiveEnabled, nullptr);  // v1.0: persist OSC receive enable (issue E20)
     state.setProperty ("oscReceivePort", oscReceivePort, nullptr);  // v0.6: persist OSC port
     state.setProperty ("globalDrawerOpen", globalDrawerOpen, nullptr);  // v1.0: persist drawer state
     state.setProperty ("currentPresetIndex", currentPresetIndex, nullptr);  // v0.6: persist preset selection
@@ -6118,21 +6303,48 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
         tree.setProperty ("configAlgorithm", newAlgo, nullptr);
     }
 
-    // v0.6: Restore OSC receive port (non-APVTS property)
-    oscReceivePort = static_cast<int> (tree.getProperty ("oscReceivePort", 4002));
+    // v0.6: Restore OSC receive settings (non-APVTS properties, issue E20)
+    // Only restore on first call (project load) — skip on undo/redo to keep
+    // OSC receive settings out of the DAW undo stack.
+    if (! oscReceiveStateLoaded)
+    {
+        oscReceivePort = static_cast<int> (tree.getProperty ("oscReceivePort", 4002));
+        bool savedReceiveEnabled = static_cast<bool> (tree.getProperty ("oscReceiveEnabled", false));
+        if (savedReceiveEnabled)
+            setOscReceiveEnabled (true);
+        oscReceiveStateLoaded = true;
+    }
     globalDrawerOpen = static_cast<bool> (tree.getProperty ("globalDrawerOpen", false));
 
     // v0.6: Restore preset index (non-APVTS property)
     currentPresetIndex = static_cast<int> (tree.getProperty ("currentPresetIndex", 0));
 
-    // v0.7: Restore OSC Send settings
-    oscSendPort = static_cast<int> (tree.getProperty ("oscSendPort", 4003));
-    oscSendIP   = tree.getProperty ("oscSendIP", "127.0.0.1").toString();
-    bool savedSendEnabled = static_cast<bool> (tree.getProperty ("oscSendEnabled", false));
-    if (savedSendEnabled)
-        setOscSendEnabled (true);
+    // v0.7: Restore OSC Send settings (E14: guard against undo restoring send settings)
+    if (! oscSendStateLoaded)
+    {
+        oscSendPort = static_cast<int> (tree.getProperty ("oscSendPort", 4003));
+        oscSendIP   = tree.getProperty ("oscSendIP", "127.0.0.1").toString();
+        bool savedSendEnabled = static_cast<bool> (tree.getProperty ("oscSendEnabled", false));
+        if (savedSendEnabled)
+            setOscSendEnabled (true);
+        oscSendStateLoaded = true;
+    }
 
     apvts.replaceState (tree);
+
+    // issue #164: Sync global tap offset atomics from restored APVTS values.
+    // Without this, atomics are stale after undo and OSC Send uses old values.
+    // Do NOT set globalTapOffsetChanged — that would trigger syncGlobalTapOffsetsFromOSC
+    // which re-applies deltas to per-object params (incorrect for undo).
+    {
+        static const char* ids[] = { "globalTapAzimuth", "globalTapElevation", "globalTapDistance",
+                                     "globalTapPitch",   "globalTapDoppler",   "globalTapSpeed" };
+        for (int i = 0; i < kNumGlobalTapOffsets; ++i)
+        {
+            if (auto* p = apvts.getRawParameterValue (ids[i]))
+                globalTapOffset[i].store (p->load(), std::memory_order_relaxed);
+        }
+    }
 }
 
 //==============================================================================
