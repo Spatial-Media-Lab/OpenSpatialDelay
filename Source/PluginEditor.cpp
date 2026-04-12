@@ -2276,8 +2276,8 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         delayTimeSlider.setVisible (!isSynced);
         noteDivisionSlider.setVisible (isSynced);
         syncModeBox.setVisible (false);  // hidden — replaced by toggle buttons
-        syncDottedButton->setVisible (isSynced);
-        syncTripletButton->setVisible (isSynced);
+        if (syncDottedButton)  syncDottedButton->setVisible (isSynced);
+        if (syncTripletButton) syncTripletButton->setVisible (isSynced);
 
         // Toggle button text: "Sync" when synced, "Time" when free
         tempoSyncButton->setLabel (isSynced ? "SYNC" : "TIME");
