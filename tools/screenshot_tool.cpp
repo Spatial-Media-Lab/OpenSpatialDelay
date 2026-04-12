@@ -247,8 +247,7 @@ int main (int argc, char* argv[])
     }
 
     // ── Enable OSC Receive for visual completeness in screenshots ──────
-    if (auto* p = processor.apvts.getParameter ("admOscEnabled"))
-        p->setValueNotifyingHost (1.0f);
+    processor.setOscReceiveEnabled (true);
 
     // ── Create editor ────────────────────────────────────────────────────
     auto* editorRaw = processor.createEditor();

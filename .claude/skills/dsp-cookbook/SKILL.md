@@ -1,6 +1,6 @@
 ---
 name: dsp-cookbook
-description: Production-ready DSP algorithms including filters, compressors, delays, modulation effects, saturation, and distortion with JUCE integration and optimization techniques. Use when implementing audio processing, DSP algorithms, audio effects, dynamics processors, or need code examples for common audio operations.
+description: Use when implementing fundamental DSP building blocks in JUCE — filters (biquad, SVF, ladder), compressors, saturation, distortion, and one-pole utility stages. For modulation/delay effects use time-based-effects; for reverb use reverb-algorithms; for spatial panning use spatial-audio-dsp; for synthesis use synthesis-techniques.
 ---
 
 # DSP Cookbook
@@ -702,3 +702,16 @@ private:
 ---
 
 **Note**: All code examples are production-ready and follow realtime-safety rules. Pre-allocate buffers in `prepare()`, avoid allocations in `processSample()`, and use proper numerical stability techniques.
+
+---
+
+## Common Mistakes
+
+| Mistake | Fix |
+|---|---|
+| Not handling denormals — tiny floats cause CPU spikes on x86 | Set `juce::ScopedNoDenormals` at top of `processBlock()` |
+| Forgetting to smooth parameter changes — causes zipper noise | Use `juce::SmoothedValue` or one-pole filter on all parameters |
+| Allocating memory in `processBlock()` — causes audio glitches | Pre-allocate all buffers in `prepareToPlay()` |
+| Not recalculating coefficients on sample rate change | Recalc filter coefficients in `prepareToPlay()` and when sample rate changes |
+| Using linear interpolation for delay lines — audible aliasing | Use cubic Hermite (Catmull-Rom) minimum for modulated delays |
+| Feedback coefficient >= 1.0 — causes runaway oscillation | Always clamp feedback to `abs(g) < 0.999`, soft-clip in feedback path |

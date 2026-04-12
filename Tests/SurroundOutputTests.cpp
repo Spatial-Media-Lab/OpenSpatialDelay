@@ -70,6 +70,17 @@ static std::unique_ptr<Proc> createConstrainedProcessor (int outputFormat, int a
     return proc;
 }
 
+// Create a processor with wrapperType_VST3 for testing VST3-specific bus logic.
+// Uses JUCE's setTypeOfNextNewPlugin() — the canonical seam for controlling
+// wrapperType in unit tests (same mechanism used by all plugin wrapper entry points).
+static std::unique_ptr<Proc> createVST3Processor()
+{
+    juce::AudioProcessor::setTypeOfNextNewPlugin (juce::AudioProcessor::wrapperType_VST3);
+    auto proc = std::make_unique<Proc>();
+    juce::AudioProcessor::setTypeOfNextNewPlugin (juce::AudioProcessor::wrapperType_Undefined);
+    return proc;
+}
+
 // Process blocks with a buffer matching the constrained bus channel count.
 // Includes warmup period to fill the delay line and let parameter smoothing settle.
 static juce::AudioBuffer<float> processBlocksConstrained (Proc& proc, int numBlocks, int blockSize,
@@ -235,15 +246,16 @@ static const LayoutExpectation layoutExpectations[] = {
     { "5.1",        4,   5,  6,  3, false },
     { "7.0",        5,   7,  7, -1, false },
     { "7.1",        6,   7,  8,  3, false },
-    { "Octaphonic",  7,  8,  8, -1, false },
-    { "5.1.2",      8,   7,  8,  3, true  },
-    { "5.1.4",       9,  9, 10,  3, true  },
-    { "7.1.2",      10,  9, 10,  3, true  },
-    { "7.1.4",      11, 11, 12,  3, true  },
-    { "7.1.6",      12, 13, 14,  3, true  },
-    { "9.1.4",      13, 13, 14,  3, true  },
-    { "9.1.6",      14, 15, 16,  3, true  },
-    { "SML 13.1",   15, 13, 14, 13, true  },
+    { "9.1",        7,   9, 10,  3, false },
+    { "Octaphonic",  8,  8,  8, -1, false },
+    { "5.1.2",      9,   7,  8,  3, true  },
+    { "5.1.4",      10,  9, 10,  3, true  },
+    { "7.1.2",      11,  9, 10,  3, true  },
+    { "7.1.4",      12, 11, 12,  3, true  },
+    { "7.1.6",      13, 13, 14,  3, true  },
+    { "9.1.4",      14, 13, 14,  3, true  },
+    { "9.1.6",      15, 15, 16,  3, true  },
+    { "SML 13.1",   16, 13, 14, 13, true  },
 };
 
 TEST_CASE ("Layout: speaker count and channel count match spec", "[layout]")
@@ -352,9 +364,9 @@ TEST_CASE ("Layout: VBAP triplets are non-empty for 3D layouts", "[layout]")
 // ============================================================================
 
 // Algorithm parameter indices (from createParameterLayout line 305):
-// 0=Ambisonics, 1=DBAP, 2=KNN, 3=MDAP, 4=VBAP, 5=VBIP
+// 0=Ambisonics, 1=ConstantPower, 2=DBAP, 3=KNN, 4=MDAP, 5=VBAP, 6=VBIP
 namespace AlgoIdx {
-    constexpr int Ambisonics = 0, DBAP = 1, KNN = 2, MDAP = 3, VBAP = 4, VBIP = 5;
+    constexpr int Ambisonics = 0, ConstantPower = 1, DBAP = 2, KNN = 3, MDAP = 4, VBAP = 5, VBIP = 6;
 }
 
 // --- VBAP Tests ---
@@ -424,7 +436,7 @@ TEST_CASE ("VBAP: source at rear (135deg) on 7.1 activates Lrs", "[algorithm][vb
 
 TEST_CASE ("VBAP: source at height position on 7.1.4 activates height speaker", "[algorithm][vbap]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     const auto& state = proc->getActiveLayout();
     auto ctx = makeLayoutCtx (state);
 
@@ -574,7 +586,7 @@ TEST_CASE ("KNN: source at speaker position has that speaker loudest", "[algorit
 
 TEST_CASE ("KNN: activates exactly k=3 speakers (between speakers)", "[algorithm][knn]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::KNN);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::KNN);
     const auto& state = proc->getActiveLayout();
     auto ctx = makeLayoutCtx (state);
 
@@ -680,7 +692,7 @@ TEST_CASE ("MDAP: source at speaker position has that speaker loudest", "[algori
 
 TEST_CASE ("MDAP: wider spread than VBAP (more non-zero gains)", "[algorithm][mdap]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     const auto& state = proc->getActiveLayout();
     auto ctx = makeLayoutCtx (state);
 
@@ -751,18 +763,85 @@ TEST_CASE ("Ambisonics: source at speaker position has that speaker loudest", "[
     CHECK (loudest == 3);
 }
 
+// --- Constant Power Tests ---
+
+TEST_CASE ("ConstantPower: source at L speaker (30deg) on 7.1 has L as loudest", "[algorithm][constpower]")
+{
+    auto proc = createTestProcessor (6 /*7.1*/, AlgoIdx::ConstantPower);
+    const auto& state = proc->getActiveLayout();
+    auto ctx = makeLayoutCtx (state);
+
+    ConstantPowerAlgorithm cp;
+    SourcePosition src { 30.0f * kDeg2Rad, 0.0f, 0.5f };
+    float gains[16] = {};
+    cp.computeGains (src, ctx, gains, state.layout.numSpeakers);
+
+    int loudest = findLoudestSpeaker (gains, state.layout.numSpeakers);
+    CHECK (loudest == 0);  // L is speaker index 0 on 7.1
+}
+
+TEST_CASE ("ConstantPower: constant-power normalization", "[algorithm][constpower]")
+{
+    auto proc = createTestProcessor (6 /*7.1*/, AlgoIdx::ConstantPower);
+    const auto& state = proc->getActiveLayout();
+    auto ctx = makeLayoutCtx (state);
+
+    ConstantPowerAlgorithm cp;
+    SourcePosition src { 45.0f * kDeg2Rad, 0.0f, 0.5f };
+    float gains[16] = {};
+    cp.computeGains (src, ctx, gains, state.layout.numSpeakers);
+
+    float sumSq = sumOfSquaredGains (gains, state.layout.numSpeakers);
+    CHECK_THAT (sumSq, WithinAbs (1.0f, 0.01f));
+}
+
+TEST_CASE ("ConstantPower: activates multiple speakers (wider than VBAP)", "[algorithm][constpower]")
+{
+    auto proc = createTestProcessor (6 /*7.1*/, AlgoIdx::ConstantPower);
+    const auto& state = proc->getActiveLayout();
+    auto ctx = makeLayoutCtx (state);
+
+    ConstantPowerAlgorithm cp;
+    SourcePosition src { 0.0f, 0.0f, 0.5f };  // Front center
+    float gains[16] = {};
+    cp.computeGains (src, ctx, gains, state.layout.numSpeakers);
+
+    int active = countNonZeroGains (gains, state.layout.numSpeakers);
+    CHECK (active > 2);  // Should activate multiple speakers in hemisphere
+}
+
+TEST_CASE ("ConstantPower: hemisphere cutoff — rear speakers quiet for front source", "[algorithm][constpower]")
+{
+    auto proc = createTestProcessor (6 /*7.1*/, AlgoIdx::ConstantPower);
+    const auto& state = proc->getActiveLayout();
+    auto ctx = makeLayoutCtx (state);
+
+    ConstantPowerAlgorithm cp;
+    SourcePosition src { 0.0f, 0.0f, 0.5f };  // Front center (0 deg azimuth)
+    float gains[16] = {};
+    cp.computeGains (src, ctx, gains, state.layout.numSpeakers);
+
+    // Front center (speaker 2 at 0°) should be loudest
+    int loudest = findLoudestSpeaker (gains, state.layout.numSpeakers);
+    CHECK (loudest == 2);  // C speaker
+
+    // Rear speakers (indices 5,6 at ±135°) should have zero gain (> 90° from front)
+    CHECK (gains[5] < 0.001f);  // Rear left
+    CHECK (gains[6] < 0.001f);  // Rear right
+}
+
 // --- Cross-Algorithm: All algorithms on all surround formats at cardinal positions ---
 
 TEST_CASE ("All algorithms: source at L (30deg) has L as loudest on all formats", "[algorithm][cardinal]")
 {
     // Formats that have L at 30° as speaker index 0
-    int formats[] = { 4 /*5.1*/, 5 /*7.0*/, 6 /*7.1*/, 11 /*7.1.4*/, 14 /*9.1.6*/ };
-    int algos[] = { AlgoIdx::VBAP, AlgoIdx::VBIP, AlgoIdx::KNN, AlgoIdx::DBAP, AlgoIdx::MDAP };
-    const char* algoNames[] = { "VBAP", "VBIP", "KNN", "DBAP", "MDAP" };
+    int formats[] = { 4 /*5.1*/, 5 /*7.0*/, 6 /*7.1*/, 12 /*7.1.4*/, 15 /*9.1.6*/ };
+    int algos[] = { AlgoIdx::VBAP, AlgoIdx::VBIP, AlgoIdx::KNN, AlgoIdx::DBAP, AlgoIdx::MDAP, AlgoIdx::ConstantPower };
+    const char* algoNames[] = { "VBAP", "VBIP", "KNN", "DBAP", "MDAP", "ConstantPower" };
 
     for (int fi = 0; fi < 5; ++fi)
     {
-        for (int ai = 0; ai < 5; ++ai)
+        for (int ai = 0; ai < 6; ++ai)
         {
             SECTION (std::string (Proc::outputFormatRegistry[static_cast<size_t>(formats[fi])].name)
                      + " + " + algoNames[ai])
@@ -776,7 +855,7 @@ TEST_CASE ("All algorithms: source at L (30deg) has L as loudest on all formats"
 
                 // Use the actual algorithm instance
                 VBAPAlgorithm vbap; VBIPAlgorithm vbip; KNNAlgorithm knn;
-                DBAPAlgorithm dbap; MDAPAlgorithm mdap;
+                DBAPAlgorithm dbap; MDAPAlgorithm mdap; ConstantPowerAlgorithm constPow;
                 SpatializationAlgorithm* algo = nullptr;
                 switch (algos[ai])
                 {
@@ -785,6 +864,7 @@ TEST_CASE ("All algorithms: source at L (30deg) has L as loudest on all formats"
                     case AlgoIdx::KNN:  algo = &knn;  break;
                     case AlgoIdx::DBAP: algo = &dbap; break;
                     case AlgoIdx::MDAP: algo = &mdap; break;
+                    case AlgoIdx::ConstantPower: algo = &constPow; break;
                 }
 
                 algo->computeGains (src, ctx, gains, state.layout.numSpeakers);
@@ -828,7 +908,7 @@ TEST_CASE ("Elevation: VBAP triplets are populated for all height formats", "[el
 
 TEST_CASE ("Elevation: VBAP horizontal source gives zero gain to height speakers on 7.1.4", "[elevation][vbap]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     const auto& state = proc->getActiveLayout();
     auto ctx = makeLayoutCtx (state);
     auto heightIndices = findHeightSpeakerIndices (state.layout);
@@ -857,7 +937,7 @@ TEST_CASE ("Elevation: VBAP horizontal source gives zero gain to height speakers
 
 TEST_CASE ("Elevation: VBIP horizontal source gives zero gain to height speakers on 7.1.4", "[elevation][vbip]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBIP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBIP);
     const auto& state = proc->getActiveLayout();
     auto ctx = makeLayoutCtx (state);
     auto heightIndices = findHeightSpeakerIndices (state.layout);
@@ -884,7 +964,7 @@ TEST_CASE ("Elevation: VBIP horizontal source gives zero gain to height speakers
 
 TEST_CASE ("Elevation: integration — horizontal source silent in height channels on 7.1.4", "[elevation][integration]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     setParam (*proc, "delayTime", 1.0f);
     setParam (*proc, "dryWet", 1.0f);
     setParam (*proc, "feedback", 0.0f);
@@ -909,7 +989,7 @@ TEST_CASE ("Elevation: integration — horizontal source silent in height channe
 TEST_CASE ("Elevation: integration — elevated source activates height channels on 7.1.4", "[elevation][integration]")
 {
     // Source at (45°, 0°) — height channels should be silent
-    auto proc0 = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc0 = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     setParam (*proc0, "delayTime", 1.0f);
     setParam (*proc0, "dryWet", 1.0f);
     setParam (*proc0, "feedback", 0.0f);
@@ -918,7 +998,7 @@ TEST_CASE ("Elevation: integration — elevated source activates height channels
     auto out0 = processBlocksConstrained (*proc0, 8, 512, 12);
 
     // Source at (45°, 45°) — height channels should be active
-    auto proc45 = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc45 = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     setParam (*proc45, "delayTime", 1.0f);
     setParam (*proc45, "dryWet", 1.0f);
     setParam (*proc45, "feedback", 0.0f);
@@ -974,7 +1054,7 @@ TEST_CASE ("Elevation: all height formats — horizontal source excludes height 
 
 TEST_CASE ("Elevation: VBAP gain to Tfl increases monotonically 0->45 on 7.1.4", "[elevation]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     const auto& state = proc->getActiveLayout();
     auto ctx = makeLayoutCtx (state);
 
@@ -1001,7 +1081,7 @@ TEST_CASE ("Elevation: VBAP gain to Tfl increases monotonically 0->45 on 7.1.4",
 
 TEST_CASE ("Elevation: all algorithms — height isolation for horizontal source on 7.1.4", "[elevation]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     const auto& state = proc->getActiveLayout();
     auto ctx = makeLayoutCtx (state);
     auto heightIdx = findHeightSpeakerIndices (state.layout);
@@ -1197,7 +1277,7 @@ TEST_CASE ("Integration: 7.1 VBAP tap at 90deg routes to ch4 (Ls)", "[integratio
 
 TEST_CASE ("Integration: 7.1.4 VBAP tap at height routes to height channel", "[integration]")
 {
-    auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
     REQUIRE (proc->getActiveOutputFormat() == OF::Surround7_1_4);
 
     setParam (*proc, "delayTime", 1.0f);
@@ -1217,7 +1297,7 @@ TEST_CASE ("Integration: 7.1.4 VBAP tap at height routes to height channel", "[i
 
 TEST_CASE ("Integration: 9.1.6 VBAP tap at wide (60deg) routes to ch8 (Lw)", "[integration]")
 {
-    auto proc = createTestProcessor (14 /*9.1.6*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (15 /*9.1.6*/, AlgoIdx::VBAP);
     REQUIRE (proc->getActiveOutputFormat() == OF::Surround9_1_6);
 
     setParam (*proc, "delayTime", 1.0f);
@@ -1386,7 +1466,7 @@ TEST_CASE ("Channel ordering: 7.1.4 — sweep all speakers including height", "[
     {
         SECTION (pt.name)
         {
-            auto proc = createTestProcessor (11 /*7.1.4*/, AlgoIdx::VBAP);
+            auto proc = createTestProcessor (12 /*7.1.4*/, AlgoIdx::VBAP);
             setParam (*proc, "delayTime", 1.0f);
             setParam (*proc, "dryWet", 1.0f);
             setParam (*proc, "feedback", 0.0f);
@@ -1429,7 +1509,7 @@ TEST_CASE ("Channel ordering: 9.1.6 — sweep all speakers including wide + heig
     {
         SECTION (pt.name)
         {
-            auto proc = createTestProcessor (14 /*9.1.6*/, AlgoIdx::VBAP);
+            auto proc = createTestProcessor (15 /*9.1.6*/, AlgoIdx::VBAP);
             setParam (*proc, "delayTime", 1.0f);
             setParam (*proc, "dryWet", 1.0f);
             setParam (*proc, "feedback", 0.0f);
@@ -1557,6 +1637,165 @@ TEST_CASE ("Drift diagnostic: feedback repeats maintain consistent timing", "[dr
 // AudioChannelSets instead of the 50-channel discrete default.
 // ============================================================================
 
+TEST_CASE ("AU bus: accepts named layouts for standard surround formats", "[bus]")
+{
+    auto proc = std::make_unique<Proc>();
+
+    // Issue #189: AU path now rejects discrete layouts (so JUCE advertises named
+    // layout tags to Ableton). Test with named AudioChannelSets instead.
+    auto check = [&](const char* label, juce::AudioChannelSet set) {
+        SECTION (label)
+        {
+            juce::AudioProcessor::BusesLayout layout;
+            layout.inputBuses.add (juce::AudioChannelSet::stereo());
+            layout.outputBuses.add (set);
+            CHECK (proc->checkBusesLayoutSupported (layout));
+        }
+    };
+
+    check ("stereo (2ch)",           juce::AudioChannelSet::stereo());
+    check ("quadraphonic (4ch)",     juce::AudioChannelSet::quadraphonic());
+    check ("5.1 (6ch)",             juce::AudioChannelSet::create5point1());
+    check ("7.1 (8ch)",             juce::AudioChannelSet::create7point1());
+    check ("7.1.4 (12ch)",          juce::AudioChannelSet::create7point1point4());
+    check ("9.1.6 (16ch)",          juce::AudioChannelSet::create9point1point6());
+}
+
+TEST_CASE ("AU bus: rejects discrete layouts (issue #189)", "[bus]")
+{
+    auto proc = std::make_unique<Proc>();
+
+    // Discrete layouts are rejected in the AU path so JUCE advertises named
+    // layout tags. Ambisonics (discrete 4/9/16/25/36/49) should use VST3.
+    for (int numCh : { 2, 4, 8, 16, 25, 50 })
+    {
+        SECTION ("discrete(" + std::to_string (numCh) + ")")
+        {
+            juce::AudioProcessor::BusesLayout layout;
+            layout.inputBuses.add (juce::AudioChannelSet::stereo());
+            layout.outputBuses.add (juce::AudioChannelSet::discreteChannels (numCh));
+            CHECK_FALSE (proc->checkBusesLayoutSupported (layout));
+        }
+    }
+}
+
+// Note: The old "REAPER even channel counts" test used discreteChannels() which is
+// now rejected in the AU/standalone path (issue #189). REAPER multichannel uses VST3
+// where all layouts are accepted. AU named layout acceptance is covered above.
+
+TEST_CASE ("AU bus: rejects channel count below minimum (< 2)", "[bus]")
+{
+    auto proc = std::make_unique<Proc>();
+
+    // 0 and 1 channels are below the minimum format requirement (Binaural = 2ch)
+    for (int numCh : { 1 })
+    {
+        SECTION ("discrete(" + std::to_string (numCh) + ")")
+        {
+            juce::AudioProcessor::BusesLayout layout;
+            layout.inputBuses.add (juce::AudioChannelSet::mono());
+            layout.outputBuses.add (juce::AudioChannelSet::discreteChannels (numCh));
+            CHECK_FALSE (proc->checkBusesLayoutSupported (layout));
+        }
+    }
+}
+
+TEST_CASE ("AU bus: accepts named JUCE channel sets matching registry", "[bus]")
+{
+    auto proc = std::make_unique<Proc>();
+
+    struct NamedLayout { const char* name; juce::AudioChannelSet set; };
+    NamedLayout named[] = {
+        { "stereo (2ch)",       juce::AudioChannelSet::stereo() },
+        { "quad (4ch)",         juce::AudioChannelSet::quadraphonic() },
+        { "5.1 (6ch)",          juce::AudioChannelSet::create5point1() },
+        { "7.1 (8ch)",          juce::AudioChannelSet::create7point1() },
+        { "octagonal (8ch)",    juce::AudioChannelSet::octagonal() },
+        { "7.1.4 (12ch)",       juce::AudioChannelSet::create7point1point4() },
+        { "9.1.6 (16ch)",       juce::AudioChannelSet::create9point1point6() },
+    };
+
+    for (const auto& n : named)
+    {
+        SECTION (n.name)
+        {
+            juce::AudioProcessor::BusesLayout layout;
+            layout.inputBuses.add (juce::AudioChannelSet::stereo());
+            layout.outputBuses.add (n.set);
+            CHECK (proc->checkBusesLayoutSupported (layout));
+        }
+    }
+}
+
+TEST_CASE ("isBusesLayoutSupported accepts VST3 default layout (9.1.6)", "[bus]")
+{
+    auto proc = createVST3Processor();
+    juce::AudioProcessor::BusesLayout layout;
+    layout.inputBuses.add (juce::AudioChannelSet::stereo());
+    layout.outputBuses.add (juce::AudioChannelSet::create9point1point6());
+    CHECK (proc->checkBusesLayoutSupported (layout));
+}
+
+TEST_CASE ("isBusesLayoutSupported accepts symmetric layouts for VST3 (issue #111)", "[bus]")
+{
+    auto proc = createVST3Processor();
+
+    // Symmetric 7.1 in/out — REAPER proposes this on an 8ch track
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::create7point1());
+        layout.outputBuses.add (juce::AudioChannelSet::create7point1());
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+
+    // Symmetric 9.1.6 in/out — REAPER proposes this on a 16ch track
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::create9point1point6());
+        layout.outputBuses.add (juce::AudioChannelSet::create9point1point6());
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+
+    // Asymmetric multichannel in / different out — now accepted (IEM approach, issue #111)
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::create7point1());
+        layout.outputBuses.add (juce::AudioChannelSet::create9point1point6());
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+
+    // Mono/stereo input still works with any supported output
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::stereo());
+        layout.outputBuses.add (juce::AudioChannelSet::create7point1());
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+}
+
+TEST_CASE ("isBusesLayoutSupported accepts ambisonic() channel sets for VST3 (issue #111)", "[bus]")
+{
+    auto proc = createVST3Processor();
+
+    // ambisonic(1-6) must be accepted for VST3 HOA negotiation
+    for (int order = 1; order <= 6; ++order)
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::stereo());
+        layout.outputBuses.add (juce::AudioChannelSet::ambisonic (order));
+        INFO ("Ambisonics order " << order << " (" << ((order + 1) * (order + 1)) << "ch)");
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+
+    // Symmetric ambisonic(6) in/out — VST3 default on a 49ch track
+    {
+        juce::AudioProcessor::BusesLayout layout;
+        layout.inputBuses.add (juce::AudioChannelSet::ambisonic (6));
+        layout.outputBuses.add (juce::AudioChannelSet::ambisonic (6));
+        CHECK (proc->checkBusesLayoutSupported (layout));
+    }
+}
+
 TEST_CASE ("Constrained bus: 7.1 rear speakers receive signal (8ch buffer)", "[bus][regression]")
 {
     struct TestPoint { float azDeg; int expectedChannel; const char* name; };
@@ -1610,7 +1849,7 @@ TEST_CASE ("Constrained bus: 7.1.4 rear speakers receive signal (12ch buffer)", 
     {
         SECTION (pt.name)
         {
-            auto proc = createConstrainedProcessor (11 /*7.1.4*/, AlgoIdx::VBAP,
+            auto proc = createConstrainedProcessor (12 /*7.1.4*/, AlgoIdx::VBAP,
                                                      juce::AudioChannelSet::create7point1point4());
             setParam (*proc, "delayTime", 1.0f);
             setParam (*proc, "dryWet", 1.0f);
@@ -1631,10 +1870,10 @@ TEST_CASE ("Constrained bus: 7.1.4 rear speakers receive signal (12ch buffer)", 
 TEST_CASE ("Constrained bus: all algorithms route to Lrs on 7.1 (8ch)", "[bus][algorithm]")
 {
     int algos[] = { AlgoIdx::VBAP, AlgoIdx::VBIP, AlgoIdx::KNN,
-                    AlgoIdx::DBAP, AlgoIdx::MDAP };
-    const char* names[] = { "VBAP", "VBIP", "KNN", "DBAP", "MDAP" };
+                    AlgoIdx::DBAP, AlgoIdx::MDAP, AlgoIdx::ConstantPower };
+    const char* names[] = { "VBAP", "VBIP", "KNN", "DBAP", "MDAP", "ConstantPower" };
 
-    for (int a = 0; a < 5; ++a)
+    for (int a = 0; a < 6; ++a)
     {
         SECTION (names[a])
         {
@@ -1686,7 +1925,7 @@ TEST_CASE ("Channel ordering: SML 13.1 — sweep all speakers including zenith",
     {
         SECTION (pt.name)
         {
-            auto proc = createTestProcessor (15 /*SML 13.1*/, AlgoIdx::VBAP);
+            auto proc = createTestProcessor (16 /*SML 13.1*/, AlgoIdx::VBAP);
             setParam (*proc, "delayTime", 1.0f);
             setParam (*proc, "dryWet", 1.0f);
             setParam (*proc, "feedback", 0.0f);
@@ -1705,7 +1944,7 @@ TEST_CASE ("Channel ordering: SML 13.1 — sweep all speakers including zenith",
 
 TEST_CASE ("SML 13.1: LFE receives low-pass filtered signal", "[sml][lfe]")
 {
-    auto proc = createTestProcessor (15 /*SML 13.1*/, AlgoIdx::VBAP);
+    auto proc = createTestProcessor (16 /*SML 13.1*/, AlgoIdx::VBAP);
     setParam (*proc, "delayTime", 1.0f);
     setParam (*proc, "dryWet", 1.0f);
     setParam (*proc, "feedback", 0.0f);
@@ -1721,14 +1960,14 @@ TEST_CASE ("SML 13.1: LFE receives low-pass filtered signal", "[sml][lfe]")
 TEST_CASE ("SML 13.1: all algorithms produce signal", "[sml][algorithm]")
 {
     int algos[] = { AlgoIdx::VBAP, AlgoIdx::VBIP, AlgoIdx::KNN,
-                    AlgoIdx::DBAP, AlgoIdx::MDAP };
-    const char* names[] = { "VBAP", "VBIP", "KNN", "DBAP", "MDAP" };
+                    AlgoIdx::DBAP, AlgoIdx::MDAP, AlgoIdx::ConstantPower };
+    const char* names[] = { "VBAP", "VBIP", "KNN", "DBAP", "MDAP", "ConstantPower" };
 
-    for (int a = 0; a < 5; ++a)
+    for (int a = 0; a < 6; ++a)
     {
         SECTION (names[a])
         {
-            auto proc = createTestProcessor (15 /*SML 13.1*/, algos[a]);
+            auto proc = createTestProcessor (16 /*SML 13.1*/, algos[a]);
             setParam (*proc, "delayTime", 1.0f);
             setParam (*proc, "dryWet", 1.0f);
             setParam (*proc, "feedback", 0.0f);

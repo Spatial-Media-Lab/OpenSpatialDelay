@@ -33,13 +33,28 @@ cd "${BUILD_DIR}"
 git checkout "${COMMIT}" -- . 2>/dev/null
 git submodule update --init --recursive 2>/dev/null
 
+# Issue #122: Patch JUCE VST3 wrapper — guard restartComponent against flags=0
+# to prevent Ableton from resetting its Configure parameter state.
+# The JUCE source uses \r\n line endings, so use perl for reliable matching.
+VST3_WRAPPER="JUCE/modules/juce_audio_plugin_client/juce_audio_plugin_client_VST3.cpp"
+if grep -q 'handler->restartComponent (flags)' "${VST3_WRAPPER}" 2>/dev/null; then
+    perl -i -p0e 's/(flags &= ~pluginShouldBeMarkedDirtyFlag;\r?\n\r?\n)\s*(if \(auto\* handler = componentHandler\.get\(\)\)\r?\n\s*handler->restartComponent \(flags\);)/$1        if (flags != 0)\r\n            if (auto* handler = componentHandler.get())\r\n                handler->restartComponent (flags);/s' "${VST3_WRAPPER}"
+fi
+
+# Issue #88: Patch JUCE AU wrapper — raise channel probe limit from 16 to 64
+# so AU hosts discover support for high-order Ambisonics (25/36/49ch).
+AU_SHARED="JUCE/modules/juce_audio_processors/format_types/juce_AU_Shared.h"
+if grep -q 'maxNumChanToCheckFor = 16' "${AU_SHARED}" 2>/dev/null; then
+    sed -i '' 's/maxNumChanToCheckFor = 16/maxNumChanToCheckFor = 64/' "${AU_SHARED}"
+fi
+
 # Step 2: Patch CMakeLists.txt with version-specific name, plugin code, and bundle ID
 sed -i '' "s/PLUGIN_CODE Os10/PLUGIN_CODE ${PLUGIN_CODE}/" CMakeLists.txt
 sed -i '' "s/PRODUCT_NAME \"OpenSpatialDelay v1.0\"/PRODUCT_NAME \"${PLUGIN_NAME}\"/" CMakeLists.txt
 
 # v1.0.7: Compute unique bundle ID suffix for post-build plist patching (issue #62)
 BUNDLE_SUFFIX=$(echo "${VERSION}" | tr '.' '-')  # e.g., v1.0.7 → v1-0-7
-UNIQUE_BUNDLE_ID="com.SpatialMediaLibrary.OpenSpatialDelay.${BUNDLE_SUFFIX}"
+UNIQUE_BUNDLE_ID="com.spatialmedialab.OpenSpatialDelay.${BUNDLE_SUFFIX}"
 
 # Step 3: Patch install script with version-specific name
 sed -i '' "s/PLUGIN_NAME=\"OpenSpatialDelay v1.0\"/PLUGIN_NAME=\"${PLUGIN_NAME}\"/" scripts/install_plugins.sh
@@ -126,6 +141,19 @@ if [ -f "${VST3_INSTALLED_PLIST}" ]; then
     /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier ${UNIQUE_BUNDLE_ID}" "${VST3_INSTALLED_PLIST}"
 fi
 
+# Step 9c: Re-sign bundles after plist patching (issue #120)
+# Patching Info.plist invalidates the JUCE ad-hoc signature; Ableton rejects unsigned VST3.
+AU_INSTALLED_BUNDLE="$HOME/Library/Audio/Plug-Ins/Components/${PLUGIN_NAME}.component"
+VST3_INSTALLED_BUNDLE="$HOME/Library/Audio/Plug-Ins/VST3/${PLUGIN_NAME}.vst3"
+if [ -d "${AU_INSTALLED_BUNDLE}" ]; then
+    codesign --force --deep --sign - "${AU_INSTALLED_BUNDLE}"
+    echo "  AU re-signed (ad-hoc)"
+fi
+if [ -d "${VST3_INSTALLED_BUNDLE}" ]; then
+    codesign --force --deep --sign - "${VST3_INSTALLED_BUNDLE}"
+    echo "  VST3 re-signed (ad-hoc)"
+fi
+
 # Step 10: Final validation of installed plugins
 echo ""
 echo "=== Validation ==="
@@ -139,7 +167,9 @@ AU_BIN_INSTALLED="${AU_INSTALLED}/Contents/MacOS/${PLUGIN_NAME}"
 if [ -f "${AU_BIN_INSTALLED}" ]; then
     AU_SUB=$(/usr/libexec/PlistBuddy -c "Print :AudioComponents:0:subtype" "${AU_INSTALLED}/Contents/Info.plist" 2>/dev/null)
     AU_ARCH=$(file "${AU_BIN_INSTALLED}" | grep -o 'arm64\|x86_64')
-    echo "  AU:   OK (subtype=${AU_SUB}, arch=${AU_ARCH})"
+    AU_SIGNED="unsigned"
+    if codesign --verify --deep --strict "${AU_INSTALLED}" 2>/dev/null; then AU_SIGNED="signed"; fi
+    echo "  AU:   OK (subtype=${AU_SUB}, arch=${AU_ARCH}, ${AU_SIGNED})"
     if [ "${AU_SUB}" != "${PLUGIN_CODE}" ]; then
         echo "  ERROR: AU subtype '${AU_SUB}' does not match expected '${PLUGIN_CODE}'"
         PASS=false
@@ -153,7 +183,12 @@ fi
 VST3_BIN_INSTALLED="${VST3_INSTALLED}/Contents/MacOS/${PLUGIN_NAME}"
 if [ -f "${VST3_BIN_INSTALLED}" ]; then
     VST3_ARCH=$(file "${VST3_BIN_INSTALLED}" | grep -o 'arm64\|x86_64')
-    echo "  VST3: OK (arch=${VST3_ARCH})"
+    if codesign --verify --deep --strict "${VST3_INSTALLED}" 2>/dev/null; then
+        echo "  VST3: OK (arch=${VST3_ARCH}, signed)"
+    else
+        echo "  VST3: OK (arch=${VST3_ARCH}, UNSIGNED — may not appear in Ableton)"
+        PASS=false
+    fi
 else
     echo "  VST3: FAILED — binary missing"
     PASS=false

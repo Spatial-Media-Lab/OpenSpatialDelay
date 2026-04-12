@@ -1,6 +1,6 @@
 # Output Formats
 
-OpenSpatialDelay supports 22 output formats organized into four categories: Binaural, Stereo, Surround, and Ambisonics. The active format is selected from the dropdown in the header bar.
+OpenSpatialDelay supports 23 output formats organized into four categories: Binaural, Stereo, Surround, and Ambisonics. The active format is selected from the dropdown in the header bar.
 
 ## Five Rendering Paths
 
@@ -25,11 +25,11 @@ When Binaural is selected, the rightmost dropdown in the header bar becomes the 
 | Profile | Source | Character |
 |---|---|---|
 | Simple (Low CPU) | Woodworth model | Lightweight ITD+ILD only -- no convolution. Good for low-latency monitoring or when CPU is limited. Less spatial realism. |
-| Studio Reference | MIT KEMAR | Industry-standard dummy head measurement. Neutral, accurate localization. Good starting point. |
 | Immersive | SADIE II D2 (KU100) | Neumann KU100 dummy head. Rich low end, wide spatial image. Excellent for music production. |
 | Natural | CIPIC Subject003 | Human subject measurement. Organic, realistic externalization. Good for dialogue and field recordings. |
 | Precise | HUTUBS PP2 | High-resolution measurement. Tight localization, analytical character. Useful for spatial design work. |
 | Spatial | Bernschuetz KU100 | Full 2-degree resolution KU100. Smooth, even coverage. Great all-rounder for spatial mixing. |
+| Studio Reference | MIT KEMAR | Industry-standard dummy head measurement. Neutral, accurate localization. Good starting point. |
 
 > **Tip:** HRTF perception is highly individual. Try each profile and choose the one where you can most clearly locate sounds in space. The "right" profile depends on your head and ear shape.
 
@@ -66,6 +66,7 @@ Surround formats output discrete speaker signals. The plugin computes per-speake
 | 5.1 Surround | 6 | Yes | No | Standard film/broadcast surround |
 | 7.0 Surround | 7 | No | No | Extended surround without LFE |
 | 7.1 Surround | 8 | Yes | No | Standard high-channel surround |
+| 9.1 Surround | 10 | Yes | No | ITU-R BS.2051 System H -- 9 ear-level speakers + LFE |
 | Octaphonic | 8 | No | No | 8 equidistant speakers (ring), art/research |
 | 5.1.2 Atmos | 8 | Yes | Yes | Entry-level Atmos with 2 height speakers |
 | 5.1.4 Atmos | 10 | Yes | Yes | Atmos with 4 height speakers |
@@ -82,14 +83,15 @@ When a surround format is selected, the Algorithm dropdown becomes active. Choos
 
 | Algorithm | Full Name | Description | Best For |
 |---|---|---|---|
-| VBAP | Vector Base Amplitude Panning | Selects the nearest speaker triangle and distributes gain across up to 3 speakers. Sharp, focused image. | Standard surround, precise placement |
+| Constant Power | Constant Power Panning | Cosine-distance weighting to all speakers within 90 degrees. Smooth, natural rolloff with wide image. Default for surround. | Most surround work, smooth panning |
+| VBAP | Vector Base Amplitude Panning | Selects the nearest speaker triangle and distributes gain across up to 3 speakers. Sharp, focused image. | Precise placement, point sources |
 | VBIP | Vector Base Intensity Panning | Like VBAP but with squared gains for even tighter localization. | Precision work, forensic audio |
 | MDAP | Multiple Direction Amplitude Panning | Spreads the source across multiple VBAP directions for a wider image. | Ambient sources, wide pads |
 | KNN | K-Nearest Neighbor | Inverse-distance weighting to the nearest speakers. Smooth, diffuse. | Gentle panning, ambient textures |
 | DBAP | Distance-Based Amplitude Panning | Pure distance-based gain (no direction). Works with any speaker layout including irregular ones. | Non-standard layouts, installations |
 | Ambisonics | Ambisonics Decode | Encodes to spherical harmonics then decodes to speakers. Even coverage, layout-independent. | When format-agnostic rendering is needed |
 
-> **Tip:** For most surround work, start with VBAP. If sources sound too pinpointed, try MDAP or KNN for a wider spread. DBAP is the go-to choice for non-standard or irregular speaker arrays.
+> **Tip:** For most surround work, start with Constant Power (the default). For sharper localization, try VBAP or VBIP. For wider spread, try MDAP or KNN. DBAP is the go-to choice for non-standard or irregular speaker arrays.
 
 ## Ambisonics (Spherical Harmonic Output)
 

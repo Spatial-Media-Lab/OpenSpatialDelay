@@ -2,56 +2,13 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include "../Source/PluginProcessor.h"
 #include "../Source/PhaseVocoderPitchShifter.h"
+#include "TestUtilities.h"
 #include <cmath>
 #include <vector>
 #include <numeric>
 
 using Proc = OpenSpatialDelayProcessor;
 using Catch::Matchers::WithinAbs;
-
-static constexpr float kPi = juce::MathConstants<float>::pi;
-static constexpr double kSampleRate = 48000.0;
-static constexpr int kBlockSize = 256;
-
-// ============================================================================
-// Section 1: Glitch Detection Utilities
-// ============================================================================
-
-// Detect clicks/pops in an audio buffer using first-derivative threshold.
-// Returns the sample indices where |sample[n] - sample[n-1]| exceeds threshold.
-// For a 440 Hz sine at 48 kHz, the max natural derivative ≈ 0.058 (at zero crossing).
-// A threshold of 0.15 catches any non-natural discontinuity while avoiding false positives.
-static std::vector<int> detectGlitches (const float* buffer, int numSamples, float threshold = 0.15f)
-{
-    std::vector<int> glitchIndices;
-    for (int i = 1; i < numSamples; ++i)
-    {
-        float diff = std::abs (buffer[i] - buffer[i - 1]);
-        if (diff > threshold)
-            glitchIndices.push_back (i);
-    }
-    return glitchIndices;
-}
-
-// Compute RMS of a buffer
-static float computeRMS (const float* buffer, int numSamples)
-{
-    float sumSq = 0.0f;
-    for (int i = 0; i < numSamples; ++i)
-        sumSq += buffer[i] * buffer[i];
-    return std::sqrt (sumSq / static_cast<float> (numSamples));
-}
-
-// Generate a sine wave into a buffer
-static void fillSine (float* buffer, int numSamples, float freq, float sampleRate,
-                      float amplitude, int startSample)
-{
-    for (int i = 0; i < numSamples; ++i)
-    {
-        float phase = 2.0f * kPi * freq * static_cast<float> (startSample + i) / sampleRate;
-        buffer[i] = amplitude * std::sin (phase);
-    }
-}
 
 // Create a simple lowpass IR (sinc-based) for testing
 static std::vector<float> createLowpassIR (int length, float cutoffNorm)
@@ -84,6 +41,25 @@ static void setParam (Proc& proc, const juce::String& paramId, float value)
 {
     if (auto* p = proc.apvts.getParameter (paramId))
         p->setValueNotifyingHost (p->convertTo0to1 (value));
+}
+
+// ============================================================================
+// Section 1b: SharedFFTCache Unit Tests (issue #131)
+// ============================================================================
+
+TEST_CASE ("SharedFFTCache — returns same instance for same order", "[fft][issue131]")
+{
+    auto& cache = getSharedFFTCache();
+    auto fft1 = cache.getOrCreate (11);
+    auto fft2 = cache.getOrCreate (11);
+    REQUIRE (fft1.get() == fft2.get());
+
+    auto fft3 = cache.getOrCreate (10);
+    REQUIRE (fft3.get() != fft1.get());
+
+    // Different order also cached
+    auto fft4 = cache.getOrCreate (10);
+    REQUIRE (fft4.get() == fft3.get());
 }
 
 // ============================================================================
@@ -3181,4 +3157,497 @@ TEST_CASE ("MS Encode — L/R symmetry for mirrored azimuths", "[issue76][msenco
     // L channel at +60° ≈ R channel at -60° and vice versa
     CHECK_THAT (posL, WithinAbs (static_cast<double> (negR), 0.01));
     CHECK_THAT (posR, WithinAbs (static_cast<double> (negL), 0.01));
+}
+
+// ============================================================================
+// Issue #90: HRTF profile switching must not cause clipping or volume swell
+// ============================================================================
+
+// Helper: compute peak absolute value of interleaved L/R buffers
+static float peakAbs (const std::vector<float>& L, const std::vector<float>& R)
+{
+    float peak = 0.0f;
+    for (size_t i = 0; i < L.size(); ++i)
+        peak = std::max (peak, std::max (std::abs (L[i]), std::abs (R[i])));
+    return peak;
+}
+
+TEST_CASE ("Binaural HRTF — no volume swell on profile switch (issue #90)", "[binaural][glitch][profile]")
+{
+    auto proc = createBinauralProcessor (1);  // MIT KEMAR
+
+    // Disable extras and feedback to isolate HRTF transition
+    setParam (*proc, "object1_dopplerAmount", 0.0f);
+    setParam (*proc, "object1_pitchShift", 0.0f);
+    setParam (*proc, "airAbsorption", 0.0f);
+    setParam (*proc, "filterEnabled", 0.0f);
+    setParam (*proc, "feedback", 0.0f);
+
+    // Stabilize — fill delay line, let HRTF convolvers settle
+    processBlocksCapturingAll (*proc, 100);
+
+    // Measure Profile 1 steady-state peak
+    auto [ss1L, ss1R] = processBlocksCapturingAll (*proc, 20);
+    float p1Peak = peakAbs (ss1L, ss1R);
+    REQUIRE (p1Peak > 0.001f);  // Sanity: signal is audible
+
+    // Switch to Profile 1 (SADIE KU100 — Immersive)
+    proc->testLoadHRTFProfile (1);
+
+    // Capture transition window (10 blocks ≈ 53ms, covers the 4-block crossfade)
+    auto [txL, txR] = processBlocksCapturingAll (*proc, 10);
+    float txPeak = peakAbs (txL, txR);
+
+    // Let Profile 2 stabilize, then measure its steady state
+    processBlocksCapturingAll (*proc, 100);
+    auto [ss2L, ss2R] = processBlocksCapturingAll (*proc, 20);
+    float p2Peak = peakAbs (ss2L, ss2R);
+
+    // Transition peak must not exceed the HIGHER of the two profiles' levels
+    // by more than +1 dB (1.122x). A swell would exceed this.
+    float maxSS = std::max (p1Peak, p2Peak);
+
+    INFO ("Profile 1 SS peak: " << p1Peak << ", Profile 2 SS peak: " << p2Peak
+          << ", transition peak: " << txPeak);
+
+    CHECK (txPeak <= maxSS * 1.122f);
+}
+
+TEST_CASE ("Binaural HRTF — repeated profile cycling no volume swell (issue #90)", "[binaural][glitch][profile]")
+{
+    auto proc = createBinauralProcessor (1);  // MIT KEMAR
+
+    setParam (*proc, "object1_dopplerAmount", 0.0f);
+    setParam (*proc, "object1_pitchShift", 0.0f);
+    setParam (*proc, "airAbsorption", 0.0f);
+    setParam (*proc, "filterEnabled", 0.0f);
+    setParam (*proc, "feedback", 0.0f);
+
+    // Full stabilization
+    processBlocksCapturingAll (*proc, 100);
+
+    // Measure current profile's steady state before cycling
+    auto [initL, initR] = processBlocksCapturingAll (*proc, 20);
+    float prevSS = peakAbs (initL, initR);
+
+    // Cycle through profiles — the bug manifests on renderer reuse
+    int profiles[] = { 2, 3, 1, 2, 1, 3 };
+    for (int p : profiles)
+    {
+        proc->testLoadHRTFProfile (p);
+
+        // Capture transition window
+        auto [txL, txR] = processBlocksCapturingAll (*proc, 10);
+        float txPeak = peakAbs (txL, txR);
+
+        // Let new profile stabilize, then measure its steady state
+        processBlocksCapturingAll (*proc, 100);
+        auto [ssL, ssR] = processBlocksCapturingAll (*proc, 20);
+        float ssPeak = peakAbs (ssL, ssR);
+
+        // During crossfade, both old and new renderer contribute. The peak
+        // must not exceed the HIGHER of the two profiles' levels by > +1 dB.
+        float maxSS = std::max (prevSS, ssPeak);
+
+        INFO ("Profile " << p << ": prevSS=" << prevSS << ", newSS=" << ssPeak
+              << ", maxSS=" << maxSS << ", transition peak=" << txPeak);
+
+        CHECK (txPeak <= maxSS * 1.122f);
+
+        prevSS = ssPeak;
+    }
+}
+
+// ============================================================================
+// Section: Onset-Detection ITD Alignment Tests (issue #89, Phase 1)
+// ============================================================================
+
+TEST_CASE ("detectOnset — unit: finds onset at correct position", "[issue89][onset][unit]")
+{
+    // Synthetic IR: silence for 5 samples, then a peak
+    std::vector<float> ir (64, 0.0f);
+    ir[5] = 0.8f;
+    ir[6] = 1.0f;
+    ir[7] = 0.5f;
+
+    int onset = HRTFDatabase::detectOnset (ir.data(), static_cast<int> (ir.size()), 0.1f);
+    // 10% of peak (1.0) = 0.1; first sample >= 0.1 is ir[5] = 0.8
+    CHECK (onset == 5);
+}
+
+TEST_CASE ("detectOnset — unit: returns 0 for silent IR", "[issue89][onset][unit]")
+{
+    std::vector<float> ir (64, 0.0f);
+    int onset = HRTFDatabase::detectOnset (ir.data(), static_cast<int> (ir.size()), 0.1f);
+    CHECK (onset == 0);
+}
+
+TEST_CASE ("detectOnset — unit: clamps onset past halfway", "[issue89][onset][unit]")
+{
+    // Peak is past halfway — no clear leading edge
+    std::vector<float> ir (64, 0.0f);
+    ir[40] = 1.0f;
+    int onset = HRTFDatabase::detectOnset (ir.data(), static_cast<int> (ir.size()), 0.1f);
+    CHECK (onset == 0);
+}
+
+TEST_CASE ("detectOnset — unit: immediate onset returns 0", "[issue89][onset][unit]")
+{
+    // Energy starts at sample 0
+    std::vector<float> ir (64, 0.0f);
+    ir[0] = 1.0f;
+    ir[1] = 0.5f;
+    int onset = HRTFDatabase::detectOnset (ir.data(), static_cast<int> (ir.size()), 0.1f);
+    CHECK (onset == 0);
+}
+
+TEST_CASE ("ITD onset detection — MIT KEMAR returns non-zero delays at az=90deg", "[issue89][onset][integration]")
+{
+    auto proc = createBinauralProcessor (5);  // MIT KEMAR (Studio Reference)
+
+    // Stabilize
+    processBlocksCapturingAll (*proc, 60);
+
+    // Set source hard left (az=90deg) — should produce maximum ITD
+    setParam (*proc, "object1_azimuth", 90.0f);
+
+    // Process several blocks to let ITD converge
+    for (int i = 0; i < 10; ++i)
+    {
+        juce::MidiBuffer midi;
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+    }
+
+    auto& renderer = proc->getActiveRenderer();
+    float tgtL = renderer.getTargetITDL (0);
+    float tgtR = renderer.getTargetITDR (0);
+
+    INFO ("MIT KEMAR at az=90deg: targetITD_L=" << tgtL << " targetITD_R=" << tgtR);
+
+    // With onset detection, at least one channel should have non-zero ITD.
+    // Before this fix, both were always 0 for KEMAR.
+    float maxITD = std::max (std::abs (tgtL), std::abs (tgtR));
+    CHECK (maxITD > 0.1f);  // At least ~2 microseconds of ITD at 48kHz
+}
+
+TEST_CASE ("ITD onset detection — SADIE bypasses fallback (non-zero SOFA delays)", "[issue89][onset][integration]")
+{
+    auto proc = createBinauralProcessor (1);  // SADIE II KU100 (Immersive)
+
+    // Stabilize
+    processBlocksCapturingAll (*proc, 60);
+
+    // Set source hard left
+    setParam (*proc, "object1_azimuth", 90.0f);
+
+    for (int i = 0; i < 10; ++i)
+    {
+        juce::MidiBuffer midi;
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+    }
+
+    auto& renderer = proc->getActiveRenderer();
+    float tgtL = renderer.getTargetITDL (0);
+    float tgtR = renderer.getTargetITDR (0);
+
+    INFO ("SADIE KU100 at az=90deg: targetITD_L=" << tgtL << " targetITD_R=" << tgtR);
+
+    // SADIE already has non-zero SOFA delays, so ITD should be valid
+    float maxITD = std::max (std::abs (tgtL), std::abs (tgtR));
+    CHECK (maxITD > 0.1f);
+}
+
+TEST_CASE ("ITD onset detection — symmetric positions produce symmetric delays", "[issue89][onset][integration]")
+{
+    auto proc = createBinauralProcessor (5);  // MIT KEMAR (Studio Reference)
+
+    // Stabilize
+    processBlocksCapturingAll (*proc, 60);
+
+    // Process at az=+90 (hard left)
+    setParam (*proc, "object1_azimuth", 90.0f);
+    for (int i = 0; i < 10; ++i)
+    {
+        juce::MidiBuffer midi;
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+    }
+
+    auto& renderer = proc->getActiveRenderer();
+    float leftL = renderer.getTargetITDL (0);
+    float leftR = renderer.getTargetITDR (0);
+
+    // Process at az=-90 (hard right)
+    setParam (*proc, "object1_azimuth", -90.0f);
+    for (int i = 0; i < 10; ++i)
+    {
+        juce::MidiBuffer midi;
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            buffer.setSample (0, s, 0.5f);
+            buffer.setSample (1, s, 0.5f);
+        }
+        proc->processBlock (buffer, midi);
+    }
+
+    float rightL = renderer.getTargetITDL (0);
+    float rightR = renderer.getTargetITDR (0);
+
+    INFO ("Left: ITD_L=" << leftL << " ITD_R=" << leftR);
+    INFO ("Right: ITD_L=" << rightL << " ITD_R=" << rightR);
+
+    // At symmetric positions, L/R delays should roughly swap:
+    // at az=+90, ipsilateral ear (L) should have less delay than contralateral (R)
+    // at az=-90, it should be the reverse
+    // Allow tolerance since SOFA grids aren't perfectly symmetric
+    CHECK (std::abs (leftL - rightR) < 3.0f);
+    CHECK (std::abs (leftR - rightL) < 3.0f);
+}
+
+// ============================================================================
+// Section: Great-Circle Distance Threshold Tests (issue #89, Phase 2)
+// ============================================================================
+
+TEST_CASE ("Great-circle threshold — polar azimuth sweep is stable", "[issue89][greatcircle][integration]")
+{
+    // At elevation ~89°, azimuth changes should produce near-zero angular distance
+    // and NOT trigger constant HRIR updates. Before the fix, independent azimuth/elevation
+    // comparison treated every 1° azimuth change as significant even near the pole.
+    auto proc = createBinauralProcessor (1);  // MIT KEMAR
+
+    // Stabilize
+    processBlocksCapturingAll (*proc, 60);
+
+    // Set elevation near pole
+    setParam (*proc, "object1_elevation", 85.0f);
+
+    // Process a few blocks at initial azimuth to establish cached position
+    setParam (*proc, "object1_azimuth", 0.0f);
+    for (int i = 0; i < 5; ++i)
+    {
+        juce::MidiBuffer midi;
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+            buffer.setSample (0, s, 0.5f);
+        proc->processBlock (buffer, midi);
+    }
+
+    // Now sweep azimuth and check that output is stable (no glitches from
+    // constant HRIR switching). At 85° elevation, a 10° azimuth change is
+    // only ~0.87° of actual angular movement — below the 1° threshold.
+    std::vector<float> peakDiffs;
+    float prevSampleL = 0.0f;
+
+    for (int step = 0; step < 18; ++step)
+    {
+        float az = 10.0f * static_cast<float> (step);
+        setParam (*proc, "object1_azimuth", az);
+
+        juce::MidiBuffer midi;
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+            buffer.setSample (0, s, 0.5f);
+        proc->processBlock (buffer, midi);
+
+        // Check for large sample-to-sample jumps at block boundary
+        float firstSampleL = buffer.getSample (0, 0);
+        float diff = std::abs (firstSampleL - prevSampleL);
+        peakDiffs.push_back (diff);
+        prevSampleL = buffer.getSample (0, kBlockSize - 1);
+    }
+
+    // Count how many block boundaries had large discontinuities
+    int largeJumps = 0;
+    for (float d : peakDiffs)
+        if (d > 0.2f) ++largeJumps;
+
+    INFO ("Large jumps at polar azimuth sweep: " << largeJumps << " / " << peakDiffs.size());
+    // With great-circle threshold, most azimuth changes at 85° elevation should
+    // NOT trigger HRIR updates, so we expect very few discontinuities
+    CHECK (largeJumps <= 3);
+}
+
+TEST_CASE ("Great-circle threshold — equatorial sweep unchanged", "[issue89][greatcircle][integration]")
+{
+    // At elevation 0° (equator), behavior should be identical to the old threshold.
+    // Great-circle distance equals azimuth difference at the equator.
+    auto proc = createBinauralProcessor (1);  // MIT KEMAR
+
+    // Stabilize
+    processBlocksCapturingAll (*proc, 60);
+
+    setParam (*proc, "object1_elevation", 0.0f);
+
+    // Sweep azimuth in 2° steps (above the 1° threshold) — should trigger updates
+    int updateCount = 0;
+    float prevITDL = -999.0f;
+
+    for (int step = 0; step < 36; ++step)
+    {
+        float az = 2.0f * static_cast<float> (step);
+        setParam (*proc, "object1_azimuth", az);
+
+        juce::MidiBuffer midi;
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+        for (int s = 0; s < kBlockSize; ++s)
+            buffer.setSample (0, s, 0.5f);
+        proc->processBlock (buffer, midi);
+
+        float tgtL = proc->getActiveRenderer().getTargetITDL (0);
+        if (std::abs (tgtL - prevITDL) > 0.01f)
+            ++updateCount;
+        prevITDL = tgtL;
+    }
+
+    INFO ("HRIR updates during equatorial 2-degree sweep: " << updateCount);
+    // At equator with 2° steps, great-circle ≈ azimuth difference, so updates should fire
+    CHECK (updateCount >= 10);
+}
+
+// ============================================================================
+// Section: LF Bypass Tests (issue #89, Phase 3)
+// ============================================================================
+
+TEST_CASE ("LF shelf — 100 Hz improved through MIT KEMAR convolution", "[issue89][lfshelf][integration]")
+{
+    // MIT KEMAR has a 24 dB bass deficit at 50 Hz (measurement limitation).
+    // A +12 dB low-shelf at 200 Hz boosts the convolved output's LF content.
+    auto proc = createBinauralProcessor (1);  // MIT KEMAR (Studio Reference)
+
+    // Stabilize
+    processBlocksCapturingAll (*proc, 60);
+
+    // Set source to front (az=0, el=0) for cleanest measurement
+    setParam (*proc, "object1_azimuth", 0.0f);
+    setParam (*proc, "object1_elevation", 0.0f);
+    setParam (*proc, "dryWet", 1.0f);
+
+    // Generate 100 Hz sine and process through the plugin
+    constexpr float freq = 100.0f;
+    constexpr int numBlocks = 20;  // ~107ms — enough for filter to settle
+    float inputRMS = 0.0f;
+    float outputRMS = 0.0f;
+    int totalSamples = 0;
+
+    for (int b = 0; b < numBlocks; ++b)
+    {
+        juce::MidiBuffer midi;
+        juce::AudioBuffer<float> buffer (2, kBlockSize);
+        buffer.clear();
+
+        for (int s = 0; s < kBlockSize; ++s)
+        {
+            float phase = static_cast<float> (b * kBlockSize + s) / static_cast<float> (kSampleRate);
+            float sample = 0.5f * std::sin (juce::MathConstants<float>::twoPi * freq * phase);
+            buffer.setSample (0, s, sample);
+            buffer.setSample (1, s, sample);
+        }
+
+        // Measure input RMS (last few blocks only, after settling)
+        if (b >= numBlocks - 5)
+        {
+            for (int s = 0; s < kBlockSize; ++s)
+                inputRMS += buffer.getSample (0, s) * buffer.getSample (0, s);
+        }
+
+        proc->processBlock (buffer, midi);
+
+        // Measure output RMS (last few blocks only)
+        if (b >= numBlocks - 5)
+        {
+            for (int s = 0; s < kBlockSize; ++s)
+            {
+                float outL = buffer.getSample (0, s);
+                float outR = buffer.getSample (1, s);
+                outputRMS += (outL * outL + outR * outR) * 0.5f;
+            }
+            totalSamples += kBlockSize;
+        }
+    }
+
+    inputRMS = std::sqrt (inputRMS / static_cast<float> (totalSamples));
+    outputRMS = std::sqrt (outputRMS / static_cast<float> (totalSamples));
+
+    float dB = 20.0f * std::log10 (outputRMS / std::max (inputRMS, 1e-10f));
+    INFO ("100 Hz through MIT KEMAR: input RMS=" << inputRMS << " output RMS=" << outputRMS << " dB=" << dB);
+
+    // With +12 dB low-shelf, 100 Hz should be significantly boosted.
+    // Without shelf: ~-20 dB. With shelf: should be within ~10 dB of input.
+    CHECK (dB > -12.0f);
+}
+
+TEST_CASE ("LF shelf — SADIE and Spatial unaffected (shelf inactive)", "[issue89][lfshelf][integration]")
+{
+    // SADIE (profile 2) and Spatial (profile 5) should NOT have LF shelf active.
+    // Verify by checking that the renderer reports lfBypassActive = false.
+    // We test this indirectly: process a 100 Hz sine through both and verify
+    // the output characteristics match what we'd expect from full HRTF convolution.
+
+    for (int profile : { 2, 5 })
+    {
+        auto proc = createBinauralProcessor (profile);
+        processBlocksCapturingAll (*proc, 60);
+
+        setParam (*proc, "object1_azimuth", 0.0f);
+        setParam (*proc, "object1_elevation", 0.0f);
+
+        // Process a few blocks of 100 Hz sine
+        float outputRMS = 0.0f;
+        constexpr int numBlocks = 20;
+
+        for (int b = 0; b < numBlocks; ++b)
+        {
+            juce::MidiBuffer midi;
+            juce::AudioBuffer<float> buffer (2, kBlockSize);
+            buffer.clear();
+            for (int s = 0; s < kBlockSize; ++s)
+            {
+                float phase = static_cast<float> (b * kBlockSize + s) / static_cast<float> (kSampleRate);
+                float sample = 0.5f * std::sin (juce::MathConstants<float>::twoPi * 100.0f * phase);
+                buffer.setSample (0, s, sample);
+                buffer.setSample (1, s, sample);
+            }
+            proc->processBlock (buffer, midi);
+
+            if (b >= numBlocks - 5)
+            {
+                for (int s = 0; s < kBlockSize; ++s)
+                {
+                    float outL = buffer.getSample (0, s);
+                    outputRMS += outL * outL;
+                }
+            }
+        }
+
+        outputRMS = std::sqrt (outputRMS / (5.0f * kBlockSize));
+        INFO ("Profile " << profile << " — 100 Hz output RMS=" << outputRMS);
+        // These profiles have long enough IRs to represent 100 Hz naturally,
+        // so output should be non-trivial even without LF bypass
+        CHECK (outputRMS > 0.001f);
+    }
 }
