@@ -87,7 +87,7 @@ A spatial delay plugin where each repeat occurs at a different, definable positi
 The codebase is organized into a shared core library and per-plugin modules:
 
 ```
-SpatialMediaLibrary/
+SpatialMediaLab/
 |-- Core/                          # Shared spatial engine (used by ALL plugins)
 |   |-- SpatialEngine/
 |   |   |-- SpatializationAlgorithm.h      # Abstract base class
@@ -151,7 +151,7 @@ SpatialMediaLibrary/
 1. **Lock-free audio processing:** The `processBlock` callback must never allocate memory, acquire locks, or perform I/O. All parameter changes use `std::atomic` or lock-free FIFOs.
 2. **SIMD optimization:** Use JUCE's `FloatVectorOperations` (which maps to ARM NEON on Apple Silicon and SSE/AVX on x64) for all bulk channel operations — gain scaling, buffer copying, accumulation.
 3. **Algorithm abstraction:** All spatialization algorithms inherit from `SpatializationAlgorithm` and implement a common interface (`computeGains(SourcePosition, SpeakerLayout) -> float[]`), enabling runtime algorithm switching without architectural changes.
-4. **Shared core, independent plugins:** Each plugin in the suite links against the same `SpatialMediaLibrary_Core` static library. Plugin-specific DSP lives in the plugin module only.
+4. **Shared core, independent plugins:** Each plugin in the suite links against the same `SpatialMediaLab_Core` static library. Plugin-specific DSP lives in the plugin module only.
 
 ### 3.4 I/O Architecture
 
@@ -931,7 +931,7 @@ Jobs:
 
 ## 13. Plugin Suite Roadmap
 
-All plugins share the `SpatialMediaLibrary/Core` engine and UI components.
+All plugins share the `SpatialMediaLab/Core` engine and UI components.
 
 | Plugin | Description | Target |
 |--------|-------------|--------|
