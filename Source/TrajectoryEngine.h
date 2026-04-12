@@ -4,6 +4,22 @@
 #include <atomic>
 #include <cmath>
 
+/** Wrap azimuth into [-180, 180] range. */
+inline float wrapAzimuth (float az)
+{
+    while (az > 180.0f)  az -= 360.0f;
+    while (az < -180.0f) az += 360.0f;
+    return az;
+}
+
+/** Unwrap an azimuth delta to shortest-path rotation (single wrap). */
+inline float unwrapAzimuthDelta (float delta)
+{
+    if (delta > 180.0f)  delta -= 360.0f;
+    if (delta < -180.0f) delta += 360.0f;
+    return delta;
+}
+
 //==============================================================================
 // Trajectory Animation Engine — Per-Object Spatial Movement
 // Extracted from PluginProcessor for independent testability and reuse.

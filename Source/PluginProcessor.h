@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include <array>
 #include <vector>
+#include "SharedFFTCache.h"
 #include "PresetData.h"
 #include "PhaseVocoderPitchShifter.h"
 #include "DopplerVelocity.h"
@@ -260,6 +261,17 @@ public:
     juce::String getName() const override { return "MDAP"; }
 };
 
+/** Constant Power Panning — cosine-distance all-speaker weighting.
+    Activates all speakers within 90 degrees of the source with natural
+    cosine rolloff, constant-power normalized. Smooth, wide image. */
+class ConstantPowerAlgorithm : public SpatializationAlgorithm
+{
+public:
+    void computeGains (const SourcePosition& source, const LayoutContext& ctx,
+                       float* outputGains, int numSpeakers) const override;
+    juce::String getName() const override { return "Constant Power"; }
+};
+
 // #############################################################################
 // SPATIAL MEDIA LIBRARY — HRTF & binaural rendering infrastructure
 // HRTFDatabase, PartitionedConvolver, and BinauralRenderer are reusable
@@ -307,6 +319,22 @@ public:
         without comb filtering (issue #47). workBuf must be >= fftSize * 2 floats. */
     static void convertToMinPhase (float* ir, int irLength, int fftOrder, float* workBuf);
 
+    /** Detect onset sample index of an IR using threshold of peak amplitude.
+        Returns the index of the first sample exceeding thresholdFraction * peakAbs.
+        Used to compute ITD when SOFA delay values are zero (ITD baked into waveform).
+        Returns 0 if no clear onset found or if onset > irLength/2. */
+    static int detectOnset (const float* ir, int length, float thresholdFraction = 0.1f);
+
+    /** Apply low-frequency correction to an HRIR in-place (Xie 2009 method).
+        Below lfCutoffHz: magnitude is set to the mean of the lfCutoffHz-to-hfCutoffHz
+        range, and phase is linearly extrapolated from that range. This restores
+        physically plausible bass response for datasets with weak LF content (e.g.,
+        MIT KEMAR). workBuf must be >= fftSize * 2 floats. */
+    static void correctLowFrequency (float* ir, int irLength, int fftOrder,
+                                      float sampleRate, float* workBuf,
+                                      float lfCutoffHz = 100.0f,
+                                      float hfCutoffHz = 300.0f);
+
 private:
     MYSOFA_EASY* easyHandle = nullptr;
     int irLength = 0;
@@ -346,7 +374,7 @@ public:
     bool isPrepared() const { return fftSize > 0; }
 
 private:
-    juce::dsp::FFT fft { 1 };      // Will be re-initialized in prepare()
+    std::shared_ptr<juce::dsp::FFT> fft;  // Shared via process-global FFT cache (issue #131)
     int fftOrder = 1;
     int fftSize = 0;                 // 2^fftOrder
     int irLen = 0;
@@ -410,18 +438,21 @@ public:
 
     BinauralRenderer() = default;
 
+    /** Per-renderer HRTF database (issue #96: eliminates shared-state race
+        between timer thread loading and audio thread HRIR lookups). */
+    HRTFDatabase hrtfDatabase;
+
     /** Prepare all convolvers for the given sample rate and block size. */
     void prepare (double sampleRate, int maxBlockSize);
 
     /** Load a new HRTF profile. Computes normGain and prepares source convolvers.
         v0.3: No longer sets up virtual speaker or SH convolvers. */
-    void setProfile (int profileIndex, HRTFDatabase& hrtfDb);
+    void setProfile (int profileIndex);
 
     /** Update a single source's HRIR based on its current 3D position.
         Realtime-safe: KD-tree lookup + in-place FFT, no allocation.
         Called from processBlock at block boundaries when position changes. */
-    void updateSourceHRIR (int sourceIndex, float azRad, float elRad,
-                           HRTFDatabase& db);
+    void updateSourceHRIR (int sourceIndex, float azRad, float elRad);
 
     /** Render per-source accumulation buffers through HRTF convolvers.
         sourceBufs: [numSources][numSamples], outL/outR: [numSamples]
@@ -491,6 +522,82 @@ private:
     int itdWritePos[MAX_SOURCES] = {};
     bool itdActive = false;  // true when using aligned HRIRs (non-Simple profiles)
 
+    // v1.0.11 (issue #89, Phase 3): Low-shelf bass compensation for bass-deficient HRTFs.
+    // MIT KEMAR has a 24 dB deficit at 50 Hz (measurement limitation). A low-shelf
+    // filter boosts the convolver output below 200 Hz to compensate. Applied post-
+    // convolution (on the output), not per-HRIR, so it doesn't interfere with
+    // the dual-slot crossfade. Bass remains spatialized since it amplifies whatever
+    // LF content the HRTF did capture at each direction.
+    bool lfShelfActive = false;
+    // Per-source IIR state for 2nd-order low-shelf (biquad)
+    float lfShelfStateL[MAX_SOURCES][2] = {};  // z^-1, z^-2 for left channel
+    float lfShelfStateR[MAX_SOURCES][2] = {};  // z^-1, z^-2 for right channel
+    float lfShelfB[3] = {};  // feedforward coefficients
+    float lfShelfA[3] = {};  // feedback coefficients (a[0] = 1.0)
+
+};
+
+// #############################################################################
+// Issue E15b/182: Plugin-internal undo manager (FabFilter-style)
+// Captures full APVTS + config state at every gesture boundary.
+// Works for ALL params (including non-automatable), ALL formats, ALL DAWs.
+// #############################################################################
+class PluginUndoManager
+{
+public:
+    static constexpr int kMaxSteps = 50;
+
+    void captureState (juce::AudioProcessorValueTreeState& apvts,
+                       std::atomic<int>& configAlgorithm,
+                       std::atomic<int>& configHrtfProfile,
+                       std::atomic<int>& configOutputFormat,
+                       std::atomic<int>& configInputFormat,
+                       int presetIndex,
+                       const juce::String& transactionName = {})
+    {
+        auto state = apvts.copyState();
+        state.setProperty ("_configAlgorithm",    configAlgorithm.load(),    nullptr);
+        state.setProperty ("_configHrtfProfile",  configHrtfProfile.load(),  nullptr);
+        state.setProperty ("_configOutputFormat", configOutputFormat.load(), nullptr);
+        state.setProperty ("_configInputFormat",  configInputFormat.load(),  nullptr);
+        state.setProperty ("_presetIndex",        presetIndex,              nullptr);
+        state.setProperty ("_transactionName",    transactionName,           nullptr);
+
+        // Trim any redo history beyond the current position
+        while ((int) history.size() > currentIndex + 1)
+            history.pop_back();
+
+        history.push_back (state);
+
+        // Enforce max history size
+        if ((int) history.size() > kMaxSteps)
+            history.erase (history.begin());
+        else
+            currentIndex++;
+    }
+
+    bool canUndo() const { return currentIndex > 0; }
+    bool canRedo() const { return currentIndex < (int) history.size() - 1; }
+
+    juce::ValueTree undo()
+    {
+        if (! canUndo()) return {};
+        currentIndex--;
+        return history[(size_t) currentIndex].createCopy();
+    }
+
+    juce::ValueTree redo()
+    {
+        if (! canRedo()) return {};
+        currentIndex++;
+        return history[(size_t) currentIndex].createCopy();
+    }
+
+    void clear() { history.clear(); currentIndex = -1; }
+
+private:
+    std::vector<juce::ValueTree> history;
+    int currentIndex = -1;
 };
 
 // #############################################################################
@@ -525,7 +632,7 @@ public:
     }
 
     // Output formats — Binaural, Stereo, Surround, Octaphonic, Atmos, SML, Ambisonics
-    // 1 Binaural + 1 Stereo + 14 Surround + 6 Ambisonics = 22 total
+    // 1 Binaural + 1 Stereo + 15 Surround + 6 Ambisonics = 23 total
     // Stereo mode (Equal Power, VBAP, XY, MS, Blumlein) selected via algorithm parameter
     enum class OutputFormat {
         // Binaural (HRTF head model) — default
@@ -534,6 +641,8 @@ public:
         Stereo,
         // Surround (ascending channel count)
         Quad, Surround5_0, Surround5_1, Surround7_0, Surround7_1,
+        // 9.1 Surround (ITU-R BS.2051 System H — ear level only, no height)
+        Surround9_1,
         // Octaphonic
         Octaphonic,
         // Atmos / Immersive (ascending channel count)
@@ -559,7 +668,7 @@ public:
         int  ambiOrder;             // 0 for non-ambi, 1-6 for Ambisonics output
         bool isStereoVariant;       // true for Stereo (single entry, mode via algorithm param)
     };
-    static constexpr int NUM_OUTPUT_FORMATS = 22;
+    static constexpr int NUM_OUTPUT_FORMATS = 23;
     static const std::array<OutputFormatInfo, NUM_OUTPUT_FORMATS> outputFormatRegistry;
 
     // Double-buffered layout state for lock-free audio thread reads
@@ -584,6 +693,7 @@ public:
 
     //--------------------------------------------------------------------------
     OpenSpatialDelayProcessor();
+    explicit OpenSpatialDelayProcessor (bool abletonMode);  // for testing (issue #189)
     ~OpenSpatialDelayProcessor() override;
 
     //--------------------------------------------------------------------------
@@ -632,7 +742,9 @@ public:
                ? oscOverrideActive[objectIndex].load (std::memory_order_relaxed) : false;
     }
 
-    // v0.6: OSC port configuration (editable from editor)
+    // v0.6: OSC receive configuration (editable from editor)
+    bool getOscReceiveEnabled() const { return oscReceiveEnabled; }
+    void setOscReceiveEnabled (bool enabled);
     int getOscReceivePort() const { return oscReceivePort; }
     void setOscReceivePort (int port);
 
@@ -647,10 +759,46 @@ public:
 
     // Issue #68: Config params stored outside APVTS to hide from DAW automation lists.
     // Saved/restored in getStateInformation/setStateInformation.
-    std::atomic<int> configAlgorithm { 0 };
+    std::atomic<int> configAlgorithm { 1 };  // Constant Power (default for surround)
     std::atomic<int> configHrtfProfile { 0 };
     std::atomic<int> configOutputFormat { 0 };
-    std::atomic<int> configInputFormat { 0 };
+    std::atomic<int> configInputFormat { 1 };  // Issue #155: default Stereo
+
+    // Issue #122: Debounce updateHostDisplay — set by editor/OSC, flushed in timerCallback
+    std::atomic<bool> configStateDirty { false };
+    void markConfigStateDirty() { configStateDirty.store (true, std::memory_order_relaxed); }
+
+    // Issue E15b/182: AU-specific notification — VST3 uses setDirty, AU suppressed.
+    // AU undo is parameter-level (gesture brackets), not state-level.
+    // Calling nonParameterStateChanged for AU creates harmful full-state undo entries
+    // that override parameter-level ones and cause multi-parameter undo grouping.
+    void notifyHostStateChanged()
+    {
+        // Issue #182: Suppress during state restores to prevent ghost undo entries
+        if (internalUndoInProgress.load (std::memory_order_relaxed)
+            || stateRestoreInProgress.load (std::memory_order_relaxed))
+            return;
+        if (wrapperType != wrapperType_AudioUnit && wrapperType != wrapperType_AudioUnitv3)
+            updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true));
+    }
+
+    // Issue E15b/182: Suppress updateHostDisplay() during host-initiated state restores
+    // (Undo/Redo). Without this, timer-driven config corrections trigger spurious
+    // updateHostDisplay() calls that create ghost undo points.
+    std::atomic<bool> stateRestoreInProgress { false };
+
+    // Issue #182: Flag set after setStateInformation() so editor can sync preset name
+    std::atomic<bool> stateJustRestored { false };
+
+    // Issue E15b/182: Suppress host gesture notifications during internal undo/redo
+    std::atomic<bool> internalUndoInProgress { false };
+
+    // Issue E15b/182: Plugin-internal undo/redo stack (FabFilter-style)
+    PluginUndoManager pluginUndo;
+    void captureUndoState (const juce::String& name);
+    void performInternalUndo();
+    void performInternalRedo();
+    void applyUndoState (const juce::ValueTree& state);
 
     // v0.7: OSC Send accessors for editor
     bool isOscSendConnected() const { return oscSendConnected; }
@@ -704,7 +852,7 @@ public:
     static const std::array<VirtualSpeaker, NUM_VIRTUAL_SPEAKERS> virtualSpeakers;
 
 private:
-    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
+    static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout (bool abletonMode = false);
 
     //--- DELAY-SPECIFIC: DSP helpers ------------------------------------------
     void   writeDelayLine (float sampleL, float sampleR);
@@ -752,7 +900,7 @@ private:
     void activateLayout (OutputFormat format);
 
     //--- SPATIAL FRAMEWORK: Spatialization algorithms (polymorphic dispatch) ---
-    // 4 user-facing algorithms (alphabetical): Ambisonics (0), KNN (1), VBAP (2), VBIP (3)
+    // 7 user-facing algorithms (alphabetical): Ambisonics (0), ConstPower (1), DBAP (2), KNN (3), MDAP (4), VBAP (5), VBIP (6)
     // DirectBinaural is internal-only — used for Woodworth binaural cache in "Simple (Low CPU)"
     DirectBinauralAlgorithm  algDirectBinaural;  // Kept for Simple profile Woodworth gains
     VBAPAlgorithm            algVBAP;
@@ -761,17 +909,32 @@ private:
     KNNAlgorithm             algKNN;
     DBAPAlgorithm            algDBAP;            // v0.4: Distance-Based Amplitude Panning
     MDAPAlgorithm            algMDAP;            // v0.5: Multiple-Direction Amplitude Panning
-    static constexpr int NUM_ALGORITHMS = 6;
+    ConstantPowerAlgorithm   algConstantPower;   // v1.1: Constant Power panning
+    static constexpr int NUM_ALGORITHMS = 7;
     SpatializationAlgorithm* algorithms[NUM_ALGORITHMS] = {};
 
     //--- SPATIAL FRAMEWORK: HRTF convolution (double-buffered for thread safety) ---
-    HRTFDatabase   hrtfDatabase;
+    // HRTFDatabase is now per-renderer (issue #96: eliminates shared-state race)
     BinauralRenderer binauralRenderers[2];
     std::atomic<int> activeRendererIndex { 0 };
     int prepareRendererIndex = 1;
     void loadHRTFProfile (int profileIndex);
     void loadHRTFProfileIntoRenderer (int profileIndex, BinauralRenderer& renderer);
     int loadedHRTFProfileIndex = -1;
+
+    // v1.0.4: Renderer-level crossfade for smooth HRTF profile switching (issue #90).
+    // When the active renderer swaps, the new convolver's overlap buffer is empty,
+    // causing a one-block transient overshoot from the HRIR's positive early energy.
+    // Crossfading old→new renderer output masks this startup ramp.
+    int prevActiveRendererIdx_ = 0;
+    bool rendererXfading_ = false;
+    int rendererXfadeBlockCount_ = 0;
+    int rendererXfadeFromIdx_ = 0;
+    static constexpr int kRendererXfadeBlocks = 8;
+    float prevRxFadeOut_ = 1.0f;
+    float prevRxFadeIn_ = 0.0f;
+    std::vector<float> xfadeWetL_, xfadeWetR_;
+    std::atomic<bool> rendererXfadeActive_ { false };  // Signals timer to defer prepare (issue #137)
 
     //--- SPATIAL FRAMEWORK: Background HRTF loading (via Timer) ---
     void timerCallback() override;
@@ -782,6 +945,7 @@ private:
     void handleOSCPosition (int objectIndex, float azDeg, float elDeg, float dist);
     void handleOSCParam (const juce::String& paramID, float denormValue);
     void syncGlobalTapOffsetAtomic (int index, float value);
+#if JUCE_UNIT_TESTS
 public:
     // v1.0: Public test entry point — forwards to oscMessageReceived
     void testProcessOSCMessage (const juce::OSCMessage& msg) { oscMessageReceived (msg); }
@@ -791,18 +955,21 @@ public:
 
     // v1.0.3: Synchronous HRTF profile load for tests (timer thread doesn't fire in test harness)
     void testLoadHRTFProfile (int profileIndex) { loadHRTFProfile (profileIndex); }
+#endif
 private:
 
     juce::OSCReceiver oscReceiver;
     int  oscReceivePort = 4002;                         // Default ADM-OSC receive port
     bool globalDrawerOpen = false;                      // v1.0: global tap drawer visibility
     bool oscConnected = false;                          // Current connection state
-    bool prevAdmOscEnabled = false;                     // Edge-detect for enable/disable transitions
-    std::atomic<float>* cachedParam_admOscEnabled = nullptr;
+    bool oscReceiveEnabled = false;                     // v1.0: OSC Receive enable (non-APVTS, issue E20)
+    bool prevOscReceiveEnabled = false;                 // Edge-detect for enable/disable transitions
+    bool oscReceiveStateLoaded = false;                 // E20: guard against undo restoring OSC receive settings
 
     //--- SPATIAL MEDIA LIBRARY: ADM-OSC Send state ---
     juce::OSCSender oscSender;
     bool oscSendEnabled = false;
+    bool oscSendStateLoaded = false;                    // E14: guard against undo restoring OSC send settings
     bool oscSendConnected = false;
     int  oscSendPort = 4003;
     juce::String oscSendIP = "127.0.0.1";
@@ -906,6 +1073,11 @@ private:
     bool wasPlaying = false;
     juce::int64 expectedNextSample = 0;
 
+    // v1.0.6: Transport fade-in — masks delay buffer discontinuity after scrub/seek (issue #103)
+    float transportFadeGain = 1.0f;
+    float transportFadeStep = 0.0f;  // 1/(0.005*sampleRate), set in prepareToPlay
+    bool  transportFadeActive = false;
+
     // v1.0.1: Thread-safe preset reset — loadPreset() (message thread) stores pending
     // state here; processBlock() (audio thread) applies it, eliminating the data race
     // that caused intermittent WSOLA/Doppler corruption on preset changes (issue #42).
@@ -917,6 +1089,13 @@ private:
     PendingPresetReset pendingReset;
     std::atomic<bool>  presetResetPending { false };
 
+    // v1.0.1: Preset transition — fade-out/reconfigure/fade-in (issue #84)
+    // Mutes output before resetting state, preventing all transition artifacts.
+    enum class PresetTransitionState { Idle, FadeOut, FadeIn };
+    PresetTransitionState presetTransitionState { PresetTransitionState::Idle };
+    float presetTransitionGain = 1.0f;
+    float presetTransitionStep = 0.0f;  // 1/(0.005*sampleRate), set in prepareToPlay
+
     // v1.0: Per-tap fade envelope for glitch-free enable/disable transitions
     // 64-sample ramp (~1.3ms @ 48kHz) — fast enough to be inaudible, long enough to prevent clicks
     float tapFadeGain[MAX_OBJECTS] = {};
@@ -926,8 +1105,8 @@ private:
     // Block-rate cached conversion factor: ms → samples (set at top of processBlock)
     float blockMsToSamples = 0.0f;
 
-    // v0.8/v1.0: Wobble modulation — tape wow/flutter emulation
-    float wobblePhase = 0.0f;
+    // v1.0.7: Wobble modulation — 4-layer tape wow/flutter emulation (issue #92)
+    float wobblePhases[4] = {};
     juce::SmoothedValue<float> smoothedWobbleAmount;  // v1.0: replaces blockWobbleAmount for click-free onset
     float blockWobbleMorph = 0.0f;
     inline float applyWobble (float baseDelaySamples, float currentDelayMs);

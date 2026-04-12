@@ -45,7 +45,7 @@ Each repeat drops a fourth, creating a descending spiral into low frequencies. T
 - PITCH (global): 0 ct
 - Per-tap PITCH: Set different values per tap (e.g., tap 1 = 0 st, tap 2 = +7 st, tap 3 = +12 st)
 
-Since per-tap pitch uses WSOLA (time-domain stretching), the delay timing stays perfectly locked while each tap produces a different pitch. This creates chord-like harmonizations in the echo pattern.
+Since per-tap pitch uses Phase Vocoder (STFT-based pitch shifting), the delay timing stays perfectly locked while each tap produces a different pitch. This creates chord-like harmonizations in the echo pattern.
 
 ## Wobble and Tape Effects
 
@@ -180,7 +180,7 @@ Helix trajectories make each tap slowly orbit while moving up and down through t
 
 1. Set output format to **7.1.4 Atmos** (or your Atmos bed format)
 2. Configure the track in your DAW for the matching channel count (12 for 7.1.4)
-3. Set algorithm to **VBAP** for precise placement
+3. Set algorithm to **Constant Power** (default) for smooth panning, or **VBAP** for precise placement
 4. Position taps at bed speaker positions or anywhere in the 3D field
 
 ### Atmos Renderer Integration

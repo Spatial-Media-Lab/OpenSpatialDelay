@@ -40,6 +40,9 @@ A mathematical operation that combines two signals -- in spatial audio, typicall
 **Cutoff Frequency**
 The frequency at which a filter begins to attenuate the signal, typically defined as the -3 dB point. In OpenSpatialDelay, the LP (low-pass) and HP (high-pass) knobs set cutoff frequencies for the feedback filters.
 
+**Constant Power Panning**
+The default spatialization algorithm for surround output. Computes speaker gains using the cosine of the angular distance between the source and each speaker, with a hemisphere cutoff at 90 degrees. Activates all speakers within the forward hemisphere with natural rolloff, producing smoother, wider spatial images than VBAP. Constant-power normalized so total radiated energy stays constant regardless of source position.
+
 **DAW (Digital Audio Workstation)**
 Software for recording, editing, and mixing audio. Examples include Reaper, Logic Pro, Ableton Live, Cubase, and Pro Tools. OpenSpatialDelay runs as a plugin within a DAW.
 
@@ -127,5 +130,5 @@ A variant of VBAP that squares the gains, producing an even tighter spatial imag
 **VST3 (Virtual Studio Technology 3)**
 Steinberg's cross-platform plugin format, supported by virtually all modern DAWs. VST3 supports multi-channel audio, sample-accurate automation, and dynamic I/O. OpenSpatialDelay provides VST3 on both macOS and Windows.
 
-**WSOLA (Waveform Similarity Overlap-Add)**
-A time-domain pitch shifting algorithm that preserves timing by finding similar waveform segments and overlapping them. OpenSpatialDelay uses WSOLA-lite for per-tap pitch shifting, ensuring delay rhythm stays locked regardless of pitch offset.
+**Phase Vocoder**
+A frequency-domain pitch shifting technique using STFT (Short-Time Fourier Transform) analysis-resynthesis. OpenSpatialDelay uses a Phase Vocoder with Laroche-Dolson phase locking and Robel-style spectral flux transient detection for per-tap pitch shifting (+/-12 semitones). Delay rhythm stays locked regardless of pitch offset.

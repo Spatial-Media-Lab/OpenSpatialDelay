@@ -19,11 +19,11 @@ extern "C" {
 //==============================================================================
 const char* const OpenSpatialDelayProcessor::hrtfProfileNames[NUM_HRTF_PROFILES] = {
     "Simple (Low CPU)",   // 0: Woodworth ITD+ILD (no convolution) — default
-    "Studio Reference",   // 1: MIT KEMAR
-    "Immersive",          // 2: SADIE II D2 KU100
-    "Natural",            // 3: CIPIC Subject003
-    "Precise",            // 4: HUTUBS PP2
-    "Spatial"             // 5: Bernschuetz KU100
+    "Immersive",          // 1: SADIE II D2 KU100
+    "Natural",            // 2: CIPIC Subject003
+    "Precise",            // 3: HUTUBS PP2
+    "Spatial",            // 4: Bernschuetz KU100
+    "Studio Reference"    // 5: MIT KEMAR
 };
 
 //==============================================================================
@@ -31,11 +31,11 @@ const char* const OpenSpatialDelayProcessor::hrtfProfileNames[NUM_HRTF_PROFILES]
 // (Used by profile 0 "Simple" — Woodworth fallback)
 //==============================================================================
 const std::array<BinauralProfile, 5> OpenSpatialDelayProcessor::binauralProfiles = {{
-    { 0.0875f, 1.0f, 1500.0f, "Studio Reference" },   // MIT KEMAR-inspired
     { 0.0920f, 1.3f, 1200.0f, "Immersive" },           // KU100-inspired (wider)
     { 0.0850f, 0.8f, 1800.0f, "Natural" },             // Human subject, subtler
     { 0.0900f, 1.1f, 1400.0f, "Precise" },             // Cross-validated, balanced
     { 0.0875f, 1.5f, 1100.0f, "Spatial" },             // High-res, exaggerated cues
+    { 0.0875f, 1.0f, 1500.0f, "Studio Reference" },    // MIT KEMAR-inspired
 }};
 
 //==============================================================================
@@ -56,6 +56,8 @@ const std::array<OpenSpatialDelayProcessor::OutputFormatInfo,
     { OutputFormat::Surround5_1,    "5.1 Surround",     "5.1",    6, true,  false, false, 0, false },
     { OutputFormat::Surround7_0,    "7.0 Surround",     "7.0",    7, false, false, false, 0, false },
     { OutputFormat::Surround7_1,    "7.1 Surround",     "7.1",    8, true,  false, false, 0, false },
+    // --- 9.1 Surround (ITU-R BS.2051 System H — ear level only, no height) ---
+    { OutputFormat::Surround9_1,    "9.1 Surround",     "9.1",   10, true,  false, false, 0, false },
     // --- Octaphonic ---
     { OutputFormat::Octaphonic,     "Octaphonic",       "Oct",    8, false, false, false, 0, false },
     // --- Atmos / Immersive (ascending channel count) ---
@@ -123,7 +125,7 @@ const std::array<VirtualSpeaker, OpenSpatialDelayProcessor::NUM_VIRTUAL_SPEAKERS
 struct SpeakerDef { float azDeg; float elDeg; int chIdx; };
 struct LayoutDef { int numSpeakers; int lfeIdx; int totalChs; SpeakerDef speakers[16]; };
 
-enum LayoutID { Quad, S5_0, S5_1, S7_0, S7_1, S5_1_2, S5_1_4, S7_1_2, S7_1_4, S7_1_6, S9_1_4, S9_1_6, Octaphonic, SML13_1, NUM_LAYOUT_DEFS };
+enum LayoutID { Quad, S5_0, S5_1, S7_0, S7_1, S9_1, S5_1_2, S5_1_4, S7_1_2, S7_1_4, S7_1_6, S9_1_4, S9_1_6, Octaphonic, SML13_1, NUM_LAYOUT_DEFS };
 
 static const LayoutDef layoutDefs[NUM_LAYOUT_DEFS] = {
     // Quad (4.0) — symmetric 90° spacing
@@ -136,6 +138,8 @@ static const LayoutDef layoutDefs[NUM_LAYOUT_DEFS] = {
     { 7, -1, 7, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,3}, {-90,0,4}, { 135,0,5}, {-135,0,6}} },
     // 7.1 (LFE=ch3)
     { 7,  3, 8, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,4}, {-90,0,5}, { 135,0,6}, {-135,0,7}} },
+    // 9.1 (LFE=ch3) — ITU-R BS.2051 System H, 9 ear-level speakers + LFE, no height
+    { 9, 3, 10, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 90,0,4}, {-90,0,5}, { 135,0,6}, {-135,0,7}, { 60,0,8}, {-60,0,9}} },
     // 5.1.2 (LFE=ch3)
     { 7,  3, 8, {{ 30,0,0}, {-30,0,1}, {0,0,2}, { 110,0,4}, {-110,0,5}, { 90,45,6}, {-90,45,7}} },
     // 5.1.4 (LFE=ch3)
@@ -194,9 +198,26 @@ static SpeakerLayout makeLayoutFromDef (const LayoutDef& def)
 // Parameter layout
 //==============================================================================
 juce::AudioProcessorValueTreeState::ParameterLayout
-    OpenSpatialDelayProcessor::createParameterLayout()
+    OpenSpatialDelayProcessor::createParameterLayout (bool abletonMode)
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
+
+    // Issue #189: Only limit automatable params to 64 when running in Ableton Live.
+    // Other DAWs (REAPER, Logic, Pro Tools, Nuendo) have no such limit and should
+    // see all 143 params as automatable. Mirrors the DAW-conditional bus layout
+    // pattern in isBusesLayoutSupported() (issue #122).
+    auto boolNonAuto = [&]() {
+        return abletonMode ? juce::AudioParameterBoolAttributes().withAutomatable (false)
+                           : juce::AudioParameterBoolAttributes();
+    };
+    auto floatNonAuto = [&]() {
+        return abletonMode ? juce::AudioParameterFloatAttributes().withAutomatable (false)
+                           : juce::AudioParameterFloatAttributes();
+    };
+    auto choiceNonAuto = [&]() {
+        return abletonMode ? juce::AudioParameterChoiceAttributes().withAutomatable (false)
+                           : juce::AudioParameterChoiceAttributes();
+    };
 
     // Shared string-from-value formatters (DRY)
     auto fmtDbInf = [](float value, int) {
@@ -204,8 +225,16 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             return juce::String (juce::CharPointer_UTF8 ("-\xe2\x88\x9e dB"));
         return juce::String (value, 1) + " dB";
     };
+    auto parseDbInf = [](const juce::String& text) {
+        if (text.containsChar (0x221E) || text.contains ("inf"))  // ∞
+            return -100.0f;
+        return text.getFloatValue();
+    };
     auto fmtPct01 = [](float value, int) {
         return juce::String (juce::roundToInt (value * 100.0f)) + "%";
+    };
+    auto parsePct01 = [](const juce::String& text) {
+        return text.getFloatValue() / 100.0f;
     };
     auto fmtPct100 = [](float value, int) {
         if (value < 10.0f) return juce::String (value, 1) + "%";
@@ -215,6 +244,11 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         if (value >= 1000.0f)
             return juce::String (value / 1000.0f, 1) + " kHz";
         return juce::String (juce::roundToInt (value)) + " Hz";
+    };
+    auto parseFreq = [](const juce::String& text) {
+        if (text.containsIgnoreCase ("kHz") || text.containsIgnoreCase ("khz"))
+            return text.getFloatValue() * 1000.0f;
+        return text.getFloatValue();
     };
     auto fmtDeg = [](float value, int) {
         return juce::String (value, 1) + juce::String::charToString (0x00B0);
@@ -228,16 +262,24 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("delayTime", 1), "Delay Time",
         juce::NormalisableRange<float> (1.0f, 2000.0f, 0.1f, 0.3f), 500.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (
-            [](float value, int) {
-                if (value >= 1000.0f)
-                    return juce::String (value / 1000.0f, 2) + " s";
-                return juce::String (juce::roundToInt (value)) + " ms";
-            })));
+        juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction (
+                [](float value, int) {
+                    if (value >= 1000.0f)
+                        return juce::String (value / 1000.0f, 2) + " s";
+                    return juce::String (juce::roundToInt (value)) + " ms";
+                })
+            .withValueFromStringFunction (
+                [](const juce::String& text) {
+                    if (text.containsIgnoreCase ("s") && ! text.containsIgnoreCase ("ms"))
+                        return text.getFloatValue() * 1000.0f;
+                    return text.getFloatValue();
+                })));
 
-    // G2: Delay Sync (was "Tempo Sync")
+    // G2: Delay Sync (was "Tempo Sync")  [non-automatable in Ableton only: toggle state, issue #122 / #189]
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("tempoSync", 2), "Delay Sync", false));
+        juce::ParameterID ("tempoSync", 2), "Delay Sync", false,
+        boolNonAuto()));
 
     // G3: Delay Division (was "Note Division")
     // Value = number of 16th notes. Range: 0.5 (1/32) to 32 (2/1)
@@ -259,27 +301,34 @@ juce::AudioProcessorValueTreeState::ParameterLayout
                 return juce::String (sixteenths, 1) + "/16";
             })));
 
-    // G4: Sync Mode
+    // G4: Sync Mode  [non-automatable in Ableton only: state selector, issue #122 / #189]
     params.push_back (std::make_unique<juce::AudioParameterChoice> (
         juce::ParameterID ("syncMode", 4), "Sync Mode",
-        juce::StringArray { "Straight", "Dotted", "Triplet" }, 0));
+        juce::StringArray { "Straight", "Dotted", "Triplet" }, 0,
+        choiceNonAuto()));
 
     // G5: Feedback
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("feedback", 5), "Feedback",
         juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.3f,
-        juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
+        juce::AudioParameterFloatAttributes().withLabel ("%")
+            .withStringFromValueFunction (fmtPct01)
+            .withValueFromStringFunction (parsePct01)));
 
     // G6: Filter On (was "Filter Enabled" — moved before filter params, enable→configure)
+    // [non-automatable in Ableton only: toggle state, issue #122 / #189]
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterEnabled", 6), "Filter On",
-        juce::NormalisableRange<float> (0.0f, 1.0f, 1.0f), 0.0f));
+        juce::NormalisableRange<float> (0.0f, 1.0f, 1.0f), 0.0f,
+        floatNonAuto()));
 
     // G7: High-Pass Frequency (was "High-Pass Filter" — HP grouped before LP)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterHP", 7), "High-Pass Frequency",
         juce::NormalisableRange<float> (20.0f, 5000.0f, 1.0f, 0.3f), 50.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtFreq)));
+        juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction (fmtFreq)
+            .withValueFromStringFunction (parseFreq)));
 
     // G8: High-Pass Resonance (was "HP Resonance")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -292,7 +341,9 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterLP", 9), "Low-Pass Frequency",
         juce::NormalisableRange<float> (200.0f, 20000.0f, 1.0f, 0.3f), 5000.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtFreq)));
+        juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction (fmtFreq)
+            .withValueFromStringFunction (parseFreq)));
 
     // G10: Low-Pass Resonance (was "LP Resonance")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -305,31 +356,40 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("dryWet", 11), "Dry/Wet",
         juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f,
-        juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
+        juce::AudioParameterFloatAttributes().withLabel ("%")
+            .withStringFromValueFunction (fmtPct01)
+            .withValueFromStringFunction (parsePct01)));
 
     // G12: Input Gain (-100 dB shown as -∞ to +40 dB)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("inputGain", 12), "Input Gain",
         juce::NormalisableRange<float> (-100.0f, 40.0f, 0.1f, 3.0f), 0.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDbInf)));
+        juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction (fmtDbInf)
+            .withValueFromStringFunction (parseDbInf)));
 
     // G13: Output Gain (-100 dB shown as -∞ to +12 dB)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("outputGain", 13), "Output Gain",
         juce::NormalisableRange<float> (-100.0f, 12.0f, 0.1f, 3.0f), 0.0f,
-        juce::AudioParameterFloatAttributes().withStringFromValueFunction (fmtDbInf)));
+        juce::AudioParameterFloatAttributes()
+            .withStringFromValueFunction (fmtDbInf)
+            .withValueFromStringFunction (parseDbInf)));
 
     // Issue #68: Algorithm, HRTF Profile, Output Format, and Input Format removed from APVTS.
     // They are now stored as raw std::atomic<int> members (configAlgorithm, configHrtfProfile,
     // configOutputFormat, configInputFormat) to hide them from DAW automation lists.
 
-    // G14: Air Absorption
+    // G14: Air Absorption  [non-automatable in Ableton only: toggle state, issue #122 / #189]
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("airAbsorption", 14), "Air Absorption", false));
+        juce::ParameterID ("airAbsorption", 14), "Air Absorption", false,
+        boolNonAuto()));
 
     // G15: Wobble On (was "Wobble Enabled" — moved before wobble params, enable→configure)
+    // [non-automatable in Ableton only: toggle state, issue #122 / #189]
     params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("wobbleEnabled", 15), "Wobble On", false));
+        juce::ParameterID ("wobbleEnabled", 15), "Wobble On", false,
+        boolNonAuto()));
 
     // G16: Wobble Amount
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -343,9 +403,8 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         juce::NormalisableRange<float> (0.0f, 100.0f, 0.1f), 0.0f,
         juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
-    // G18: OSC Receive (true=enabled, false=disabled; default OFF)
-    params.push_back (std::make_unique<juce::AudioParameterBool> (
-        juce::ParameterID ("admOscEnabled", 18), "OSC Receive", false));
+    // G18: OSC Receive moved to non-APVTS member (oscReceiveEnabled) — issue E20
+    // Removing from APVTS keeps it out of the DAW undo stack.
 
     // G19–G24: Global Tap Offsets (promoted from OSC-only atomics to APVTS)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -364,19 +423,19 @@ juce::AudioProcessorValueTreeState::ParameterLayout
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("globalTapPitch", 22), "Global Tap Pitch",
-        juce::NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 0.0f,
+        juce::NormalisableRange<float> (-12.0f, 12.0f, 1.0f), 0.0f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) { return juce::String (juce::roundToInt (value)) + " st"; })));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("globalTapDoppler", 23), "Global Tap Doppler",
         juce::NormalisableRange<float> (-100.0f, 100.0f, 0.1f), 0.0f,
-        juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct100)));
+        floatNonAuto().withLabel ("%").withStringFromValueFunction (fmtPct100)));
 
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("globalTapSpeed", 24), "Global Tap Speed",
         juce::NormalisableRange<float> (-5.0f, 5.0f, 0.01f), 0.0f,
-        juce::AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
+        floatNonAuto().withLabel ("Hz").withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2) + " Hz"; })));
 
     // --- Per-tap parameters (issue #68: "Object N" → "Tap 0N") ---------------
@@ -396,9 +455,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout
         // Initial spatial spread is applied in constructor after APVTS creation.
         float defaultAz = 0.0f;
 
-        // T1: Tap On (was "Object N Enabled")
+        // T1: Tap On (was "Object N Enabled")  [non-automatable in Ableton only: toggle state, issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterBool> (
-            id ("enabled", 0), name ("On"), defaultEnabled));
+            id ("enabled", 0), name ("On"), defaultEnabled,
+            boolNonAuto()));
 
         // T2: Per-tap Time — REMOVED (orphaned param, issue #68)
 
@@ -419,11 +479,13 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             id ("distance", 3), name ("Distance"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f));
 
-        // T6: Tap Doppler Amount
+        // T6: Tap Doppler Amount  [non-automatable in Ableton only: issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("dopplerAmount", 4), name ("Doppler Amount"),
             juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.0f,
-            juce::AudioParameterFloatAttributes().withLabel ("%").withStringFromValueFunction (fmtPct01)));
+            floatNonAuto().withLabel ("%")
+                .withStringFromValueFunction (fmtPct01)
+                .withValueFromStringFunction (parsePct01)));
 
         // T7: Tap Pitch Shift
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
@@ -432,28 +494,31 @@ juce::AudioProcessorValueTreeState::ParameterLayout
             juce::AudioParameterFloatAttributes().withStringFromValueFunction (
                 [](float value, int) { return juce::String (juce::roundToInt (value)) + " st"; })));
 
-        // T8: Tap Trajectory Shape
+        // T8: Tap Trajectory Shape  [non-automatable in Ableton only: state selector, issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("trajectoryShape", 6), name ("Trajectory Shape"),
             juce::StringArray { "None", "Bounce", "Circle", "Cross", "Figure-8", "Heart", "Helix",
-                                "Infinity", "Line", "Orbit", "Random", "Spiral", "Square", "Triangle" }, 0));
+                                "Infinity", "Line", "Orbit", "Random", "Spiral", "Square", "Triangle" }, 0,
+            choiceNonAuto()));
 
-        // T9: Tap Trajectory Speed
+        // T9: Tap Trajectory Speed  [non-automatable in Ableton only: issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterFloat> (
             id ("trajectorySpeed", 7), name ("Trajectory Speed"),
             juce::NormalisableRange<float> (0.0f, 5.0f, 0.01f), 0.3f,
-            juce::AudioParameterFloatAttributes().withLabel ("Hz").withStringFromValueFunction (
+            floatNonAuto().withLabel ("Hz").withStringFromValueFunction (
                 [](float value, int) { return juce::String (value, 2) + " Hz"; })));
 
-        // T10: Tap Trajectory Direction
+        // T10: Tap Trajectory Direction  [non-automatable in Ableton only: state toggle, issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("trajectoryDirection", 8), name ("Trajectory Direction"),
-            juce::StringArray { "Forward", "Reverse" }, 0));
+            juce::StringArray { "Forward", "Reverse" }, 0,
+            choiceNonAuto()));
 
-        // T11: Tap Input Channel
+        // T11: Tap Input Channel  [non-automatable in Ableton only: state selector, issue #122 / #189]
         params.push_back (std::make_unique<juce::AudioParameterChoice> (
             id ("inputChannel", 9), name ("Input Channel"),
-            juce::StringArray { "L+R", "L", "R" }, 0));
+            juce::StringArray { "L+R", "L", "R" }, 0,
+            choiceNonAuto()));
     }
 
     return { params.begin(), params.end() };
@@ -491,7 +556,9 @@ bool HRTFDatabase::loadFromMemory (const void* data, int dataSize, float targetS
 
     if (easyHandle == nullptr || err != MYSOFA_OK)
     {
+      #if JUCE_DEBUG
         DBG ("HRTFDatabase: Failed to load SOFA data, error code: " + juce::String (err));
+      #endif
         easyHandle = nullptr;
         loaded = false;
         return false;
@@ -505,8 +572,10 @@ bool HRTFDatabase::loadFromMemory (const void* data, int dataSize, float targetS
     numPositions = static_cast<int> (easyHandle->hrtf->M);
     loaded = true;
 
+  #if JUCE_DEBUG
     DBG ("HRTFDatabase: Loaded " + juce::String (numPositions) + " positions, "
          + "IR length = " + juce::String (irLength) + " samples");
+  #endif
 
     return true;
 }
@@ -552,6 +621,25 @@ void HRTFDatabase::getAlignedHRIR (float azimuthRad, float elevationRad,
     int shiftL = static_cast<int> (delayL);
     int shiftR = static_cast<int> (delayR);
 
+    // v1.0.11 (issue #89): If SOFA reports zero delay for both channels,
+    // the ITD is baked into the HRIR waveform (confirmed for MIT KEMAR,
+    // likely CIPIC/HUTUBS/Bernschuetz). Detect onset from the waveform
+    // itself so the dual-slot crossfade blends time-aligned HRIRs.
+    // SADIE II KU100 reports non-zero delays and bypasses this fallback.
+    // NOTE: Check raw float delays, not integer-truncated — SADIE reports
+    // fractional delays (e.g., 0.3/0.7) that truncate to int 0 but are valid.
+    if (delayL < 0.001f && delayR < 0.001f)
+    {
+        int onsetL = detectOnset (irL, irLength, 0.1f);
+        int onsetR = detectOnset (irR, irLength, 0.1f);
+        int minOnset = std::min (onsetL, onsetR);
+        shiftL = onsetL - minOnset;
+        shiftR = onsetR - minOnset;
+        // Report detected ITD for the ITD delay line in renderSourceBuffers()
+        delayL = static_cast<float> (onsetL);
+        delayR = static_cast<float> (onsetR);
+    }
+
     // Shift left channel: move samples backward by shiftL
     if (shiftL > 0 && shiftL < irLength)
     {
@@ -594,7 +682,7 @@ void HRTFDatabase::convertToMinPhase (float* ir, int irLength, int fftOrder, flo
     if (irLength <= 0 || fftOrder <= 0) return;
 
     const int N = 1 << fftOrder;  // FFT size (must be >= 2 * irLength)
-    juce::dsp::FFT fft (fftOrder);
+    auto fftPtr = getSharedFFTCache().getOrCreate (fftOrder);
 
     // workBuf layout: N Complex<float> = N * 2 floats
     auto* cBuf = reinterpret_cast<std::complex<float>*> (workBuf);
@@ -604,7 +692,7 @@ void HRTFDatabase::convertToMinPhase (float* ir, int irLength, int fftOrder, flo
         cBuf[i] = (i < irLength) ? std::complex<float> (ir[i], 0.0f) : std::complex<float> (0.0f, 0.0f);
 
     // Step 2: Forward FFT
-    fft.perform (cBuf, cBuf, false);
+    fftPtr->perform (cBuf, cBuf, false);
 
     // Step 3: Compute log-magnitude (real cepstrum input)
     for (int k = 0; k < N; ++k)
@@ -615,7 +703,7 @@ void HRTFDatabase::convertToMinPhase (float* ir, int irLength, int fftOrder, flo
     }
 
     // Step 4: IFFT to get real cepstrum
-    fft.perform (cBuf, cBuf, true);
+    fftPtr->perform (cBuf, cBuf, true);
 
     // Step 5: Apply minimum-phase window to cepstrum
     // c_mp[0] unchanged, c_mp[1..N/2-1] doubled, c_mp[N/2] unchanged, c_mp[N/2+1..N-1] zeroed
@@ -626,7 +714,7 @@ void HRTFDatabase::convertToMinPhase (float* ir, int irLength, int fftOrder, flo
         cBuf[n] = std::complex<float> (0.0f, 0.0f);
 
     // Step 6: Forward FFT
-    fft.perform (cBuf, cBuf, false);
+    fftPtr->perform (cBuf, cBuf, false);
 
     // Step 7: Exponentiate to get minimum-phase spectrum
     for (int k = 0; k < N; ++k)
@@ -640,9 +728,113 @@ void HRTFDatabase::convertToMinPhase (float* ir, int irLength, int fftOrder, flo
     }
 
     // Step 8: IFFT to get minimum-phase IR
-    fft.perform (cBuf, cBuf, true);
+    fftPtr->perform (cBuf, cBuf, true);
 
     // Step 9: Copy first irLength samples back (real part only)
+    for (int i = 0; i < irLength; ++i)
+        ir[i] = cBuf[i].real();
+}
+
+int HRTFDatabase::detectOnset (const float* ir, int length, float thresholdFraction)
+{
+    if (ir == nullptr || length <= 0)
+        return 0;
+
+    // Find peak absolute value
+    float peak = 0.0f;
+    for (int i = 0; i < length; ++i)
+    {
+        float absVal = std::abs (ir[i]);
+        if (absVal > peak)
+            peak = absVal;
+    }
+
+    if (peak < 1e-20f)
+        return 0;  // Silent IR
+
+    // Scan forward for first sample exceeding threshold * peak
+    float thresh = thresholdFraction * peak;
+    for (int i = 0; i < length; ++i)
+    {
+        if (std::abs (ir[i]) >= thresh)
+        {
+            // Clamp: if onset is past halfway, IR has no clear leading edge
+            if (i > length / 2)
+                return 0;
+            return i;
+        }
+    }
+
+    return 0;
+}
+
+void HRTFDatabase::correctLowFrequency (float* ir, int irLength, int fftOrder,
+                                         float sampleRate, float* workBuf,
+                                         float lfCutoffHz, float hfCutoffHz)
+{
+    if (ir == nullptr || irLength <= 0 || fftOrder <= 0)
+        return;
+
+    const int N = 1 << fftOrder;
+    juce::dsp::FFT fft (fftOrder);
+
+    auto* cBuf = reinterpret_cast<std::complex<float>*> (workBuf);
+
+    // Step 1: Copy IR into complex buffer, zero-pad
+    for (int i = 0; i < N; ++i)
+        cBuf[i] = (i < irLength) ? std::complex<float> (ir[i], 0.0f)
+                                 : std::complex<float> (0.0f, 0.0f);
+
+    // Step 2: Forward FFT
+    fft.perform (cBuf, cBuf, false);
+
+    // Step 3: Identify frequency bin ranges
+    float binHz = sampleRate / static_cast<float> (N);
+    int lfBin = static_cast<int> (lfCutoffHz / binHz);
+    int hfBin = static_cast<int> (hfCutoffHz / binHz);
+
+    if (lfBin < 1) lfBin = 1;
+    if (hfBin <= lfBin) hfBin = lfBin + 1;
+    if (hfBin > N / 2) hfBin = N / 2;
+
+    // Step 4: Compute mean magnitude in the reference range (100-300 Hz)
+    float sumMag = 0.0f;
+    int magCount = 0;
+    for (int k = lfBin; k < hfBin; ++k)
+    {
+        sumMag += std::abs (cBuf[k]);
+        ++magCount;
+    }
+    float meanMag = (magCount > 0) ? sumMag / static_cast<float> (magCount) : 0.0f;
+
+    // Step 5: Magnitude-only correction below lfCutoff.
+    // Scale each bin's magnitude up to meanMag while preserving its original phase.
+    // This avoids the phase discontinuities between adjacent positions that caused
+    // glitches when full phase extrapolation was used (same issue as min-phase, #47).
+    for (int k = 0; k < lfBin; ++k)
+    {
+        float currentMag = std::abs (cBuf[k]);
+        if (currentMag < 1e-20f)
+        {
+            // Bin has essentially zero energy — set to meanMag with zero phase
+            cBuf[k] = std::complex<float> (meanMag, 0.0f);
+        }
+        else
+        {
+            // Scale magnitude up to meanMag, preserve original phase
+            float scale = meanMag / currentMag;
+            cBuf[k] *= scale;
+        }
+
+        // Mirror to negative frequencies (conjugate symmetry for real output)
+        if (k > 0 && (N - k) < N)
+            cBuf[N - k] = std::conj (cBuf[k]);
+    }
+
+    // Step 6: Inverse FFT
+    fft.perform (cBuf, cBuf, true);
+
+    // Step 7: Copy back to IR (real part only, original length)
     for (int i = 0; i < irLength; ++i)
         ir[i] = cBuf[i].real();
 }
@@ -650,6 +842,31 @@ void HRTFDatabase::convertToMinPhase (float* ir, int irLength, int fftOrder, flo
 //==============================================================================
 // PartitionedConvolver implementation — overlap-save FFT convolution
 //==============================================================================
+
+// Process-global FFT cache (issue #131).  Apple's vDSP shares internal
+// twiddle factor memory across FFT setups of the same order.  Destroying the
+// last setup of a given order frees the shared table even while another
+// thread's vDSP_fft_zrip is reading from it.  The cache creates each order
+// once and holds a permanent shared_ptr so the vDSP twiddle tables are never
+// freed while the process is alive.  Individual convolvers also hold
+// shared_ptrs, providing redundant safety.
+std::shared_ptr<juce::dsp::FFT> SharedFFTCache::getOrCreate (int fftOrder)
+{
+    juce::SpinLock::ScopedLockType sl (lock);
+    auto it = cache.find (fftOrder);
+    if (it != cache.end())
+        return it->second;
+    auto ptr = std::make_shared<juce::dsp::FFT> (fftOrder);
+    cache[fftOrder] = ptr;
+    return ptr;
+}
+
+SharedFFTCache& getSharedFFTCache()
+{
+    static SharedFFTCache instance;
+    return instance;
+}
+
 void PartitionedConvolver::prepare (int maxBlockSize, int irLength_)
 {
     irLen = irLength_;
@@ -658,17 +875,21 @@ void PartitionedConvolver::prepare (int maxBlockSize, int irLength_)
     // FFT size must be >= blockSize + irLen - 1 (linear convolution length)
     // Round up to next power of 2
     int minFFTSize = blockSize + irLen - 1;
-    fftOrder = 1;
-    while ((1 << fftOrder) < minFFTSize)
-        ++fftOrder;
+    int newFftOrder = 1;
+    while ((1 << newFftOrder) < minFFTSize)
+        ++newFftOrder;
+
+    bool orderChanged = (newFftOrder != fftOrder) || fft == nullptr;
+    fftOrder = newFftOrder;
     fftSize = 1 << fftOrder;
 
-    fft = juce::dsp::FFT (fftOrder);
+    if (orderChanged)
+        fft = getSharedFFTCache().getOrCreate (fftOrder);
 
     // v1.0.5: Allocate dual convolution slots (issue #50)
     for (int s = 0; s < 2; ++s)
     {
-        slots[s].irFreqDomain.resize (static_cast<size_t> (fftSize * 2), 0.0f);
+        slots[s].irFreqDomain.assign (static_cast<size_t> (fftSize * 2), 0.0f);
         slots[s].inputAccum.resize (static_cast<size_t> (fftSize * 2), 0.0f);
         slots[s].fftWorkBuf.resize (static_cast<size_t> (fftSize * 2), 0.0f);
         slots[s].overlapBuf.resize (static_cast<size_t> (fftSize), 0.0f);
@@ -692,7 +913,7 @@ void PartitionedConvolver::loadIRIntoSlot (ConvSlot& slot, const float* ir, int 
     std::fill (slot.irFreqDomain.begin(), slot.irFreqDomain.end(), 0.0f);
     for (int i = 0; i < std::min (length, fftSize); ++i)
         slot.irFreqDomain[static_cast<size_t> (i)] = ir[i];
-    fft.performRealOnlyForwardTransform (slot.irFreqDomain.data(), true);
+    fft->performRealOnlyForwardTransform (slot.irFreqDomain.data(), true);
 }
 
 void PartitionedConvolver::resetSlot (ConvSlot& slot)
@@ -766,7 +987,7 @@ void PartitionedConvolver::processSlot (ConvSlot& slot, const float* in, float* 
                 slot.fftWorkBuf[static_cast<size_t> (i)] = slot.inputAccum[static_cast<size_t> (i)];
 
             // Forward FFT of input
-            fft.performRealOnlyForwardTransform (slot.fftWorkBuf.data(), true);
+            fft->performRealOnlyForwardTransform (slot.fftWorkBuf.data(), true);
 
             // Complex multiply with slot's IR spectrum
             for (int i = 0; i < fftSize * 2; i += 2)
@@ -777,7 +998,7 @@ void PartitionedConvolver::processSlot (ConvSlot& slot, const float* in, float* 
                 slot.fftWorkBuf[static_cast<size_t> (i + 1)] = re1 * im2 + im1 * re2;
             }
 
-            fft.performRealOnlyInverseTransform (slot.fftWorkBuf.data());
+            fft->performRealOnlyInverseTransform (slot.fftWorkBuf.data());
 
             int outStart = samplesProcessed - blockSize;
             int outSamples = std::min (blockSize, numSamples - outStart);
@@ -932,15 +1153,18 @@ void BinauralRenderer::prepare (double sampleRate, int maxBlockSize)
     currentSampleRate = sampleRate;
     currentBlockSize = maxBlockSize;
 
-    convTmpL.resize (static_cast<size_t> (maxBlockSize), 0.0f);
-    convTmpR.resize (static_cast<size_t> (maxBlockSize), 0.0f);
+    // Pre-allocate to max(blockSize, 512) to cover typical IR lengths
+    // and avoid audio-thread allocation in renderSourceBuffers / updateSourceHRIR.
+    size_t preAllocSize = static_cast<size_t> (std::max (maxBlockSize, 512));
+    convTmpL.resize (preAllocSize, 0.0f);
+    convTmpR.resize (preAllocSize, 0.0f);
 }
 
-void BinauralRenderer::setProfile (int profileIndex, HRTFDatabase& hrtfDb)
+void BinauralRenderer::setProfile (int profileIndex)
 {
     activeProfile = profileIndex;
 
-    if (profileIndex == 0 || ! hrtfDb.isLoaded())
+    if (profileIndex == 0 || ! hrtfDatabase.isLoaded())
     {
         // Simple mode — no convolution needed
         storedNormGain = 1.0f;
@@ -955,7 +1179,7 @@ void BinauralRenderer::setProfile (int profileIndex, HRTFDatabase& hrtfDb)
     // ITD is extracted and applied separately for smooth crossfading.
     itdActive = true;
 
-    int irLen = hrtfDb.getIRLength();
+    int irLen = hrtfDatabase.getIRLength();
     storedIRLength = irLen;
 
     // =========================================================================
@@ -982,8 +1206,8 @@ void BinauralRenderer::setProfile (int profileIndex, HRTFDatabase& hrtfDb)
     for (int d = 0; d < NUM_REF_DIRS; ++d)
     {
         float delayL = 0.0f, delayR = 0.0f;
-        hrtfDb.getInterpolatedHRIR (refDirs[d][0], refDirs[d][1],
-                                     tmpIRL.data(), tmpIRR.data(), delayL, delayR);
+        hrtfDatabase.getInterpolatedHRIR (refDirs[d][0], refDirs[d][1],
+                                         tmpIRL.data(), tmpIRR.data(), delayL, delayR);
         for (int n = 0; n < irLen; ++n)
         {
             totalEnergy += (double) tmpIRL[static_cast<size_t> (n)] * tmpIRL[static_cast<size_t> (n)];
@@ -1006,27 +1230,78 @@ void BinauralRenderer::setProfile (int profileIndex, HRTFDatabase& hrtfDb)
         sourceConvReady[i] = false;   // Force HRIR reload on next processBlock
         cachedSourceAz[i] = -999.0f;  // Invalidate cached positions
         cachedSourceEl[i] = -999.0f;
+
+        // v1.0.4: Clear stale ITD state to prevent transient on profile switch
+        // (issue #90). Without this, the renderer reuses ITD buffer data from
+        // its previous profile, causing a volume swell when renderSourceBuffers
+        // interpolates from stale currentITD to new targetITD.
+        currentITDL[i] = 0.0f;
+        currentITDR[i] = 0.0f;
+        targetITDL[i] = 0.0f;
+        targetITDR[i] = 0.0f;
+        itdWritePos[i] = 0;
+        std::memset (itdBufferL[i], 0, sizeof (itdBufferL[i]));
+        std::memset (itdBufferR[i], 0, sizeof (itdBufferR[i]));
     }
 
+    // v1.0.11 (issue #89, Phase 3): Low-shelf bass compensation for MIT KEMAR.
+    // KEMAR has a 24 dB deficit at 50 Hz and 6 dB at 100 Hz (measurement limitation).
+    // Design a low-shelf biquad filter to boost post-convolution output.
+    // Applied per-source to the convolved signal — bass remains spatialized since
+    // it amplifies whatever LF the HRTF captured at each direction.
+    lfShelfActive = (profileIndex == 1);  // Only MIT KEMAR needs compensation
+    if (lfShelfActive)
+    {
+        // Low-shelf: +12 dB at 200 Hz, Q=0.7 (gentle slope)
+        auto coeffs = juce::dsp::IIR::Coefficients<float>::makeLowShelf (
+            currentSampleRate, 200.0f, 0.7f, juce::Decibels::decibelsToGain (12.0f));
+        lfShelfB[0] = coeffs->coefficients[0];
+        lfShelfB[1] = coeffs->coefficients[1];
+        lfShelfB[2] = coeffs->coefficients[2];
+        lfShelfA[0] = 1.0f;  // a0 normalized
+        lfShelfA[1] = coeffs->coefficients[3];
+        lfShelfA[2] = coeffs->coefficients[4];
+
+        // Clear filter state
+        for (int i = 0; i < MAX_SOURCES; ++i)
+        {
+            lfShelfStateL[i][0] = lfShelfStateL[i][1] = 0.0f;
+            lfShelfStateR[i][0] = lfShelfStateR[i][1] = 0.0f;
+        }
+    }
+
+  #if JUCE_DEBUG
     DBG ("BinauralRenderer: Profile " + juce::String (profileIndex)
          + " loaded — IR=" + juce::String (irLen)
          + ", normGain=" + juce::String (storedNormGain, 4)
+         + ", lfShelf=" + juce::String (lfShelfActive ? "ON" : "OFF")
          + " (per-source direct binaural)");
+  #endif
 }
 
-void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elRad,
-                                          HRTFDatabase& db)
+void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elRad)
 {
     if (sourceIndex < 0 || sourceIndex >= MAX_SOURCES || storedIRLength <= 0)
         return;
 
-    // v1.0.2: ~1° threshold (reduced from ~2°) — more frequent, smaller HRIR changes
-    // produce less audible spectral transitions during azimuth/elevation sweeps (issue #47)
+    // v1.0.11 (issue #89): Great-circle angular distance threshold replaces independent
+    // azimuth/elevation comparison. The old check treated 1° of azimuth equally at equator
+    // and pole, but at elevation 89° a 1° azimuth change is only ~0.017° of actual angular
+    // movement on the sphere. This caused constant HRIR switching at poles (zenith stuck
+    // centered, erratic nadir jumps). Great-circle distance naturally handles the pole
+    // singularity — azimuth changes near ±90° elevation produce near-zero angular distance.
     constexpr float THRESHOLD = 0.017f;  // ~1 degree in radians
-    if (sourceConvReady[sourceIndex]
-        && std::abs (azRad - cachedSourceAz[sourceIndex]) < THRESHOLD
-        && std::abs (elRad - cachedSourceEl[sourceIndex]) < THRESHOLD)
-        return;
+    if (sourceConvReady[sourceIndex])
+    {
+        float cachedAz = cachedSourceAz[sourceIndex];
+        float cachedEl = cachedSourceEl[sourceIndex];
+        float dot = std::cos (elRad) * std::cos (cachedEl) * std::cos (azRad - cachedAz)
+                  + std::sin (elRad) * std::sin (cachedEl);
+        dot = juce::jlimit (-1.0f, 1.0f, dot);
+        float angularDist = std::acos (dot);
+        if (angularDist < THRESHOLD)
+            return;
+    }
 
     // Query HRTF at exact source direction (realtime-safe: KD-tree lookup, no malloc)
     float delayL = 0.0f, delayR = 0.0f;
@@ -1036,15 +1311,16 @@ void BinauralRenderer::updateSourceHRIR (int sourceIndex, float azRad, float elR
     // Ensure work buffers are large enough for IR
     if ((int) tmpL.size() < storedIRLength)
     {
+        jassertfalse;  // Audio thread allocation — should have been pre-allocated in prepare()
         tmpL.resize (static_cast<size_t> (storedIRLength));
         tmpR.resize (static_cast<size_t> (storedIRLength));
     }
 
     // v1.0: Use ITD-free HRIRs for smooth crossfading (no comb-filtering from ITD misalignment)
     if (itdActive)
-        db.getAlignedHRIR (azRad, elRad, tmpL.data(), tmpR.data(), delayL, delayR);
+        hrtfDatabase.getAlignedHRIR (azRad, elRad, tmpL.data(), tmpR.data(), delayL, delayR);
     else
-        db.getInterpolatedHRIR (azRad, elRad, tmpL.data(), tmpR.data(), delayL, delayR);
+        hrtfDatabase.getInterpolatedHRIR (azRad, elRad, tmpL.data(), tmpR.data(), delayL, delayR);
 
     // Apply cross-profile normalization
     for (int n = 0; n < storedIRLength; ++n)
@@ -1080,6 +1356,7 @@ void BinauralRenderer::renderSourceBuffers (const float* const* sourceBufs,
 
     if (convTmpL.size() < static_cast<size_t> (numSamples))
     {
+        jassertfalse;  // Audio thread allocation — should have been pre-allocated in prepare()
         convTmpL.resize (static_cast<size_t> (numSamples));
         convTmpR.resize (static_cast<size_t> (numSamples));
     }
@@ -1092,6 +1369,29 @@ void BinauralRenderer::renderSourceBuffers (const float* const* sourceBufs,
         // Convolve this source's accumulated signal with its L and R HRIRs
         sourceConvL[src].process (sourceBufs[src], convTmpL.data(), numSamples);
         sourceConvR[src].process (sourceBufs[src], convTmpR.data(), numSamples);
+
+        // v1.0.11 (issue #89, Phase 3): Low-shelf bass boost for KEMAR.
+        // Amplifies the residual LF content in the convolved output. Bass stays
+        // spatialized because the boost is applied to the per-direction HRTF output.
+        if (lfShelfActive)
+        {
+            for (int s = 0; s < numSamples; ++s)
+            {
+                // Transposed Direct Form II biquad — left channel
+                float xL = convTmpL[static_cast<size_t> (s)];
+                float yL = lfShelfB[0] * xL + lfShelfStateL[src][0];
+                lfShelfStateL[src][0] = lfShelfB[1] * xL - lfShelfA[1] * yL + lfShelfStateL[src][1];
+                lfShelfStateL[src][1] = lfShelfB[2] * xL - lfShelfA[2] * yL;
+                convTmpL[static_cast<size_t> (s)] = yL;
+
+                // Right channel
+                float xR = convTmpR[static_cast<size_t> (s)];
+                float yR = lfShelfB[0] * xR + lfShelfStateR[src][0];
+                lfShelfStateR[src][0] = lfShelfB[1] * xR - lfShelfA[1] * yR + lfShelfStateR[src][1];
+                lfShelfStateR[src][1] = lfShelfB[2] * xR - lfShelfA[2] * yR;
+                convTmpR[static_cast<size_t> (s)] = yR;
+            }
+        }
 
         // v1.0: Apply ITD as fractional-sample delay if using aligned HRIRs.
         // ITD is smoothly interpolated per-sample from currentITD to targetITD
@@ -1165,6 +1465,8 @@ void BinauralRenderer::reset()
         itdWritePos[i] = 0;
         std::memset (itdBufferL[i], 0, sizeof (itdBufferL[i]));
         std::memset (itdBufferR[i], 0, sizeof (itdBufferR[i]));
+        lfShelfStateL[i][0] = lfShelfStateL[i][1] = 0.0f;
+        lfShelfStateR[i][0] = lfShelfStateR[i][1] = 0.0f;
     }
 }
 
@@ -1184,6 +1486,8 @@ void BinauralRenderer::invalidateSources()
         itdWritePos[i] = 0;
         std::memset (itdBufferL[i], 0, sizeof (itdBufferL[i]));
         std::memset (itdBufferR[i], 0, sizeof (itdBufferR[i]));
+        lfShelfStateL[i][0] = lfShelfStateL[i][1] = 0.0f;
+        lfShelfStateR[i][0] = lfShelfStateR[i][1] = 0.0f;
     }
 }
 
@@ -1199,9 +1503,11 @@ void OpenSpatialDelayProcessor::loadHRTFProfileIntoRenderer (
 {
     if (profileIndex == 0)
     {
-        hrtfDatabase.unload();
-        renderer.setProfile (0, hrtfDatabase);
+        renderer.hrtfDatabase.unload();
+        renderer.setProfile (0);
+      #if JUCE_DEBUG
         DBG ("HRTF: Switched to Simple (Woodworth) profile");
+      #endif
         return;
     }
 
@@ -1210,34 +1516,42 @@ void OpenSpatialDelayProcessor::loadHRTFProfileIntoRenderer (
 
     switch (profileIndex)
     {
-        case 1:  sofaData = HRTFData::mit_kemar_large_pinna_sofa;
-                 sofaSize = HRTFData::mit_kemar_large_pinna_sofaSize;  break;
-        case 2:  sofaData = HRTFData::sadie_d2_ku100_sofa;
+        case 1:  sofaData = HRTFData::sadie_d2_ku100_sofa;
                  sofaSize = HRTFData::sadie_d2_ku100_sofaSize;         break;
-        case 3:  sofaData = HRTFData::cipic_subject_003_sofa;
+        case 2:  sofaData = HRTFData::cipic_subject_003_sofa;
                  sofaSize = HRTFData::cipic_subject_003_sofaSize;      break;
-        case 4:  sofaData = HRTFData::hutubs_pp2_sofa;
+        case 3:  sofaData = HRTFData::hutubs_pp2_sofa;
                  sofaSize = HRTFData::hutubs_pp2_sofaSize;             break;
-        case 5:  sofaData = HRTFData::bernschuetz_ku100_sofa;
+        case 4:  sofaData = HRTFData::bernschuetz_ku100_sofa;
                  sofaSize = HRTFData::bernschuetz_ku100_sofaSize;      break;
-        default: DBG ("HRTF: Invalid profile index " + juce::String (profileIndex)); return;
+        case 5:  sofaData = HRTFData::mit_kemar_large_pinna_sofa;
+                 sofaSize = HRTFData::mit_kemar_large_pinna_sofaSize;  break;
+        default:
+          #if JUCE_DEBUG
+            DBG ("HRTF: Invalid profile index " + juce::String (profileIndex));
+          #endif
+            return;
     }
 
     float sampleRate = static_cast<float> (currentSampleRate);
-    bool success = hrtfDatabase.loadFromMemory (sofaData, sofaSize, sampleRate);
+    bool success = renderer.hrtfDatabase.loadFromMemory (sofaData, sofaSize, sampleRate);
 
     if (success)
     {
-        renderer.setProfile (profileIndex, hrtfDatabase);
+        renderer.setProfile (profileIndex);
+      #if JUCE_DEBUG
         DBG ("HRTF: Loaded profile " + juce::String (profileIndex)
              + " (" + juce::String (hrtfProfileNames[profileIndex]) + ")"
-             + " — " + juce::String (hrtfDatabase.getNumPositions()) + " positions"
-             + ", IR=" + juce::String (hrtfDatabase.getIRLength()) + " samples");
+             + " — " + juce::String (renderer.hrtfDatabase.getNumPositions()) + " positions"
+             + ", IR=" + juce::String (renderer.hrtfDatabase.getIRLength()) + " samples");
+      #endif
     }
     else
     {
+      #if JUCE_DEBUG
         DBG ("HRTF: Failed to load profile " + juce::String (profileIndex)
              + ", falling back to Simple");
+      #endif
     }
 }
 
@@ -1264,7 +1578,8 @@ void OpenSpatialDelayProcessor::timerCallback()
 {
     // --- HRTF profile loading (existing, unchanged) ---
     int wantedProfile = targetHRTFProfile.load (std::memory_order_relaxed);
-    if (wantedProfile != loadedHRTFProfileIndex)
+    if (wantedProfile != loadedHRTFProfileIndex
+        && ! rendererXfadeActive_.load (std::memory_order_acquire))
     {
         auto& renderer = binauralRenderers[prepareRendererIndex];
         renderer.prepare (currentSampleRate, static_cast<int> (monoInputBuffer.size()));
@@ -1275,16 +1590,15 @@ void OpenSpatialDelayProcessor::timerCallback()
     }
 
     // --- v0.6: ADM-OSC connection management (edge-detect enable/disable) ---
-    bool admEnabled = cachedParam_admOscEnabled != nullptr
-                      && cachedParam_admOscEnabled->load() >= 0.5f;
-    if (admEnabled && ! prevAdmOscEnabled)
+    // oscReceiveEnabled is a plain member (not APVTS) so it stays out of the DAW undo stack (issue E20)
+    if (oscReceiveEnabled && ! prevOscReceiveEnabled)
     {
         // Transition OFF→ON: connect
         oscConnected = oscReceiver.connect (oscReceivePort);
         if (oscConnected)
             oscReceiver.addListener (this);
     }
-    else if (! admEnabled && prevAdmOscEnabled)
+    else if (! oscReceiveEnabled && prevOscReceiveEnabled)
     {
         // Transition ON→OFF: disconnect
         oscReceiver.disconnect();
@@ -1294,10 +1608,10 @@ void OpenSpatialDelayProcessor::timerCallback()
         for (int t = 0; t < MAX_OBJECTS; ++t)
             oscOverrideActive[t].store (false, std::memory_order_relaxed);
     }
-    prevAdmOscEnabled = admEnabled;
+    prevOscReceiveEnabled = oscReceiveEnabled;
 
     // --- v0.6: OSC override timeout (500ms since last receive → release override) ---
-    if (admEnabled)
+    if (oscReceiveEnabled)
     {
         double now = juce::Time::getMillisecondCounterHiRes();
         for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -1315,7 +1629,7 @@ void OpenSpatialDelayProcessor::timerCallback()
     // and eliminating 60Hz staircase buzz in Doppler velocity.
 
     // --- SPATIAL MEDIA LIBRARY: ADM-OSC Send — broadcast object positions at 30Hz ---
-    if (oscSendEnabled && admEnabled && oscSendConnected && ++oscSendTickCounter >= 2)
+    if (oscSendEnabled && oscSendConnected && ++oscSendTickCounter >= 2)
     {
         oscSendTickCounter = 0;
         for (int t = 0; t < MAX_OBJECTS; ++t)
@@ -1412,8 +1726,7 @@ void OpenSpatialDelayProcessor::timerCallback()
             if (cachedParam_dryWet)         sendGlobal ("drywet",        cachedParam_dryWet->load(),         pg.dryWet);
             if (cachedParam_inputGain)      sendGlobal ("inputgain",     cachedParam_inputGain->load(),      pg.inputGain);
             if (cachedParam_outputGain)     sendGlobal ("outputgain",    cachedParam_outputGain->load(),     pg.outputGain);
-            sendGlobal ("algorithm",     static_cast<float> (configAlgorithm.load (std::memory_order_relaxed)),  pg.algorithm);
-            sendGlobal ("hrtfprofile",   static_cast<float> (configHrtfProfile.load (std::memory_order_relaxed)), pg.hrtfProfile);
+            // Algorithm and HRTF profile are configuration-level — not sent via OSC.
             if (cachedParam_airAbsorption)  sendGlobal ("air",           cachedParam_airAbsorption->load(),  pg.airAbsorption);
             if (cachedParam_wobbleEnabled)  sendGlobal ("wobble",        cachedParam_wobbleEnabled->load(),  pg.wobbleEnabled);
             if (cachedParam_wobbleAmount)   sendGlobal ("wobbleamount",  cachedParam_wobbleAmount->load(),   pg.wobbleAmount);
@@ -1456,6 +1769,10 @@ void OpenSpatialDelayProcessor::timerCallback()
         }
     }
 
+    // Issue #122: Debounced updateHostDisplay — at most once per 60Hz tick
+    // instead of on every UI dropdown / OSC config change (fixes Ableton automation reset)
+    if (configStateDirty.exchange (false, std::memory_order_relaxed))
+        updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true));
 }
 
 // #############################################################################
@@ -1470,17 +1787,24 @@ void OpenSpatialDelayProcessor::timerCallback()
 OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     : AudioProcessor (BusesProperties()
                         .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
-                        .withOutput ("Output", juce::AudioChannelSet::discreteChannels (50), true)),
-      apvts (*this, nullptr, "Parameters", createParameterLayout())
+                        .withOutput ("Output",
+                            // Issue #189: Ableton AU can't negotiate from discreteChannels(50).
+                            // Default to stereo in Ableton; other DAWs keep 50ch for high-order Ambisonics.
+                            juce::PluginHostType().isAbletonLive()
+                                ? juce::AudioChannelSet::stereo()
+                                : juce::AudioChannelSet::discreteChannels (50),
+                            true)),
+      apvts (*this, nullptr, "Parameters", createParameterLayout (juce::PluginHostType().isAbletonLive()))
 {
     // Initialize polymorphic algorithm pointer array (O(1) index lookup)
-    // 6 algorithms (alphabetical): Ambisonics (0), DBAP (1), KNN (2), MDAP (3), VBAP (4), VBIP (5)
+    // 7 algorithms (alphabetical): Ambisonics (0), ConstPower (1), DBAP (2), KNN (3), MDAP (4), VBAP (5), VBIP (6)
     algorithms[0] = &algAmbisonics;
-    algorithms[1] = &algDBAP;
-    algorithms[2] = &algKNN;
-    algorithms[3] = &algMDAP;
-    algorithms[4] = &algVBAP;
-    algorithms[5] = &algVBIP;
+    algorithms[1] = &algConstantPower;
+    algorithms[2] = &algDBAP;
+    algorithms[3] = &algKNN;
+    algorithms[4] = &algMDAP;
+    algorithms[5] = &algVBAP;
+    algorithms[6] = &algVBIP;
 
     // Cache per-object parameter pointers (stable for APVTS lifetime, avoids string lookups in processBlock)
     for (int i = 0; i < MAX_OBJECTS; ++i)
@@ -1515,7 +1839,7 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     cachedParam_feedback        = apvts.getRawParameterValue ("feedback");
     cachedParam_inputGain       = apvts.getRawParameterValue ("inputGain");
     cachedParam_outputGain      = apvts.getRawParameterValue ("outputGain");
-    cachedParam_admOscEnabled   = apvts.getRawParameterValue ("admOscEnabled");
+    // admOscEnabled removed from APVTS — now oscReceiveEnabled member (issue E20)
     // issue #68: Cache global tap offset APVTS pointers
     cachedParam_globalTapAzimuth   = apvts.getRawParameterValue ("globalTapAzimuth");
     cachedParam_globalTapElevation = apvts.getRawParameterValue ("globalTapElevation");
@@ -1560,8 +1884,97 @@ OpenSpatialDelayProcessor::OpenSpatialDelayProcessor()
     }
 }
 
+// Issue #189: Test constructor — allows forcing abletonMode for automated tests.
+OpenSpatialDelayProcessor::OpenSpatialDelayProcessor (bool abletonMode)
+    : AudioProcessor (BusesProperties()
+                        .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
+                        .withOutput ("Output",
+                            abletonMode ? juce::AudioChannelSet::stereo()
+                                        : juce::AudioChannelSet::discreteChannels (50),
+                            true)),
+      apvts (*this, nullptr, "Parameters", createParameterLayout (abletonMode))
+{
+    algorithms[0] = &algAmbisonics;
+    algorithms[1] = &algConstantPower;
+    algorithms[2] = &algDBAP;
+    algorithms[3] = &algKNN;
+    algorithms[4] = &algMDAP;
+    algorithms[5] = &algVBAP;
+    algorithms[6] = &algVBIP;
+
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+    {
+        auto prefix = "object" + juce::String (i + 1) + "_";
+        cachedObj[i].enabled       = apvts.getRawParameterValue (prefix + "enabled");
+        cachedObj[i].azimuth       = apvts.getRawParameterValue (prefix + "azimuth");
+        cachedObj[i].elevation     = apvts.getRawParameterValue (prefix + "elevation");
+        cachedObj[i].distance      = apvts.getRawParameterValue (prefix + "distance");
+        cachedObj[i].dopplerAmount = apvts.getRawParameterValue (prefix + "dopplerAmount");
+        cachedObj[i].pitchShift    = apvts.getRawParameterValue (prefix + "pitchShift");
+        cachedParam_trajectoryShape[i] = apvts.getRawParameterValue (prefix + "trajectoryShape");
+        cachedParam_trajectorySpeed[i] = apvts.getRawParameterValue (prefix + "trajectorySpeed");
+        cachedParam_trajectoryDirection[i] = apvts.getRawParameterValue (prefix + "trajectoryDirection");
+        cachedObj[i].inputChannel      = apvts.getRawParameterValue (prefix + "inputChannel");
+    }
+
+    cachedParam_tempoSync       = apvts.getRawParameterValue ("tempoSync");
+    cachedParam_noteDivision    = apvts.getRawParameterValue ("noteDivision");
+    cachedParam_filterLP        = apvts.getRawParameterValue ("filterLP");
+    cachedParam_filterHP        = apvts.getRawParameterValue ("filterHP");
+    cachedParam_filterHPQ       = apvts.getRawParameterValue ("filterHPQ");
+    cachedParam_filterLPQ       = apvts.getRawParameterValue ("filterLPQ");
+    cachedParam_filterEnabled   = apvts.getRawParameterValue ("filterEnabled");
+    cachedParam_airAbsorption   = apvts.getRawParameterValue ("airAbsorption");
+    cachedParam_wobbleEnabled   = apvts.getRawParameterValue ("wobbleEnabled");
+    cachedParam_wobbleAmount    = apvts.getRawParameterValue ("wobbleAmount");
+    cachedParam_wobbleMorph     = apvts.getRawParameterValue ("wobbleMorph");
+    cachedParam_delayTime       = apvts.getRawParameterValue ("delayTime");
+    cachedParam_dryWet          = apvts.getRawParameterValue ("dryWet");
+    cachedParam_feedback        = apvts.getRawParameterValue ("feedback");
+    cachedParam_inputGain       = apvts.getRawParameterValue ("inputGain");
+    cachedParam_outputGain      = apvts.getRawParameterValue ("outputGain");
+    cachedParam_globalTapAzimuth   = apvts.getRawParameterValue ("globalTapAzimuth");
+    cachedParam_globalTapElevation = apvts.getRawParameterValue ("globalTapElevation");
+    cachedParam_globalTapDistance   = apvts.getRawParameterValue ("globalTapDistance");
+    cachedParam_globalTapPitch     = apvts.getRawParameterValue ("globalTapPitch");
+    cachedParam_globalTapDoppler   = apvts.getRawParameterValue ("globalTapDoppler");
+    cachedParam_globalTapSpeed     = apvts.getRawParameterValue ("globalTapSpeed");
+
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+    {
+        auto prefix = "object" + juce::String (i + 1) + "_";
+        trajParam_azimuth[i]   = apvts.getParameter (prefix + "azimuth");
+        oscSendAddress[i] = "/adm/obj/" + juce::String (i + 1) + "/aed";
+    }
+
+    {
+        static const float initAz[] = {-45.0f, 45.0f, -135.0f, 135.0f,
+                                         0.0f, 90.0f, -90.0f, 180.0f,
+                                        -30.0f, 30.0f, -60.0f, 60.0f};
+        for (int i = 0; i < MAX_OBJECTS; ++i)
+            if (trajParam_azimuth[i] != nullptr)
+                trajParam_azimuth[i]->setValueNotifyingHost (
+                    trajParam_azimuth[i]->convertTo0to1 (initAz[i]));
+    }
+
+    loadAllPresets();
+
+    for (int i = 0; i < static_cast<int> (allPresets.size()); ++i)
+    {
+        if (allPresets[static_cast<size_t> (i)].name == "Quad Ping-Pong")
+        {
+            currentPresetIndex = i;
+            break;
+        }
+    }
+}
+
 OpenSpatialDelayProcessor::~OpenSpatialDelayProcessor()
 {
+    // Issue #122: Stop 60Hz timer before any member destruction to prevent
+    // use-after-free in timerCallback() during plugin deletion
+    stopTimer();
+
     // v0.6: Disconnect OSC receiver before destruction
     oscReceiver.disconnect();
     oscReceiver.removeListener (this);
@@ -1572,12 +1985,20 @@ OpenSpatialDelayProcessor::~OpenSpatialDelayProcessor()
 //==============================================================================
 // v0.6: OSC port change — reconnect if currently connected
 //==============================================================================
+void OpenSpatialDelayProcessor::setOscReceiveEnabled (bool enabled)
+{
+    oscReceiveEnabled = enabled;
+    markConfigStateDirty();  // E14: notify DAW so state is re-captured on save
+    // Connection lifecycle handled in processBlock via edge-detect
+}
+
 void OpenSpatialDelayProcessor::setOscReceivePort (int port)
 {
     if (port == oscReceivePort)
         return;
 
     oscReceivePort = port;
+    markConfigStateDirty();  // E14: notify DAW so state is re-captured on save
 
     // If currently connected, reconnect on the new port
     if (oscConnected)
@@ -1599,6 +2020,7 @@ void OpenSpatialDelayProcessor::setOscSendEnabled (bool enabled)
         return;
 
     oscSendEnabled = enabled;
+    markConfigStateDirty();  // E14: notify DAW so state is re-captured on save
     if (enabled)
     {
         oscSendConnected = oscSender.connect (oscSendIP, oscSendPort);
@@ -1615,6 +2037,7 @@ void OpenSpatialDelayProcessor::setOscSendPort (int port)
     if (port == oscSendPort)
         return;
     oscSendPort = port;
+    markConfigStateDirty();  // E14: notify DAW so state is re-captured on save
     if (oscSendEnabled)
     {
         oscSender.disconnect();
@@ -1627,6 +2050,7 @@ void OpenSpatialDelayProcessor::setOscSendIP (const juce::String& ip)
     if (ip == oscSendIP)
         return;
     oscSendIP = ip;
+    markConfigStateDirty();  // E14: notify DAW so state is re-captured on save
     if (oscSendEnabled)
     {
         oscSender.disconnect();
@@ -1664,6 +2088,32 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
 
     const PresetData* preset = &allPresets[static_cast<size_t> (index)];
 
+    // Issue E15: Begin gestures on all params we're about to set, so the host
+    // groups the entire preset load into a single undo entry.
+    std::vector<juce::RangedAudioParameter*> presetGestures;
+    auto beginGesture = [&] (const juce::String& paramId) {
+        if (auto* p = apvts.getParameter (paramId))
+        {
+            p->beginChangeGesture();
+            presetGestures.push_back (p);
+        }
+    };
+
+    // Collect all params that will be set
+    for (const char* id : { "delayTime", "tempoSync", "noteDivision", "syncMode",
+                            "feedback", "filterLP", "filterHP", "filterLPQ", "filterHPQ",
+                            "dryWet", "inputGain", "outputGain", "airAbsorption",
+                            "filterEnabled", "wobbleEnabled", "wobbleAmount", "wobbleMorph" })
+        beginGesture (id);
+    for (int i = 0; i < MAX_OBJECTS; ++i)
+    {
+        auto prefix = "object" + juce::String (i + 1) + "_";
+        for (const char* suffix : { "enabled", "azimuth", "elevation", "distance",
+                                    "dopplerAmount", "pitchShift", "trajectoryShape",
+                                    "trajectorySpeed", "trajectoryDirection", "inputChannel" })
+            beginGesture (prefix + suffix);
+    }
+
     // Helpers — use convertTo0to1() to handle skewed NormalisableRanges correctly
     auto setFloat = [&] (const juce::String& paramId, float value) {
         if (auto* p = apvts.getParameter (paramId))
@@ -1700,9 +2150,8 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
     setBool   ("wobbleEnabled", preset->wobbleEnabled);
     setFloat  ("wobbleAmount", preset->wobbleAmount);
     setFloat  ("wobbleMorph",  preset->wobbleMorph);
-    configAlgorithm.store (preset->algorithm, std::memory_order_relaxed);
     configHrtfProfile.store (preset->hrtfProfile, std::memory_order_relaxed);
-    // NOTE: outputFormat, admOscEnabled, oscReceivePort are NOT modified by presets
+    // NOTE: configAlgorithm, outputFormat, admOscEnabled, oscReceivePort are NOT modified by presets
 
     // Per-tap params
     for (int i = 0; i < MAX_OBJECTS; ++i)
@@ -1721,6 +2170,10 @@ void OpenSpatialDelayProcessor::loadPreset (int index)
         setChoice (prefix + "trajectoryDirection", tap.trajectoryDirection);
         setChoice (prefix + "inputChannel",        tap.inputChannel);
     }
+
+    // Issue E15: End all gestures — host groups the entire preset load as one undo entry
+    for (auto* p : presetGestures)
+        p->endChangeGesture();
 
     // v1.0.1: Reset trajectory state FIRST so processBlock doesn't read stale
     // animated positions from the old preset while prevAzimuth already points to
@@ -1993,42 +2446,44 @@ void OpenSpatialDelayProcessor::rebuildCategorizedOrder()
 //==============================================================================
 bool OpenSpatialDelayProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
 {
-    // Input can be mono or stereo (stereo will be summed to mono internally)
+    // VST3: accept any layout the host proposes (IEM Plugin Suite approach, issue #111).
+    // VST3 hosts negotiate bus arrangements that may not match our predefined set;
+    // accepting everything lets REAPER/Cubase provide the track's full channel count.
+    // AU: keep explicit whitelist for Ableton AU compatibility (issue #122).
+    if (wrapperType == wrapperType_VST3)
+    {
+        juce::ignoreUnused (layouts);
+        return true;
+    }
+
+    // Issue #189: Reject discrete layouts for AU.
+    // JUCE's AU wrapper calls busIgnoresLayout() which tests discreteChannels(N).
+    // If accepted, JUCE reports zero named layout tags via
+    // kAudioUnitProperty_SupportedChannelLayoutTags. Ableton requires explicit
+    // named tags (kAudioChannelLayoutTag_Stereo, etc.) and rejects plugins with
+    // empty tag lists. Rejecting discrete makes busIgnoresLayout() return false,
+    // so JUCE enumerates and advertises named tags.
+    // Ambisonics (discrete 4/9/16/25/36/49) is unaffected — use VST3 for that.
+    if (layouts.getMainOutputChannelSet().isDiscreteLayout())
+        return false;
+
+    // AU / standalone path: accept any named channel count usable by at least one format.
+    // The UI dropdown greys out formats whose requiredChannels > maxBusChannels,
+    // so bus negotiation only needs to confirm the channel count is viable.
     auto inputSet = layouts.getMainInputChannelSet();
     if (inputSet != juce::AudioChannelSet::mono() &&
         inputSet != juce::AudioChannelSet::stereo())
-        return false;
+    {
+        if (inputSet != layouts.getMainOutputChannelSet())
+            return false;
+    }
 
-    // v0.2: Stable set of output bus layouts. DO NOT ADD NEW ENTRIES HERE.
-    // Adding entries causes DAWs to renegotiate bus layouts during playback,
-    // which triggers prepareToPlay() mid-session and zeros the delay buffer.
-    // See docs/BUS_LAYOUT_BUG.md for full explanation.
-    //
-    // New output formats (5.0, 7.0, 5.1.2, Ambisonics, etc.) are handled
-    // INTERNALLY via the output format dropdown — they render to whatever
-    // channels the bus provides without needing DAW-level bus support.
     auto outputSet = layouts.getMainOutputChannelSet();
-    if (outputSet == juce::AudioChannelSet::stereo())              return true;
-    if (outputSet == juce::AudioChannelSet::quadraphonic())        return true;
-    if (outputSet == juce::AudioChannelSet::create5point1())       return true;
-    if (outputSet == juce::AudioChannelSet::create7point1())       return true;
-    if (outputSet == juce::AudioChannelSet::create7point1point4()) return true;
-    if (outputSet == juce::AudioChannelSet::create9point1point6()) return true;
-    if (outputSet == juce::AudioChannelSet::octagonal())           return true;
-    if (outputSet == juce::AudioChannelSet::discreteChannels (8))  return true;
+    int numCh = outputSet.size();
 
-    // v1.0: SpatialMediaLab 13.1 / 7.1.6 (14 channels)
-    if (outputSet == juce::AudioChannelSet::discreteChannels (14)) return true;
-
-    // v0.5: Ambisonics discrete channel buses (FOA through 6th order)
-    if (outputSet == juce::AudioChannelSet::discreteChannels (4))  return true;  // FOA
-    if (outputSet == juce::AudioChannelSet::discreteChannels (9))  return true;  // SOA
-    if (outputSet == juce::AudioChannelSet::discreteChannels (16)) return true;  // HOA (3rd)
-    if (outputSet == juce::AudioChannelSet::discreteChannels (25)) return true;  // 4th order
-    if (outputSet == juce::AudioChannelSet::discreteChannels (26)) return true;  // v0.8: 4OA stereo-pair (13×2)
-    if (outputSet == juce::AudioChannelSet::discreteChannels (36)) return true;  // 5th order
-    if (outputSet == juce::AudioChannelSet::discreteChannels (49)) return true;  // 6th order
-    if (outputSet == juce::AudioChannelSet::discreteChannels (50)) return true;  // v0.8: 6OA stereo-pair (25×2)
+    for (const auto& info : outputFormatRegistry)
+        if (info.requiredChannels <= numCh)
+            return true;
 
     return false;
 }
@@ -2247,6 +2702,7 @@ void OpenSpatialDelayProcessor::activateLayout (OutputFormat format)
         case OutputFormat::Surround5_1:   buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S5_1]);       break;
         case OutputFormat::Surround7_0:   buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S7_0]);       break;
         case OutputFormat::Surround7_1:   buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S7_1]);       break;
+        case OutputFormat::Surround9_1:   buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S9_1]);       break;
         case OutputFormat::Surround5_1_2: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S5_1_2]);     break;
         case OutputFormat::Surround5_1_4: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S5_1_4]);     break;
         case OutputFormat::Surround7_1_2: buf.layout = makeLayoutFromDef (layoutDefs[LayoutID::S7_1_2]);     break;
@@ -2387,8 +2843,8 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     writePosition = 0;
     feedbackSample = 0.0f;
 
-    // v0.8: Reset wobble modulation state
-    wobblePhase = 0.0f;
+    // v1.0.7: Reset wobble modulation state (4-layer tape emulation, issue #92)
+    std::fill (std::begin (wobblePhases), std::end (wobblePhases), 0.0f);
     smoothedWobbleAmount.reset (sampleRate, 0.05);  // 50ms ramp
     smoothedWobbleAmount.setCurrentAndTargetValue (0.0f);
     blockWobbleMorph = 0.0f;
@@ -2439,7 +2895,19 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     smoothedOutputGain.reset (sampleRate, 0.02);
 
     // Read current parameter values so smoothing starts at the right position
-    float initDelayMs = apvts.getRawParameterValue ("delayTime")->load();
+    // E18: Use tempo-synced value when tempo sync is active — the raw knob value
+    // may differ from the actual delay time, causing a stale ramp on first block.
+    float initDelayMs;
+    bool tempoSyncInit = apvts.getRawParameterValue ("tempoSync")->load() > 0.5f;
+    if (tempoSyncInit)
+    {
+        int ndivInit = static_cast<int> (apvts.getRawParameterValue ("noteDivision")->load());
+        initDelayMs = getTempoSyncedDelayMs (ndivInit);
+    }
+    else
+    {
+        initDelayMs = apvts.getRawParameterValue ("delayTime")->load();
+    }
     float initDryWet  = apvts.getRawParameterValue ("dryWet")->load();
     float initFb      = apvts.getRawParameterValue ("feedback")->load();
     float initInGain  = juce::Decibels::decibelsToGain (apvts.getRawParameterValue ("inputGain")->load());
@@ -2457,6 +2925,16 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     // Smooth loop multiplier — 50ms ramp prevents clicks when enabling/disabling objects
     smoothedLoopMultiplier.reset (sampleRate, 0.05);
     smoothedLoopMultiplier.setCurrentAndTargetValue (1.0f);
+
+    // v1.0.1: Preset transition fade — 5ms = imperceptible but click-free (issue #84)
+    presetTransitionStep = 1.0f / (0.005f * static_cast<float> (sampleRate));
+    presetTransitionState = PresetTransitionState::Idle;
+    presetTransitionGain = 1.0f;
+
+    // v1.0.6: Transport fade-in — same 5ms ramp for scrub/seek click prevention (issue #103)
+    transportFadeStep = 1.0f / (0.005f * static_cast<float> (sampleRate));
+    transportFadeGain = 1.0f;
+    transportFadeActive = false;
 
     // Initialize modular 3D audio core
     computeAmbiDecodeMatrix();        // Pre-compute 3rd-order decode matrix for virtual speakers
@@ -2503,6 +2981,10 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
     binauralRenderers[0].prepare (sampleRate, samplesPerBlock);
     binauralRenderers[1].prepare (sampleRate, samplesPerBlock);
 
+    // Pre-allocate renderer crossfade buffers (issue #131: avoid audio-thread allocation)
+    xfadeWetL_.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+    xfadeWetR_.resize (static_cast<size_t> (samplesPerBlock), 0.0f);
+
     // v0.5: Contiguous per-source accumulation buffers for direct binaural
     sourceAccumBufStorage.resize (static_cast<size_t> (MAX_OBJECTS * samplesPerBlock), 0.0f);
     for (int src = 0; src < MAX_OBJECTS; ++src)
@@ -2519,6 +3001,9 @@ void OpenSpatialDelayProcessor::prepareToPlay (double sampleRate, int samplesPer
 
 void OpenSpatialDelayProcessor::releaseResources()
 {
+    // Issue #122: Stop timer early — DAW calls this before destruction
+    stopTimer();
+
     delayBufferL.clear();
     delayBufferR.clear();
     monoInputBuffer.clear();
@@ -2708,113 +3193,115 @@ static bool invert3x3 (const float m[3][3], float inv[3][3])
 // projected up); the 9 ear-level speakers provide full 360° horizontal coverage.
 const std::vector<VBAPTriplet>& OpenSpatialDelayProcessor::getVBAPTriplets()
 {
-    static std::vector<VBAPTriplet> triplets;
-    static bool initialized = false;
+    // C++11 guarantees thread-safe initialization of function-local statics,
+    // eliminating the race condition when multiple instances call this
+    // simultaneously (issue #96).
+    static const std::vector<VBAPTriplet> triplets = []() {
+        std::vector<VBAPTriplet> result;
 
-    if (initialized)
-        return triplets;
+        // Speaker indices for reference:
+        //  0: C (0°)      1: L (30°)      2: R (-30°)
+        //  3: Lw (60°)    4: Rw (-60°)    5: Ls (90°)
+        //  6: Rs (-90°)   7: Lrs (135°)   8: Rrs (-135°)
+        //  9: Tfl (45°)  10: Tfr (-45°)  11: Tsl (90°)
+        // 12: Tsr (-90°) 13: Trl (135°)  14: Trr (-135°)
+        // 15: T (zenith)
 
-    // Speaker indices for reference:
-    //  0: C (0°)      1: L (30°)      2: R (-30°)
-    //  3: Lw (60°)    4: Rw (-60°)    5: Ls (90°)
-    //  6: Rs (-90°)   7: Lrs (135°)   8: Rrs (-135°)
-    //  9: Tfl (45°)  10: Tfr (-45°)  11: Tsl (90°)
-    // 12: Tsr (-90°) 13: Trl (135°)  14: Trr (-135°)
-    // 15: T (zenith)
+        // Triangulation connectivity:
+        // Tier 1: Ear-level ring to top ring (connect adjacent ear-level pairs
+        //         to the top speaker that sits above the arc between them)
+        // Tier 2: Top ring to zenith (6 triangles forming the dome cap)
+        const int tris[][3] = {
+            // --- Tier 1: Ear-level ↔ Top ring ---
+            // Front sector
+            { 0,  1,  9 },  // C + L → Tfl
+            { 0,  2, 10 },  // C + R → Tfr
+            { 1,  3,  9 },  // L + Lw → Tfl
+            { 2,  4, 10 },  // R + Rw → Tfr
+            // Side sector
+            { 3,  5,  9 },  // Lw + Ls → Tfl (Tfl bridges front-to-side left)
+            { 4,  6, 10 },  // Rw + Rs → Tfr (Tfr bridges front-to-side right)
+            { 5,  7, 11 },  // Ls + Lrs → Tsl
+            { 6,  8, 12 },  // Rs + Rrs → Tsr
+            // Rear sector
+            { 7,  8, 13 },  // Lrs + Rrs → Trl (using Trl at 135°)
+            { 7,  8, 14 },  // Lrs + Rrs → Trr (using Trr at -135°)
+            // Bridging: connect top speakers to each other through ear-level ring
+            { 5,  9, 11 },  // Ls + Tfl + Tsl
+            { 6, 10, 12 },  // Rs + Tfr + Tsr
+            { 7, 11, 13 },  // Lrs + Tsl + Trl
+            { 8, 12, 14 },  // Rrs + Tsr + Trr
+            // Front bridging between Tfl/Tfr through C
+            { 0,  9, 10 },  // C + Tfl + Tfr
+            // Rear bridging between Trl/Trr through rear ear-level
+            { 7, 13, 14 },  // Lrs + Trl + Trr  (left rear bridge)
+            { 8, 13, 14 },  // Rrs + Trl + Trr  (right rear bridge)
 
-    // Triangulation connectivity:
-    // Tier 1: Ear-level ring to top ring (connect adjacent ear-level pairs
-    //         to the top speaker that sits above the arc between them)
-    // Tier 2: Top ring to zenith (6 triangles forming the dome cap)
-    const int tris[][3] = {
-        // --- Tier 1: Ear-level ↔ Top ring ---
-        // Front sector
-        { 0,  1,  9 },  // C + L → Tfl
-        { 0,  2, 10 },  // C + R → Tfr
-        { 1,  3,  9 },  // L + Lw → Tfl
-        { 2,  4, 10 },  // R + Rw → Tfr
-        // Side sector
-        { 3,  5,  9 },  // Lw + Ls → Tfl (Tfl bridges front-to-side left)
-        { 4,  6, 10 },  // Rw + Rs → Tfr (Tfr bridges front-to-side right)
-        { 5,  7, 11 },  // Ls + Lrs → Tsl
-        { 6,  8, 12 },  // Rs + Rrs → Tsr
-        // Rear sector
-        { 7,  8, 13 },  // Lrs + Rrs → Trl (using Trl at 135°)
-        { 7,  8, 14 },  // Lrs + Rrs → Trr (using Trr at -135°)
-        // Bridging: connect top speakers to each other through ear-level ring
-        { 5,  9, 11 },  // Ls + Tfl + Tsl
-        { 6, 10, 12 },  // Rs + Tfr + Tsr
-        { 7, 11, 13 },  // Lrs + Tsl + Trl
-        { 8, 12, 14 },  // Rrs + Tsr + Trr
-        // Front bridging between Tfl/Tfr through C
-        { 0,  9, 10 },  // C + Tfl + Tfr
-        // Rear bridging between Trl/Trr through rear ear-level
-        { 7, 13, 14 },  // Lrs + Trl + Trr  (left rear bridge)
-        { 8, 13, 14 },  // Rrs + Trl + Trr  (right rear bridge)
+            // --- Tier 2: Top ring → Zenith (dome cap) ---
+            {  9, 10, 15 }, // Tfl + Tfr + T  (front cap)
+            {  9, 11, 15 }, // Tfl + Tsl + T  (front-left cap)
+            { 10, 12, 15 }, // Tfr + Tsr + T  (front-right cap)
+            { 11, 13, 15 }, // Tsl + Trl + T  (rear-left cap)
+            { 12, 14, 15 }, // Tsr + Trr + T  (rear-right cap)
+            { 13, 14, 15 }, // Trl + Trr + T  (rear cap)
 
-        // --- Tier 2: Top ring → Zenith (dome cap) ---
-        {  9, 10, 15 }, // Tfl + Tfr + T  (front cap)
-        {  9, 11, 15 }, // Tfl + Tsl + T  (front-left cap)
-        { 10, 12, 15 }, // Tfr + Tsr + T  (front-right cap)
-        { 11, 13, 15 }, // Tsl + Trl + T  (rear-left cap)
-        { 12, 14, 15 }, // Tsr + Trr + T  (rear-right cap)
-        { 13, 14, 15 }, // Trl + Trr + T  (rear cap)
-
-        // --- Below-horizon fallback triangles ---
-        // For sources below the ear plane, these triangles between adjacent
-        // ear-level speakers provide panning across the lower hemisphere.
-        // (The signal is effectively "projected" into the ear-level ring.)
-        { 0,  1,  2 },  // C + L + R (front)
-        { 1,  2,  3 },  // L + R + Lw
-        { 2,  3,  4 },  // R + Lw + Rw
-        { 3,  4,  5 },  // Lw + Rw + Ls
-        { 4,  5,  6 },  // Rw + Ls + Rs
-        { 5,  6,  7 },  // Ls + Rs + Lrs
-        { 6,  7,  8 },  // Rs + Lrs + Rrs
-        { 0,  7,  8 },  // C + Lrs + Rrs (rear wrap — through C for full coverage)
-        { 0,  1,  7 },  // C + L + Lrs (left rear quadrant)
-        { 0,  2,  8 },  // C + R + Rrs (right rear quadrant)
-    };
-
-    constexpr int numTris = sizeof(tris) / sizeof(tris[0]);
-
-    for (int t = 0; t < numTris; ++t)
-    {
-        VBAPTriplet tri;
-        tri.i = tris[t][0];
-        tri.j = tris[t][1];
-        tri.k = tris[t][2];
-
-        // Build 3x3 matrix of speaker direction vectors
-        // Convention: (sin(az)*cos(el), cos(az)*cos(el), sin(el))
-        // Matches computeVBAPGains3D and activateLayout toCart lambda
-        auto toCart = [](float az, float el) -> std::array<float, 3> {
-            return { std::cos(el) * std::sin(az),
-                     std::cos(el) * std::cos(az),
-                     std::sin(el) };
+            // --- Below-horizon fallback triangles ---
+            // For sources below the ear plane, these triangles between adjacent
+            // ear-level speakers provide panning across the lower hemisphere.
+            // (The signal is effectively "projected" into the ear-level ring.)
+            { 0,  1,  2 },  // C + L + R (front)
+            { 1,  2,  3 },  // L + R + Lw
+            { 2,  3,  4 },  // R + Lw + Rw
+            { 3,  4,  5 },  // Lw + Rw + Ls
+            { 4,  5,  6 },  // Rw + Ls + Rs
+            { 5,  6,  7 },  // Ls + Rs + Lrs
+            { 6,  7,  8 },  // Rs + Lrs + Rrs
+            { 0,  7,  8 },  // C + Lrs + Rrs (rear wrap — through C for full coverage)
+            { 0,  1,  7 },  // C + L + Lrs (left rear quadrant)
+            { 0,  2,  8 },  // C + R + Rrs (right rear quadrant)
         };
 
-        auto ci = toCart (virtualSpeakers[static_cast<size_t> (tri.i)].azimuthRad, virtualSpeakers[static_cast<size_t> (tri.i)].elevationRad);
-        auto cj = toCart (virtualSpeakers[static_cast<size_t> (tri.j)].azimuthRad, virtualSpeakers[static_cast<size_t> (tri.j)].elevationRad);
-        auto ck = toCart (virtualSpeakers[static_cast<size_t> (tri.k)].azimuthRad, virtualSpeakers[static_cast<size_t> (tri.k)].elevationRad);
+        constexpr int numTris = sizeof(tris) / sizeof(tris[0]);
 
-        float xi = ci[0], yi = ci[1], zi = ci[2];
-        float xj = cj[0], yj = cj[1], zj = cj[2];
-        float xk = ck[0], yk = ck[1], zk = ck[2];
+        for (int t = 0; t < numTris; ++t)
+        {
+            VBAPTriplet tri;
+            tri.i = tris[t][0];
+            tri.j = tris[t][1];
+            tri.k = tris[t][2];
 
-        // Matrix L = [spk_i | spk_j | spk_k] as columns for g = L^-1 * p
-        // (Pulkki 1997: p = L*g → g = L^-1 * p; speakers must be columns)
-        float L[3][3] = {
-            { xi, xj, xk },
-            { yi, yj, yk },
-            { zi, zj, zk }
-        };
+            // Build 3x3 matrix of speaker direction vectors
+            // Convention: (sin(az)*cos(el), cos(az)*cos(el), sin(el))
+            // Matches computeVBAPGains3D and activateLayout toCart lambda
+            auto toCart = [](float az, float el) -> std::array<float, 3> {
+                return { std::cos(el) * std::sin(az),
+                         std::cos(el) * std::cos(az),
+                         std::sin(el) };
+            };
 
-        if (invert3x3 (L, tri.inv))
-            triplets.push_back (tri);
-    }
+            auto ci = toCart (virtualSpeakers[static_cast<size_t> (tri.i)].azimuthRad, virtualSpeakers[static_cast<size_t> (tri.i)].elevationRad);
+            auto cj = toCart (virtualSpeakers[static_cast<size_t> (tri.j)].azimuthRad, virtualSpeakers[static_cast<size_t> (tri.j)].elevationRad);
+            auto ck = toCart (virtualSpeakers[static_cast<size_t> (tri.k)].azimuthRad, virtualSpeakers[static_cast<size_t> (tri.k)].elevationRad);
 
-    initialized = true;
+            float xi = ci[0], yi = ci[1], zi = ci[2];
+            float xj = cj[0], yj = cj[1], zj = cj[2];
+            float xk = ck[0], yk = ck[1], zk = ck[2];
+
+            // Matrix L = [spk_i | spk_j | spk_k] as columns for g = L^-1 * p
+            // (Pulkki 1997: p = L*g → g = L^-1 * p; speakers must be columns)
+            float L[3][3] = {
+                { xi, xj, xk },
+                { yi, yj, yk },
+                { zi, zj, zk }
+            };
+
+            if (invert3x3 (L, tri.inv))
+                result.push_back (tri);
+        }
+
+        return result;
+    }();
+
     return triplets;
 }
 
@@ -3443,6 +3930,49 @@ void DBAPAlgorithm::computeGains (const SourcePosition& source, const LayoutCont
 }
 
 //==============================================================================
+// ConstantPowerAlgorithm — Cosine-distance all-speaker panning
+// All speakers within 90 degrees of the source receive a cosine-weighted gain,
+// constant-power normalized. Produces smooth, diffuse spatial images.
+//==============================================================================
+void ConstantPowerAlgorithm::computeGains (const SourcePosition& source, const LayoutContext& ctx,
+                                            float* outputGains, int numSpeakers) const
+{
+    for (int s = 0; s < numSpeakers; ++s)
+        outputGains[s] = 0.0f;
+
+    if (numSpeakers == 0) return;
+
+    // Source direction as unit Cartesian vector
+    float px = std::cos (source.elevationRad) * std::sin (source.azimuthRad);
+    float py = std::cos (source.elevationRad) * std::cos (source.azimuthRad);
+    float pz = std::sin (source.elevationRad);
+
+    // Cosine-distance weighting: dot product = cos(angular distance)
+    // Hemisphere cutoff: speakers beyond 90 degrees get zero gain
+    float totalPower = 0.0f;
+
+    for (int s = 0; s < numSpeakers; ++s)
+    {
+        float sx = std::cos (ctx.layout.speakers[s].elevationRad) * std::sin (ctx.layout.speakers[s].azimuthRad);
+        float sy = std::cos (ctx.layout.speakers[s].elevationRad) * std::cos (ctx.layout.speakers[s].azimuthRad);
+        float sz = std::sin (ctx.layout.speakers[s].elevationRad);
+
+        float dot = juce::jlimit (-1.0f, 1.0f, px * sx + py * sy + pz * sz);
+        float rawGain = std::max (0.0f, dot);
+        outputGains[s] = rawGain;
+        totalPower += rawGain * rawGain;
+    }
+
+    // Constant-power normalization
+    if (totalPower > 1e-12f)
+    {
+        float scale = 1.0f / std::sqrt (totalPower);
+        for (int s = 0; s < numSpeakers; ++s)
+            outputGains[s] *= scale;
+    }
+}
+
+//==============================================================================
 // MDAPAlgorithm — Multiple-Direction Amplitude Panning (Pulkki 2000)
 // Creates source spread using N auxiliary VBAP sources on a ring around the
 // main direction. Produces wider, more stable spatial images than point VBAP.
@@ -3633,49 +4163,41 @@ OpenSpatialDelayProcessor::evaluateRandomNoise (int objectIndex, float time) con
 // and render logic, calling the spatial algorithms via computeGains().
 // #############################################################################
 
-// --- DELAY-SPECIFIC: Wobble modulation (v0.9) --- tape wow/flutter emulation
+// --- DELAY-SPECIFIC: Wobble modulation (v1.0.7) --- tape wow/flutter emulation
 // 4 incommensurate sinusoids spanning wow (1.5 Hz) to flutter (8.1 Hz).
 // Morph crossfades weight distribution: wow-heavy at 0%, flutter-heavy at 100%.
-// v0.8: Wobble waveform — morphs between 4 shapes based on morph parameter (0..100)
-// 0=sine (smooth wow), 33=triangle, 66=rounded square (mechanical), 100=irregular (worn tape)
-static float computeWobbleWaveform (float phase, float morphPercent)
-{
-    float twoPi = juce::MathConstants<float>::twoPi;
-    float p = phase * twoPi;
+// Restored from v0.9 architecture with smoothed amount + quadratic depth (issue #92).
+static constexpr int   kWobbleLayers = 4;
+static constexpr float kWobbleRates[kWobbleLayers]    = { 1.5f, 3.7f, 5.9f, 8.1f };
+static constexpr float kWowWeights[kWobbleLayers]     = { 0.55f, 0.30f, 0.10f, 0.05f };
+static constexpr float kFlutterWeights[kWobbleLayers] = { 0.05f, 0.10f, 0.30f, 0.55f };
 
-    float sine = std::sin (p);
-    float triangle = 2.0f * std::abs (2.0f * phase - 1.0f) - 1.0f;
-    float roundedSquare = std::tanh (4.0f * std::sin (p));
-    float irregular = std::sin (p)
-                    + 0.3f * std::sin (2.0f * p + 0.7f)
-                    + 0.15f * std::sin (3.0f * p + 1.3f)
-                    + 0.08f * std::sin (5.0f * p + 2.1f);
-    irregular *= 0.65f;  // normalize roughly to +/-1
-
-    // Crossfade between adjacent shapes (0→sine, 33→triangle, 66→roundedSq, 100→irregular)
-    float t = morphPercent / 100.0f * 3.0f;  // 0..3
-    int seg = juce::jlimit (0, 2, static_cast<int> (t));
-    float frac = t - static_cast<float> (seg);
-
-    float shapes[4] = { sine, triangle, roundedSquare, irregular };
-    return shapes[seg] * (1.0f - frac) + shapes[seg + 1] * frac;
-}
-
-// v0.8: Apply wobble modulation — LFO rate tied to delay time (shorter delay = faster wobble)
 inline float OpenSpatialDelayProcessor::applyWobble (float baseDelaySamples, float currentDelayMs)
 {
     float wobbleAmt = smoothedWobbleAmount.getNextValue();
     if (wobbleAmt <= 0.0f)
         return baseDelaySamples;
 
-    float lfoFreqHz = 1000.0f / std::max (1.0f, currentDelayMs);
-    wobblePhase += lfoFreqHz / static_cast<float> (currentSampleRate);
-    if (wobblePhase >= 1.0f)
-        wobblePhase -= std::floor (wobblePhase);
+    juce::ignoreUnused (currentDelayMs);
 
-    float waveform = computeWobbleWaveform (wobblePhase, blockWobbleMorph);
+    const float morph = blockWobbleMorph / 100.0f;
+    const float invSr = 1.0f / static_cast<float> (currentSampleRate);
+
+    float modulation = 0.0f;
+    for (int i = 0; i < kWobbleLayers; ++i)
+    {
+        wobblePhases[i] += kWobbleRates[i] * invSr;
+        if (wobblePhases[i] >= 1.0f)
+            wobblePhases[i] -= 1.0f;
+
+        float weight = kWowWeights[i] + morph * (kFlutterWeights[i] - kWowWeights[i]);
+        modulation += weight * std::sin (wobblePhases[i] * juce::MathConstants<float>::twoPi);
+    }
+
+    // Linear scaling — original 0.006 depth works correctly with fixed 4-layer rates
+    // (v0.8's "too extreme" was caused by delay-dependent rate, not depth)
     constexpr float maxDeviation = 0.006f;  // ±0.6% of delay time at max amount
-    return baseDelaySamples * (1.0f + wobbleAmt * waveform * maxDeviation);
+    return baseDelaySamples * (1.0f + wobbleAmt * modulation * maxDeviation);
 }
 
 //==============================================================================
@@ -3804,6 +4326,28 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
                         pvPitchShifters[i].reset();
                         dopplerDelayAccum[i] = 0.0f;
                     }
+
+                    // v1.0.6: Mute output and fade back in over 5ms to mask
+                    // delay buffer discontinuity after scrub/seek (issue #103)
+                    transportFadeGain = 0.0f;
+                    transportFadeActive = true;
+
+                    // E18: Snap delay time to correct value on transport start.
+                    // Without this, smoothedDelayTime ramps from its stale value
+                    // over 100ms, sweeping the read position through old buffer
+                    // content (audible chirp at tempos other than the previous one).
+                    {
+                        bool tsync = cachedParam_tempoSync->load() > 0.5f;
+                        if (tsync)
+                        {
+                            int ndiv = static_cast<int> (cachedParam_noteDivision->load());
+                            smoothedDelayTime.setCurrentAndTargetValue (getTempoSyncedDelayMs (ndiv));
+                        }
+                        else
+                        {
+                            smoothedDelayTime.setCurrentAndTargetValue (cachedParam_delayTime->load());
+                        }
+                    }
                 }
 
                 wasPlaying = isPlaying;
@@ -3812,28 +4356,13 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         }
     }
 
-    // v1.0.1: Apply deferred preset reset on the audio thread (thread-safe).
-    // loadPreset() sets the flag; we do the actual WSOLA/Doppler/filter reset here
-    // so there's no race between message thread writes and audio thread reads.
-    if (presetResetPending.load (std::memory_order_acquire))
+    // v1.0.1: Preset transition — fade-out/reconfigure/fade-in (issue #84).
+    // Instead of resetting state immediately (which causes chirp through feedback),
+    // trigger a fade-out. The actual reset happens at zero gain in the output stage.
+    if (presetResetPending.load (std::memory_order_acquire)
+        && presetTransitionState != PresetTransitionState::FadeOut)
     {
-        for (int i = 0; i < MAX_OBJECTS; ++i)
-        {
-            doppler.reset (i, pendingReset.prevAz[i], pendingReset.prevEl[i], pendingReset.prevDist[i]);
-            dopplerDelayAccum[i] = 0.0f;
-        }
-
-        for (int i = 0; i < MAX_OBJECTS; ++i)
-            pvPitchShifters[i].reset();
-
-        filters.resetAll();
-
-        // Invalidate HRTF convolvers so new HRIRs load directly (no crossfade
-        // from stale IR at the old preset's positions — prevents clicks).
-        auto& activeRenderer = binauralRenderers[activeRendererIndex.load (std::memory_order_acquire)];
-        activeRenderer.invalidateSources();
-
-        presetResetPending.store (false, std::memory_order_release);
+        presetTransitionState = PresetTransitionState::FadeOut;
     }
 
     // v0.7: Reset per-tap peak accumulators for this block
@@ -3908,7 +4437,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
 
     // For surround output, fall back if algorithm doesn't support speakers
     if (! isBinaural && ! isStereoVariant && ! algo->supportsSurround())
-        algo = algorithms[4];  // Fall back to VBAP (index 4 in alphabetical order)
+        algo = algorithms[5];  // Fall back to VBAP (index 5 in alphabetical order)
 
     // --- HRTF profile management (block-rate, binaural only) ---
     bool useHRTF = false;
@@ -4135,6 +4664,51 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     }
     smoothedLoopMultiplier.setCurrentAndTargetValue (loopMultiplierTarget);
 
+    // v1.0.1: At zero-gain, reconfigure everything cleanly (issue #84).
+    // All smoother targets and per-object state have been set above, so snapping
+    // smoothers here gives correct new-preset values for the upcoming render.
+    if (presetTransitionState == PresetTransitionState::FadeOut
+        && presetTransitionGain <= 0.0f)
+    {
+        // Clear delay buffers — old audio is stale for the new preset
+        std::fill (delayBufferL.begin(), delayBufferL.end(), 0.0f);
+        std::fill (delayBufferR.begin(), delayBufferR.end(), 0.0f);
+        feedbackSample = 0.0f;
+
+        // Doppler reset
+        for (int i = 0; i < MAX_OBJECTS; ++i)
+        {
+            doppler.reset (i, pendingReset.prevAz[i], pendingReset.prevEl[i], pendingReset.prevDist[i]);
+            dopplerDelayAccum[i] = 0.0f;
+        }
+
+        // Filter + HRTF reset (safe at zero gain — no audible transient)
+        filters.resetAll();
+        auto& rend = binauralRenderers[activeRendererIndex.load (std::memory_order_acquire)];
+        rend.invalidateSources();
+
+        // Reset pitch shifters — stale phase/accumulator state causes chirp (issue #99)
+        for (int i = 0; i < MAX_OBJECTS; ++i)
+            pvPitchShifters[i].reset();
+
+        // Snap ALL smoothers to target — no ramps during fade-in
+        smoothedDelayTime.setCurrentAndTargetValue (smoothedDelayTime.getTargetValue());
+        smoothedDryWet.setCurrentAndTargetValue (smoothedDryWet.getTargetValue());
+        smoothedFeedback.setCurrentAndTargetValue (smoothedFeedback.getTargetValue());
+        smoothedInputGain.setCurrentAndTargetValue (smoothedInputGain.getTargetValue());
+        smoothedOutputGain.setCurrentAndTargetValue (smoothedOutputGain.getTargetValue());
+        smoothedLoopMultiplier.setCurrentAndTargetValue (smoothedLoopMultiplier.getTargetValue());
+        smoothedWobbleAmount.setCurrentAndTargetValue (smoothedWobbleAmount.getTargetValue());
+
+        // Snap tap fades + feedback crossfade
+        for (int t = 0; t < MAX_OBJECTS; ++t)
+            tapFadeGain[t] = tapFadeTarget[t];
+        fbCrossfadeProgress = 1.0f;
+
+        presetResetPending.store (false, std::memory_order_release);
+        presetTransitionState = PresetTransitionState::FadeIn;
+    }
+
     // v1.0.1: Pre-advance dryWet / outputGain smoothers into per-sample arrays (issue #73)
     // Render paths now output raw wet signal; dry/wet mix happens once after dispatch.
     if (perSampleDW.size() < ns)       perSampleDW.resize (ns);
@@ -4150,7 +4724,7 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
     if (isStereoVariant)
     {
         // Stereo mode from algorithm parameter: indices 6-10 → modes 0-4
-        int stereoMode = juce::jlimit (6, 10, algorithmIndex) - 6;
+        int stereoMode = juce::jlimit (7, 11, algorithmIndex) - 7;
         renderStereoVariant (buffer, numSamples, objects, objDistGain,
                              stereoMode);
     }
@@ -4187,6 +4761,31 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
         for (int s = 0; s < numSamples; ++s)
         {
             auto si = static_cast<size_t> (s);
+
+            // v1.0.1: Advance preset transition envelope (issue #84)
+            float tGain = 1.0f;
+            if (presetTransitionState == PresetTransitionState::FadeOut)
+            {
+                presetTransitionGain = std::max (0.0f, presetTransitionGain - presetTransitionStep);
+                tGain = presetTransitionGain;
+            }
+            else if (presetTransitionState == PresetTransitionState::FadeIn)
+            {
+                presetTransitionGain = std::min (1.0f, presetTransitionGain + presetTransitionStep);
+                tGain = presetTransitionGain;
+                if (presetTransitionGain >= 1.0f)
+                    presetTransitionState = PresetTransitionState::Idle;
+            }
+
+            // v1.0.6: Transport fade-in after scrub/seek (issue #103)
+            if (transportFadeActive)
+            {
+                transportFadeGain = std::min (1.0f, transportFadeGain + transportFadeStep);
+                tGain *= transportFadeGain;
+                if (transportFadeGain >= 1.0f)
+                    transportFadeActive = false;
+            }
+
             float dw       = perSampleDW[si];
             float outGain  = perSampleOutGain[si];
             float dryCoeff = std::cos (dw * juce::MathConstants<float>::halfPi);
@@ -4195,24 +4794,26 @@ void OpenSpatialDelayProcessor::processBlock (juce::AudioBuffer<float>& buffer,
             if (isAmbiOutput)
             {
                 // Ambisonics: mono dry → W channel (ACN 0), wet → all SH channels
+                // v1.0.1: Limiter on wet only — dry passes through at unity (issue #97)
                 float dryMono = (dryCompBufferL[si] + dryCompBufferR[si]) * 0.5f;
                 if (outPtrs[0])
-                    outPtrs[0][s] = outputLimiter ((outPtrs[0][s] * wetCoeff + dryMono * dryCoeff) * outGain);
+                    outPtrs[0][s] = (outputLimiter (outPtrs[0][s] * wetCoeff * outGain) + dryMono * dryCoeff * outGain) * tGain;
                 for (int ch = 1; ch < usableCh; ++ch)
                     if (outPtrs[ch])
-                        outPtrs[ch][s] = outputLimiter (outPtrs[ch][s] * wetCoeff * outGain);
+                        outPtrs[ch][s] = outputLimiter (outPtrs[ch][s] * wetCoeff * outGain) * tGain;
             }
             else
             {
                 // Binaural / Stereo / Surround: stereo dry → L/R (ch 0/1)
+                // v1.0.1: Limiter on wet only — dry passes through at unity (issue #97)
                 if (outPtrs[0])
-                    outPtrs[0][s] = outputLimiter ((outPtrs[0][s] * wetCoeff + dryCompBufferL[si] * dryCoeff) * outGain);
+                    outPtrs[0][s] = (outputLimiter (outPtrs[0][s] * wetCoeff * outGain) + dryCompBufferL[si] * dryCoeff * outGain) * tGain;
                 if (usableCh > 1 && outPtrs[1])
-                    outPtrs[1][s] = outputLimiter ((outPtrs[1][s] * wetCoeff + dryCompBufferR[si] * dryCoeff) * outGain);
+                    outPtrs[1][s] = (outputLimiter (outPtrs[1][s] * wetCoeff * outGain) + dryCompBufferR[si] * dryCoeff * outGain) * tGain;
                 // Remaining channels (surround speakers, LFE): wet only
                 for (int ch = 2; ch < usableCh; ++ch)
                     if (outPtrs[ch])
-                        outPtrs[ch][s] = outputLimiter (outPtrs[ch][s] * wetCoeff * outGain);
+                        outPtrs[ch][s] = outputLimiter (outPtrs[ch][s] * wetCoeff * outGain) * tGain;
             }
         }
     }
@@ -4241,16 +4842,32 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
     auto* outL = buffer.getWritePointer (0);
     auto* outR = buffer.getWritePointer (1);
 
-    auto& activeRenderer = binauralRenderers[activeRendererIndex.load (std::memory_order_acquire)];
+    int currentActiveIdx = activeRendererIndex.load (std::memory_order_acquire);
+    auto& activeRenderer = binauralRenderers[currentActiveIdx];
+
+    // v1.0.4: Detect renderer swap → start crossfade (issue #90).
+    // The new convolver's overlap buffer is empty on first use, causing a
+    // one-block transient overshoot. Crossfading old→new masks this ramp-up.
+    if (currentActiveIdx != prevActiveRendererIdx_ && ! rendererXfading_)
+    {
+        rendererXfading_ = true;
+        rendererXfadeActive_.store (true, std::memory_order_release);
+        rendererXfadeBlockCount_ = 0;
+        rendererXfadeFromIdx_ = prevActiveRendererIdx_;
+        prevRxFadeOut_ = 1.0f;
+        prevRxFadeIn_ = 0.0f;
+        prevActiveRendererIdx_ = currentActiveIdx;
+    }
 
     // Update per-source HRIRs at block boundary for any taps that moved
+    // (new renderer only — old renderer keeps its existing HRIRs during crossfade)
     for (int t = 0; t < MAX_OBJECTS; ++t)
     {
         if (objects[t].enabled)
         {
             float azRad = juce::degreesToRadians (objects[t].azimuthDeg);
             float elRad = juce::degreesToRadians (objects[t].elevationDeg);
-            activeRenderer.updateSourceHRIR (t, azRad, elRad, hrtfDatabase);
+            activeRenderer.updateSourceHRIR (t, azRad, elRad);
         }
     }
 
@@ -4324,6 +4941,52 @@ void OpenSpatialDelayProcessor::renderDirectBinauralHRTF (
 
     activeRenderer.renderSourceBuffers (srcBufPtrs, sourceEnabled, MAX_OBJECTS,
                                         numSamples, wetBufL.data(), wetBufR.data());
+
+    // v1.0.4: Renderer-level crossfade (issue #90).
+    // Blend old renderer's output (full overlap → steady state) with new renderer's
+    // output (ramping up from empty overlap) using equal-power cos/sin envelope.
+    if (rendererXfading_)
+    {
+        auto ns = static_cast<size_t> (numSamples);
+        if (xfadeWetL_.size() < ns) { xfadeWetL_.resize (ns, 0.0f); xfadeWetR_.resize (ns, 0.0f); }
+
+        auto& oldRenderer = binauralRenderers[rendererXfadeFromIdx_];
+        oldRenderer.renderSourceBuffers (srcBufPtrs, sourceEnabled, MAX_OBJECTS,
+                                          numSamples, xfadeWetL_.data(), xfadeWetR_.data());
+
+        ++rendererXfadeBlockCount_;
+        float progress = static_cast<float> (rendererXfadeBlockCount_)
+                       / static_cast<float> (kRendererXfadeBlocks);
+        if (progress > 1.0f) progress = 1.0f;
+
+        constexpr float halfPi = juce::MathConstants<float>::halfPi;
+        float fadeOutGain = std::cos (progress * halfPi);
+        float fadeInGain  = std::sin (progress * halfPi);
+
+        float fadeOutInc = (fadeOutGain - prevRxFadeOut_) / static_cast<float> (numSamples);
+        float fadeInInc  = (fadeInGain  - prevRxFadeIn_)  / static_cast<float> (numSamples);
+        float gOut = prevRxFadeOut_;
+        float gIn  = prevRxFadeIn_;
+
+        for (int i = 0; i < numSamples; ++i)
+        {
+            gOut += fadeOutInc;
+            gIn  += fadeInInc;
+            wetBufL[static_cast<size_t> (i)] = xfadeWetL_[static_cast<size_t> (i)] * gOut
+                                             + wetBufL[static_cast<size_t> (i)]     * gIn;
+            wetBufR[static_cast<size_t> (i)] = xfadeWetR_[static_cast<size_t> (i)] * gOut
+                                             + wetBufR[static_cast<size_t> (i)]     * gIn;
+        }
+
+        prevRxFadeOut_ = fadeOutGain;
+        prevRxFadeIn_  = fadeInGain;
+
+        if (rendererXfadeBlockCount_ >= kRendererXfadeBlocks)
+        {
+            rendererXfading_ = false;
+            rendererXfadeActive_.store (false, std::memory_order_release);
+        }
+    }
 
     // === PASS 3: Write raw wet signal to output (dry/wet mix handled in processBlock) ===
     std::memcpy (outL, wetBufL.data(), sizeof (float) * static_cast<size_t> (numSamples));
@@ -4967,9 +5630,8 @@ void OpenSpatialDelayProcessor::oscMessageReceived (const juce::OSCMessage& mess
         else if (property == "/drywet")        handleOSCParam ("dryWet", val);
         else if (property == "/inputgain")     handleOSCParam ("inputGain", val);
         else if (property == "/outputgain")    handleOSCParam ("outputGain", val);
-        else if (property == "/algorithm")    configAlgorithm.store (juce::roundToInt (val), std::memory_order_relaxed);
-        else if (property == "/hrtfprofile")  configHrtfProfile.store (juce::roundToInt (val), std::memory_order_relaxed);
-        else if (property == "/outputformat") configOutputFormat.store (juce::roundToInt (val), std::memory_order_relaxed);
+        // Algorithm, HRTF profile, and output format are configuration-level settings
+        // — not controllable via OSC (no send or receive).
         else if (property == "/air")           handleOSCParam ("airAbsorption", val);
         else if (property == "/wobble")        handleOSCParam ("wobbleEnabled", val);
         else if (property == "/wobbleamount")  handleOSCParam ("wobbleAmount", val);
@@ -5055,17 +5717,77 @@ void OpenSpatialDelayProcessor::handleOSCPosition (int objIdx, float azDeg, floa
 // #############################################################################
 
 //==============================================================================
+// Issue E15b/182: Plugin-internal undo/redo (FabFilter-style)
+//==============================================================================
+void OpenSpatialDelayProcessor::captureUndoState (const juce::String& name)
+{
+    // Issue #182: Suppress spurious captures during state restores (DAW undo,
+    // internal undo). replaceState() fires parameter listeners whose onChange
+    // callbacks would otherwise create ghost entries that wipe redo history.
+    if (internalUndoInProgress.load (std::memory_order_relaxed)
+        || stateRestoreInProgress.load (std::memory_order_relaxed))
+        return;
+
+    pluginUndo.captureState (apvts, configAlgorithm, configHrtfProfile,
+                             configOutputFormat, configInputFormat,
+                             currentPresetIndex, name);
+}
+
+void OpenSpatialDelayProcessor::applyUndoState (const juce::ValueTree& state)
+{
+    if (! state.isValid()) return;
+
+    internalUndoInProgress.store (true, std::memory_order_relaxed);
+
+    // Restore config atomics from snapshot properties
+    configAlgorithm.store (static_cast<int> (state.getProperty ("_configAlgorithm", configAlgorithm.load())),
+                           std::memory_order_relaxed);
+    configHrtfProfile.store (static_cast<int> (state.getProperty ("_configHrtfProfile", configHrtfProfile.load())),
+                             std::memory_order_relaxed);
+    configOutputFormat.store (static_cast<int> (state.getProperty ("_configOutputFormat", configOutputFormat.load())),
+                              std::memory_order_relaxed);
+    configInputFormat.store (static_cast<int> (state.getProperty ("_configInputFormat", configInputFormat.load())),
+                             std::memory_order_relaxed);
+
+    // Restore preset index so UI label syncs via timer
+    currentPresetIndex = static_cast<int> (state.getProperty ("_presetIndex", currentPresetIndex));
+
+    // Restore APVTS state (triggers parameter listeners but not gesture notifications)
+    apvts.replaceState (state);
+
+    internalUndoInProgress.store (false, std::memory_order_relaxed);
+
+    // Sync UI via config dirty flag
+    markConfigStateDirty();
+}
+
+void OpenSpatialDelayProcessor::performInternalUndo()
+{
+    auto state = pluginUndo.undo();
+    if (state.isValid())
+        applyUndoState (state);
+}
+
+void OpenSpatialDelayProcessor::performInternalRedo()
+{
+    auto state = pluginUndo.redo();
+    if (state.isValid())
+        applyUndoState (state);
+}
+
+//==============================================================================
 // State save / restore
 //==============================================================================
 void OpenSpatialDelayProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
-    state.setProperty ("pluginStateVersion", 20, nullptr);  // v1.0 state format (20 = config params moved out of APVTS)
+    state.setProperty ("pluginStateVersion", 23, nullptr);  // v1.1 state format (23 = Constant Power algorithm inserted at index 1)
     // Issue #68: Config params stored as top-level properties (not APVTS children)
     state.setProperty ("configAlgorithm", configAlgorithm.load (std::memory_order_relaxed), nullptr);
     state.setProperty ("configHrtfProfile", configHrtfProfile.load (std::memory_order_relaxed), nullptr);
     state.setProperty ("configOutputFormat", configOutputFormat.load (std::memory_order_relaxed), nullptr);
     state.setProperty ("configInputFormat", configInputFormat.load (std::memory_order_relaxed), nullptr);
+    state.setProperty ("oscReceiveEnabled", oscReceiveEnabled, nullptr);  // v1.0: persist OSC receive enable (issue E20)
     state.setProperty ("oscReceivePort", oscReceivePort, nullptr);  // v0.6: persist OSC port
     state.setProperty ("globalDrawerOpen", globalDrawerOpen, nullptr);  // v1.0: persist drawer state
     state.setProperty ("currentPresetIndex", currentPresetIndex, nullptr);  // v0.6: persist preset selection
@@ -5079,9 +5801,17 @@ void OpenSpatialDelayProcessor::getStateInformation (juce::MemoryBlock& destData
 
 void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
+    // Issue E15b/182: Suppress updateHostDisplay() during state restore (Undo/Redo).
+    // Timer-driven algorithm validation may fire between replaceState() and the next
+    // editor repaint, creating spurious undo points that corrupt the host undo stack.
+    stateRestoreInProgress.store (true, std::memory_order_relaxed);
+
     std::unique_ptr<juce::XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
     if (xmlState == nullptr || ! xmlState->hasTagName (apvts.state.getType()))
+    {
+        stateRestoreInProgress.store (false, std::memory_order_relaxed);
         return;
+    }
 
     auto tree = juce::ValueTree::fromXml (*xmlState);
 
@@ -5602,27 +6332,93 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
     else
     {
         // New session format: config params are top-level integer properties
-        configAlgorithm.store (static_cast<int> (tree.getProperty ("configAlgorithm", 0)), std::memory_order_relaxed);
+        configAlgorithm.store (static_cast<int> (tree.getProperty ("configAlgorithm", 1)), std::memory_order_relaxed);
         configHrtfProfile.store (static_cast<int> (tree.getProperty ("configHrtfProfile", 0)), std::memory_order_relaxed);
         configOutputFormat.store (static_cast<int> (tree.getProperty ("configOutputFormat", 0)), std::memory_order_relaxed);
-        configInputFormat.store (static_cast<int> (tree.getProperty ("configInputFormat", 0)), std::memory_order_relaxed);
+        configInputFormat.store (static_cast<int> (tree.getProperty ("configInputFormat", 1)), std::memory_order_relaxed);
     }
 
-    // v0.6: Restore OSC receive port (non-APVTS property)
-    oscReceivePort = static_cast<int> (tree.getProperty ("oscReceivePort", 4002));
+    // Issue #88: Migrate outputFormat from 22-item to 23-item (9.1 Surround inserted at index 8)
+    // Old indices 0-7 stay the same. Old indices 8-21 (Atmos, SML, Ambisonics) shift to 9-22.
+    if (savedVersion < 21)
+    {
+        int oldIdx = configOutputFormat.load (std::memory_order_relaxed);
+        int newIdx = (oldIdx >= 8) ? oldIdx + 1 : oldIdx;
+        configOutputFormat.store (newIdx, std::memory_order_relaxed);
+        tree.setProperty ("configOutputFormat", newIdx, nullptr);
+    }
+
+    // Issue #88: Reorder 9.1 Surround (7) before Octaphonic (8) so surround formats group together
+    if (savedVersion < 22)
+    {
+        int idx = configOutputFormat.load (std::memory_order_relaxed);
+        if (idx == 7)      idx = 8;   // Octaphonic → 8
+        else if (idx == 8) idx = 7;   // 9.1 Surround → 7
+        configOutputFormat.store (idx, std::memory_order_relaxed);
+        tree.setProperty ("configOutputFormat", idx, nullptr);
+    }
+
+    // v1.1: Migrate algorithm index for Constant Power insertion at index 1
+    // Old: [0=Ambi, 1=DBAP, 2=KNN, 3=MDAP, 4=VBAP, 5=VBIP, 6..10=stereo]
+    // New: [0=Ambi, 1=ConstPow, 2=DBAP, 3=KNN, 4=MDAP, 5=VBAP, 6=VBIP, 7..11=stereo]
+    // All old indices >= 1 shift up by 1
+    if (savedVersion < 23)
+    {
+        int oldAlgo = configAlgorithm.load (std::memory_order_relaxed);
+        int newAlgo = (oldAlgo >= 1) ? oldAlgo + 1 : oldAlgo;
+        configAlgorithm.store (newAlgo, std::memory_order_relaxed);
+        tree.setProperty ("configAlgorithm", newAlgo, nullptr);
+    }
+
+    // v0.6: Restore OSC receive settings (non-APVTS properties, issue E20)
+    // Only restore on first call (project load) — skip on undo/redo to keep
+    // OSC receive settings out of the DAW undo stack.
+    if (! oscReceiveStateLoaded)
+    {
+        oscReceivePort = static_cast<int> (tree.getProperty ("oscReceivePort", 4002));
+        bool savedReceiveEnabled = static_cast<bool> (tree.getProperty ("oscReceiveEnabled", false));
+        if (savedReceiveEnabled)
+            setOscReceiveEnabled (true);
+        oscReceiveStateLoaded = true;
+    }
     globalDrawerOpen = static_cast<bool> (tree.getProperty ("globalDrawerOpen", false));
 
     // v0.6: Restore preset index (non-APVTS property)
     currentPresetIndex = static_cast<int> (tree.getProperty ("currentPresetIndex", 0));
 
-    // v0.7: Restore OSC Send settings
-    oscSendPort = static_cast<int> (tree.getProperty ("oscSendPort", 4003));
-    oscSendIP   = tree.getProperty ("oscSendIP", "127.0.0.1").toString();
-    bool savedSendEnabled = static_cast<bool> (tree.getProperty ("oscSendEnabled", false));
-    if (savedSendEnabled)
-        setOscSendEnabled (true);
+    // v0.7: Restore OSC Send settings (E14: guard against undo restoring send settings)
+    if (! oscSendStateLoaded)
+    {
+        oscSendPort = static_cast<int> (tree.getProperty ("oscSendPort", 4003));
+        oscSendIP   = tree.getProperty ("oscSendIP", "127.0.0.1").toString();
+        bool savedSendEnabled = static_cast<bool> (tree.getProperty ("oscSendEnabled", false));
+        if (savedSendEnabled)
+            setOscSendEnabled (true);
+        oscSendStateLoaded = true;
+    }
 
     apvts.replaceState (tree);
+
+    // issue #164: Sync global tap offset atomics from restored APVTS values.
+    // Without this, atomics are stale after undo and OSC Send uses old values.
+    // Do NOT set globalTapOffsetChanged — that would trigger syncGlobalTapOffsetsFromOSC
+    // which re-applies deltas to per-object params (incorrect for undo).
+    {
+        static const char* ids[] = { "globalTapAzimuth", "globalTapElevation", "globalTapDistance",
+                                     "globalTapPitch",   "globalTapDoppler",   "globalTapSpeed" };
+        for (int i = 0; i < kNumGlobalTapOffsets; ++i)
+        {
+            if (auto* p = apvts.getRawParameterValue (ids[i]))
+                globalTapOffset[i].store (p->load(), std::memory_order_relaxed);
+        }
+    }
+
+    // Issue E15b/182: Consume dirty flag and clear restore guard
+    configStateDirty.store (false, std::memory_order_relaxed);
+    stateRestoreInProgress.store (false, std::memory_order_relaxed);
+
+    // Issue #182: Signal editor to sync preset name after host state restore (Undo/Redo)
+    stateJustRestored.store (true, std::memory_order_relaxed);
 }
 
 //==============================================================================

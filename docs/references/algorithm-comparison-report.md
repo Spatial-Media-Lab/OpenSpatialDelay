@@ -44,6 +44,7 @@
 
 | | **Coordinate System** | **Zenith Behavior** | **Layout Requirement** | **Purpose** |
 |---|---|---|---|---|
+| **Constant Power** (existing) | Cartesian dot product | Graceful — cosine rolloff distributes naturally | Arbitrary (any) | Smooth diffuse panning (default) |
 | **VBAP** (existing) | Polar input, Cartesian internal | Poor without zenith speaker — degenerate triangles, energy drop | Arbitrary surrounding (convex hull) | Point-source panning |
 | **VBIP** (existing) | Same as VBAP | Same as VBAP | Same as VBAP | Intensity-optimized panning |
 | **KNN** (existing) | Cartesian distance | Graceful — distributes to nearest speakers | Arbitrary (any) | Diffuse distance-weighted |

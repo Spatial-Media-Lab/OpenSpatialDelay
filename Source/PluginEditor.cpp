@@ -69,6 +69,10 @@ namespace Colours_OSD
     static const juce::Colour selectionBox (0x40ffffff);
 }
 
+// OSC port validation bounds
+static constexpr int kMinPort = 1024;
+static constexpr int kMaxPort = 65535;
+
 // Helper: create a Font from a specific Typeface with height and optional kerning
 static juce::Font makeFont (juce::Typeface::Ptr tf, float height, float kerning = 0.0f)
 {
@@ -699,7 +703,7 @@ void OSDLookAndFeel::getIdealPopupMenuItemSize (const juce::String& text, bool i
 
 void OSDLookAndFeel::drawComboBox (juce::Graphics& g, int width, int height, bool /*isButtonDown*/,
                                    int /*buttonX*/, int /*buttonY*/, int /*buttonW*/, int /*buttonH*/,
-                                   juce::ComboBox& /*box*/)
+                                   juce::ComboBox& box)
 {
     auto bounds = juce::Rectangle<float> (0, 0, (float) width, (float) height);
 
@@ -711,22 +715,27 @@ void OSDLookAndFeel::drawComboBox (juce::Graphics& g, int width, int height, boo
     g.setColour (findColour (juce::ComboBox::outlineColourId));
     g.drawRoundedRectangle (bounds.reduced (0.5f), 4.0f, 1.0f);
 
-    // Small dropdown arrow
-    float arrowX = (float) width - 12.0f;
-    float arrowY = (float) height * 0.5f;
-    juce::Path arrow;
-    arrow.addTriangle (arrowX - 3.0f, arrowY - 1.5f,
-                       arrowX + 3.0f, arrowY - 1.5f,
-                       arrowX,        arrowY + 2.5f);
-    g.setColour (findColour (juce::ComboBox::arrowColourId));
-    g.fillPath (arrow);
+    // Small dropdown arrow — hidden when combo is disabled (e.g. Ambisonics mode)
+    if (box.isEnabled())
+    {
+        float arrowX = (float) width - 12.0f;
+        float arrowY = (float) height * 0.5f;
+        juce::Path arrow;
+        arrow.addTriangle (arrowX - 3.0f, arrowY - 1.5f,
+                           arrowX + 3.0f, arrowY - 1.5f,
+                           arrowX,        arrowY + 2.5f);
+        g.setColour (findColour (juce::ComboBox::arrowColourId));
+        g.fillPath (arrow);
+    }
 }
 
 void OSDLookAndFeel::positionComboBoxText (juce::ComboBox& box, juce::Label& label)
 {
-    // Reserve only 20px for arrow (our triangle is 6px wide centered at width-12)
-    // instead of JUCE's default 30px — fixes "Figure-8" truncation
-    label.setBounds (1, 1, box.getWidth() - 20, box.getHeight() - 2);
+    // Reserve 20px for arrow when enabled; use full width when disabled (no arrow)
+    if (box.isEnabled())
+        label.setBounds (1, 1, box.getWidth() - 20, box.getHeight() - 2);
+    else
+        label.setBounds (0, 1, box.getWidth(), box.getHeight() - 2);
     label.setFont (getComboBoxFont (box));
 }
 
@@ -865,9 +874,10 @@ std::pair<float, float> SpatialMapComponent::pixelToSpatial (juce::Point<float> 
 
 int SpatialMapComponent::findObjectAt (juce::Point<float> pos) const
 {
-    for (int i = MAX_OBJECTS - 1; i >= 0; --i)
+    // Issue #98: Check selected tap first (it renders on top)
+    auto hitTest = [&](int i) -> bool
     {
-        if (! objects[(size_t)i].enabled) continue;
+        if (! objects[(size_t)i].enabled) return false;
         auto p = spatialToPixel (objects[(size_t)i].azimuthDeg, objects[(size_t)i].distance);
 
         // Variable hit radius based on elevation-dependent dot size
@@ -878,8 +888,18 @@ int SpatialMapComponent::findObjectAt (juce::Point<float> pos) const
         float currentDotSize = baseDiam + elevScale * z;
         float hitRadius = std::max (currentDotSize * 0.5f + 2.0f, 10.0f);
 
-        if (p.getDistanceFrom (pos) < hitRadius)
-            return (int)i;
+        return p.getDistanceFrom (pos) < hitRadius;
+    };
+
+    // Selected tap is visually on top, so check it first
+    if (selectedObject >= 0 && selectedObject < MAX_OBJECTS && hitTest (selectedObject))
+        return selectedObject;
+
+    for (int i = MAX_OBJECTS - 1; i >= 0; --i)
+    {
+        if (i == selectedObject) continue;
+        if (hitTest (i))
+            return i;
     }
     return -1;
 }
@@ -1111,44 +1131,55 @@ void SpatialMapComponent::paint (juce::Graphics& g)
         }
         else if (ts.shape == 10 && processor != nullptr)
         {
-            // Random look-ahead trail: evaluate noise at future time values
-            constexpr int kLookaheadSamples = 120;
-            constexpr float kLookaheadSeconds = 2.0f;  // ~2s look-ahead (compact, like other shapes)
+            // Symmetric time-windowed trail: look-back + look-ahead centered on randomTime
+            // Unlike deterministic shapes (which outline a compact closed loop at 0.05 base alpha),
+            // Random's sprawling path needs zero base alpha — only the proximity glow near the dot.
+            constexpr int kRandomSamples = 120;
+            constexpr float kHalfWindow = 1.0f;     // ±1s from current time (2s total)
+            constexpr float kDecayRate = 3.0f;       // glow visible within ~±0.33s of dot
 
-            juce::Point<float> prevPx;
-            float prevEl = 0.0f;
-            for (int s = 0; s <= kLookaheadSamples; ++s)
+            struct RndPathPoint { juce::Point<float> px; float elDeg; float timeOffset; };
+            RndPathPoint rndPath[kRandomSamples];
+
+            for (int s = 0; s < kRandomSamples; ++s)
             {
-                float futureOffset = (float) s / (float) kLookaheadSamples * kLookaheadSeconds;
-                float sampleTime = ts.randomTime + futureOffset;
+                float timeOffset = -kHalfWindow + (float) s / (float) (kRandomSamples - 1) * (2.0f * kHalfWindow);
+                float sampleTime = ts.randomTime + timeOffset;
                 auto rp = processor->evaluateRandomNoise (selectedObject, sampleTime);
                 float az   = ts.originAzDeg + rp.azDeg;
                 float el   = juce::jlimit (-90.0f, 90.0f, ts.originElDeg + rp.elDeg);
-                float dist = juce::jlimit (0.0f, 1.0f, ts.originDist + rp.dist);
-                while (az > 180.0f)  az -= 360.0f;
-                while (az < -180.0f) az += 360.0f;
+                float distScaleR = 1.0f - ts.originDist;  // match tick() distance scaling
+                float dist = juce::jlimit (0.0f, 1.0f, ts.originDist + rp.dist * distScaleR);
+                az = wrapAzimuth (az);
 
-                auto px = spatialToPixel (az, dist);
+                rndPath[s].px         = spatialToPixel (az, dist);
+                rndPath[s].elDeg      = el;
+                rndPath[s].timeOffset = timeOffset;
+            }
 
-                if (s > 0)
-                {
-                    if (prevPx.getDistanceFrom (px) > radius * 0.8f)
-                    { prevPx = px; prevEl = el; continue; }
+            for (int s = 0; s < kRandomSamples - 1; ++s)
+            {
+                auto& p0 = rndPath[s];
+                auto& p1 = rndPath[s + 1];
 
-                    // Brightness fades with distance into the future
-                    float futureNorm = futureOffset / kLookaheadSeconds;
-                    float glowAlpha = 0.45f * (1.0f - futureNorm);  // bright now, dim far ahead
+                // Skip segments that wrap across the map
+                if (p0.px.getDistanceFrom (p1.px) > radius * 0.8f)
+                    continue;
 
-                    float avgEl = (prevEl + el) * 0.5f;
-                    float elNorm = (avgEl + 90.0f) / 180.0f;
-                    float elOpacity = 0.3f + elNorm * 0.7f;
-                    float thickness = 1.0f + elNorm * 4.5f;
+                // Brightness: proximity to current time (timeOffset == 0)
+                float proximity = 1.0f - std::abs (p0.timeOffset) * kDecayRate;
+                proximity = juce::jlimit (0.0f, 1.0f, proximity);
+                float glowAlpha = proximity * 0.60f;
 
-                    g.setColour (objCol.withAlpha (glowAlpha * elOpacity));
-                    g.drawLine (prevPx.x, prevPx.y, px.x, px.y, thickness);
-                }
-                prevPx = px;
-                prevEl = el;
+                // Elevation encoding: opacity + thickness (same as other shapes)
+                float avgEl = (p0.elDeg + p1.elDeg) * 0.5f;
+                float elNorm = (avgEl + 90.0f) / 180.0f;
+                float elOpacity = 0.3f + elNorm * 0.7f;
+                float thickness = 1.0f + elNorm * 4.5f;
+
+                float finalAlpha = glowAlpha * elOpacity;
+                g.setColour (objCol.withAlpha (finalAlpha));
+                g.drawLine (p0.px.x, p0.px.y, p1.px.x, p1.px.y, thickness);
             }
         }
 
@@ -1163,8 +1194,17 @@ void SpatialMapComponent::paint (juce::Graphics& g)
         }
     }
 
+    // Issue #98: Build draw order so selected tap renders on top
+    int drawOrder[MAX_OBJECTS];
+    int drawCount = 0;
     for (int i = 0; i < MAX_OBJECTS; ++i)
+        if (i != selectedObject) drawOrder[drawCount++] = i;
+    if (selectedObject >= 0 && selectedObject < MAX_OBJECTS)
+        drawOrder[drawCount++] = selectedObject;
+
+    for (int di = 0; di < drawCount; ++di)
     {
+        int i = drawOrder[di];
         if (! objects[(size_t)i].enabled) continue;
 
         auto pos = spatialToPixel (objects[(size_t)i].azimuthDeg, objects[(size_t)i].distance);
@@ -1320,7 +1360,11 @@ void SpatialMapComponent::mouseDown (const juce::MouseEvent& e)
 {
     draggedObject = findObjectAt (e.position);
     if (draggedObject >= 0)
+    {
         listeners.call ([this](Listener& l) { l.objectSelected (draggedObject); });
+        // Issue E15: Signal drag start for gesture wrapping (undo grouping)
+        if (onDragStarted) onDragStarted (draggedObject);
+    }
 }
 
 void SpatialMapComponent::mouseDrag (const juce::MouseEvent& e)
@@ -1339,6 +1383,14 @@ void SpatialMapComponent::mouseDrag (const juce::MouseEvent& e)
     });
 }
 
+void SpatialMapComponent::mouseUp (const juce::MouseEvent&)
+{
+    // Issue E15: Signal drag end for gesture wrapping (undo grouping)
+    if (draggedObject >= 0 && onDragEnded)
+        onDragEnded (draggedObject);
+    draggedObject = -1;
+}
+
 //==============================================================================
 // Helper: create a rotary slider with consistent styling
 //==============================================================================
@@ -1353,6 +1405,8 @@ static void styleSlider (juce::Slider& slider, juce::LookAndFeel& lf,
     slider.setColour (juce::Slider::textBoxTextColourId, Colours_OSD::textSecondary);
     slider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     slider.setColour (juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
+    // Disable mouse wheel parameter adjustment on all sliders.
+    slider.setScrollWheelEnabled (false);
 }
 
 static void styleLabel (juce::Label& label, const juce::String& text, OSDLookAndFeel* lf = nullptr)
@@ -1563,14 +1617,19 @@ void FilterGraphComponent::mouseDown (const juce::MouseEvent& e)
 
     dragStartY = static_cast<float> (e.y);
     dragStartQ = (currentDrag == HP) ? hpQ : lpQ;
+
+    // Issue E15: Signal drag start for gesture wrapping (undo grouping)
+    if (currentDrag != None && onFilterDragStarted)
+        onFilterDragStarted (currentDrag == HP);
 }
 
 void FilterGraphComponent::mouseDrag (const juce::MouseEvent& e)
 {
     if (currentDrag == None) return;
 
-    // Horizontal: frequency
-    float freq = xToFreq (static_cast<float> (e.x));
+    // Horizontal: frequency — clamp to component bounds so handles can't go off-screen (issue #195)
+    float clampedX = juce::jlimit (0.0f, static_cast<float> (getWidth()), static_cast<float> (e.x));
+    float freq = xToFreq (clampedX);
     if (currentDrag == HP)
         hpFreq = juce::jlimit (20.0f, 5000.0f, freq);
     else
@@ -1599,6 +1658,9 @@ void FilterGraphComponent::mouseDrag (const juce::MouseEvent& e)
 
 void FilterGraphComponent::mouseUp (const juce::MouseEvent&)
 {
+    // Issue E15: Signal drag end for gesture wrapping (undo grouping)
+    if (currentDrag != None && onFilterDragEnded)
+        onFilterDragEnded (currentDrag == HP);
     currentDrag = None;
 }
 
@@ -1630,7 +1692,7 @@ GlobalTapDrawerComponent::GlobalTapDrawerComponent (OSDLookAndFeel& lf)
     setupKnob (distSlider,    distLabel,    "DIST",    -1.0f,   1.0f,   0.01f, kDistance);
     setupKnob (dopplerSlider, dopplerLabel, "DOPPLER", -100.0f, 100.0f, 1.0f,  kDoppler);
     dopplerSlider.setTextValueSuffix ("%");
-    setupKnob (pitchSlider,   pitchLabel,   "PITCH",   -24.0f,  24.0f,  1.0f,  kPitch);
+    setupKnob (pitchSlider,   pitchLabel,   "PITCH",   -12.0f,  12.0f,  1.0f,  kPitch);
     pitchSlider.setTextValueSuffix (" st");
     setupKnob (speedSlider,   speedLabel,   "SPEED",   -5.0f,   5.0f,   0.01f, kSpeed);
     speedSlider.setTextValueSuffix (" Hz");
@@ -1640,14 +1702,19 @@ void GlobalTapDrawerComponent::setupKnob (juce::Slider& s, juce::Label& l,
                                            const juce::String& name,
                                            float min, float max, float step, int knobIdx)
 {
-    s.setSliderStyle (juce::Slider::RotaryVerticalDrag);
-    s.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 58, 11);
+    styleSlider (s, lookAndFeel);
     s.setRange (min, max, step);
+    s.textFromValueFunction = [&s](double value) {
+        int dec = s.getNumDecimalPlacesToDisplay();
+        juce::String text = dec > 0 ? juce::String (value, dec)
+                                     : juce::String (juce::roundToInt (value));
+        if (text[0] == '-' && text.getDoubleValue() == 0.0)
+            return text.substring (1);
+        return text;
+    };
     s.setValue (0.0);
+    s.updateText();  // force text refresh through textFromValueFunction (issue #126)
     s.setColour (juce::Slider::thumbColourId, Colours_OSD::accentGlobal);
-    s.setColour (juce::Slider::textBoxTextColourId, Colours_OSD::accentGlobalDim);
-    s.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
-    s.setColour (juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
     s.setDoubleClickReturnValue (true, 0.0);
     knobPanel.addAndMakeVisible (s);  // add to knobPanel, not directly to drawer
 
@@ -1657,13 +1724,15 @@ void GlobalTapDrawerComponent::setupKnob (juce::Slider& s, juce::Label& l,
         float delta = val - prevValues[knobIdx];
         if (knobIdx == kAzimuth)
         {
-            if (delta > 180.0f)  delta -= 360.0f;
-            if (delta < -180.0f) delta += 360.0f;
+            delta = unwrapAzimuthDelta (delta);
         }
         prevValues[knobIdx] = val;
         if (onGlobalDelta && std::abs (delta) > 1e-6f)
             onGlobalDelta (knobIdx, delta);
     };
+    // Issue E15: Signal drag start/end for gesture wrapping (undo grouping)
+    s.onDragStart = [this, knobIdx] { if (onDragStarted) onDragStarted (knobIdx); };
+    s.onDragEnd   = [this, knobIdx] { if (onDragEnded)  onDragEnded (knobIdx); };
     prevValues[knobIdx] = static_cast<float> (s.getValue());  // sync tracking to initial value
 
     l.setText (name, juce::dontSendNotification);
@@ -1815,7 +1884,7 @@ void GlobalTapDrawerComponent::layoutKnobs()
 {
     // Layout knobs inside the knobPanel (always at full panel size)
     int knobSize = 38;
-    int textBoxH = 11;
+    int textBoxH = 12;
     int labelH = 12;
     int dividerGap = 10;
     int totalH = knobPanel.getHeight();
@@ -1896,25 +1965,93 @@ void GlobalTapDrawerComponent::mouseMove (const juce::MouseEvent& e)
 // Editor constructor
 //==============================================================================
 OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
-    : AudioProcessorEditor (&p), processorRef (p), globalTapDrawer (osdLookAndFeel)
+    : AudioProcessorEditor (&p), processorRef (p), globalTapDrawer (*osdLookAndFeel)
 {
-    setLookAndFeel (&osdLookAndFeel);
+    setLookAndFeel (&*osdLookAndFeel);
     setSize (kWindowWidth, kWindowHeight);
 
     // --- Spatial map ---------------------------------------------------------
     addAndMakeVisible (spatialMap);
     spatialMap.addListener (this);
+    // Issue E15: Gesture wrapping for spatial map drag (undo grouping)
+    spatialMap.onDragStarted = [this] (int objectIndex) {
+        auto prefix = "object" + juce::String (objectIndex + 1) + "_";
+        activeSpatialGestureParams[0] = processorRef.apvts.getParameter (prefix + "azimuth");
+        activeSpatialGestureParams[1] = processorRef.apvts.getParameter (prefix + "distance");
+        for (auto* p : activeSpatialGestureParams)
+            if (p != nullptr) p->beginChangeGesture();
+    };
+    spatialMap.onDragEnded = [this] (int /*objectIndex*/) {
+        for (auto* p : activeSpatialGestureParams)
+            if (p != nullptr) p->endChangeGesture();
+        activeSpatialGestureParams = { nullptr, nullptr };
+        processorRef.captureUndoState ("Move Object");
+    };
     spatialMap.setProcessor (&processorRef);
 
     // --- Global tap drawer (overlays left edge of spatial map) ---------------
     addAndMakeVisible (globalTapDrawer);
     globalTapDrawer.toFront (false);
     globalTapDrawer.setOpen (processorRef.getGlobalDrawerOpen());
+    // issue #95: Restore drawer knob values from APVTS params on editor (re)creation.
+    // The globalTapAzimuth/etc. APVTS params hold the absolute knob value (written below
+    // in onGlobalDelta) and survive save/restore via apvts.replaceState.
+    {
+        static const char* tapParamIds[] = { "globalTapAzimuth", "globalTapElevation", "globalTapDistance",
+                                             "globalTapPitch",   "globalTapDoppler",   "globalTapSpeed" };
+        for (int i = 0; i < GlobalTapDrawerComponent::kNumKnobs; ++i)
+        {
+            if (auto* p = processorRef.apvts.getRawParameterValue (tapParamIds[i]))
+                globalTapDrawer.setKnobValueSilent (i, p->load());
+        }
+    }
+    // Issue E15: Begin gestures on all affected per-object params when a global knob drag starts
+    globalTapDrawer.onDragStarted = [this] (int knobIndex) {
+        static const char* suffixes[] = {
+            "azimuth", "elevation", "distance",
+            "pitchShift", "dopplerAmount", "trajectorySpeed"
+        };
+        if (knobIndex < 0 || knobIndex >= 6) return;
+        activeGlobalGestureParams.clear();
+        for (int i = 0; i < SpatialMapComponent::MAX_OBJECTS; ++i)
+        {
+            auto enabledId = "object" + juce::String (i + 1) + "_enabled";
+            if (processorRef.apvts.getRawParameterValue (enabledId)->load() < 0.5f)
+                continue;
+            auto paramId = "object" + juce::String (i + 1) + "_" + suffixes[knobIndex];
+            if (auto* param = processorRef.apvts.getParameter (paramId))
+            {
+                param->beginChangeGesture();
+                activeGlobalGestureParams.push_back (param);
+            }
+        }
+        // Also begin gesture on the globalTap APVTS param itself
+        static const char* tapParamIds[] = { "globalTapAzimuth", "globalTapElevation", "globalTapDistance",
+                                             "globalTapPitch",   "globalTapDoppler",   "globalTapSpeed" };
+        if (auto* param = processorRef.apvts.getParameter (tapParamIds[knobIndex]))
+        {
+            param->beginChangeGesture();
+            activeGlobalGestureParams.push_back (param);
+        }
+    };
+    // Issue E15: End gestures when global knob drag ends
+    globalTapDrawer.onDragEnded = [this] (int /*knobIndex*/) {
+        for (auto* param : activeGlobalGestureParams)
+            param->endChangeGesture();
+        activeGlobalGestureParams.clear();
+        processorRef.captureUndoState ("Adjust Global Tap");
+    };
     globalTapDrawer.onGlobalDelta = [this] (int idx, float delta) {
         applyGlobalTapDelta (idx, delta);
-        // Sync to processor atomics for OSC Send broadcast
-        processorRef.globalTapOffset[idx].store (
-            static_cast<float> (globalTapDrawer.getKnobValue (idx)), std::memory_order_relaxed);
+        // Sync absolute knob value to processor atomic (for OSC Send)
+        float absVal = static_cast<float> (globalTapDrawer.getKnobValue (idx));
+        processorRef.globalTapOffset[idx].store (absVal, std::memory_order_relaxed);
+        // issue #95: Also write to APVTS param so the value is saved with the session.
+        // Without this, globalTapAzimuth etc. stay at 0.0 and knobs reset on UI reopen.
+        static const char* tapParamIds[] = { "globalTapAzimuth", "globalTapElevation", "globalTapDistance",
+                                             "globalTapPitch",   "globalTapDoppler",   "globalTapSpeed" };
+        if (auto* param = processorRef.apvts.getParameter (tapParamIds[idx]))
+            param->setValueNotifyingHost (param->convertTo0to1 (absVal));
     };
     globalTapDrawer.onToggle = [this] {
         processorRef.setGlobalDrawerOpen (globalTapDrawer.isOpen());
@@ -1929,9 +2066,9 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     // --- Global knobs --------------------------------------------------------
     auto addKnob = [&](juce::Slider& s, juce::Label& l, const juce::String& name,
                         const juce::String& paramId, std::unique_ptr<SliderAttachment>& attach) {
-        styleSlider (s, osdLookAndFeel);
+        styleSlider (s, *osdLookAndFeel);
         addAndMakeVisible (s);
-        styleLabel (l, name, &osdLookAndFeel);
+        styleLabel (l, name, &*osdLookAndFeel);
         addAndMakeVisible (l);
         attach = std::make_unique<SliderAttachment> (processorRef.apvts, paramId, s);
     };
@@ -1940,9 +2077,36 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     addKnob (delayTimeSlider,  delayTimeLabel,  "TIME",     "delayTime",  delayTimeAttach);
     addKnob (noteDivisionSlider, delayTimeLabel, "TIME",    "noteDivision", noteDivisionAttach);
     addKnob (feedbackSlider,   feedbackLabel,   "FEEDBACK", "feedback",   feedbackAttach);
+
+    // Issue E15b: Force host state capture after APVTS slider drag gestures.
+    // Uses gesture duration to distinguish drags (>100ms, force capture) from
+    // mouse wheel ticks (<100ms, let host debounce/group naturally).
+    auto makeGestureEndHandler = [this] (const char* name) {
+        return [this, name] {
+            double elapsed = juce::Time::getMillisecondCounterHiRes() - lastSliderDragStartTime;
+            if (elapsed > 20.0)
+            {
+                processorRef.notifyHostStateChanged();
+                processorRef.captureUndoState (juce::String ("Adjust ") + name);
+            }
+        };
+    };
+    auto makeDragStartHandler = [this] { return [this] { lastSliderDragStartTime = juce::Time::getMillisecondCounterHiRes(); }; };
+    delayTimeSlider.onDragStart = makeDragStartHandler();
+    delayTimeSlider.onDragEnd   = makeGestureEndHandler ("delayTime");
+    feedbackSlider.onDragStart  = makeDragStartHandler();
+    feedbackSlider.onDragEnd    = makeGestureEndHandler ("feedback");
+    noteDivisionSlider.onDragStart = makeDragStartHandler();
+    noteDivisionSlider.onDragEnd   = makeGestureEndHandler ("noteDivision");
     addKnob (filterHPSlider,   filterHPLabel,   "HP",       "filterHP",   filterHPAttach);
     addKnob (filterLPSlider,   filterLPLabel,   "LP",       "filterLP",   filterLPAttach);
     addKnob (dryWetSlider,     dryWetLabel,     "DRY/WET",  "dryWet",     dryWetAttach);
+    dryWetSlider.onDragStart = makeDragStartHandler();
+    dryWetSlider.onDragEnd   = makeGestureEndHandler ("dryWet");
+    inputGainSlider.onDragStart  = makeDragStartHandler();
+    inputGainSlider.onDragEnd    = makeGestureEndHandler ("inputGain");
+    outputGainSlider.onDragStart = makeDragStartHandler();
+    outputGainSlider.onDragEnd   = makeGestureEndHandler ("outputGain");
     addKnob (outputGainSlider, outputGainLabel, "OUTPUT",   "outputGain", outputGainAttach);
 
     // Section-based knob accent colors (prototype v6: DELAY=stellar, TONE=no knobs, MIX=amber)
@@ -1960,17 +2124,33 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // --- v0.8: Wobble modulation knobs (MOD section) -------------------------
     {
-        styleSlider (wobbleAmountSlider, osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
+        styleSlider (wobbleAmountSlider, *osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
         addAndMakeVisible (wobbleAmountSlider);
-        styleLabel (wobbleAmountLabel, "AMOUNT", &osdLookAndFeel);
+        styleLabel (wobbleAmountLabel, "AMOUNT", &*osdLookAndFeel);
         addAndMakeVisible (wobbleAmountLabel);
         wobbleAmountAttach = std::make_unique<SliderAttachment> (processorRef.apvts, "wobbleAmount", wobbleAmountSlider);
+        wobbleAmountSlider.onDragStart = [this] { lastSliderDragStartTime = juce::Time::getMillisecondCounterHiRes(); };
+        wobbleAmountSlider.onDragEnd = [this] {
+            if (juce::Time::getMillisecondCounterHiRes() - lastSliderDragStartTime > 20.0)
+            {
+                processorRef.notifyHostStateChanged();
+                processorRef.captureUndoState ("Adjust wobbleAmount");
+            }
+        };
 
-        styleSlider (wobbleMorphSlider, osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
+        styleSlider (wobbleMorphSlider, *osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
         addAndMakeVisible (wobbleMorphSlider);
-        styleLabel (wobbleMorphLabel, "MORPH", &osdLookAndFeel);
+        styleLabel (wobbleMorphLabel, "MORPH", &*osdLookAndFeel);
         addAndMakeVisible (wobbleMorphLabel);
         wobbleMorphAttach = std::make_unique<SliderAttachment> (processorRef.apvts, "wobbleMorph", wobbleMorphSlider);
+        wobbleMorphSlider.onDragStart = [this] { lastSliderDragStartTime = juce::Time::getMillisecondCounterHiRes(); };
+        wobbleMorphSlider.onDragEnd = [this] {
+            if (juce::Time::getMillisecondCounterHiRes() - lastSliderDragStartTime > 20.0)
+            {
+                processorRef.notifyHostStateChanged();
+                processorRef.captureUndoState ("Adjust wobbleMorph");
+            }
+        };
 
         // MOD section — rose/pink accent (using Colours_OSD::accentRose)
         wobbleAmountSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentRose);
@@ -1985,10 +2165,10 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         for (int i = 0; i < items.size(); ++i)
             box.addItem (items[i], i + 1);
         // (#9) Colors inherited from OSDLookAndFeel for consistency
-        box.setLookAndFeel (&osdLookAndFeel);
+        box.setLookAndFeel (&*osdLookAndFeel);
         addAndMakeVisible (box);
         if (&label != &delayTimeLabel) {
-            styleLabel (label, name, &osdLookAndFeel);
+            styleLabel (label, name, &*osdLookAndFeel);
             addAndMakeVisible (label);
         }
         attach = std::make_unique<ComboBoxAttachment> (processorRef.apvts, paramId, box);
@@ -1996,9 +2176,9 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // Algorithm combo — manually managed (no ComboBoxParameterAttachment)
     // Items dynamically populated based on output format (stereo vs surround)
-    algorithmBox.setLookAndFeel (&osdLookAndFeel);
+    algorithmBox.setLookAndFeel (&*osdLookAndFeel);
     addAndMakeVisible (algorithmBox);
-    styleLabel (algorithmLabel, "ALGORITHM", &osdLookAndFeel);
+    styleLabel (algorithmLabel, "ALGORITHM", &*osdLookAndFeel);
     addAndMakeVisible (algorithmLabel);
     algorithmBox.onChange = [this]
     {
@@ -2007,20 +2187,22 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         {
             int paramIdx = selectedId - 1;  // IDs are 1-based, param indices are 0-based
             processorRef.configAlgorithm.store (paramIdx, std::memory_order_relaxed);
+            processorRef.markConfigStateDirty();
         }
     };
     {
-        juce::StringArray hrtfItems { "Simple", "Studio Ref", "Immersive", "Natural", "Precise", "Spatial" };
+        juce::StringArray hrtfItems { "Simple", "Immersive", "Natural", "Precise", "Spatial", "Studio Ref" };
         for (int i = 0; i < hrtfItems.size(); ++i)
             hrtfProfileBox.addItem (hrtfItems[i], i + 1);
-        hrtfProfileBox.setLookAndFeel (&osdLookAndFeel);
+        hrtfProfileBox.setLookAndFeel (&*osdLookAndFeel);
         addAndMakeVisible (hrtfProfileBox);
-        styleLabel (hrtfProfileLabel, "PROFILE", &osdLookAndFeel);
+        styleLabel (hrtfProfileLabel, "PROFILE", &*osdLookAndFeel);
         addAndMakeVisible (hrtfProfileLabel);
         hrtfProfileBox.setSelectedItemIndex (processorRef.configHrtfProfile.load (std::memory_order_relaxed),
                                              juce::dontSendNotification);
         hrtfProfileBox.onChange = [this] {
             processorRef.configHrtfProfile.store (hrtfProfileBox.getSelectedItemIndex(), std::memory_order_relaxed);
+            processorRef.markConfigStateDirty();
         };
     }
     // v0.7: syncMode reworked to 3-state (Straight/Dotted/Triplet)
@@ -2038,20 +2220,25 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
             formatNames.add (info.name);
         for (int i = 0; i < formatNames.size(); ++i)
             outputFormatBox.addItem (formatNames[i], i + 1);
-        outputFormatBox.setLookAndFeel (&osdLookAndFeel);
+        outputFormatBox.setLookAndFeel (&*osdLookAndFeel);
         addAndMakeVisible (outputFormatBox);
-        styleLabel (outputFormatLabel, "OUTPUT", &osdLookAndFeel);
+        styleLabel (outputFormatLabel, "OUTPUT", &*osdLookAndFeel);
         addAndMakeVisible (outputFormatLabel);
         outputFormatBox.setSelectedItemIndex (processorRef.configOutputFormat.load (std::memory_order_relaxed),
                                               juce::dontSendNotification);
         outputFormatBox.onChange = [this] {
             processorRef.configOutputFormat.store (outputFormatBox.getSelectedItemIndex(), std::memory_order_relaxed);
+            processorRef.markConfigStateDirty();
+            // Issue E15b: Activate layout immediately on user-driven format change
+            // instead of waiting for the next timer tick. This eliminates the one-tick
+            // race that corrupts undo state after format changes.
+            processorRef.requestOutputFormatChange (outputFormatBox.getSelectedItemIndex());
         };
     }
 
     // --- Header dropdown labels: left-aligned, JetBrains Mono Medium ----------
     {
-        auto headerLblFont = makeFont (osdLookAndFeel.jetbrainsMedium, 9.5f, 0.1f);
+        auto headerLblFont = makeFont (osdLookAndFeel->jetbrainsMedium, 9.5f, 0.1f);
         auto headerLblColour = Colours_OSD::textDim;
 
         for (auto* lbl : { &algorithmLabel, &outputFormatLabel, &hrtfProfileLabel })
@@ -2064,18 +2251,33 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // --- Tempo sync button (#5/#6) -------------------------------------------
     tempoSyncButton = std::make_unique<StyledButton> ("SYNC", Colours_OSD::accentSync,
-                                                       osdLookAndFeel.jetbrainsMedium);
+                                                       osdLookAndFeel->jetbrainsMedium);
     tempoSyncButton->setAlwaysActive (true);
+    tempoSyncButton->setClickingTogglesState (false);  // Issue E15b: timer drives visual state
     addAndMakeVisible (*tempoSyncButton);
-    tempoSyncAttach = std::make_unique<ButtonAttachment> (processorRef.apvts, "tempoSync", *tempoSyncButton);
+
+    // Issue E15b: Manual gesture brackets instead of ButtonAttachment (prevents double-undo)
+    tempoSyncButton->onClick = [this]
+    {
+        auto* syncParam = processorRef.apvts.getParameter ("tempoSync");
+        if (syncParam != nullptr)
+        {
+            syncParam->beginChangeGesture();
+            float current = processorRef.apvts.getRawParameterValue ("tempoSync")->load();
+            syncParam->setValueNotifyingHost (current < 0.5f ? 1.0f : 0.0f);
+            syncParam->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Toggle Tempo Sync");
+        }
+    };
 
     auto updateSyncUI = [this] {
-        bool isSynced = tempoSyncButton->getToggleState();
+        bool isSynced = processorRef.apvts.getRawParameterValue ("tempoSync")->load() > 0.5f;
         delayTimeSlider.setVisible (!isSynced);
         noteDivisionSlider.setVisible (isSynced);
         syncModeBox.setVisible (false);  // hidden — replaced by toggle buttons
-        syncDottedButton->setVisible (isSynced);
-        syncTripletButton->setVisible (isSynced);
+        if (syncDottedButton)  syncDottedButton->setVisible (isSynced);
+        if (syncTripletButton) syncTripletButton->setVisible (isSynced);
 
         // Toggle button text: "Sync" when synced, "Time" when free
         tempoSyncButton->setLabel (isSynced ? "SYNC" : "TIME");
@@ -2088,17 +2290,19 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         noteDivisionSlider.setColour (juce::Slider::thumbColourId, knobCol);
     };
 
-    tempoSyncButton->onStateChange = updateSyncUI;
+    // Issue E15b: call once to initialize UI, then timer drives updates
+    updateSyncUI();
+    tempoSyncUpdateUI = updateSyncUI;  // store for timer-driven refresh
 
     // v0.7: Dotted/Triplet toggle buttons (mutually exclusive, radio-style)
     syncDottedButton = std::make_unique<StyledButton> ("", Colours_OSD::accentSync,
-                                                        osdLookAndFeel.jetbrainsMedium);
+                                                        osdLookAndFeel->jetbrainsMedium);
     syncDottedButton->setIcon (createDottedNoteIconPath(), 1.0f);
     syncDottedButton->setClickingTogglesState (false);
     addAndMakeVisible (*syncDottedButton);
 
     syncTripletButton = std::make_unique<StyledButton> ("", Colours_OSD::accentSync,
-                                                         osdLookAndFeel.jetbrainsMedium);
+                                                         osdLookAndFeel->jetbrainsMedium);
     syncTripletButton->setIcon (createTripletNoteIconPath(), 1.0f);
     syncTripletButton->setClickingTogglesState (false);
     addAndMakeVisible (*syncTripletButton);
@@ -2110,7 +2314,13 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         if (newState) syncTripletButton->setToggleState (false, juce::dontSendNotification);
         int mode = newState ? 1 : 0;
         if (auto* param = processorRef.apvts.getParameter ("syncMode"))
+        {
+            param->beginChangeGesture();
             param->setValueNotifyingHost (param->convertTo0to1 ((float) mode));
+            param->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Change Sync Mode");
+        }
         repaint();
     };
     // Triplet button: toggle → set syncMode to 2 (Triplet) or 0 (Straight)
@@ -2120,7 +2330,13 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         if (newState) syncDottedButton->setToggleState (false, juce::dontSendNotification);
         int mode = newState ? 2 : 0;
         if (auto* param = processorRef.apvts.getParameter ("syncMode"))
+        {
+            param->beginChangeGesture();
             param->setValueNotifyingHost (param->convertTo0to1 ((float) mode));
+            param->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Change Sync Mode");
+        }
         repaint();
     };
 
@@ -2132,7 +2348,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         auto& btn = objectButtons[(size_t)i];
         btn.setButtonText (juce::String (i + 1));
         btn.setClickingTogglesState (false);
-        btn.setLookAndFeel (&osdLookAndFeel);
+        btn.setLookAndFeel (&*osdLookAndFeel);
         btn.onClick = [this, i] { selectObject (i); };
         addAndMakeVisible (btn);
     }
@@ -2140,42 +2356,42 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // --- Per-object controls -------------------------------------------------
     // (#3) Azimuth: rotary knob — use RotaryHorizontalVerticalDrag for natural direction
-    styleSlider (objAzimuthSlider, osdLookAndFeel, juce::Slider::RotaryHorizontalVerticalDrag);
+    styleSlider (objAzimuthSlider, *osdLookAndFeel, juce::Slider::RotaryHorizontalVerticalDrag);
     objAzimuthSlider.setRotaryParameters (juce::MathConstants<float>::pi, 3.0f * juce::MathConstants<float>::pi, false);
     objAzimuthSlider.setReversed (true);  // (#8) IEM StereoEncoder convention: clockwise knob = clockwise on map
     addAndMakeVisible (objAzimuthSlider);
-    styleLabel (objAzLabel, "AZIMUTH", &osdLookAndFeel);
+    styleLabel (objAzLabel, "AZIMUTH", &*osdLookAndFeel);
     addAndMakeVisible (objAzLabel);
 
     // v0.7: Elevation: rotary knob — 0° at left (9 o'clock), -90° at bottom, +90° at top
-    styleSlider (objElevationSlider, osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
+    styleSlider (objElevationSlider, *osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
     objElevationSlider.setRotaryParameters (juce::MathConstants<float>::pi,
                                             juce::MathConstants<float>::twoPi,
                                             true);
     addAndMakeVisible (objElevationSlider);
-    styleLabel (objElLabel, "ELEVATION", &osdLookAndFeel);
+    styleLabel (objElLabel, "ELEVATION", &*osdLookAndFeel);
     addAndMakeVisible (objElLabel);
 
     // Distance: rotary knob
-    styleSlider (objDistanceSlider, osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
+    styleSlider (objDistanceSlider, *osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
     addAndMakeVisible (objDistanceSlider);
-    styleLabel (objDistLabel, "DISTANCE", &osdLookAndFeel);
+    styleLabel (objDistLabel, "DISTANCE", &*osdLookAndFeel);
     addAndMakeVisible (objDistLabel);
 
     // --- Enabled toggle (IndicatorToggle — accent matches selected tap color) --
     objEnabledButton = std::make_unique<IndicatorToggle> ("ON", SpatialMapComponent::objectColours[0],
-                                                           osdLookAndFeel.jetbrainsMedium);
+                                                           osdLookAndFeel->jetbrainsMedium);
     addAndMakeVisible (*objEnabledButton);
 
     // --- v0.4: Per-object Doppler amount knob --------------------------------
-    styleSlider (objDopplerSlider, osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
+    styleSlider (objDopplerSlider, *osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
     addAndMakeVisible (objDopplerSlider);
-    styleLabel (objDopplerLabel, "DOPPLER", &osdLookAndFeel);
+    styleLabel (objDopplerLabel, "DOPPLER", &*osdLookAndFeel);
     addAndMakeVisible (objDopplerLabel);
     // Doppler color set per-tap in selectObject()
 
     // --- v0.6: Per-object trajectory controls (bottom panel, bound in selectObject) ---
-    objTrajectoryBox.setLookAndFeel (&osdLookAndFeel);
+    objTrajectoryBox.setLookAndFeel (&*osdLookAndFeel);
     objTrajectoryBox.addItem ("None",      1);
     objTrajectoryBox.addItem ("Bounce",    2);
     objTrajectoryBox.addItem ("Circle",    3);
@@ -2191,20 +2407,20 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     objTrajectoryBox.addItem ("Square",   13);
     objTrajectoryBox.addItem ("Triangle", 14);
     addAndMakeVisible (objTrajectoryBox);
-    styleLabel (objTrajectoryLabel, "TRAJECTORY", &osdLookAndFeel);
+    styleLabel (objTrajectoryLabel, "TRAJECTORY", &*osdLookAndFeel);
     addAndMakeVisible (objTrajectoryLabel);
     // Attachment created in selectObject()
 
     // v0.8: Trajectory direction arrow buttons (← →)
     objTrajectoryFwdButton = std::make_unique<StyledButton> (juce::String::charToString (0x2192),
                                                               SpatialMapComponent::objectColours[0],
-                                                              osdLookAndFeel.jetbrainsMedium);
+                                                              osdLookAndFeel->jetbrainsMedium);
     objTrajectoryFwdButton->setClickingTogglesState (false);
     addAndMakeVisible (*objTrajectoryFwdButton);
 
     objTrajectoryRevButton = std::make_unique<StyledButton> (juce::String::charToString (0x2190),
                                                               SpatialMapComponent::objectColours[0],
-                                                              osdLookAndFeel.jetbrainsMedium);
+                                                              osdLookAndFeel->jetbrainsMedium);
     objTrajectoryRevButton->setClickingTogglesState (false);
     addAndMakeVisible (*objTrajectoryRevButton);
 
@@ -2212,35 +2428,77 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     objTrajectoryDirBox.addItem ("Forward", 1);
     objTrajectoryDirBox.addItem ("Reverse", 2);
     addChildComponent (objTrajectoryDirBox);  // invisible
+    // Issue #182: Use manual gesture brackets (like Dotted/Triplet) instead of
+    // setSelectedId() which relies on ComboBoxAttachment auto-gestures that don't
+    // create proper undo entries in Ableton.
     objTrajectoryFwdButton->onClick = [this] {
-        objTrajectoryDirBox.setSelectedId (1, juce::sendNotificationSync);
+        auto prefix = "object" + juce::String (currentObjectIndex + 1) + "_";
+        if (auto* param = processorRef.apvts.getParameter (prefix + "trajectoryDirection"))
+        {
+            param->beginChangeGesture();
+            param->setValueNotifyingHost (param->convertTo0to1 (0.0f));  // 0 = Forward
+            param->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Change Trajectory Direction");
+        }
         objTrajectoryFwdButton->setToggleState (true, juce::dontSendNotification);
         objTrajectoryRevButton->setToggleState (false, juce::dontSendNotification);
     };
     objTrajectoryRevButton->onClick = [this] {
-        objTrajectoryDirBox.setSelectedId (2, juce::sendNotificationSync);
+        auto prefix = "object" + juce::String (currentObjectIndex + 1) + "_";
+        if (auto* param = processorRef.apvts.getParameter (prefix + "trajectoryDirection"))
+        {
+            param->beginChangeGesture();
+            param->setValueNotifyingHost (param->convertTo0to1 (1.0f));  // 1 = Reverse
+            param->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Change Trajectory Direction");
+        }
         objTrajectoryRevButton->setToggleState (true, juce::dontSendNotification);
         objTrajectoryFwdButton->setToggleState (false, juce::dontSendNotification);
     };
+    objTrajectoryDirBox.onChange = [this] {
+        int sel = objTrajectoryDirBox.getSelectedId();  // 1=Forward, 2=Reverse
+        if (objTrajectoryFwdButton) objTrajectoryFwdButton->setToggleState (sel == 1, juce::dontSendNotification);
+        if (objTrajectoryRevButton) objTrajectoryRevButton->setToggleState (sel == 2, juce::dontSendNotification);
+    };
 
-    styleSlider (objTrajectorySpeedSlider, osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
+    // Issue #182: Use manual gesture brackets (like Direction/InputChannel) instead of
+    // ComboBoxAttachment auto-gestures that Ableton ignores.
+    objTrajectoryBox.onChange = [this] {
+        auto prefix = "object" + juce::String (currentObjectIndex + 1) + "_";
+        if (auto* param = processorRef.apvts.getParameter (prefix + "trajectoryShape"))
+        {
+            int selectedIdx = objTrajectoryBox.getSelectedId() - 1;  // ComboBox 1-based -> 0-based
+            param->beginChangeGesture();
+            param->setValueNotifyingHost (param->convertTo0to1 (static_cast<float> (selectedIdx)));
+            param->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Change Trajectory Shape");
+        }
+    };
+
+    styleSlider (objTrajectorySpeedSlider, *osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
     addAndMakeVisible (objTrajectorySpeedSlider);
-    styleLabel (objTrajectorySpeedLabel, "SPEED", &osdLookAndFeel);
+    styleLabel (objTrajectorySpeedLabel, "SPEED", &*osdLookAndFeel);
     addAndMakeVisible (objTrajectorySpeedLabel);
     // Speed color set per-tap in selectObject()
     // Attachment created in selectObject()
 
     // --- v0.6: ADM-OSC Receive toggle (IndicatorToggle) ----------------------
     oscToggleButton = std::make_unique<IndicatorToggle> ("RECEIVE", Colours_OSD::accentGreen,
-                                                          osdLookAndFeel.jetbrainsMedium);
+                                                          osdLookAndFeel->jetbrainsMedium);
     addAndMakeVisible (*oscToggleButton);
-    oscToggleAttach = std::make_unique<ButtonAttachment> (processorRef.apvts, "admOscEnabled",
-                                                          *oscToggleButton);
+    oscToggleButton->setToggleState (processorRef.getOscReceiveEnabled(), juce::dontSendNotification);
+    oscToggleButton->onClick = [this]
+    {
+        processorRef.setOscReceiveEnabled (oscToggleButton->getToggleState());
+    };
 
-    // v0.6: Editable OSC port label (double-click to edit, Enter to commit)
+    // v0.6: Editable OSC port label (single-click to edit, Enter to commit)
     oscPortLabel.setText (juce::String (processorRef.getOscReceivePort()), juce::dontSendNotification);
-    oscPortLabel.setEditable (false, true, false);  // single-click no, double-click yes, return-key commits
-    oscPortLabel.setFont (makeFont (osdLookAndFeel.jetbrainsRegular, 11.0f));
+    oscPortLabel.setEditable (true, false, false);  // single-click yes, double-click no, loss-of-focus commits
+    oscPortLabel.setFont (makeFont (osdLookAndFeel->jetbrainsRegular, 11.0f));
     oscPortLabel.setColour (juce::Label::textColourId, Colours_OSD::textSecondary);
     oscPortLabel.setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
     oscPortLabel.setColour (juce::Label::backgroundWhenEditingColourId, Colours_OSD::bgWell);
@@ -2261,7 +2519,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     {
         auto text = oscPortLabel.getText().trim();
         int port = text.getIntValue();
-        if (port >= 1024 && port <= 65535)
+        if (port >= kMinPort && port <= kMaxPort)
         {
             processorRef.setOscReceivePort (port);
         }
@@ -2274,15 +2532,30 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     addAndMakeVisible (oscPortLabel);
 
     // --- v0.4: Global Air Absorption toggle (IndicatorToggle) ----------------
+    // Issue #182: Use manual onClick with gesture brackets (like FLT/MOD) instead
+    // of ButtonAttachment, which creates double undo entries.
     airAbsorptionButton = std::make_unique<IndicatorToggle> ("AIR", Colours_OSD::accentStellar,
-                                                              osdLookAndFeel.jetbrainsMedium);
+                                                              osdLookAndFeel->jetbrainsMedium);
+    airAbsorptionButton->setClickingTogglesState (false);  // timer drives visual state
+    airAbsorptionButton->onClick = [this]
+    {
+        auto* airParam = processorRef.apvts.getParameter ("airAbsorption");
+        if (airParam != nullptr)
+        {
+            airParam->beginChangeGesture();
+            float current = processorRef.apvts.getRawParameterValue ("airAbsorption")->load();
+            airParam->setValueNotifyingHost (current < 0.5f ? 1.0f : 0.0f);
+            airParam->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Toggle Air Absorption");
+        }
+    };
     addAndMakeVisible (*airAbsorptionButton);
-    airAbsorptionAttach = std::make_unique<ButtonAttachment> (processorRef.apvts, "airAbsorption",
-                                                              *airAbsorptionButton);
 
     // --- v0.7: ADM-OSC Send toggle (IndicatorToggle) -------------------------
     oscSendToggleButton = std::make_unique<IndicatorToggle> ("SEND", Colours_OSD::accentGreen,
-                                                              osdLookAndFeel.jetbrainsMedium);
+                                                              osdLookAndFeel->jetbrainsMedium);
+    oscSendToggleButton->setToggleState (processorRef.getOscSendEnabled(), juce::dontSendNotification);
     oscSendToggleButton->onClick = [this]
     {
         processorRef.setOscSendEnabled (oscSendToggleButton->getToggleState());
@@ -2290,8 +2563,8 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     addAndMakeVisible (*oscSendToggleButton);
 
     oscSendIPLabel.setText (processorRef.getOscSendIP(), juce::dontSendNotification);
-    oscSendIPLabel.setEditable (false, true, false);
-    oscSendIPLabel.setFont (makeFont (osdLookAndFeel.jetbrainsRegular, 11.0f));
+    oscSendIPLabel.setEditable (true, false, false);
+    oscSendIPLabel.setFont (makeFont (osdLookAndFeel->jetbrainsRegular, 11.0f));
     oscSendIPLabel.setColour (juce::Label::textColourId, Colours_OSD::textSecondary);
     oscSendIPLabel.setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
     oscSendIPLabel.setColour (juce::Label::backgroundWhenEditingColourId, Colours_OSD::bgWell);
@@ -2305,18 +2578,38 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         if (auto* ed = oscSendIPLabel.getCurrentTextEditor())
         {
             ed->setJustification (juce::Justification::centred);
+            ed->setInputFilter (new juce::TextEditor::LengthAndCharacterRestriction (15, "0123456789."), true);
             ed->setHighlightedRegion ({ 0, oscSendIPLabel.getText().length() });
         }
     };
     oscSendIPLabel.onTextChange = [this]
     {
-        processorRef.setOscSendIP (oscSendIPLabel.getText().trim());
+        auto text = oscSendIPLabel.getText().trim();
+        auto octets = juce::StringArray::fromTokens (text, ".", "");
+        bool valid = (octets.size() == 4);
+        if (valid)
+        {
+            for (auto& o : octets)
+            {
+                int val = o.getIntValue();
+                if (o.isEmpty() || o.length() > 3 || val < 0 || val > 255
+                    || (o.length() > 1 && o[0] == '0'))
+                {
+                    valid = false;
+                    break;
+                }
+            }
+        }
+        if (valid)
+            processorRef.setOscSendIP (text);
+        else
+            oscSendIPLabel.setText (processorRef.getOscSendIP(), juce::dontSendNotification);
     };
     addAndMakeVisible (oscSendIPLabel);
 
     oscSendPortLabel.setText (juce::String (processorRef.getOscSendPort()), juce::dontSendNotification);
-    oscSendPortLabel.setEditable (false, true, false);
-    oscSendPortLabel.setFont (makeFont (osdLookAndFeel.jetbrainsRegular, 11.0f));
+    oscSendPortLabel.setEditable (true, false, false);
+    oscSendPortLabel.setFont (makeFont (osdLookAndFeel->jetbrainsRegular, 11.0f));
     oscSendPortLabel.setColour (juce::Label::textColourId, Colours_OSD::textSecondary);
     oscSendPortLabel.setColour (juce::Label::textWhenEditingColourId, juce::Colours::white);
     oscSendPortLabel.setColour (juce::Label::backgroundWhenEditingColourId, Colours_OSD::bgWell);
@@ -2336,7 +2629,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     oscSendPortLabel.onTextChange = [this]
     {
         int port = oscSendPortLabel.getText().trim().getIntValue();
-        if (port >= 1024 && port <= 65535)
+        if (port >= kMinPort && port <= kMaxPort)
             processorRef.setOscSendPort (port);
         else
             oscSendPortLabel.setText (juce::String (processorRef.getOscSendPort()), juce::dontSendNotification);
@@ -2345,15 +2638,19 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // --- v0.9: FLT toggle — directly controls filterEnabled parameter ---------
     fltToggle = std::make_unique<IndicatorToggle> ("FLT", Colours_OSD::accentViolet,
-                                                    osdLookAndFeel.jetbrainsMedium);
+                                                    osdLookAndFeel->jetbrainsMedium);
     fltToggle->setClickingTogglesState (false);  // timer drives visual state
     fltToggle->onClick = [this]
     {
         auto* fltParam = processorRef.apvts.getParameter ("filterEnabled");
         if (fltParam != nullptr)
         {
+            fltParam->beginChangeGesture();
             float current = processorRef.apvts.getRawParameterValue ("filterEnabled")->load();
             fltParam->setValueNotifyingHost (current < 0.5f ? 1.0f : 0.0f);
+            fltParam->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Toggle Filter");
         }
     };
     addAndMakeVisible (*fltToggle);
@@ -2365,15 +2662,19 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // --- v0.8: MOD toggle (MOD section header) — timer-driven ----------------
     modToggle = std::make_unique<IndicatorToggle> ("MOD", Colours_OSD::accentRose,
-                                                    osdLookAndFeel.jetbrainsMedium);
+                                                    osdLookAndFeel->jetbrainsMedium);
     modToggle->setClickingTogglesState (false);  // timer drives visual state
     modToggle->onClick = [this]
     {
         auto* param = processorRef.apvts.getParameter ("wobbleEnabled");
         if (param != nullptr)
         {
+            param->beginChangeGesture();
             float cur = processorRef.apvts.getRawParameterValue ("wobbleEnabled")->load();
             param->setValueNotifyingHost (cur > 0.5f ? 0.0f : 1.0f);
+            param->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Toggle Modulation");
         }
     };
     addAndMakeVisible (*modToggle);
@@ -2402,11 +2703,34 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
             param->setValueNotifyingHost (param->convertTo0to1 (q));
         repaint();  // update painted readout
     };
+    // Issue E15: Gesture wrapping for filter graph drag (undo grouping)
+    filterGraph.onFilterDragStarted = [this] (bool isHP) {
+        activeFilterGestureParams.clear();
+        // Issue E15b: Only begin gestures on the params that will actually change.
+        // Opening gestures on all 4 params causes the host to create per-parameter undo entries.
+        const char* ids[2] = { isHP ? "filterHP" : "filterLP",
+                               isHP ? "filterHPQ" : "filterLPQ" };
+        for (auto* id : ids)
+        {
+            if (auto* param = processorRef.apvts.getParameter (id))
+            {
+                param->beginChangeGesture();
+                activeFilterGestureParams.push_back (param);
+            }
+        }
+    };
+    filterGraph.onFilterDragEnded = [this] (bool /*isHP*/) {
+        for (auto* param : activeFilterGestureParams)
+            param->endChangeGesture();
+        activeFilterGestureParams.clear();
+        processorRef.notifyHostStateChanged();
+        processorRef.captureUndoState ("Adjust Filter");
+    };
 
     // --- v0.7: Per-object pitch shift knob (bottom panel) --------------------
-    styleSlider (objPitchShiftSlider, osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
+    styleSlider (objPitchShiftSlider, *osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
     addAndMakeVisible (objPitchShiftSlider);
-    styleLabel (objPitchShiftLabel, "PITCH", &osdLookAndFeel);
+    styleLabel (objPitchShiftLabel, "PITCH", &*osdLookAndFeel);
     addAndMakeVisible (objPitchShiftLabel);
     // Per-object pitch color set per-tap in selectObject()
 
@@ -2421,7 +2745,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         // Cycling button — onClick advances to next item, wraps around
         objInputChannelButton = std::make_unique<StyledButton> ("L+R",
                                                                  SpatialMapComponent::objectColours[0],
-                                                                 osdLookAndFeel.jetbrainsMedium);
+                                                                 osdLookAndFeel->jetbrainsMedium);
         objInputChannelButton->setClickingTogglesState (false);
         objInputChannelButton->setAlwaysActive (true);
         addAndMakeVisible (*objInputChannelButton);
@@ -2444,15 +2768,26 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         };
 
         // Cycle on click: L+R (1) → L (2) → R (3) → L+R (1)
+        // Issue #182: Use manual gesture brackets (like Dotted/Triplet) instead of
+        // setSelectedId() which relies on ComboBoxAttachment auto-gestures that don't
+        // create proper undo entries in Ableton.
         objInputChannelButton->onClick = [this] {
-            int cur = objInputChannelBox.getSelectedId();
-            int next = (cur >= 3) ? 1 : cur + 1;
-            objInputChannelBox.setSelectedId (next, juce::sendNotificationSync);
+            auto prefix = "object" + juce::String (currentObjectIndex + 1) + "_";
+            if (auto* param = processorRef.apvts.getParameter (prefix + "inputChannel"))
+            {
+                int cur = objInputChannelBox.getSelectedId();  // 1-based
+                int next = (cur >= 3) ? 1 : cur + 1;
+                param->beginChangeGesture();
+                param->setValueNotifyingHost (param->convertTo0to1 (static_cast<float> (next - 1)));
+                param->endChangeGesture();
+                processorRef.notifyHostStateChanged();
+                processorRef.captureUndoState ("Change Input Channel");
+            }
         };
     }
 
     // --- v0.7: Input format dropdown (header bar) ----------------------------
-    inputFormatBox.setLookAndFeel (&osdLookAndFeel);
+    inputFormatBox.setLookAndFeel (&*osdLookAndFeel);
     inputFormatBox.addItem ("Mono", 1);
     inputFormatBox.addItem ("Stereo", 2);
     addAndMakeVisible (inputFormatBox);
@@ -2460,11 +2795,12 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
                                         juce::dontSendNotification);
     inputFormatBox.onChange = [this] {
         processorRef.configInputFormat.store (inputFormatBox.getSelectedItemIndex(), std::memory_order_relaxed);
+        processorRef.markConfigStateDirty();
     };
 
     // Header dropdown labels: JetBrains Mono Medium 7.5px, wide kerning
     {
-        auto headerLblFont2 = makeFont (osdLookAndFeel.jetbrainsMedium, 9.5f, 0.1f);
+        auto headerLblFont2 = makeFont (osdLookAndFeel->jetbrainsMedium, 9.5f, 0.1f);
         auto headerLblColour2 = Colours_OSD::textDim;
 
         presetLabel.setText ("PRESET", juce::dontSendNotification);
@@ -2481,7 +2817,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     }
 
     // --- v0.9: Preset browser — TextButton + PopupMenu (replaces ComboBox) ---
-    presetNameButton.setLookAndFeel (&osdLookAndFeel);
+    presetNameButton.setLookAndFeel (&*osdLookAndFeel);
     presetNameButton.setComponentID ("presetButton");
     presetNameButton.setColour (juce::TextButton::buttonColourId, Colours_OSD::bgRecessed);
     presetNameButton.setColour (juce::TextButton::textColourOffId, Colours_OSD::textSecondary);
@@ -2492,7 +2828,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     auto stylePresetButton = [&] (juce::TextButton& btn, const juce::String& text)
     {
         btn.setButtonText (text);
-        btn.setLookAndFeel (&osdLookAndFeel);
+        btn.setLookAndFeel (&*osdLookAndFeel);
         btn.setColour (juce::TextButton::buttonColourId, Colours_OSD::bgRecessed);
         btn.setColour (juce::TextButton::textColourOffId, Colours_OSD::textSecondary);
         addAndMakeVisible (btn);
@@ -2502,20 +2838,20 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     presetPrevButton.onClick = [this]
     {
         globalTapDrawer.resetToCenter();
-        for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
-            processorRef.globalTapOffset[i].store (0.0f, std::memory_order_relaxed);
+        resetGlobalTapAPVTSParams();
         processorRef.loadPreviousPreset();
         updatePresetButtonText();
+        processorRef.captureUndoState ("Load Preset");
     };
 
     stylePresetButton (presetNextButton, ">");
     presetNextButton.onClick = [this]
     {
         globalTapDrawer.resetToCenter();
-        for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
-            processorRef.globalTapOffset[i].store (0.0f, std::memory_order_relaxed);
+        resetGlobalTapAPVTSParams();
         processorRef.loadNextPreset();
         updatePresetButtonText();
+        processorRef.captureUndoState ("Load Preset");
     };
 
     stylePresetButton (presetSaveButton, "Save");
@@ -2547,7 +2883,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
 
     // --- SML badge button (header branding link) ---
     smlButton = std::make_unique<StyledButton> ("SML", Colours_OSD::accentStellar,
-                                                  osdLookAndFeel.robotoMedium);
+                                                  osdLookAndFeel->robotoMedium);
     smlButton->setClickingTogglesState (false);
     smlButton->onClick = [] { juce::URL ("https://spatialmedialab.org").launchInDefaultBrowser(); };
     smlButton->setAlwaysActive (true);
@@ -2556,8 +2892,28 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     smlButton->setButtonHeight (17);
     addAndMakeVisible (*smlButton);
 
+    // Issue E15b/182: Internal undo/redo buttons (FabFilter-style)
+    undoButton = std::make_unique<juce::TextButton> (juce::CharPointer_UTF8 ("\xe2\x86\xa9"));  // arrow left hook
+    undoButton->setTooltip ("Undo");
+    undoButton->setColour (juce::TextButton::buttonColourId, Colours_OSD::bgRecessed);
+    undoButton->setColour (juce::TextButton::textColourOffId, Colours_OSD::textSecondary);
+    undoButton->onClick = [this] { processorRef.performInternalUndo(); updatePresetButtonText(); updateUndoButtons(); };
+    addAndMakeVisible (*undoButton);
+
+    redoButton = std::make_unique<juce::TextButton> (juce::CharPointer_UTF8 ("\xe2\x86\xaa"));  // arrow right hook
+    redoButton->setTooltip ("Redo");
+    redoButton->setColour (juce::TextButton::buttonColourId, Colours_OSD::bgRecessed);
+    redoButton->setColour (juce::TextButton::textColourOffId, Colours_OSD::textSecondary);
+    redoButton->onClick = [this] { processorRef.performInternalRedo(); updatePresetButtonText(); updateUndoButtons(); };
+    addAndMakeVisible (*redoButton);
+
     selectObject (0);
     resized();  // re-layout now that all unique_ptr components are constructed
+
+    // Issue E15b/182: Capture initial state for undo baseline
+    processorRef.captureUndoState ("Initial State");
+    updateUndoButtons();
+
     startTimerHz (30);
 }
 
@@ -2567,6 +2923,50 @@ OpenSpatialDelayEditor::~OpenSpatialDelayEditor()
     spatialMap.removeListener (this);
     setLookAndFeel (nullptr);
     stopTimer();
+}
+
+void OpenSpatialDelayEditor::visibilityChanged()
+{
+    if (isVisible())
+        startTimerHz (30);
+    else
+        startTimerHz (5);    // keep param sync alive, skip rendering
+}
+
+//==============================================================================
+// Issue E15b/182: Internal undo/redo support
+//==============================================================================
+void OpenSpatialDelayEditor::updateUndoButtons()
+{
+    if (undoButton)
+    {
+        undoButton->setEnabled (processorRef.pluginUndo.canUndo());
+        undoButton->setAlpha (processorRef.pluginUndo.canUndo() ? 1.0f : 0.3f);
+    }
+    if (redoButton)
+    {
+        redoButton->setEnabled (processorRef.pluginUndo.canRedo());
+        redoButton->setAlpha (processorRef.pluginUndo.canRedo() ? 1.0f : 0.3f);
+    }
+}
+
+bool OpenSpatialDelayEditor::keyPressed (const juce::KeyPress& key)
+{
+    if (key == juce::KeyPress ('z', juce::ModifierKeys::commandModifier, 0))
+    {
+        processorRef.performInternalUndo();
+        updatePresetButtonText();
+        updateUndoButtons();
+        return true;
+    }
+    if (key == juce::KeyPress ('z', juce::ModifierKeys::commandModifier | juce::ModifierKeys::shiftModifier, 0))
+    {
+        processorRef.performInternalRedo();
+        updatePresetButtonText();
+        updateUndoButtons();
+        return true;
+    }
+    return false;
 }
 
 //==============================================================================
@@ -2628,7 +3028,7 @@ void OpenSpatialDelayEditor::showPresetMenu()
         }
     }
 
-    mainMenu.setLookAndFeel (&osdLookAndFeel);
+    mainMenu.setLookAndFeel (&*osdLookAndFeel);
     mainMenu.showMenuAsync (
         juce::PopupMenu::Options()
             .withTargetComponent (&presetNameButton)
@@ -2640,10 +3040,10 @@ void OpenSpatialDelayEditor::showPresetMenu()
             if (result > 0)
             {
                 globalTapDrawer.resetToCenter();
-                for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
-                    processorRef.globalTapOffset[i].store (0.0f, std::memory_order_relaxed);
+                resetGlobalTapAPVTSParams();
                 processorRef.loadPreset (result - 1);
                 updatePresetButtonText();
+                processorRef.captureUndoState ("Load Preset");
             }
         });
 }
@@ -2683,7 +3083,31 @@ void OpenSpatialDelayEditor::selectObject (int index)
     objDopplerAttach = std::make_unique<SliderAttachment> (processorRef.apvts, prefix + "dopplerAmount", objDopplerSlider);
     objPitchShiftAttach      = std::make_unique<SliderAttachment> (processorRef.apvts, prefix + "pitchShift", objPitchShiftSlider);
     objInputChannelAttach    = std::make_unique<ComboBoxAttachment> (processorRef.apvts, prefix + "inputChannel", objInputChannelBox);
-    objTrajectoryAttach      = std::make_unique<ComboBoxAttachment> (processorRef.apvts, prefix + "trajectoryShape", objTrajectoryBox);
+
+    // Issue E15b: Force host state capture after per-object slider drag gestures
+    auto makeDragStart = [this] { return [this] { lastSliderDragStartTime = juce::Time::getMillisecondCounterHiRes(); }; };
+    auto makeDragEnd = [this] (const char* name) {
+        return [this, name] {
+            double elapsed = juce::Time::getMillisecondCounterHiRes() - lastSliderDragStartTime;
+            if (elapsed > 20.0)
+            {
+                processorRef.notifyHostStateChanged();
+                processorRef.captureUndoState (juce::String ("Adjust ") + name);
+            }
+        };
+    };
+    for (auto* s : std::initializer_list<juce::Slider*> { &objAzimuthSlider, &objElevationSlider, &objDistanceSlider,
+                     &objDopplerSlider, &objPitchShiftSlider, &objTrajectorySpeedSlider })
+    {
+        s->onDragStart = makeDragStart();
+        s->onDragEnd   = makeDragEnd ("perObject");
+    }
+    // Issue #182: Manual sync replaces ComboBoxAttachment (auto-gestures fail in Ableton)
+    {
+        auto* raw = processorRef.apvts.getRawParameterValue (prefix + "trajectoryShape");
+        if (raw)
+            objTrajectoryBox.setSelectedId (static_cast<int> (raw->load()) + 1, juce::dontSendNotification);
+    }
     objTrajectorySpeedAttach = std::make_unique<SliderAttachment>   (processorRef.apvts, prefix + "trajectorySpeed", objTrajectorySpeedSlider);
     objTrajectoryDirAttach   = std::make_unique<ComboBoxAttachment> (processorRef.apvts, prefix + "trajectoryDirection", objTrajectoryDirBox);
 
@@ -2834,12 +3258,37 @@ void OpenSpatialDelayEditor::applyGlobalTapDelta (int knobIndex, float delta)
         // Azimuth wrapping
         if (wraps)
         {
-            while (newVal >  180.0f) newVal -= 360.0f;
-            while (newVal < -180.0f) newVal += 360.0f;
+            newVal = wrapAzimuth (newVal);
         }
 
         // convertTo0to1 handles NormalisableRange clamping for non-wrapping params
         param->setValueNotifyingHost (param->convertTo0to1 (newVal));
+    }
+}
+
+// issue #95: Zero out APVTS global tap params + processor atomics on preset change
+void OpenSpatialDelayEditor::resetGlobalTapAPVTSParams()
+{
+    static const char* tapParamIds[] = { "globalTapAzimuth", "globalTapElevation", "globalTapDistance",
+                                         "globalTapPitch",   "globalTapDoppler",   "globalTapSpeed" };
+    // Issue E15: Wrap in gestures so the host groups the reset as one undo entry
+    std::array<juce::RangedAudioParameter*, 6> gestures {};
+    for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
+    {
+        gestures[static_cast<size_t> (i)] = processorRef.apvts.getParameter (tapParamIds[i]);
+        if (gestures[static_cast<size_t> (i)] != nullptr)
+            gestures[static_cast<size_t> (i)]->beginChangeGesture();
+    }
+    for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
+    {
+        processorRef.globalTapOffset[i].store (0.0f, std::memory_order_relaxed);
+        if (gestures[static_cast<size_t> (i)] != nullptr)
+            gestures[static_cast<size_t> (i)]->setValueNotifyingHost (gestures[static_cast<size_t> (i)]->convertTo0to1 (0.0f));
+    }
+    for (int i = 0; i < OpenSpatialDelayProcessor::kNumGlobalTapOffsets; ++i)
+    {
+        if (gestures[static_cast<size_t> (i)] != nullptr)
+            gestures[static_cast<size_t> (i)]->endChangeGesture();
     }
 }
 
@@ -2854,14 +3303,34 @@ void OpenSpatialDelayEditor::syncGlobalTapOffsetsFromOSC()
         // Azimuth wrapping
         if (i == GlobalTapDrawerComponent::kAzimuth)
         {
-            if (delta >  180.0f) delta -= 360.0f;
-            if (delta < -180.0f) delta += 360.0f;
+            delta = unwrapAzimuthDelta (delta);
         }
 
         if (std::abs (delta) > 1e-6f)
         {
             applyGlobalTapDelta (i, delta);
             globalTapDrawer.setKnobValueSilent (i, oscVal);
+        }
+    }
+}
+
+// issue #164: Sync global tap knobs from APVTS on host undo / external param change.
+// Unlike syncGlobalTapOffsetsFromOSC(), this does NOT call applyGlobalTapDelta() —
+// per-object params are already correct after undo, we only need the UI + atomics.
+void OpenSpatialDelayEditor::syncGlobalTapKnobsFromAPVTS()
+{
+    static const char* tapParamIds[] = { "globalTapAzimuth", "globalTapElevation", "globalTapDistance",
+                                         "globalTapPitch",   "globalTapDoppler",   "globalTapSpeed" };
+    for (int i = 0; i < GlobalTapDrawerComponent::kNumKnobs; ++i)
+    {
+        auto* rawParam = processorRef.apvts.getRawParameterValue (tapParamIds[i]);
+        if (rawParam == nullptr) continue;
+        float apvtsVal = rawParam->load();
+        float knobVal  = globalTapDrawer.getKnobValue (i);
+        if (std::abs (apvtsVal - knobVal) > 1e-6f)
+        {
+            globalTapDrawer.setKnobValueSilent (i, apvtsVal);
+            processorRef.globalTapOffset[i].store (apvtsVal, std::memory_order_relaxed);
         }
     }
 }
@@ -2895,20 +3364,21 @@ void OpenSpatialDelayEditor::updateMapFromParameters()
 
 void OpenSpatialDelayEditor::timerCallback()
 {
-    // v0.7: Advance star field animation (~30Hz timer → dt ≈ 0.033s)
-    float dt = 1.0f / 30.0f;
-    spatialMap.advanceStarAnimation (dt);
-
-    // v0.7: Poll per-tap activity for glow animation (exponential decay)
-    for (int i = 0; i < SpatialMapComponent::MAX_OBJECTS; ++i)
+    // issue #131: skip animation + repaint when editor is not visible
+    if (isVisible())
     {
-        float rms = processorRef.getTapActivityRMS (i);
-        smoothedActivity[i] = rms * 0.7f + smoothedActivity[i] * 0.3f;
-        spatialMap.setObjectActivityLevel (i, smoothedActivity[i]);
-    }
-    spatialMap.advancePulsePhases (dt);
+        float dt = 1.0f / 30.0f;
+        spatialMap.advanceStarAnimation (dt);
 
-    spatialMap.repaint();
+        for (int i = 0; i < SpatialMapComponent::MAX_OBJECTS; ++i)
+        {
+            float rms = processorRef.getTapActivityRMS (i);
+            smoothedActivity[i] = rms * 0.7f + smoothedActivity[i] * 0.3f;
+            spatialMap.setObjectActivityLevel (i, smoothedActivity[i]);
+        }
+        spatialMap.advancePulsePhases (dt);
+        spatialMap.repaint();
+    }
 
     updateMapFromParameters();
     updateObjectButtonColours();
@@ -2926,6 +3396,9 @@ void OpenSpatialDelayEditor::timerCallback()
         bool hasTraj = (trajShape > 0);  // 0 = None
         if (objTrajectoryFwdButton) objTrajectoryFwdButton->setVisible (hasTraj);
         if (objTrajectoryRevButton) objTrajectoryRevButton->setVisible (hasTraj);
+        // Issue #182: Sync ComboBox from APVTS (no ComboBoxAttachment)
+        if (objTrajectoryBox.getSelectedId() != trajShape + 1)
+            objTrajectoryBox.setSelectedId (trajShape + 1, juce::dontSendNotification);
     }
 
     // v0.8: MOD enable/disable — dim wobble knobs + labels when disabled
@@ -2991,8 +3464,13 @@ void OpenSpatialDelayEditor::timerCallback()
         }
     }
 
-    // Trigger layout recomputation if format changed
-    processorRef.requestOutputFormatChange (outputFormatBox.getSelectedItemIndex());
+    // Issue E15b: Only re-resolve the output format from the timer when the host
+    // changes the bus channel count (e.g., track routing change). User-driven format
+    // changes now call requestOutputFormatChange() directly from outputFormatBox.onChange.
+    // Polling every 30Hz tick created spurious layout activations after Undo/Redo that
+    // corrupted the host undo stack.
+    if (lastMaxBusChannels != processorRef.getMaxBusChannels())
+        processorRef.requestOutputFormatChange (outputFormatBox.getSelectedItemIndex());
 
     // v0.5: Context-sensitive header dropdowns based on output format
     int fmtIdx = static_cast<int> (processorRef.getActiveOutputFormat());
@@ -3026,13 +3504,20 @@ void OpenSpatialDelayEditor::timerCallback()
         algorithmBox.setVisible (true);
         algorithmLabel.setVisible (true);
         algorithmBox.setEnabled (false);
+        algorithmBox.setAlpha (0.5f);
         algorithmBox.setText ("Ambisonics Encode", juce::dontSendNotification);
+        if (fmtCategory != lastAlgoCategoryShown)
+        {
+            lastAlgoCategoryShown = fmtCategory;
+            algorithmBox.resized();   // re-trigger positionComboBoxText for full-width label
+        }
     }
     else
     {
         algorithmBox.setVisible (true);
         algorithmLabel.setVisible (true);
         algorithmBox.setEnabled (true);
+        algorithmBox.setAlpha (1.0f);
 
         // Rebuild combo items only when format category changes
         if (fmtCategory != lastAlgoCategoryShown)
@@ -3043,36 +3528,44 @@ void OpenSpatialDelayEditor::timerCallback()
             if (isStereoVariant)
             {
                 // Stereo modes only — IDs match param indices + 1
-                algorithmBox.addItem ("Equal Power",  7);   // param index 6
-                algorithmBox.addItem ("Stereo VBAP",  8);   // param index 7
-                algorithmBox.addItem ("XY Pair",      9);   // param index 8
-                algorithmBox.addItem ("MS Encode",    10);  // param index 9
-                algorithmBox.addItem ("Blumlein",     11);  // param index 10
-
-                // Auto-snap if current param is a surround algorithm
-                if (algoIdx < 6)
-                {
-                    processorRef.configAlgorithm.store (6, std::memory_order_relaxed);  // Equal Power
-                    algoIdx = 6;
-                }
+                algorithmBox.addItem ("Equal Power",  8);   // param index 7
+                algorithmBox.addItem ("Stereo VBAP",  9);   // param index 8
+                algorithmBox.addItem ("XY Pair",      10);  // param index 9
+                algorithmBox.addItem ("MS Encode",    11);  // param index 10
+                algorithmBox.addItem ("Blumlein",     12);  // param index 11
             }
             else  // Surround
             {
                 // Surround algorithms only — IDs match param indices + 1
+                // Constant Power shown first (default for surround)
+                algorithmBox.addItem ("Constant Power", 2); // param index 1
                 algorithmBox.addItem ("Ambisonics",   1);   // param index 0
-                algorithmBox.addItem ("DBAP",         2);   // param index 1
-                algorithmBox.addItem ("KNN",          3);   // param index 2
-                algorithmBox.addItem ("MDAP",         4);   // param index 3
-                algorithmBox.addItem ("VBAP",         5);   // param index 4
-                algorithmBox.addItem ("VBIP",         6);   // param index 5
-
-                // Auto-snap if current param is a stereo mode
-                if (algoIdx > 5)
-                {
-                    processorRef.configAlgorithm.store (4, std::memory_order_relaxed);  // VBAP
-                    algoIdx = 4;
-                }
+                algorithmBox.addItem ("DBAP",         3);   // param index 2
+                algorithmBox.addItem ("KNN",          4);   // param index 3
+                algorithmBox.addItem ("MDAP",         5);   // param index 4
+                algorithmBox.addItem ("VBAP",         6);   // param index 5
+                algorithmBox.addItem ("VBIP",         7);   // param index 6
             }
+
+            algorithmBox.resized();   // restore arrow-reserved label width
+        }
+
+        // Validate algorithm against current output mode every tick
+        // (preset loading can write an out-of-range value)
+        if (isStereoVariant && algoIdx < 7)
+        {
+            algoIdx = 7;  // Equal Power
+            processorRef.configAlgorithm.store (algoIdx, std::memory_order_relaxed);
+            // Issue E15b: Do NOT call markConfigStateDirty() here — timer-driven
+            // algorithm corrections must be silent. User-initiated format changes
+            // already call markConfigStateDirty() from the combo box onChange handler.
+            // Calling it here creates spurious updateHostDisplay() notifications that
+            // corrupt the host undo stack after Undo/Redo operations.
+        }
+        else if (! isStereoVariant && algoIdx > 6)
+        {
+            algoIdx = 1;  // Constant Power (default for surround)
+            processorRef.configAlgorithm.store (algoIdx, std::memory_order_relaxed);
         }
 
         // Sync combo selection from parameter (IDs are param index + 1)
@@ -3090,6 +3583,9 @@ void OpenSpatialDelayEditor::timerCallback()
     }
 
     // v0.9: Sync preset name button text from processor
+    // Issue #182: Also force sync after host state restore (Undo/Redo)
+    if (processorRef.stateJustRestored.exchange (false, std::memory_order_relaxed))
+        updatePresetButtonText();
     {
         int idx = processorRef.getCurrentPresetIndex();
         auto names = processorRef.getPresetNames();
@@ -3112,6 +3608,24 @@ void OpenSpatialDelayEditor::timerCallback()
         filterGraph.setEnabled (filterIsActive);
         if (fltToggle) fltToggle->setToggleState (filterIsActive, juce::dontSendNotification);
 
+        // Issue #182: Sync Air button visual state (no ButtonAttachment — manual sync)
+        if (airAbsorptionButton)
+        {
+            bool airActive = processorRef.apvts.getRawParameterValue ("airAbsorption")->load() > 0.5f;
+            airAbsorptionButton->setToggleState (airActive, juce::dontSendNotification);
+        }
+
+        // Issue E15b: Sync tempoSync button visual state + UI (no ButtonAttachment)
+        if (tempoSyncButton && tempoSyncUpdateUI)
+        {
+            bool synced = processorRef.apvts.getRawParameterValue ("tempoSync")->load() > 0.5f;
+            if (tempoSyncButton->getToggleState() != synced)
+            {
+                tempoSyncButton->setToggleState (synced, juce::dontSendNotification);
+                tempoSyncUpdateUI();
+            }
+        }
+
         // Always update graph with live values — dimming handles on/off visual
         filterGraph.setFrequencies (hp, lp);
         filterGraph.setQ (hpq, lpq);
@@ -3129,6 +3643,12 @@ void OpenSpatialDelayEditor::timerCallback()
     {
         syncGlobalTapOffsetsFromOSC();
     }
+
+    // issue #164: Sync knobs from APVTS on host undo / external param change
+    syncGlobalTapKnobsFromAPVTS();
+
+    // Issue E15b/182: Refresh undo/redo button state
+    updateUndoButtons();
 
     repaint();
 }
@@ -3158,7 +3678,7 @@ void OpenSpatialDelayEditor::drawSectionHeader (juce::Graphics& g, int x, int y,
 {
     // Observatory v6: JetBrains Mono Bold, wide tracking
     g.setColour (Colours_OSD::textDim);
-    juce::Font headerFont = makeFont (osdLookAndFeel.jetbrainsBold, 11.0f, 0.15f);
+    juce::Font headerFont = makeFont (osdLookAndFeel->jetbrainsBold, 11.0f, 0.15f);
     g.setFont (headerFont);
     g.drawText (text, x, y, w, 12, juce::Justification::centredLeft);
     juce::GlyphArrangement glyphs;
@@ -3214,7 +3734,7 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
     {
         int leftX = 10;  // prototype: padding 0 10px
         // Compute SML button width from actual content (icon + gap + text at real font)
-        auto smlFont = makeFont (osdLookAndFeel.robotoMedium, 11.5f, 0.08f);
+        auto smlFont = makeFont (osdLookAndFeel->robotoMedium, 11.5f, 0.08f);
         juce::GlyphArrangement smlGl;
         smlGl.addLineOfText (smlFont, "SML", 0.0f, 0.0f);
         float smlTextW = smlGl.getBoundingBox (0, smlGl.getNumGlyphs(), true).getWidth();
@@ -3226,7 +3746,7 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         // Plugin title — DM Sans Medium 14px
         int titleX = leftX + smlW + 6;
         g.setColour (Colours_OSD::textPrimary);
-        auto titleFont = makeFont (osdLookAndFeel.dmSansMedium, 17.0f, 0.02f);
+        auto titleFont = makeFont (osdLookAndFeel->dmSansMedium, 17.0f, 0.02f);
         g.setFont (titleFont);
         juce::String titleText = "OpenSpatialDelay";
         juce::GlyphArrangement titleGlyphs;
@@ -3238,7 +3758,7 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         // "v1.0" dim version tag — JetBrains Mono 9px
         int versionX = titleX + (int) titleTextW + 4;
         g.setColour (Colours_OSD::textDim);
-        g.setFont (makeFont (osdLookAndFeel.jetbrainsRegular, 11.0f));
+        g.setFont (makeFont (osdLookAndFeel->jetbrainsRegular, 11.0f));
         g.drawText ("v1.0", versionX, 0, 40, kHeaderHeight,
                     juce::Justification::centredLeft);
     }
@@ -3288,7 +3808,7 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
     {
         auto btnBounds = objInputChannelButton->getBounds();
         g.setColour (Colours_OSD::textDim);
-        g.setFont (makeFont (osdLookAndFeel.jetbrainsMedium, 10.0f, 0.12f));
+        g.setFont (makeFont (osdLookAndFeel->jetbrainsMedium, 10.0f, 0.12f));
         g.drawText ("INPUT", btnBounds.getX(), btnBounds.getY() - 14, btnBounds.getWidth(), 12,
                     juce::Justification::centred);
     }
@@ -3305,7 +3825,7 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         auto fwdBounds = objTrajectoryFwdButton->getBounds();
         int dirLabelW = fwdBounds.getRight() - revBounds.getX();
         g.setColour (Colours_OSD::textDim);
-        g.setFont (makeFont (osdLookAndFeel.jetbrainsMedium, 10.0f, 0.12f));
+        g.setFont (makeFont (osdLookAndFeel->jetbrainsMedium, 10.0f, 0.12f));
         g.drawText ("DIRECTION", revBounds.getX(), revBounds.getY() - 14, dirLabelW, 12,
                     juce::Justification::centred);
     }
@@ -3319,7 +3839,7 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         if (oscBounds.getWidth() > 0)
         {
             g.setColour (Colours_OSD::textDim);
-            g.setFont (makeFont (osdLookAndFeel.jetbrainsMedium, 10.0f, 0.08f));
+            g.setFont (makeFont (osdLookAndFeel->jetbrainsMedium, 10.0f, 0.08f));
             g.drawText ("Port", (int)(oscBounds.getRight() + 4), (int)oscBounds.getY(),
                         28, (int)oscBounds.getHeight(), juce::Justification::centredLeft);
         }
@@ -3332,7 +3852,7 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         if (sendBounds.getWidth() > 0)
         {
             g.setColour (Colours_OSD::textDim);
-            g.setFont (makeFont (osdLookAndFeel.jetbrainsMedium, 10.0f, 0.08f));
+            g.setFont (makeFont (osdLookAndFeel->jetbrainsMedium, 10.0f, 0.08f));
             g.drawText ("IP", (int)(sendBounds.getRight() + 4), (int)sendBounds.getY(),
                         14, (int)sendBounds.getHeight(), juce::Justification::centredLeft);
             auto ipBounds = oscSendIPLabel.getBounds().toFloat();
@@ -3354,7 +3874,7 @@ void OpenSpatialDelayEditor::paint (juce::Graphics& g)
         auto filterBounds = filterGraph.getBounds();
         float readoutAlpha = filterIsActive ? 1.0f : 0.3f;
         g.setColour (Colours_OSD::textDim.withAlpha (readoutAlpha));
-        g.setFont (makeFont (osdLookAndFeel.jetbrainsRegular, 11.0f, 0.04f));
+        g.setFont (makeFont (osdLookAndFeel->jetbrainsRegular, 11.0f, 0.04f));
         g.drawText ("HP " + hpStr + "  Res " + juce::String (hpq, 2)
                     + "    LP " + lpStr + "  Res " + juce::String (lpq, 2),
                     filterBounds.getX(), filterBounds.getBottom() + 2,
@@ -3411,12 +3931,19 @@ void OpenSpatialDelayEditor::resized()
     px += 22 + 2;
     presetSaveButton.setBounds (px, boxY, 40, boxH);
 
+    // Issue E15b/182: Undo/Redo buttons in header (after preset save)
+    {
+        int undoX = px + 40 + 8;
+        if (undoButton)  undoButton->setBounds  (undoX, boxY, 22, boxH);
+        if (redoButton)  redoButton->setBounds  (undoX + 22, boxY, 22, boxH);
+    }
+
     // Title is painted directly in paint() — no setBounds needed
     // SML badge button (header, left-aligned)
     {
         int smlH = smlButton ? smlButton->getEffectiveHeight() : StyledButton::kHeight;
         // Compute SML button width from actual content (icon + gap + text at real font)
-        auto smlFont = makeFont (osdLookAndFeel.robotoMedium, 11.5f, 0.08f);
+        auto smlFont = makeFont (osdLookAndFeel->robotoMedium, 11.5f, 0.08f);
         juce::GlyphArrangement smlGl;
         smlGl.addLineOfText (smlFont, "SML", 0.0f, 0.0f);
         float smlTextW = smlGl.getBoundingBox (0, smlGl.getNumGlyphs(), true).getWidth();
@@ -3517,7 +4044,7 @@ void OpenSpatialDelayEditor::resized()
     placeKnob (outputGainSlider, outputGainLabel, px1, curY);
 
     // Toggle pill sizes (IndicatorToggle::getPreferredWidth)
-    auto jbm = osdLookAndFeel.jetbrainsMedium;
+    auto jbm = osdLookAndFeel->jetbrainsMedium;
     int airW = IndicatorToggle::getPreferredWidth (jbm, "AIR");
     int fltW = IndicatorToggle::getPreferredWidth (jbm, "FLT");
     int modW = IndicatorToggle::getPreferredWidth (jbm, "MOD");
@@ -3578,13 +4105,13 @@ void OpenSpatialDelayEditor::resized()
     int objKnobDiam = 46;  // slightly larger bottom-panel knobs
 
     // Compute trajectory column width — max of title and widest dropdown item
-    auto trajFont = makeFont (osdLookAndFeel.jetbrainsMedium, 10.0f, 0.12f);
+    auto trajFont = makeFont (osdLookAndFeel->jetbrainsMedium, 10.0f, 0.12f);
     juce::GlyphArrangement trajGa;
     trajGa.addLineOfText (trajFont, "TRAJECTORY", 0.0f, 0.0f);
     int trajLabelW = juce::roundToInt (std::ceil (trajGa.getBoundingBox (0, -1, false).getWidth())) + 6;
 
     // Measure widest dropdown item (DM Sans Regular 13px + arrow/padding)
-    auto comboFont = juce::Font (juce::FontOptions (osdLookAndFeel.dmSansRegular).withHeight (13.0f));
+    auto comboFont = juce::Font (juce::FontOptions (osdLookAndFeel->dmSansRegular).withHeight (13.0f));
     juce::GlyphArrangement itemGa;
     itemGa.addLineOfText (comboFont, "Figure-8", 0.0f, 0.0f);
     int itemTextW = juce::roundToInt (std::ceil (itemGa.getBoundingBox (0, -1, false).getWidth())) + 24;
@@ -3609,7 +4136,7 @@ void OpenSpatialDelayEditor::resized()
     auto placeObjKnob = [objKnobDiam, this](juce::Slider& slider, juce::Label& label,
                                              int x, int y, int colW) {
         label.setBounds (x, y, colW, 12);
-        label.setFont (makeFont (osdLookAndFeel.jetbrainsMedium, 10.0f, 0.12f));
+        label.setFont (makeFont (osdLookAndFeel->jetbrainsMedium, 10.0f, 0.12f));
         slider.setBounds (x + (colW - objKnobDiam) / 2, y + 12, objKnobDiam, 58);
     };
 

@@ -77,7 +77,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Quad Ping-Pong", "Classic Delays",
         500.0f, false, 4.0f, 0, 0.3f, 20000.0f, 20.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -45.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 1: front-left
             { true,  45.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 2: front-right
@@ -90,7 +90,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Stereo Ping-Pong", "Classic Delays",
         350.0f, false, 4.0f, 0, 0.5f, 18000.0f, 20.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 1: hard left
             { true,  90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 2: hard right
@@ -101,7 +101,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Cardinal", "Spatial Movement",
         250.0f, false, 4.0f, 0, 0.4f, 20000.0f, 20.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,   0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 1: front
             { true,  90.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 2: right
@@ -114,7 +114,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Surround 5.1", "Surround Production",
         300.0f, false, 4.0f, 0, 0.35f, 20000.0f, 20.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,   30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // L
             { true,  -30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // R
@@ -128,7 +128,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Surround 7.1", "Surround Production",
         250.0f, false, 4.0f, 0, 0.35f, 20000.0f, 20.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,   30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // L
             { true,  -30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // R
@@ -144,7 +144,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Atmos 7.1.4", "Surround Production",
         200.0f, false, 4.0f, 0, 0.3f, 20000.0f, 20.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,   30.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // L
             { true,  -30.0f,  0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // R
@@ -164,7 +164,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Rising Spiral", "Spatial Movement",
         200.0f, false, 4.0f, 0, 0.4f, 16000.0f, 40.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,    0.0f,  -20.0f, 0.7f, 0.4f, 0.0f, 9 /*Orbit*/, 0.1876f },
             { true,   45.0f,  -10.0f, 0.6f, 0.4f, 0.0f, 9 /*Orbit*/, 0.225f },
@@ -181,14 +181,14 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Falling Cascade", "Height + 3D",
         350.0f, false, 4.0f, 0, 0.45f, 14000.0f, 30.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,  -30.0f,  40.0f, 0.3f, 0.1f, 0.0f, 0, 1.0f },    // High left
-            { true,   60.0f,  25.0f, 0.4f, 0.1f, -1.0f, 0, 1.0f },   // Mid-high right -1st
-            { true, -120.0f,  10.0f, 0.5f, 0.1f, -2.0f, 0, 1.0f },   // Mid left-rear -2st
-            { true,  150.0f,  -5.0f, 0.6f, 0.1f, -3.0f, 0, 1.0f },   // Low right-rear -3st
-            { true,  -60.0f, -20.0f, 0.7f, 0.1f, -4.0f, 0, 1.0f },   // Lower left -4st
-            { true,   90.0f, -35.0f, 0.8f, 0.1f, -5.0f, 0, 1.0f },   // Lowest right -5st
+            { true,   60.0f,  25.0f, 0.4f, 0.1f, -1.0f, 0, 1.0f, 0, 1 /*L*/ },   // Mid-high right -1st
+            { true, -120.0f,  10.0f, 0.5f, 0.1f, -2.0f, 0, 1.0f, 0, 2 /*R*/ },   // Mid left-rear -2st
+            { true,  150.0f,  -5.0f, 0.6f, 0.1f, -3.0f, 0, 1.0f, 0, 1 /*L*/ },   // Low right-rear -3st
+            { true,  -60.0f, -20.0f, 0.7f, 0.1f, -4.0f, 0, 1.0f, 0, 2 /*R*/ },   // Lower left -4st
+            { true,   90.0f, -35.0f, 0.8f, 0.1f, -5.0f, 0, 1.0f, 0, 1 /*L*/ },   // Lowest right -5st
             {}, {}, {}, {}, {}, {}
         }
     },
@@ -201,7 +201,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Slapback", "Classic Delays",
         80.0f, false, 4.0f, 0, 0.15f, 12000.0f, 80.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,   30.0f,   5.0f, 0.3f, 0.0f, 0.0f, 0, 1.0f },   // Tap 1: front-right wall
             { true,  -50.0f,   0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },   // Tap 2: left wall
@@ -214,7 +214,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Dotted Eighth", "Classic Delays",
         350.0f, true, 3.0f /*8th*/, 2 /*Dotted*/, 0.45f, 14000.0f, 60.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -45.0f, 0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
             { true,  45.0f, 0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
@@ -225,7 +225,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Tape Echo", "Classic Delays",
         400.0f, false, 4.0f, 0, 0.5f, 6000.0f, 200.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, true, 45.0f, 15.0f /*wow-heavy*/, 4 /*VBAP*/, 0,
+        false, true, true, 45.0f, 15.0f /*wow-heavy*/, 5 /*VBAP*/, 0,
         {
             { true, -40.0f, 0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
             { true,   0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },
@@ -237,7 +237,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Dub Delay", "Classic Delays",
         500.0f, false, 4.0f, 0, 0.7f, 3000.0f, 300.0f, 0.707f, 0.707f, 0.55f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -60.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },
             { true,  60.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },
@@ -248,7 +248,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Quarter Note Bounce", "Classic Delays",
         400.0f, true, 2.0f /*quarter*/, 0 /*Notes*/, 0.4f, 16000.0f, 40.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -60.0f, 0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
             { true,  60.0f, 0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
@@ -261,7 +261,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Multi-Tap Cascade", "Classic Delays",
         150.0f, false, 4.0f, 0, 0.35f, 18000.0f, 30.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -75.0f, 0.0f, 0.25f, 0.0f, 0.0f, 0, 1.0f },
             { true, -45.0f, 0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f },
@@ -281,7 +281,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Orbit Dance", "Spatial Movement",
         300.0f, false, 4.0f, 0, 0.4f, 16000.0f, 30.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,   0.0f, 0.0f, 0.4f, 0.75f, 0.0f, 9 /*Orbit*/, 0.3125f },
             { true,  90.0f, 0.0f, 0.4f, 0.75f, 0.0f, 9 /*Orbit*/, 0.4688f },
@@ -294,7 +294,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Figure-8 Weave", "Spatial Movement",
         350.0f, false, 4.0f, 0, 0.45f, 14000.0f, 40.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -60.0f,  0.0f, 0.5f, 0.8f, 0.0f, 7 /*Infinity*/, 0.15f },
             { true,   0.0f, 15.0f, 0.4f, 0.8f, 0.0f, 7 /*Infinity*/, 0.225f },
@@ -306,7 +306,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Bouncing Balls", "Spatial Movement",
         200.0f, false, 4.0f, 0, 0.4f, 18000.0f, 30.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -20.0f,  30.0f, 0.3f, 0.65f, 0.0f, 1 /*Bounce*/, 0.25f },
             { true,  20.0f,  15.0f, 0.4f, 0.65f, 0.0f, 1 /*Bounce*/, 0.3752f },
@@ -319,7 +319,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Spiral Descent", "Spatial Movement",
         250.0f, false, 4.0f, 0, 0.4f, 12000.0f, 50.0f, 1.75f, 1.75f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,    0.0f,  50.0f, 0.3f, 1.0f, 0.0f, 11 /*Spiral*/, 0.1407f, 1 /*Rev*/ },
             { true,  -60.0f,  30.0f, 0.4f, 1.0f, 0.0f, 11 /*Spiral*/, 0.1688f, 1 /*Rev*/ },
@@ -334,7 +334,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Random Walk", "Spatial Movement",
         300.0f, false, 4.0f, 0, 0.35f, 16000.0f, 30.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,  -30.0f,  10.0f, 0.4f, 1.0f, 0.0f, 10 /*Random*/, 0.0625f },  // Tap 1
             {},
@@ -352,7 +352,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Pendulum", "Spatial Movement",
         450.0f, false, 4.0f, 0, 0.5f, 16000.0f, 30.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -60.0f, 0.0f, 0.5f, 1.0f, 0.0f, 7 /*Infinity*/, 0.25f },
             { true,  60.0f, 0.0f, 0.5f, 1.0f, 0.0f, 7 /*Infinity*/, 0.25f, 1 /*Rev*/ },
@@ -368,12 +368,12 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Shimmer", "Ambient + Texture",
         600.0f, false, 4.0f, 0, 0.65f, 8000.0f, 100.0f, 0.707f, 0.707f, 0.45f, 0.0f, 0.0f,
-        true, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        true, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
-            { true, -30.0f, 20.0f, 0.4f, 0.0f, 7.0f, 0, 1.0f },    // +7st (perfect 5th)
-            { true,  30.0f, 20.0f, 0.4f, 0.0f, 12.0f, 0, 1.0f },   // +12st (octave)
-            { true, -90.0f, 10.0f, 0.5f, 0.0f, 19.0f, 0, 1.0f },   // +19st (octave + 5th)
-            { true,  90.0f, 10.0f, 0.5f, 0.0f, 24.0f, 0, 1.0f },   // +24st (2 octaves)
+            { true, -30.0f, 20.0f, 0.4f, 0.0f, 5.0f, 0, 1.0f },    // +5st (perfect 4th)
+            { true,  30.0f, 20.0f, 0.4f, 0.0f, 7.0f, 0, 1.0f },    // +7st (perfect 5th)
+            { true, -90.0f, 10.0f, 0.5f, 0.0f, 10.0f, 0, 1.0f },   // +10st (minor 7th)
+            { true,  90.0f, 10.0f, 0.5f, 0.0f, 12.0f, 0, 1.0f },   // +12st (octave)
             {}, {}, {}, {}, {}, {}, {}, {}
         }
     },
@@ -381,7 +381,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Frozen Cascade", "Ambient + Texture",
         1500.0f, false, 4.0f, 0, 0.85f, 4000.0f, 60.0f, 0.707f, 0.707f, 0.4f, 0.0f, 0.0f,
-        true, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        true, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,    0.0f,  0.0f, 0.3f, 0.0f, 0.0f, 0, 1.0f },
             { true,   45.0f, 10.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
@@ -398,12 +398,12 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Dark Matter", "Ambient + Texture",
         700.0f, false, 4.0f, 0, 0.55f, 2000.0f, 400.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
-            { true, -120.0f, -10.0f, 0.6f, 0.0f, 0.0f, 0, 1.0f },   // Tap 1
+            { true, -120.0f, -10.0f, 0.6f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },   // Tap 1
             {},
             { true,    0.0f,  -5.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 3
-            { true,  120.0f, -10.0f, 0.6f, 0.0f, 0.0f, 0, 1.0f },   // Tap 4
+            { true,  120.0f, -10.0f, 0.6f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },   // Tap 4
             {}, {}, {}, {}, {}, {}, {}, {}
         }
     },
@@ -411,14 +411,14 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Ethereal Wash", "Ambient + Texture",
         800.0f, false, 4.0f, 0, 0.6f, 6000.0f, 80.0f, 0.707f, 0.707f, 0.4f, 0.0f, 0.0f,
-        true, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        true, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -20.0f,  30.0f, 0.3f, 0.0f, 0.0f, 0, 1.0f },
-            { true,  70.0f,  10.0f, 0.6f, 0.0f, 0.0f, 0, 1.0f },
-            { true, -100.0f, 20.0f, 0.8f, 0.0f, 0.0f, 0, 1.0f },
+            { true,  70.0f,  10.0f, 0.6f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
+            { true, -100.0f, 20.0f, 0.8f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             { true,  150.0f,  5.0f, 0.9f, 0.0f, 0.0f, 0, 1.0f },
-            { true,  -50.0f, 40.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },
-            { true,  110.0f, 15.0f, 0.7f, 0.0f, 0.0f, 0, 1.0f },
+            { true,  -50.0f, 40.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
+            { true,  110.0f, 15.0f, 0.7f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
             {}, {}, {}, {}, {}, {}
         }
     },
@@ -426,27 +426,27 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Grain Cloud", "Ambient + Texture",
         60.0f, false, 4.0f, 0, 0.3f, 18000.0f, 20.0f, 0.707f, 0.707f, 0.4f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,  -15.0f,  10.0f, 0.2f, 0.0f, 0.0f, 0, 1.0f },
-            { true,   25.0f,  -5.0f, 0.25f, 0.0f, 0.0f, 0, 1.0f },
-            { true,  -50.0f,  15.0f, 0.3f, 0.0f, 0.0f, 0, 1.0f },
+            { true,   25.0f,  -5.0f, 0.25f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
+            { true,  -50.0f,  15.0f, 0.3f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             { true,   60.0f,   5.0f, 0.2f, 0.0f, 0.0f, 0, 1.0f },
-            { true,  -80.0f,  -8.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f },
-            { true,  100.0f,  12.0f, 0.25f, 0.0f, 0.0f, 0, 1.0f },
-            { true, -130.0f,   3.0f, 0.3f, 0.0f, 0.0f, 0, 1.0f },
+            { true,  -80.0f,  -8.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
+            { true,  100.0f,  12.0f, 0.25f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
+            { true, -130.0f,   3.0f, 0.3f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             { true,  150.0f,  -3.0f, 0.2f, 0.0f, 0.0f, 0, 1.0f },
             { true, -160.0f,   8.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f },
             { true,  170.0f, -10.0f, 0.25f, 0.0f, 0.0f, 0, 1.0f },
             { true,  -40.0f,  20.0f, 0.15f, 0.0f, 0.0f, 0, 1.0f },
-            { true,   45.0f, -15.0f, 0.3f, 0.0f, 0.0f, 0, 1.0f }
+            { true,   45.0f, -15.0f, 0.3f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ }
         }
     },
     // 25: Echo Chamber — reverb-like space with air absorption
     {
         "Echo Chamber", "Ambient + Texture",
         600.0f, false, 4.0f, 0, 0.7f, 5000.0f, 100.0f, 0.707f, 0.707f, 0.45f, 0.0f, 0.0f,
-        true, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        true, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,  -30.0f,  10.0f, 0.3f, 0.0f, 0.0f, 0, 1.0f },
             { true,   30.0f,  10.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
@@ -460,14 +460,14 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Drift", "Ambient + Texture",
         900.0f, false, 4.0f, 0, 0.55f, 8000.0f, 60.0f, 0.707f, 0.707f, 0.4f, 0.0f, 0.0f,
-        true, true, true, 25.0f, 70.0f /*flutter-heavy*/, 4 /*VBAP*/, 0,
+        true, true, true, 25.0f, 70.0f /*flutter-heavy*/, 5 /*VBAP*/, 0,
         {
-            { true, -40.0f,  15.0f, 0.5f, 0.33f, 0.0f, 9 /*Orbit*/, 0.0752f },   // Tap 1
-            { true,  80.0f,   5.0f, 0.6f, 0.33f, 0.0f, 9 /*Orbit*/, 0.1f },      // Tap 2
+            { true, -40.0f,  15.0f, 0.5f, 0.33f, 0.0f, 9 /*Orbit*/, 0.0752f, 0, 1 /*L*/ },   // Tap 1
+            { true,  80.0f,   5.0f, 0.6f, 0.33f, 0.0f, 9 /*Orbit*/, 0.1f, 0, 2 /*R*/ },      // Tap 2
             {}, {},
-            { true, -150.0f, 10.0f, 0.7f, 0.33f, 0.0f, 9 /*Orbit*/, 0.1252f },   // Tap 5
+            { true, -150.0f, 10.0f, 0.7f, 0.33f, 0.0f, 9 /*Orbit*/, 0.1252f, 0, 1 /*L*/ },   // Tap 5
             {}, {}, {},
-            { true,  160.0f, 20.0f, 0.4f, 0.33f, 0.0f, 9 /*Orbit*/, 0.15f },     // Tap 9
+            { true,  160.0f, 20.0f, 0.4f, 0.33f, 0.0f, 9 /*Orbit*/, 0.15f, 0, 2 /*R*/ },     // Tap 9
             {}, {}, {}
         }
     },
@@ -475,7 +475,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Fifth Ghost", "Ambient + Texture",
         500.0f, false, 4.0f, 0, 0.6f, 10000.0f, 80.0f, 0.707f, 0.707f, 0.45f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -45.0f,  10.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
             { true,  45.0f,  10.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
@@ -492,7 +492,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Rain", "Height + 3D",
         50.0f, false, 4.0f, 0, 0.5f, 16000.0f, 100.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        true, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        true, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,  -20.0f, 70.0f, 0.3f, 0.0f, 0.0f, 0, 1.0f },
             { true,   50.0f, 80.0f, 0.25f, 0.0f, 0.0f, 0, 1.0f },
@@ -509,7 +509,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Hemisphere Spread", "Height + 3D",
         300.0f, false, 4.0f, 0, 0.4f, 14000.0f, 40.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,  -45.0f,  60.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },  // upper L
             { true,   45.0f,  30.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },  // upper R
@@ -524,7 +524,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Overhead Arc", "Height + 3D",
         300.0f, false, 4.0f, 0, 0.45f, 14000.0f, 40.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,    0.0f, -15.0f, 0.6f, 0.2f, 0.0f, 0, 1.0f },   // front-low
             { true,   30.0f,  30.0f, 0.4f, 0.2f, 0.0f, 0, 1.0f },   // front-right rising
@@ -538,7 +538,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Dome Ring", "Height + 3D",
         250.0f, false, 4.0f, 0, 0.35f, 18000.0f, 30.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,    0.0f, 45.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },
             { true,   60.0f, 45.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },
@@ -553,10 +553,10 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Vertical Ping-Pong", "Height + 3D",
         400.0f, false, 4.0f, 0, 0.5f, 16000.0f, 30.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
-            { true, 0.0f,  45.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
-            { true, 0.0f, -45.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
+            { true, 0.0f,  45.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
+            { true, 0.0f, -45.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
         }
     },
@@ -569,7 +569,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Quad Swirl", "Surround Production",
         300.0f, false, 4.0f, 0, 0.4f, 16000.0f, 30.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,  -45.0f, 0.0f, 0.5f, 0.5f, 0.0f, 9 /*Orbit*/, 0.4f },
             { true,   45.0f, 0.0f, 0.5f, 0.5f, 0.0f, 9 /*Orbit*/, 0.4f },
@@ -582,7 +582,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "5.1 Rhythmic", "Surround Production",
         300.0f, true, 3.0f /*8th*/, 2 /*Dotted*/, 0.4f, 14000.0f, 40.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,    0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },   // Tap 1: C
             {},
@@ -600,7 +600,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Wide Stereo", "Surround Production",
         350.0f, true, 4.0f /*1/4*/, 0 /*Straight*/, 0.4f, 18000.0f, 30.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },
             { true,  30.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },
@@ -616,7 +616,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Tape Wow", "Wobble + Modulated",
         400.0f, false, 4.0f, 0, 0.5f, 8000.0f, 150.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, true, 60.0f, 0.0f /*wow-heavy*/, 4 /*VBAP*/, 0,
+        false, true, true, 60.0f, 0.0f /*wow-heavy*/, 5 /*VBAP*/, 0,
         {
             { true, -50.0f, 0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
             { true,   0.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },
@@ -628,7 +628,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Tape Flutter", "Wobble + Modulated",
         350.0f, false, 4.0f, 0, 0.45f, 7000.0f, 180.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, true, 40.0f, 100.0f /*flutter-heavy*/, 4 /*VBAP*/, 0,
+        false, true, true, 40.0f, 100.0f /*flutter-heavy*/, 5 /*VBAP*/, 0,
         {
             { true, -40.0f, 0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
             { true,  10.0f, 5.0f, 0.45f, 0.0f, 0.0f, 0, 1.0f },
@@ -640,7 +640,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Warped Echo", "Wobble + Modulated",
         450.0f, false, 4.0f, 0, 0.55f, 5000.0f, 200.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, true, 80.0f, 50.0f, 4 /*VBAP*/, 0,
+        false, true, true, 80.0f, 50.0f, 5 /*VBAP*/, 0,
         {
             { true, -70.0f, 0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
             { true,  70.0f, 0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
@@ -651,7 +651,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Chorus Delay", "Wobble + Modulated",
         30.0f, false, 4.0f, 0, 0.4f, 20000.0f, 20.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, true, 100.0f, 100.0f, 4 /*VBAP*/, 0,
+        false, false, true, 100.0f, 100.0f, 5 /*VBAP*/, 0,
         {
             { true, -25.0f,  5.0f, 0.3f, 0.0f, 0.0f, 0, 1.0f },
             { true,  25.0f, -5.0f, 0.3f, 0.0f, 0.0f, 0, 1.0f },
@@ -664,7 +664,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Seasick", "Wobble + Modulated",
         500.0f, false, 4.0f, 0, 0.6f, 6000.0f, 100.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, true, 100.0f, 30.0f, 4 /*VBAP*/, 0,
+        false, true, true, 100.0f, 30.0f, 5 /*VBAP*/, 0,
         {
             { true, -60.0f,  10.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },
             { true,  60.0f, -10.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },
@@ -676,7 +676,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Subtle Motion", "Wobble + Modulated",
         400.0f, false, 4.0f, 0, 0.4f, 16000.0f, 30.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, true, 10.0f, 60.0f, 4 /*VBAP*/, 0,
+        false, false, true, 10.0f, 60.0f, 5 /*VBAP*/, 0,
         {
             { true, -45.0f,  0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
             { true,  45.0f,  0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
@@ -694,7 +694,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Self-Oscillation", "Creative + Experimental",
         350.0f, false, 4.0f, 0, 0.95f, 3000.0f, 200.0f, 0.707f, 0.707f, 0.4f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -60.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },
             { true,  60.0f, 0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f },
@@ -705,35 +705,36 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Reverse Spiral", "Creative + Experimental",
         250.0f, false, 4.0f, 0, 0.45f, 14000.0f, 40.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        true, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        true, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,    0.0f,  0.0f, 0.4f, 0.4f, 0.0f, 9 /*Orbit*/, 0.1876f, 1 /*Rev*/ },
-            { true,   60.0f, 10.0f, 0.5f, 0.4f, 0.0f, 9 /*Orbit*/, 0.25f, 1 /*Rev*/ },
-            { true,  120.0f, 20.0f, 0.4f, 0.4f, 0.0f, 9 /*Orbit*/, 0.3126f, 1 /*Rev*/ },
+            { true,   60.0f, 10.0f, 0.5f, 0.4f, 0.0f, 9 /*Orbit*/, 0.25f, 1 /*Rev*/, 1 /*L*/ },
+            { true,  120.0f, 20.0f, 0.4f, 0.4f, 0.0f, 9 /*Orbit*/, 0.3126f, 1 /*Rev*/, 2 /*R*/ },
             { true,  180.0f, 30.0f, 0.5f, 0.4f, 0.0f, 9 /*Orbit*/, 0.375f, 1 /*Rev*/ },
-            { true, -120.0f, 20.0f, 0.4f, 0.4f, 0.0f, 9 /*Orbit*/, 0.4376f, 1 /*Rev*/ },
-            { true,  -60.0f, 10.0f, 0.5f, 0.4f, 0.0f, 9 /*Orbit*/, 0.5f, 1 /*Rev*/ },
+            { true, -120.0f, 20.0f, 0.4f, 0.4f, 0.0f, 9 /*Orbit*/, 0.4376f, 1 /*Rev*/, 1 /*L*/ },
+            { true,  -60.0f, 10.0f, 0.5f, 0.4f, 0.0f, 9 /*Orbit*/, 0.5f, 1 /*Rev*/, 2 /*R*/ },
             {}, {}, {}, {}, {}, {}
         }
     },
-    // 44: Stereo Split — L input left, R input right
+    // 44: POG in Space — EHX POG-inspired spatial harmonizer, diagonal 3D cross
     {
-        "Stereo Split", "Creative + Experimental",
-        400.0f, false, 4.0f, 0, 0.45f, 10000.0f, 100.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        "POG in Space", "Creative + Experimental",
+        1.1f, false, 4.0f, 0, 0.0f, 20000.0f, 20.0f, 0.707f, 0.707f, 1.0f, 1.0f, 0.0f,
+        false, false, false, 0.0f, 0.0f, 1, 0,
         {
-            { true, -90.0f,  10.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
-            { true, -45.0f,   0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
-            { true,  45.0f,   0.0f, 0.5f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
-            { true,  90.0f,  10.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
-            {}, {}, {}, {}, {}, {}, {}, {}
+            { true,    0.0f,    0.0f, 0.25f, 0.0f,   0.0f, 0, 1.0f, 0, 0 /*L+R*/ },  // Unison: center
+            { true,   45.0f,   45.0f, 0.5f,  0.0f,  12.0f, 0, 1.0f, 0, 1 /*L*/ },  // +12st: upper-right
+            { true,  -22.5f,   22.5f, 0.5f,  0.0f,   7.0f, 0, 1.0f, 0, 2 /*R*/ },  // +7st: upper-left
+            { true,   22.5f,  -22.5f, 0.5f,  0.0f,  -5.0f, 0, 1.0f, 0, 1 /*L*/ },  // -5st: lower-right
+            { true,  -45.0f,  -45.0f, 0.5f,  0.0f, -12.0f, 0, 1.0f, 0, 2 /*R*/ },  // -12st: lower-left
+            {}, {}, {}, {}, {}, {}, {}
         }
     },
     // 45: Pitch Ladder — ascending per-tap pitch: +2 to +12 semitones
     {
         "Pitch Ladder", "Creative + Experimental",
         300.0f, false, 4.0f, 0, 0.35f, 14000.0f, 40.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -75.0f,  0.0f, 0.35f, 0.0f,  2.0f, 0, 1.0f },
             { true, -45.0f, 10.0f, 0.4f,  0.0f,  4.0f, 0, 1.0f },
@@ -748,14 +749,14 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Doppler Storm", "Creative + Experimental",
         200.0f, false, 4.0f, 0, 0.4f, 20000.0f, 20.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,    0.0f,  0.0f, 0.3f, 1.0f, 0.0f, 9 /*Orbit*/, 0.2813f },
-            { true,   60.0f, 15.0f, 0.4f, 1.0f, 0.0f, 9 /*Orbit*/, 0.422f },
-            { true,  120.0f,  0.0f, 0.5f, 1.0f, 0.0f, 9 /*Orbit*/, 0.5625f, 1 /*Rev*/ },
+            { true,   60.0f, 15.0f, 0.4f, 1.0f, 0.0f, 9 /*Orbit*/, 0.422f, 0, 1 /*L*/ },
+            { true,  120.0f,  0.0f, 0.5f, 1.0f, 0.0f, 9 /*Orbit*/, 0.5625f, 1 /*Rev*/, 2 /*R*/ },
             { true,  180.0f,-15.0f, 0.4f, 1.0f, 0.0f, 9 /*Orbit*/, 0.7032f },
-            { true, -120.0f, 10.0f, 0.3f, 1.0f, 0.0f, 9 /*Orbit*/, 0.8438f, 1 /*Rev*/ },
-            { true,  -60.0f,  0.0f, 0.5f, 1.0f, 0.0f, 9 /*Orbit*/, 0.9845f },
+            { true, -120.0f, 10.0f, 0.3f, 1.0f, 0.0f, 9 /*Orbit*/, 0.8438f, 1 /*Rev*/, 1 /*L*/ },
+            { true,  -60.0f,  0.0f, 0.5f, 1.0f, 0.0f, 9 /*Orbit*/, 0.9845f, 0, 2 /*R*/ },
             {}, {}, {}, {}, {}, {}
         }
     },
@@ -763,7 +764,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Micro Delay", "Creative + Experimental",
         10.0f, false, 4.0f, 0, 0.5f, 20000.0f, 20.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -10.0f,   5.0f, 0.15f, 0.0f, 0.0f, 0, 1.0f },
             { true,  10.0f,  -5.0f, 0.15f, 0.0f, 0.0f, 0, 1.0f },
@@ -783,19 +784,19 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Wide Scatter", "Creative + Experimental",
         500.0f, false, 4.0f, 0, 0.35f, 12000.0f, 40.0f, 0.707f, 0.707f, 0.45f, 0.0f, 0.0f,
-        true, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        true, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
-            { true,  -25.0f,  15.0f, 1.0f, 0.0f, 0.0f, 0, 1.0f },    // Tap 1
-            { true,   73.0f, -10.0f, 0.95f, 0.0f, 0.0f, 0, 1.0f },   // Tap 2
+            { true,  -25.0f,  15.0f, 1.0f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },    // Tap 1
+            { true,   73.0f, -10.0f, 0.95f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },   // Tap 2
             {},
-            { true, -112.0f,  25.0f, 1.0f, 0.0f, 0.0f, 0, 1.0f },    // Tap 4
-            { true,  148.0f,   5.0f, 0.9f, 0.0f, 0.0f, 0, 1.0f },    // Tap 5
+            { true, -112.0f,  25.0f, 1.0f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },    // Tap 4
+            { true,  148.0f,   5.0f, 0.9f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },    // Tap 5
             {},
-            { true,  -58.0f, -20.0f, 1.0f, 0.0f, 0.0f, 0, 1.0f },    // Tap 7
-            { true,   95.0f,  30.0f, 0.95f, 0.0f, 0.0f, 0, 1.0f },   // Tap 8
+            { true,  -58.0f, -20.0f, 1.0f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },    // Tap 7
+            { true,   95.0f,  30.0f, 0.95f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },   // Tap 8
             {},
-            { true, -170.0f, -15.0f, 1.0f, 0.0f, 0.0f, 0, 1.0f },    // Tap 10
-            { true,   38.0f,  20.0f, 0.9f, 0.0f, 0.0f, 0, 1.0f },    // Tap 11
+            { true, -170.0f, -15.0f, 1.0f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },    // Tap 10
+            { true,   38.0f,  20.0f, 0.9f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },    // Tap 11
             {}
         }
     },
@@ -803,10 +804,10 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Broken Record", "Creative + Experimental",
         500.0f, true, 0.0f /*whole*/, 0, 0.75f, 4000.0f, 300.0f, 0.707f, 0.707f, 0.45f, 0.0f, 0.0f,
-        false, true, true, 100.0f, 40.0f, 4 /*VBAP*/, 0,
+        false, true, true, 100.0f, 40.0f, 5 /*VBAP*/, 0,
         {
-            { true, -30.0f, 0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
-            { true,  30.0f, 0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f },
+            { true, -30.0f, 0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
+            { true,  30.0f, 0.0f, 0.4f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
             {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
         }
     },
@@ -819,13 +820,13 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Tresillo", "Rhythmic",
         300.0f, true, 4.0f /*16th*/, 0, 0.25f, 12000.0f, 40.0f, 0.707f, 0.707f, 0.45f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
-            { true,  -25.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },
+            { true,  -25.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             {}, {},
             { true,    0.0f, 0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f },
             {}, {},
-            { true,   25.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },
+            { true,   25.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
             {}, {}, {}, {}, {}
         }
     },
@@ -833,14 +834,14 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Cinquillo", "Rhythmic",
         300.0f, true, 4.0f /*16th*/, 0, 0.20f, 11000.0f, 50.0f, 0.707f, 0.707f, 0.45f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
-            { true,  -60.0f, 0.0f, 0.45f, 0.0f, 0.0f, 0, 1.0f },
+            { true,  -60.0f, 0.0f, 0.45f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             {},
-            { true,   45.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },
-            { true,  -30.0f, 0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f },
+            { true,   60.0f, 0.0f, 0.46f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
+            { true,  -30.0f, 0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             {},
-            { true,   30.0f, 0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f },
+            { true,   30.0f, 0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
             { true,    0.0f, 0.0f, 0.30f, 0.0f, 0.0f, 0, 1.0f },
             {}, {}, {}, {}, {}
         }
@@ -849,94 +850,94 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Offbeat Pong", "Rhythmic",
         300.0f, true, 4.0f /*16th*/, 0, 0.15f, 10000.0f, 60.0f, 0.707f, 0.707f, 0.40f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             {},
-            { true,  -90.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },
+            { true,  -90.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             {},
-            { true,   90.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },
+            { true,   90.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
             {},
-            { true,  -90.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },
+            { true,  -90.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             {},
-            { true,   90.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },
+            { true,   90.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
             {},
-            { true,  -90.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },
+            { true,  -90.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             {},
-            { true,   90.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f }
+            { true,   90.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ }
         }
     },
     // 53: West African Bell — E(7,12) semicircle sweep
     {
         "West African Bell", "Rhythmic",
-        300.0f, true, 3.0f /*8th*/, 0, 0.30f, 14000.0f, 30.0f, 0.707f, 0.707f, 0.48f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        300.0f, true, 1.0f /*16th*/, 1 /*Dotted*/, 0.30f, 14000.0f, 30.0f, 0.707f, 0.707f, 0.48f, 0.0f, 0.0f,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
-            { true,  -90.0f, 0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f },
+            { true,  -90.0f, 0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             {},
-            { true,  -55.0f, 0.0f, 0.38f, 0.0f, 0.0f, 0, 1.0f },
-            { true,  -25.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },
+            { true,  -55.0f, 0.0f, 0.38f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
+            { true,  -25.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             {},
             { true,   10.0f, 0.0f, 0.42f, 0.0f, 0.0f, 0, 1.0f },
             {},
-            { true,   40.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },
-            { true,   65.0f, 0.0f, 0.38f, 0.0f, 0.0f, 0, 1.0f },
+            { true,   40.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
+            { true,   65.0f, 0.0f, 0.38f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
             {},
-            { true,   90.0f, 0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f },
+            { true,   90.0f, 0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
             {}
         }
     },
     // 54: Son Clave 3-2 — call (L) and response (R)
     {
         "Son Clave 3-2", "Rhythmic",
-        300.0f, true, 4.0f /*16th*/, 0, 0.20f, 13000.0f, 40.0f, 0.707f, 0.707f, 0.45f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        300.0f, true, 1.0f /*16th*/, 0, 0.50f, 13000.0f, 40.0f, 0.707f, 0.707f, 0.45f, 0.0f, 0.0f,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
-            { true,  -70.0f, 0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f },
+            { true,  -70.0f, 0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             {}, {},
-            { true,  -40.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },
+            { true,  -40.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             {}, {},
             { true,  -10.0f, 0.0f, 0.45f, 0.0f, 0.0f, 0, 1.0f },
             {}, {},
-            { true,   40.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },
+            { true,   40.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
             {},
-            { true,   70.0f, 0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f }
+            { true,   70.0f, 0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ }
         }
     },
     // 55: Paradiddle Pong — RLRR LRLL sticking, pairs with gaps
     {
         "Paradiddle Pong", "Rhythmic",
-        300.0f, true, 4.0f /*16th*/, 0, 0.15f, 11000.0f, 80.0f, 0.707f, 0.707f, 0.42f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        300.0f, true, 1.0f /*16th*/, 0, 0.50f, 11000.0f, 80.0f, 0.707f, 0.707f, 0.42f, 0.0f, 0.0f,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
-            { true,   50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },  // R
-            { true,  -50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },  // L
+            { true,   50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
+            { true,  -50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             {},
-            { true,   50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },  // R
-            { true,   50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },  // R
+            { true,   50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
+            { true,   50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
             {},
-            { true,  -50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },  // L
-            { true,   50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },  // R
+            { true,  -50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
+            { true,   50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
             {},
-            { true,  -50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },  // L
-            { true,  -50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },  // L
+            { true,  -50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
+            { true,  -50.0f, 0.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             {}
         }
     },
     // 56: Polyrhythm 3v4 — 3-against-4 cross-rhythm, spatially separated layers
     {
         "Polyrhythm 3v4", "Rhythmic",
-        300.0f, true, 4.0f /*16th*/, 0, 0.22f, 13000.0f, 40.0f, 0.707f, 0.707f, 0.48f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        300.0f, true, 1.0f /*16th*/, 0, 0.22f, 13000.0f, 40.0f, 0.707f, 0.707f, 0.48f, 0.0f, 0.0f,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,    0.0f, 10.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f },  // Both
             {}, {},
-            { true,   60.0f, -5.0f, 0.45f, 0.0f, 0.0f, 0, 1.0f },  // "4"
-            { true,  -60.0f, 20.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },  // "3"
+            { true,   60.0f, -5.0f, 0.45f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
+            { true,  -60.0f, 20.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
             {},
-            { true,   80.0f, -5.0f, 0.45f, 0.0f, 0.0f, 0, 1.0f },  // "4"
+            { true,   80.0f, -5.0f, 0.45f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
             {},
-            { true,  -80.0f, 20.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },  // "3"
-            { true,  100.0f, -5.0f, 0.45f, 0.0f, 0.0f, 0, 1.0f },  // "4"
+            { true,  -80.0f, 20.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },
+            { true,  100.0f, -5.0f, 0.45f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },
             {}, {}
         }
     },
@@ -944,15 +945,15 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Morse SOS", "Rhythmic",
         300.0f, true, 4.0f /*16th*/, 0, 0.25f, 10000.0f, 50.0f, 0.707f, 0.707f, 0.45f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
-            { true,  -45.0f,  0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f },  // A
-            { true,  -40.0f,  5.0f, 0.38f, 0.0f, 0.0f, 0, 1.0f },  // A
-            { true,  -35.0f, 10.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },  // A
+            { true,  -45.0f,  0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },  // A
+            { true,  -40.0f,  5.0f, 0.38f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },  // A
+            { true,  -35.0f, 10.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 2 /*R*/ },  // A
             {}, {},
-            { true,   35.0f,  0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f },  // B
-            { true,   40.0f,  5.0f, 0.38f, 0.0f, 0.0f, 0, 1.0f },  // B
-            { true,   45.0f, 10.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f },  // B
+            { true,   35.0f,  0.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },  // B
+            { true,   40.0f,  5.0f, 0.38f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },  // B
+            { true,   45.0f, 10.0f, 0.40f, 0.0f, 0.0f, 0, 1.0f, 0, 1 /*L*/ },  // B
             {}, {},
             { true,    0.0f, -5.0f, 0.35f, 0.0f, 0.0f, 0, 1.0f },  // C
             { true,    0.0f,  0.0f, 0.38f, 0.0f, 0.0f, 0, 1.0f }   // C
@@ -962,7 +963,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Fibonacci Scatter", "Rhythmic",
         300.0f, true, 3.0f /*8th*/, 0, 0.30f, 16000.0f, 30.0f, 0.707f, 0.707f, 0.50f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,    0.0f, -10.0f, 0.30f, 0.0f, 1.0f, 0, 1.0f },
             { true,   20.0f,   0.0f, 0.38f, 0.0f, 1.0f, 0, 1.0f },
@@ -978,7 +979,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Dotted Gallop", "Rhythmic",
         300.0f, true, 4.0f /*16th*/, 0, 0.30f, 14000.0f, 50.0f, 0.707f, 0.707f, 0.45f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,  -70.0f, 0.0f, 0.38f, 0.0f, 0.0f, 0, 1.0f },
             {}, {},
@@ -1000,7 +1001,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Heartbeat", "Spatial Movement",
         400.0f, false, 4.0f, 0, 0.45f, 12000.0f, 60.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -40.0f,   5.0f, 0.4f, 0.5f, 0.0f, 5 /*Heart*/, 0.20f },
             { true,  40.0f,  -5.0f, 0.4f, 0.5f, 0.0f, 5 /*Heart*/, 0.25f, 1 /*Rev*/ },
@@ -1011,7 +1012,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Box Step", "Spatial Movement",
         300.0f, false, 4.0f, 0, 0.4f, 16000.0f, 30.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,  -45.0f, 0.0f, 0.35f, 0.6f, 0.0f, 12 /*Square*/, 0.30f },
             { true,   45.0f, 0.0f, 0.35f, 0.6f, 0.0f, 12 /*Square*/, 0.40f },
@@ -1024,7 +1025,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Trigonometry", "Spatial Movement",
         350.0f, false, 4.0f, 0, 0.5f, 14000.0f, 40.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,    0.0f, 0.0f, 0.4f, 0.7f, 0.0f, 13 /*Triangle*/, 0.25f },   // Tap 1
             {}, {},
@@ -1038,7 +1039,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Crossing Paths", "Spatial Movement",
         250.0f, false, 4.0f, 0, 0.35f, 18000.0f, 30.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        true, false, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        true, false, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,  -60.0f,  20.0f, 0.5f, 0.4f, 0.0f, 3 /*Cross*/, 0.15f },
             { true,   60.0f, -20.0f, 0.5f, 0.4f, 0.0f, 3 /*Cross*/, 0.20f, 1 /*Rev*/ },
@@ -1053,7 +1054,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Merry-Go-Round", "Spatial Movement",
         200.0f, false, 4.0f, 0, 0.4f, 14000.0f, 50.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, true, 20.0f, 40.0f, 4 /*VBAP*/, 0,
+        false, true, true, 20.0f, 40.0f, 5 /*VBAP*/, 0,
         {
             { true,    0.0f, 0.0f, 0.45f, 0.5f, 0.0f, 2 /*Circle*/, 0.20f },
             { true,   45.0f, 0.0f, 0.45f, 0.5f, 0.0f, 2 /*Circle*/, 0.20f },
@@ -1070,7 +1071,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Lemniscate", "Spatial Movement",
         500.0f, false, 4.0f, 0, 0.55f, 10000.0f, 50.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, 0.0f,   0.0f, 0.5f, 0.8f, 0.0f, 7 /*Infinity*/, 0.15f },
             { true, 0.0f,  10.0f, 0.4f, 0.8f, 0.0f, 7 /*Infinity*/, 0.225f },
@@ -1082,7 +1083,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Back and Forth", "Spatial Movement",
         450.0f, false, 4.0f, 0, 0.5f, 16000.0f, 30.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        false, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true, -90.0f, 0.0f, 0.5f, 1.0f, 0.0f, 8 /*Line*/, 0.20f },
             { true,  90.0f, 0.0f, 0.5f, 1.0f, 0.0f, 8 /*Line*/, 0.20f, 1 /*Rev*/ },
@@ -1093,7 +1094,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Corkscrew Duo", "Spatial Movement",
         350.0f, false, 4.0f, 0, 0.45f, 14000.0f, 40.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        true, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        true, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,   0.0f,  20.0f, 0.45f, 0.7f, 0.0f, 4 /*Figure-8*/, 0.18f },
             { true,  90.0f, -20.0f, 0.45f, 0.7f, 0.0f, 4 /*Figure-8*/, 0.22f, 1 /*Rev*/ },
@@ -1106,7 +1107,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Comet Trail", "Spatial Movement",
         300.0f, false, 4.0f, 0, 0.35f, 12000.0f, 60.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        true, true, false, 0.0f, 0.0f, 4 /*VBAP*/, 0,
+        true, true, false, 0.0f, 0.0f, 5 /*VBAP*/, 0,
         {
             { true,    0.0f,  30.0f, 0.3f, 0.8f, 0.0f, 11 /*Spiral*/, 0.30f },   // Tap 1
             { true,   72.0f,  15.0f, 0.35f, 0.8f, 0.0f, 11 /*Spiral*/, 0.25f },  // Tap 2
@@ -1122,7 +1123,7 @@ const PresetData factoryPresets[NUM_FACTORY_PRESETS] =
     {
         "Kaleidoscope", "Spatial Movement",
         400.0f, false, 4.0f, 0, 0.4f, 14000.0f, 40.0f, 0.707f, 0.707f, 0.5f, 0.0f, 0.0f,
-        false, true, true, 15.0f, 50.0f, 4 /*VBAP*/, 0,
+        false, true, true, 15.0f, 50.0f, 5 /*VBAP*/, 0,
         {
             { true,    0.0f,  10.0f, 0.4f, 0.6f, 0.0f,  2 /*Circle*/,   0.20f },   // Tap 1
             {},
