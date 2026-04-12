@@ -1,128 +1,49 @@
-# CLAUDE.md — OpenSpatialDelay
+# OpenSpatialDelay
 
-## Build & Test Rules
+## Why
+Spatial delay plugin — each echo lives in 3D space. VST3 + AU, macOS + Windows. Dual-licensed GPL-3.0 / Commercial (Spatial Media Lab).
 
-### Versioning: Major.Minor.Bugfix (issue #55)
+## What
+- `Source/` — plugin processor, editor, DSP (PluginProcessor.cpp is ~175KB)
+- `Tests/` — Catch2 test suite (162+ tests)
+- `HRTF/` — SOFA files for binaural rendering (6 profiles)
+- `scripts/` — build_version.sh, install helpers
+- `docs/` — user manual, legal notices, assets
+- `fonts/` — DM Sans, JetBrains Mono, Roboto (SIL OFL / Apache 2.0)
+- `JUCE/` — JUCE 8.0.3 framework (submodule)
 
-OpenSpatialDelay uses **semantic versioning vX.Y.Z**:
-- **X (Major):** Breaking changes, new architecture, incompatible preset format
-- **Y (Minor):** New features, new output formats, new algorithms
-- **Z (Bugfix):** Bug fixes, threshold tweaks, documentation updates
+## How
 
-**Current release: v1.0.0** (pre-release, shipping end of week 2026-04-10)
-
-All prior bugfix builds (v1.0.1–v1.0.2 for issues #76, #77) have been collapsed into v1.0.0. The next bugfix build will be v1.0.1.
-
-### MANDATORY: Versioned builds for every fix attempt
-
-Every code change that needs manual listening/testing MUST be built as a uniquely-named versioned plugin. **Never reuse a version number. Never skip this step.**
-
-```bash
-# 1. Commit your changes
-git add ... && git commit -m "..."
-
-# 2. Build as a versioned plugin (increment Z each time)
-bash scripts/build_version.sh <commit-hash> v1.0.Z O10Z
+Build (configure once):
+```
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -Wno-dev
 ```
 
-**Why this is critical:** The default `cmake --build` installs to `OpenSpatialDelay v1.0.component`. The user tests with individually-named versioned plugins (e.g., `OpenSpatialDelay v1.0.1.component`) loaded side-by-side in REAPER for A/B comparison. If you don't use `build_version.sh`, the user will never hear your changes.
-
-**Version number registry (do not reuse) — reset 2026-04-02, collapsed after issue #77:**
-- v1.0.0 / O100 — baseline (commit 3ef9c79, includes issues #76 + #77)
-- v1.0.1 / O101 — fix dry signal attenuation at 0% wet (issue #97, commit a0f39c5)
-- v1.0.2 / O102 — call updateHostDisplay() on config changes (issue #94, commit dbf19ce)
-- v1.0.3 / O103 — fix direction toggle for Bounce, Line, Random (issue #100, commit 9dd6266)
-- v1.0.5 / O105 — reset phase vocoder on preset change chirp (issue #99, commit a9df52a)
-- v1.0.6 / O106 — transport fade-in to prevent scrub/seek click (issue #103, commit 7901a0a)
-- v1.0.8 / O108 — fix Ableton crash + automation reset (issue #122, commit 0d3cc53)
-- v1.0.9 / O109 — re-sign bundles after plist patching for Ableton VST3 visibility (issue #120)
-- v1.0.10 / O110 — reduce automatable params to 64 for Ableton auto-populate (issue #122, commit 4adfd1d)
-- v1.0.7 / O107 — 4-layer tape wobble emulation (issue #92, commit 893acb2)
-- v1.0.14 / O114 — shared LookAndFeel + visibility throttle for multi-instance crash (issue #131)
-- v1.0.17 / O117 — shared FFT cache for multi-instance vDSP stability (issue #131, commit e8ee6ec)
-- v1.0.20 / O120 — default Input to Stereo on stereo tracks, disable on mono (issue #155, commit 376b5fe)
-- Next available: **v1.0.21 / O121**
-
-### Running tests
-
-```bash
-# Configure (first time or after clean)
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -Wno-dev
-
-# Build and run tests
+Build and run tests:
+```
 cmake --build build --target OpenSpatialDelayTests -j$(sysctl -n hw.ncpu)
 ./build/OpenSpatialDelayTests
-
-# HRTF tests require synchronous profile loading (testLoadHRTFProfile)
-# The timer thread doesn't fire in the test harness
 ```
 
-### Test infrastructure notes
+IMPORTANT: Build versioned plugins for every fix attempt — never use plain `cmake --build`:
+```
+bash scripts/build_version.sh <commit-hash> v1.0.Z O10Z
+```
+The user A/B-tests named plugins side-by-side in REAPER. Without `build_version.sh`, your changes are never heard. See `agent_docs/version_registry.md` for the current registry and next available version number.
 
-- All HRTF binaural tests use `testLoadHRTFProfile()` for synchronous HRTF loading
-- Without this, the timer-based loading never fires and tests run in Simple mode (false positives)
-- The `createBinauralProcessor()` helper handles this automatically
+## Conventions
+- Semantic versioning vX.Y.Z. Never reuse a version number.
+- VST3 + AU only. No other formats.
+- No `sudo`. No `killall AudioComponentRegistrar` (destroys AU cache — real incident).
+- Stay on the same version number while iterating a single fix; increment only for new builds sent to user.
 
-## Architecture Notes
+## Gotchas
+- **HRTF tests need synchronous loading.** Use `testLoadHRTFProfile()` or `createBinauralProcessor()`. Without this, the timer thread never fires in the test harness and binaural tests silently pass in Simple mode (false positives).
+- **Dry path has 2048-sample latency compensation.** The phase vocoder's latency must match the dry delay line (`dryDelayLineL/R`). If you change FFT size or overlap, update both paths or PDC breaks at all dry/wet ratios.
+- **ITD delay line is a pass-through for MIT KEMAR.** ITD values are 0 in this SOFA file (embedded in HRIR waveform). Don't assume ITD is active.
 
-### HRTF rendering signal flow
-1. `renderDirectBinauralHRTF()` — 3-pass architecture
-2. Pass 1: per-sample delay engine → per-source mono accumulation
-3. Pass 2: per-block HRTF convolution via `BinauralRenderer::renderSourceBuffers()`
-4. Pass 3: per-sample dry/wet mix + output gain
-
-### PartitionedConvolver
-Uses spectral envelope EMA smoothing: magnitude and phase smoothed separately per frequency bin. This prevents comb filtering from phase-misaligned time-domain blending.
-
-### Phase Vocoder Pitch Shifter
-Replaces WSOLA-Lite. Uses STFT (2048-point FFT, 4x overlap) with:
-- Laroche-Dolson phase locking for tonal content
-- Röbel-style spectral flux transient detection with adaptive median threshold
-- Phase reset on transient frames preserves attack sharpness
-- Latency: 2048 samples (reported to DAW via setLatencySamples)
-- Range: ±12 semitones (combined with Doppler)
-
-### Dry Path Latency Compensation (v1.0.7) + Stereo Dry (v1.0.1)
-The phase vocoder adds 2048 samples of latency to the wet path. The dry signal must be delayed by the same amount so the DAW's plugin delay compensation (PDC) is correct at all dry/wet settings. Implemented as stereo circular `dryDelayLineL/R` buffers that pre-fill `dryCompBufferL/R` from raw DAW input at the start of each processBlock.
-
-The dry/wet mix happens in a single post-render stage in processBlock — render paths output raw wet signal only. This ensures the dry signal truly bypasses the entire plugin (Input selector only affects the wet path). Equal-power crossfade (cos/sin) replaces linear (1-dw/dw) for constant perceived loudness at all mix settings.
-
-### ITD delay line
-For MIT KEMAR SOFA file, ITD values are always 0 (embedded in HRIR waveform). The ITD delay line is effectively a pass-through for this dataset.
-
-## Licensing & Monetization
-
-### Dual-license model
-OpenSpatialDelay is dual-licensed: **GPL-3.0** (free/open-source) and **Commercial License** (proprietary/closed-source, via Spatial Media Lab). Both paths must be compatible with every distributed third-party component.
-
-### JUCE 8 commercial tiers (as of April 2026)
-
-| Tier | Revenue Cap | Cost | Closed-Source OK |
-|------|-------------|------|------------------|
-| Starter | $20,000/year | Free | Yes |
-| Indie | $300,000/year | $40/mo or $800 perpetual | Yes |
-| Pro | No limit | $175/mo or $3,500 perpetual | Yes |
-
-**Starter tier allows free commercial distribution** with no splash screen and no attribution required, as long as total entity revenue stays under $20K/year. Upgrade to Indie at $20K+, Pro at $300K+.
-
-Source: [JUCE 8 EULA](https://juce.com/legal/juce-8-licence/) and [juce.com/get-juce](https://juce.com/get-juce/)
-
-### Third-party license compatibility (verified 2026-04-05)
-
-All distributed third-party components are compatible with both GPL-3.0 and commercial licensing:
-
-| Component | License | Commercial Use | Obligation |
-|-----------|---------|----------------|------------|
-| JUCE 8 | GPL-3.0 / Commercial | Yes (Starter tier free < $20K) | Upgrade tier at revenue thresholds |
-| libmysofa v1.3.2 | BSD-3-Clause | Yes | Include license notice |
-| zlib | zlib License | Yes | Include license notice |
-| MIT KEMAR (Studio Reference) | MIT | Yes | Include copyright + permission notice |
-| SADIE II D2 KU100 (Immersive) | Apache 2.0 | Yes | Include license notice |
-| CIPIC Subject 003 (Natural) | Public Domain | Yes | None |
-| HUTUBS PP2 (Precise) | CC BY 4.0 | Yes | Attribution required |
-| Bernschuetz KU100 (Spatial) | CC BY 3.0 | Yes | Attribution required |
-| DM Sans | SIL OFL 1.1 | Yes | Cannot sell font standalone |
-| JetBrains Mono | SIL OFL 1.1 | Yes | Cannot sell font standalone |
-| Roboto | Apache 2.0 | Yes | Include license notice |
-
-All attribution obligations are fulfilled by the legal notices document at `docs/OpenSpatialDelay_Legal_Notices.docx` (generated by `docs/generate_legal_notices.js`) and the Third-Party Notices chapter in the user manual.
+## Progressive disclosure
+For task-specific context, read the relevant file first:
+- `agent_docs/version_registry.md` — version number registry, next available number, build naming rules
+- `agent_docs/architecture.md` — signal flow, HRTF rendering, PartitionedConvolver, Phase Vocoder, dry path compensation
+- `agent_docs/licensing.md` — JUCE tiers, third-party license table, attribution obligations
