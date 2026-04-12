@@ -8,15 +8,26 @@ Single source of truth for version numbers. Never reuse a version number.
 bash scripts/build_version.sh <commit-hash> v1.0.Z O10Z
 ```
 
-The `O10Z` code is a short identifier used in the plugin display name (e.g., O130 = "OpenSpatialDelay v1.0.30").
+The `O10Z` code is a short identifier used in the plugin display name (e.g., O101 = "OpenSpatialDelay v1.0.1").
 
-## Consumed versions
-
-Registry collapsed to v1.0.0 on 2026-04-02 after issue #77.
+## Current release
 
 | Version | Code | Description | Commit |
 |---------|------|-------------|--------|
-| v1.0.0 | O100 | Baseline (includes issues #76 + #77) | 3ef9c79 |
+| v1.0.0 | O100 | **Release v1.0.0** — all fixes issues #76–#200 squashed into one commit | 768c248 |
+
+## Next available
+
+**v1.0.1 / O101** (use for any post-release patches)
+
+## Archive — internal patch builds (v1.0.1–v1.0.36)
+
+These were iterative development builds squashed into the v1.0.0 release commit on 2026-04-12.
+The pre-squash history is preserved at tag `v1.0.0-dev-baseline` (3ef9c79).
+
+| Version | Code | Description | Commit |
+|---------|------|-------------|--------|
+| v1.0.0 (baseline) | O100 | Baseline (includes issues #76 + #77) | 3ef9c79 |
 | v1.0.1 | O101 | Fix dry signal attenuation at 0% wet (issue #97) | a0f39c5 |
 | v1.0.2 | O102 | Call updateHostDisplay() on config changes (issue #94) | dbf19ce |
 | v1.0.3 | O103 | Fix direction toggle for Bounce, Line, Random (issue #100) | 9dd6266 |
@@ -37,7 +48,3 @@ Registry collapsed to v1.0.0 on 2026-04-02 after issue #77.
 | v1.0.34 | O134 | Issue #182: manual gestures for trajectory/inputChannel + preset name sync | 76fd6cd |
 | v1.0.35 | O135 | (Same as v1.0.34, tested in Notion DB as v1.0.35) | — |
 | v1.0.36 | O136 | Issue #182: guard captureUndoState/notifyHostStateChanged + mod knobs + trajectory shape manual gestures | — |
-
-## Next available
-
-**v1.0.37 / O137**
