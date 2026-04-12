@@ -5722,7 +5722,8 @@ void OpenSpatialDelayProcessor::handleOSCPosition (int objIdx, float azDeg, floa
 void OpenSpatialDelayProcessor::captureUndoState (const juce::String& name)
 {
     pluginUndo.captureState (apvts, configAlgorithm, configHrtfProfile,
-                             configOutputFormat, configInputFormat, name);
+                             configOutputFormat, configInputFormat,
+                             currentPresetIndex, name);
 }
 
 void OpenSpatialDelayProcessor::applyUndoState (const juce::ValueTree& state)
@@ -5740,6 +5741,9 @@ void OpenSpatialDelayProcessor::applyUndoState (const juce::ValueTree& state)
                               std::memory_order_relaxed);
     configInputFormat.store (static_cast<int> (state.getProperty ("_configInputFormat", configInputFormat.load())),
                              std::memory_order_relaxed);
+
+    // Restore preset index so UI label syncs via timer
+    currentPresetIndex = static_cast<int> (state.getProperty ("_presetIndex", currentPresetIndex));
 
     // Restore APVTS state (triggers parameter listeners but not gesture notifications)
     apvts.replaceState (state);

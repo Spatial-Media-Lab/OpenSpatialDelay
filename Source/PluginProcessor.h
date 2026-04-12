@@ -552,6 +552,7 @@ public:
                        std::atomic<int>& configHrtfProfile,
                        std::atomic<int>& configOutputFormat,
                        std::atomic<int>& configInputFormat,
+                       int presetIndex,
                        const juce::String& transactionName = {})
     {
         auto state = apvts.copyState();
@@ -559,6 +560,7 @@ public:
         state.setProperty ("_configHrtfProfile",  configHrtfProfile.load(),  nullptr);
         state.setProperty ("_configOutputFormat", configOutputFormat.load(), nullptr);
         state.setProperty ("_configInputFormat",  configInputFormat.load(),  nullptr);
+        state.setProperty ("_presetIndex",        presetIndex,              nullptr);
         state.setProperty ("_transactionName",    transactionName,           nullptr);
 
         // Trim any redo history beyond the current position

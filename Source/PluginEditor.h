@@ -651,7 +651,8 @@ private:
     int lastAlgoCategoryShown = -1;  // Track format category to avoid redundant combo rebuilds
     int lastMaxBusChannels    = -1;  // v0.7: Gate format availability re-check
     int lastOscPort           = -1;  // v0.7: Gate OSC port label sync
-    std::unique_ptr<ButtonAttachment> tempoSyncAttach;
+    // Issue E15b: tempoSync uses manual onClick (no ButtonAttachment — prevents double-undo)
+    std::function<void()> tempoSyncUpdateUI;  // stored lambda for timer-driven UI refresh
 
     // v0.4: Air Absorption uses manual onClick with gesture wrapping (issue #182)
 

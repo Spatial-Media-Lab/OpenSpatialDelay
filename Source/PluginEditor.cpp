@@ -2096,6 +2096,8 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     delayTimeSlider.onDragEnd   = makeGestureEndHandler ("delayTime");
     feedbackSlider.onDragStart  = makeDragStartHandler();
     feedbackSlider.onDragEnd    = makeGestureEndHandler ("feedback");
+    noteDivisionSlider.onDragStart = makeDragStartHandler();
+    noteDivisionSlider.onDragEnd   = makeGestureEndHandler ("noteDivision");
     addKnob (filterHPSlider,   filterHPLabel,   "HP",       "filterHP",   filterHPAttach);
     addKnob (filterLPSlider,   filterLPLabel,   "LP",       "filterLP",   filterLPAttach);
     addKnob (dryWetSlider,     dryWetLabel,     "DRY/WET",  "dryWet",     dryWetAttach);
@@ -2245,11 +2247,26 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     tempoSyncButton = std::make_unique<StyledButton> ("SYNC", Colours_OSD::accentSync,
                                                        osdLookAndFeel->jetbrainsMedium);
     tempoSyncButton->setAlwaysActive (true);
+    tempoSyncButton->setClickingTogglesState (false);  // Issue E15b: timer drives visual state
     addAndMakeVisible (*tempoSyncButton);
-    tempoSyncAttach = std::make_unique<ButtonAttachment> (processorRef.apvts, "tempoSync", *tempoSyncButton);
+
+    // Issue E15b: Manual gesture brackets instead of ButtonAttachment (prevents double-undo)
+    tempoSyncButton->onClick = [this]
+    {
+        auto* syncParam = processorRef.apvts.getParameter ("tempoSync");
+        if (syncParam != nullptr)
+        {
+            syncParam->beginChangeGesture();
+            float current = processorRef.apvts.getRawParameterValue ("tempoSync")->load();
+            syncParam->setValueNotifyingHost (current < 0.5f ? 1.0f : 0.0f);
+            syncParam->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Toggle Tempo Sync");
+        }
+    };
 
     auto updateSyncUI = [this] {
-        bool isSynced = tempoSyncButton->getToggleState();
+        bool isSynced = processorRef.apvts.getRawParameterValue ("tempoSync")->load() > 0.5f;
         delayTimeSlider.setVisible (!isSynced);
         noteDivisionSlider.setVisible (isSynced);
         syncModeBox.setVisible (false);  // hidden — replaced by toggle buttons
@@ -2267,7 +2284,9 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         noteDivisionSlider.setColour (juce::Slider::thumbColourId, knobCol);
     };
 
-    tempoSyncButton->onStateChange = updateSyncUI;
+    // Issue E15b: call once to initialize UI, then timer drives updates
+    updateSyncUI();
+    tempoSyncUpdateUI = updateSyncUI;  // store for timer-driven refresh
 
     // v0.7: Dotted/Triplet toggle buttons (mutually exclusive, radio-style)
     syncDottedButton = std::make_unique<StyledButton> ("", Colours_OSD::accentSync,
@@ -2407,16 +2426,22 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         objTrajectoryDirBox.setSelectedId (1, juce::sendNotificationSync);
         objTrajectoryFwdButton->setToggleState (true, juce::dontSendNotification);
         objTrajectoryRevButton->setToggleState (false, juce::dontSendNotification);
+        processorRef.captureUndoState ("Change Trajectory Direction");
     };
     objTrajectoryRevButton->onClick = [this] {
         objTrajectoryDirBox.setSelectedId (2, juce::sendNotificationSync);
         objTrajectoryRevButton->setToggleState (true, juce::dontSendNotification);
         objTrajectoryFwdButton->setToggleState (false, juce::dontSendNotification);
+        processorRef.captureUndoState ("Change Trajectory Direction");
     };
     objTrajectoryDirBox.onChange = [this] {
         int sel = objTrajectoryDirBox.getSelectedId();  // 1=Forward, 2=Reverse
         if (objTrajectoryFwdButton) objTrajectoryFwdButton->setToggleState (sel == 1, juce::dontSendNotification);
         if (objTrajectoryRevButton) objTrajectoryRevButton->setToggleState (sel == 2, juce::dontSendNotification);
+    };
+
+    objTrajectoryBox.onChange = [this] {
+        processorRef.captureUndoState ("Change Trajectory Shape");
     };
 
     styleSlider (objTrajectorySpeedSlider, *osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
@@ -2713,6 +2738,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
             int cur = objInputChannelBox.getSelectedId();
             int next = (cur >= 3) ? 1 : cur + 1;
             objInputChannelBox.setSelectedId (next, juce::sendNotificationSync);
+            processorRef.captureUndoState ("Change Input Channel");
         };
     }
 
@@ -3530,6 +3556,17 @@ void OpenSpatialDelayEditor::timerCallback()
         {
             bool airActive = processorRef.apvts.getRawParameterValue ("airAbsorption")->load() > 0.5f;
             airAbsorptionButton->setToggleState (airActive, juce::dontSendNotification);
+        }
+
+        // Issue E15b: Sync tempoSync button visual state + UI (no ButtonAttachment)
+        if (tempoSyncButton && tempoSyncUpdateUI)
+        {
+            bool synced = processorRef.apvts.getRawParameterValue ("tempoSync")->load() > 0.5f;
+            if (tempoSyncButton->getToggleState() != synced)
+            {
+                tempoSyncButton->setToggleState (synced, juce::dontSendNotification);
+                tempoSyncUpdateUI();
+            }
         }
 
         // Always update graph with live values — dimming handles on/off visual
