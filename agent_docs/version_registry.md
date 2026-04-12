@@ -31,7 +31,9 @@ Registry collapsed to v1.0.0 on 2026-04-02 after issue #77.
 | v1.0.20 | O120 | Default Input to Stereo on stereo tracks, disable on mono (issue #155) | 376b5fe |
 | v1.0.21–v1.0.29 | O121–O129 | Consumed by E15b double-undo investigation (issue #182) | various |
 | v1.0.30 | O130 | Current fix version for issue #182 | — |
+| v1.0.31 | O131 | Issue #182 retry (failed — no undo stack, minimal fixes) | a73554f |
+| v1.0.32 | O132 | Issue #182: gesture hygiene + internal undo stack + v1.0.30 bug fixes | — |
 
 ## Next available
 
-**v1.0.31 / O131**
+**v1.0.33 / O133**

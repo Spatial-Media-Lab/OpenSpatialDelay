@@ -538,6 +538,67 @@ private:
 };
 
 // #############################################################################
+// Issue E15b/182: Plugin-internal undo manager (FabFilter-style)
+// Captures full APVTS + config state at every gesture boundary.
+// Works for ALL params (including non-automatable), ALL formats, ALL DAWs.
+// #############################################################################
+class PluginUndoManager
+{
+public:
+    static constexpr int kMaxSteps = 50;
+
+    void captureState (juce::AudioProcessorValueTreeState& apvts,
+                       std::atomic<int>& configAlgorithm,
+                       std::atomic<int>& configHrtfProfile,
+                       std::atomic<int>& configOutputFormat,
+                       std::atomic<int>& configInputFormat,
+                       const juce::String& transactionName = {})
+    {
+        auto state = apvts.copyState();
+        state.setProperty ("_configAlgorithm",    configAlgorithm.load(),    nullptr);
+        state.setProperty ("_configHrtfProfile",  configHrtfProfile.load(),  nullptr);
+        state.setProperty ("_configOutputFormat", configOutputFormat.load(), nullptr);
+        state.setProperty ("_configInputFormat",  configInputFormat.load(),  nullptr);
+        state.setProperty ("_transactionName",    transactionName,           nullptr);
+
+        // Trim any redo history beyond the current position
+        while ((int) history.size() > currentIndex + 1)
+            history.pop_back();
+
+        history.push_back (state);
+
+        // Enforce max history size
+        if ((int) history.size() > kMaxSteps)
+            history.erase (history.begin());
+        else
+            currentIndex++;
+    }
+
+    bool canUndo() const { return currentIndex > 0; }
+    bool canRedo() const { return currentIndex < (int) history.size() - 1; }
+
+    juce::ValueTree undo()
+    {
+        if (! canUndo()) return {};
+        currentIndex--;
+        return history[(size_t) currentIndex].createCopy();
+    }
+
+    juce::ValueTree redo()
+    {
+        if (! canRedo()) return {};
+        currentIndex++;
+        return history[(size_t) currentIndex].createCopy();
+    }
+
+    void clear() { history.clear(); currentIndex = -1; }
+
+private:
+    std::vector<juce::ValueTree> history;
+    int currentIndex = -1;
+};
+
+// #############################################################################
 // PLUGIN-SPECIFIC — OpenSpatialDelay processor class
 // This class wires the reusable spatial framework (above) to the delay engine.
 // Other SML plugins would replace this class with their own DSP processor,
@@ -704,6 +765,31 @@ public:
     // Issue #122: Debounce updateHostDisplay — set by editor/OSC, flushed in timerCallback
     std::atomic<bool> configStateDirty { false };
     void markConfigStateDirty() { configStateDirty.store (true, std::memory_order_relaxed); }
+
+    // Issue E15b/182: AU-specific notification — VST3 uses setDirty, AU suppressed.
+    // AU undo is parameter-level (gesture brackets), not state-level.
+    // Calling nonParameterStateChanged for AU creates harmful full-state undo entries
+    // that override parameter-level ones and cause multi-parameter undo grouping.
+    void notifyHostStateChanged()
+    {
+        if (wrapperType != wrapperType_AudioUnit && wrapperType != wrapperType_AudioUnitv3)
+            updateHostDisplay (ChangeDetails().withNonParameterStateChanged (true));
+    }
+
+    // Issue E15b/182: Suppress updateHostDisplay() during host-initiated state restores
+    // (Undo/Redo). Without this, timer-driven config corrections trigger spurious
+    // updateHostDisplay() calls that create ghost undo points.
+    std::atomic<bool> stateRestoreInProgress { false };
+
+    // Issue E15b/182: Suppress host gesture notifications during internal undo/redo
+    std::atomic<bool> internalUndoInProgress { false };
+
+    // Issue E15b/182: Plugin-internal undo/redo stack (FabFilter-style)
+    PluginUndoManager pluginUndo;
+    void captureUndoState (const juce::String& name);
+    void performInternalUndo();
+    void performInternalRedo();
+    void applyUndoState (const juce::ValueTree& state);
 
     // v0.7: OSC Send accessors for editor
     bool isOscSendConnected() const { return oscSendConnected; }

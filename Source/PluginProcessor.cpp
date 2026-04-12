@@ -5717,6 +5717,54 @@ void OpenSpatialDelayProcessor::handleOSCPosition (int objIdx, float azDeg, floa
 // #############################################################################
 
 //==============================================================================
+// Issue E15b/182: Plugin-internal undo/redo (FabFilter-style)
+//==============================================================================
+void OpenSpatialDelayProcessor::captureUndoState (const juce::String& name)
+{
+    pluginUndo.captureState (apvts, configAlgorithm, configHrtfProfile,
+                             configOutputFormat, configInputFormat, name);
+}
+
+void OpenSpatialDelayProcessor::applyUndoState (const juce::ValueTree& state)
+{
+    if (! state.isValid()) return;
+
+    internalUndoInProgress.store (true, std::memory_order_relaxed);
+
+    // Restore config atomics from snapshot properties
+    configAlgorithm.store (static_cast<int> (state.getProperty ("_configAlgorithm", configAlgorithm.load())),
+                           std::memory_order_relaxed);
+    configHrtfProfile.store (static_cast<int> (state.getProperty ("_configHrtfProfile", configHrtfProfile.load())),
+                             std::memory_order_relaxed);
+    configOutputFormat.store (static_cast<int> (state.getProperty ("_configOutputFormat", configOutputFormat.load())),
+                              std::memory_order_relaxed);
+    configInputFormat.store (static_cast<int> (state.getProperty ("_configInputFormat", configInputFormat.load())),
+                             std::memory_order_relaxed);
+
+    // Restore APVTS state (triggers parameter listeners but not gesture notifications)
+    apvts.replaceState (state);
+
+    internalUndoInProgress.store (false, std::memory_order_relaxed);
+
+    // Sync UI via config dirty flag
+    markConfigStateDirty();
+}
+
+void OpenSpatialDelayProcessor::performInternalUndo()
+{
+    auto state = pluginUndo.undo();
+    if (state.isValid())
+        applyUndoState (state);
+}
+
+void OpenSpatialDelayProcessor::performInternalRedo()
+{
+    auto state = pluginUndo.redo();
+    if (state.isValid())
+        applyUndoState (state);
+}
+
+//==============================================================================
 // State save / restore
 //==============================================================================
 void OpenSpatialDelayProcessor::getStateInformation (juce::MemoryBlock& destData)
@@ -5742,9 +5790,17 @@ void OpenSpatialDelayProcessor::getStateInformation (juce::MemoryBlock& destData
 
 void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
+    // Issue E15b/182: Suppress updateHostDisplay() during state restore (Undo/Redo).
+    // Timer-driven algorithm validation may fire between replaceState() and the next
+    // editor repaint, creating spurious undo points that corrupt the host undo stack.
+    stateRestoreInProgress.store (true, std::memory_order_relaxed);
+
     std::unique_ptr<juce::XmlElement> xmlState (getXmlFromBinary (data, sizeInBytes));
     if (xmlState == nullptr || ! xmlState->hasTagName (apvts.state.getType()))
+    {
+        stateRestoreInProgress.store (false, std::memory_order_relaxed);
         return;
+    }
 
     auto tree = juce::ValueTree::fromXml (*xmlState);
 
@@ -6345,6 +6401,10 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
                 globalTapOffset[i].store (p->load(), std::memory_order_relaxed);
         }
     }
+
+    // Issue E15b/182: Consume dirty flag and clear restore guard
+    configStateDirty.store (false, std::memory_order_relaxed);
+    stateRestoreInProgress.store (false, std::memory_order_relaxed);
 }
 
 //==============================================================================

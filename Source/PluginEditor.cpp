@@ -1405,6 +1405,8 @@ static void styleSlider (juce::Slider& slider, juce::LookAndFeel& lf,
     slider.setColour (juce::Slider::textBoxTextColourId, Colours_OSD::textSecondary);
     slider.setColour (juce::Slider::textBoxOutlineColourId, juce::Colours::transparentBlack);
     slider.setColour (juce::Slider::textBoxBackgroundColourId, juce::Colours::transparentBlack);
+    // Disable mouse wheel parameter adjustment on all sliders.
+    slider.setScrollWheelEnabled (false);
 }
 
 static void styleLabel (juce::Label& label, const juce::String& text, OSDLookAndFeel* lf = nullptr)
@@ -1618,15 +1620,16 @@ void FilterGraphComponent::mouseDown (const juce::MouseEvent& e)
 
     // Issue E15: Signal drag start for gesture wrapping (undo grouping)
     if (currentDrag != None && onFilterDragStarted)
-        onFilterDragStarted();
+        onFilterDragStarted (currentDrag == HP);
 }
 
 void FilterGraphComponent::mouseDrag (const juce::MouseEvent& e)
 {
     if (currentDrag == None) return;
 
-    // Horizontal: frequency
-    float freq = xToFreq (static_cast<float> (e.x));
+    // Horizontal: frequency — clamp to component bounds so handles can't go off-screen (issue #195)
+    float clampedX = juce::jlimit (0.0f, static_cast<float> (getWidth()), static_cast<float> (e.x));
+    float freq = xToFreq (clampedX);
     if (currentDrag == HP)
         hpFreq = juce::jlimit (20.0f, 5000.0f, freq);
     else
@@ -1657,7 +1660,7 @@ void FilterGraphComponent::mouseUp (const juce::MouseEvent&)
 {
     // Issue E15: Signal drag end for gesture wrapping (undo grouping)
     if (currentDrag != None && onFilterDragEnded)
-        onFilterDragEnded();
+        onFilterDragEnded (currentDrag == HP);
     currentDrag = None;
 }
 
@@ -1982,6 +1985,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         for (auto* p : activeSpatialGestureParams)
             if (p != nullptr) p->endChangeGesture();
         activeSpatialGestureParams = { nullptr, nullptr };
+        processorRef.captureUndoState ("Move Object");
     };
     spatialMap.setProcessor (&processorRef);
 
@@ -2035,6 +2039,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         for (auto* param : activeGlobalGestureParams)
             param->endChangeGesture();
         activeGlobalGestureParams.clear();
+        processorRef.captureUndoState ("Adjust Global Tap");
     };
     globalTapDrawer.onGlobalDelta = [this] (int idx, float delta) {
         applyGlobalTapDelta (idx, delta);
@@ -2072,9 +2077,34 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     addKnob (delayTimeSlider,  delayTimeLabel,  "TIME",     "delayTime",  delayTimeAttach);
     addKnob (noteDivisionSlider, delayTimeLabel, "TIME",    "noteDivision", noteDivisionAttach);
     addKnob (feedbackSlider,   feedbackLabel,   "FEEDBACK", "feedback",   feedbackAttach);
+
+    // Issue E15b: Force host state capture after APVTS slider drag gestures.
+    // Uses gesture duration to distinguish drags (>100ms, force capture) from
+    // mouse wheel ticks (<100ms, let host debounce/group naturally).
+    auto makeGestureEndHandler = [this] (const char* name) {
+        return [this, name] {
+            double elapsed = juce::Time::getMillisecondCounterHiRes() - lastSliderDragStartTime;
+            if (elapsed > 20.0)
+            {
+                processorRef.notifyHostStateChanged();
+                processorRef.captureUndoState (juce::String ("Adjust ") + name);
+            }
+        };
+    };
+    auto makeDragStartHandler = [this] { return [this] { lastSliderDragStartTime = juce::Time::getMillisecondCounterHiRes(); }; };
+    delayTimeSlider.onDragStart = makeDragStartHandler();
+    delayTimeSlider.onDragEnd   = makeGestureEndHandler ("delayTime");
+    feedbackSlider.onDragStart  = makeDragStartHandler();
+    feedbackSlider.onDragEnd    = makeGestureEndHandler ("feedback");
     addKnob (filterHPSlider,   filterHPLabel,   "HP",       "filterHP",   filterHPAttach);
     addKnob (filterLPSlider,   filterLPLabel,   "LP",       "filterLP",   filterLPAttach);
     addKnob (dryWetSlider,     dryWetLabel,     "DRY/WET",  "dryWet",     dryWetAttach);
+    dryWetSlider.onDragStart = makeDragStartHandler();
+    dryWetSlider.onDragEnd   = makeGestureEndHandler ("dryWet");
+    inputGainSlider.onDragStart  = makeDragStartHandler();
+    inputGainSlider.onDragEnd    = makeGestureEndHandler ("inputGain");
+    outputGainSlider.onDragStart = makeDragStartHandler();
+    outputGainSlider.onDragEnd   = makeGestureEndHandler ("outputGain");
     addKnob (outputGainSlider, outputGainLabel, "OUTPUT",   "outputGain", outputGainAttach);
 
     // Section-based knob accent colors (prototype v6: DELAY=stellar, TONE=no knobs, MIX=amber)
@@ -2097,12 +2127,22 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         styleLabel (wobbleAmountLabel, "AMOUNT", &*osdLookAndFeel);
         addAndMakeVisible (wobbleAmountLabel);
         wobbleAmountAttach = std::make_unique<SliderAttachment> (processorRef.apvts, "wobbleAmount", wobbleAmountSlider);
+        wobbleAmountSlider.onDragStart = [this] { lastSliderDragStartTime = juce::Time::getMillisecondCounterHiRes(); };
+        wobbleAmountSlider.onDragEnd = [this] {
+            if (juce::Time::getMillisecondCounterHiRes() - lastSliderDragStartTime > 100.0)
+                processorRef.notifyHostStateChanged();
+        };
 
         styleSlider (wobbleMorphSlider, *osdLookAndFeel, juce::Slider::RotaryVerticalDrag);
         addAndMakeVisible (wobbleMorphSlider);
         styleLabel (wobbleMorphLabel, "MORPH", &*osdLookAndFeel);
         addAndMakeVisible (wobbleMorphLabel);
         wobbleMorphAttach = std::make_unique<SliderAttachment> (processorRef.apvts, "wobbleMorph", wobbleMorphSlider);
+        wobbleMorphSlider.onDragStart = [this] { lastSliderDragStartTime = juce::Time::getMillisecondCounterHiRes(); };
+        wobbleMorphSlider.onDragEnd = [this] {
+            if (juce::Time::getMillisecondCounterHiRes() - lastSliderDragStartTime > 100.0)
+                processorRef.notifyHostStateChanged();
+        };
 
         // MOD section — rose/pink accent (using Colours_OSD::accentRose)
         wobbleAmountSlider.setColour (juce::Slider::thumbColourId, Colours_OSD::accentRose);
@@ -2181,6 +2221,10 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         outputFormatBox.onChange = [this] {
             processorRef.configOutputFormat.store (outputFormatBox.getSelectedItemIndex(), std::memory_order_relaxed);
             processorRef.markConfigStateDirty();
+            // Issue E15b: Activate layout immediately on user-driven format change
+            // instead of waiting for the next timer tick. This eliminates the one-tick
+            // race that corrupts undo state after format changes.
+            processorRef.requestOutputFormatChange (outputFormatBox.getSelectedItemIndex());
         };
     }
 
@@ -2249,6 +2293,8 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
             param->beginChangeGesture();
             param->setValueNotifyingHost (param->convertTo0to1 ((float) mode));
             param->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Change Sync Mode");
         }
         repaint();
     };
@@ -2263,6 +2309,8 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
             param->beginChangeGesture();
             param->setValueNotifyingHost (param->convertTo0to1 ((float) mode));
             param->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Change Sync Mode");
         }
         repaint();
     };
@@ -2425,11 +2473,25 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     addAndMakeVisible (oscPortLabel);
 
     // --- v0.4: Global Air Absorption toggle (IndicatorToggle) ----------------
+    // Issue #182: Use manual onClick with gesture brackets (like FLT/MOD) instead
+    // of ButtonAttachment, which creates double undo entries.
     airAbsorptionButton = std::make_unique<IndicatorToggle> ("AIR", Colours_OSD::accentStellar,
                                                               osdLookAndFeel->jetbrainsMedium);
+    airAbsorptionButton->setClickingTogglesState (false);  // timer drives visual state
+    airAbsorptionButton->onClick = [this]
+    {
+        auto* airParam = processorRef.apvts.getParameter ("airAbsorption");
+        if (airParam != nullptr)
+        {
+            airParam->beginChangeGesture();
+            float current = processorRef.apvts.getRawParameterValue ("airAbsorption")->load();
+            airParam->setValueNotifyingHost (current < 0.5f ? 1.0f : 0.0f);
+            airParam->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Toggle Air Absorption");
+        }
+    };
     addAndMakeVisible (*airAbsorptionButton);
-    airAbsorptionAttach = std::make_unique<ButtonAttachment> (processorRef.apvts, "airAbsorption",
-                                                              *airAbsorptionButton);
 
     // --- v0.7: ADM-OSC Send toggle (IndicatorToggle) -------------------------
     oscSendToggleButton = std::make_unique<IndicatorToggle> ("SEND", Colours_OSD::accentGreen,
@@ -2528,6 +2590,8 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
             float current = processorRef.apvts.getRawParameterValue ("filterEnabled")->load();
             fltParam->setValueNotifyingHost (current < 0.5f ? 1.0f : 0.0f);
             fltParam->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Toggle Filter");
         }
     };
     addAndMakeVisible (*fltToggle);
@@ -2550,6 +2614,8 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
             float cur = processorRef.apvts.getRawParameterValue ("wobbleEnabled")->load();
             param->setValueNotifyingHost (cur > 0.5f ? 0.0f : 1.0f);
             param->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Toggle Modulation");
         }
     };
     addAndMakeVisible (*modToggle);
@@ -2579,10 +2645,13 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         repaint();  // update painted readout
     };
     // Issue E15: Gesture wrapping for filter graph drag (undo grouping)
-    filterGraph.onFilterDragStarted = [this] {
+    filterGraph.onFilterDragStarted = [this] (bool isHP) {
         activeFilterGestureParams.clear();
-        // Begin gestures on all 4 filter params — both freq and Q may change during a drag
-        for (const char* id : { "filterHP", "filterLP", "filterHPQ", "filterLPQ" })
+        // Issue E15b: Only begin gestures on the params that will actually change.
+        // Opening gestures on all 4 params causes the host to create per-parameter undo entries.
+        const char* ids[2] = { isHP ? "filterHP" : "filterLP",
+                               isHP ? "filterHPQ" : "filterLPQ" };
+        for (auto* id : ids)
         {
             if (auto* param = processorRef.apvts.getParameter (id))
             {
@@ -2591,10 +2660,12 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
             }
         }
     };
-    filterGraph.onFilterDragEnded = [this] {
+    filterGraph.onFilterDragEnded = [this] (bool /*isHP*/) {
         for (auto* param : activeFilterGestureParams)
             param->endChangeGesture();
         activeFilterGestureParams.clear();
+        processorRef.notifyHostStateChanged();
+        processorRef.captureUndoState ("Adjust Filter");
     };
 
     // --- v0.7: Per-object pitch shift knob (bottom panel) --------------------
@@ -2700,6 +2771,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         resetGlobalTapAPVTSParams();
         processorRef.loadPreviousPreset();
         updatePresetButtonText();
+        processorRef.captureUndoState ("Load Preset");
     };
 
     stylePresetButton (presetNextButton, ">");
@@ -2709,6 +2781,7 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         resetGlobalTapAPVTSParams();
         processorRef.loadNextPreset();
         updatePresetButtonText();
+        processorRef.captureUndoState ("Load Preset");
     };
 
     stylePresetButton (presetSaveButton, "Save");
@@ -2749,8 +2822,28 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     smlButton->setButtonHeight (17);
     addAndMakeVisible (*smlButton);
 
+    // Issue E15b/182: Internal undo/redo buttons (FabFilter-style)
+    undoButton = std::make_unique<juce::TextButton> (juce::CharPointer_UTF8 ("\xe2\x86\xa9"));  // arrow left hook
+    undoButton->setTooltip ("Undo");
+    undoButton->setColour (juce::TextButton::buttonColourId, Colours_OSD::bgRecessed);
+    undoButton->setColour (juce::TextButton::textColourOffId, Colours_OSD::textSecondary);
+    undoButton->onClick = [this] { processorRef.performInternalUndo(); updateUndoButtons(); };
+    addAndMakeVisible (*undoButton);
+
+    redoButton = std::make_unique<juce::TextButton> (juce::CharPointer_UTF8 ("\xe2\x86\xaa"));  // arrow right hook
+    redoButton->setTooltip ("Redo");
+    redoButton->setColour (juce::TextButton::buttonColourId, Colours_OSD::bgRecessed);
+    redoButton->setColour (juce::TextButton::textColourOffId, Colours_OSD::textSecondary);
+    redoButton->onClick = [this] { processorRef.performInternalRedo(); updateUndoButtons(); };
+    addAndMakeVisible (*redoButton);
+
     selectObject (0);
     resized();  // re-layout now that all unique_ptr components are constructed
+
+    // Issue E15b/182: Capture initial state for undo baseline
+    processorRef.captureUndoState ("Initial State");
+    updateUndoButtons();
+
     startTimerHz (30);
 }
 
@@ -2768,6 +2861,40 @@ void OpenSpatialDelayEditor::visibilityChanged()
         startTimerHz (30);
     else
         startTimerHz (5);    // keep param sync alive, skip rendering
+}
+
+//==============================================================================
+// Issue E15b/182: Internal undo/redo support
+//==============================================================================
+void OpenSpatialDelayEditor::updateUndoButtons()
+{
+    if (undoButton)
+    {
+        undoButton->setEnabled (processorRef.pluginUndo.canUndo());
+        undoButton->setAlpha (processorRef.pluginUndo.canUndo() ? 1.0f : 0.3f);
+    }
+    if (redoButton)
+    {
+        redoButton->setEnabled (processorRef.pluginUndo.canRedo());
+        redoButton->setAlpha (processorRef.pluginUndo.canRedo() ? 1.0f : 0.3f);
+    }
+}
+
+bool OpenSpatialDelayEditor::keyPressed (const juce::KeyPress& key)
+{
+    if (key == juce::KeyPress ('z', juce::ModifierKeys::commandModifier, 0))
+    {
+        processorRef.performInternalUndo();
+        updateUndoButtons();
+        return true;
+    }
+    if (key == juce::KeyPress ('z', juce::ModifierKeys::commandModifier | juce::ModifierKeys::shiftModifier, 0))
+    {
+        processorRef.performInternalRedo();
+        updateUndoButtons();
+        return true;
+    }
+    return false;
 }
 
 //==============================================================================
@@ -2844,6 +2971,7 @@ void OpenSpatialDelayEditor::showPresetMenu()
                 resetGlobalTapAPVTSParams();
                 processorRef.loadPreset (result - 1);
                 updatePresetButtonText();
+                processorRef.captureUndoState ("Load Preset");
             }
         });
 }
@@ -2883,6 +3011,25 @@ void OpenSpatialDelayEditor::selectObject (int index)
     objDopplerAttach = std::make_unique<SliderAttachment> (processorRef.apvts, prefix + "dopplerAmount", objDopplerSlider);
     objPitchShiftAttach      = std::make_unique<SliderAttachment> (processorRef.apvts, prefix + "pitchShift", objPitchShiftSlider);
     objInputChannelAttach    = std::make_unique<ComboBoxAttachment> (processorRef.apvts, prefix + "inputChannel", objInputChannelBox);
+
+    // Issue E15b: Force host state capture after per-object slider drag gestures
+    auto makeDragStart = [this] { return [this] { lastSliderDragStartTime = juce::Time::getMillisecondCounterHiRes(); }; };
+    auto makeDragEnd = [this] (const char* name) {
+        return [this, name] {
+            double elapsed = juce::Time::getMillisecondCounterHiRes() - lastSliderDragStartTime;
+            if (elapsed > 20.0)
+            {
+                processorRef.notifyHostStateChanged();
+                processorRef.captureUndoState (juce::String ("Adjust ") + name);
+            }
+        };
+    };
+    for (auto* s : std::initializer_list<juce::Slider*> { &objAzimuthSlider, &objElevationSlider, &objDistanceSlider,
+                     &objDopplerSlider, &objPitchShiftSlider, &objTrajectorySpeedSlider })
+    {
+        s->onDragStart = makeDragStart();
+        s->onDragEnd   = makeDragEnd ("perObject");
+    }
     objTrajectoryAttach      = std::make_unique<ComboBoxAttachment> (processorRef.apvts, prefix + "trajectoryShape", objTrajectoryBox);
     objTrajectorySpeedAttach = std::make_unique<SliderAttachment>   (processorRef.apvts, prefix + "trajectorySpeed", objTrajectorySpeedSlider);
     objTrajectoryDirAttach   = std::make_unique<ComboBoxAttachment> (processorRef.apvts, prefix + "trajectoryDirection", objTrajectoryDirBox);
@@ -3237,8 +3384,13 @@ void OpenSpatialDelayEditor::timerCallback()
         }
     }
 
-    // Trigger layout recomputation if format changed
-    processorRef.requestOutputFormatChange (outputFormatBox.getSelectedItemIndex());
+    // Issue E15b: Only re-resolve the output format from the timer when the host
+    // changes the bus channel count (e.g., track routing change). User-driven format
+    // changes now call requestOutputFormatChange() directly from outputFormatBox.onChange.
+    // Polling every 30Hz tick created spurious layout activations after Undo/Redo that
+    // corrupted the host undo stack.
+    if (lastMaxBusChannels != processorRef.getMaxBusChannels())
+        processorRef.requestOutputFormatChange (outputFormatBox.getSelectedItemIndex());
 
     // v0.5: Context-sensitive header dropdowns based on output format
     int fmtIdx = static_cast<int> (processorRef.getActiveOutputFormat());
@@ -3324,13 +3476,16 @@ void OpenSpatialDelayEditor::timerCallback()
         {
             algoIdx = 7;  // Equal Power
             processorRef.configAlgorithm.store (algoIdx, std::memory_order_relaxed);
-            processorRef.markConfigStateDirty();
+            // Issue E15b: Do NOT call markConfigStateDirty() here — timer-driven
+            // algorithm corrections must be silent. User-initiated format changes
+            // already call markConfigStateDirty() from the combo box onChange handler.
+            // Calling it here creates spurious updateHostDisplay() notifications that
+            // corrupt the host undo stack after Undo/Redo operations.
         }
         else if (! isStereoVariant && algoIdx > 6)
         {
             algoIdx = 1;  // Constant Power (default for surround)
             processorRef.configAlgorithm.store (algoIdx, std::memory_order_relaxed);
-            processorRef.markConfigStateDirty();
         }
 
         // Sync combo selection from parameter (IDs are param index + 1)
@@ -3370,6 +3525,13 @@ void OpenSpatialDelayEditor::timerCallback()
         filterGraph.setEnabled (filterIsActive);
         if (fltToggle) fltToggle->setToggleState (filterIsActive, juce::dontSendNotification);
 
+        // Issue #182: Sync Air button visual state (no ButtonAttachment — manual sync)
+        if (airAbsorptionButton)
+        {
+            bool airActive = processorRef.apvts.getRawParameterValue ("airAbsorption")->load() > 0.5f;
+            airAbsorptionButton->setToggleState (airActive, juce::dontSendNotification);
+        }
+
         // Always update graph with live values — dimming handles on/off visual
         filterGraph.setFrequencies (hp, lp);
         filterGraph.setQ (hpq, lpq);
@@ -3390,6 +3552,9 @@ void OpenSpatialDelayEditor::timerCallback()
 
     // issue #164: Sync knobs from APVTS on host undo / external param change
     syncGlobalTapKnobsFromAPVTS();
+
+    // Issue E15b/182: Refresh undo/redo button state
+    updateUndoButtons();
 
     repaint();
 }
@@ -3671,6 +3836,13 @@ void OpenSpatialDelayEditor::resized()
     presetNextButton.setBounds (px, boxY, 22, boxH);
     px += 22 + 2;
     presetSaveButton.setBounds (px, boxY, 40, boxH);
+
+    // Issue E15b/182: Undo/Redo buttons in header (after preset save)
+    {
+        int undoX = px + 40 + 8;
+        if (undoButton)  undoButton->setBounds  (undoX, boxY, 22, boxH);
+        if (redoButton)  redoButton->setBounds  (undoX + 22, boxY, 22, boxH);
+    }
 
     // Title is painted directly in paint() — no setBounds needed
     // SML badge button (header, left-aligned)

@@ -278,8 +278,9 @@ public:
     std::function<void (float q)> onLPQChanged;
 
     // Callbacks: fired on filter handle drag start/end — used for gesture wrapping (issue E15)
-    std::function<void()> onFilterDragStarted;
-    std::function<void()> onFilterDragEnded;
+    // isHP = true when dragging the HP handle, false for LP
+    std::function<void (bool isHP)> onFilterDragStarted;
+    std::function<void (bool isHP)> onFilterDragEnded;
 
     /** Enable/disable the filter display (dims when off). */
     void setEnabled (bool enabled) { filterEnabled = enabled; repaint(); }
@@ -511,6 +512,7 @@ public:
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    bool keyPressed (const juce::KeyPress& key) override;
 
     /** Sync all UI state from processor parameters (for screenshot tool).
         Normally the 30Hz timer handles this, but headless capture needs
@@ -651,8 +653,7 @@ private:
     int lastOscPort           = -1;  // v0.7: Gate OSC port label sync
     std::unique_ptr<ButtonAttachment> tempoSyncAttach;
 
-    // v0.4: Global DSP attachments
-    std::unique_ptr<ButtonAttachment> airAbsorptionAttach;
+    // v0.4: Air Absorption uses manual onClick with gesture wrapping (issue #182)
 
     // v0.8: Wobble modulation attachments
     std::unique_ptr<SliderAttachment> wobbleAmountAttach, wobbleMorphAttach;
@@ -697,6 +698,13 @@ private:
     std::vector<juce::RangedAudioParameter*> activeGlobalGestureParams;   // Global Tap Drawer drag
     std::array<juce::RangedAudioParameter*, 2> activeSpatialGestureParams { nullptr, nullptr }; // Spatial Map drag
     std::vector<juce::RangedAudioParameter*> activeFilterGestureParams;   // Filter Graph drag
+
+    // Issue E15b/182: Internal undo/redo buttons (FabFilter-style)
+    std::unique_ptr<juce::TextButton> undoButton, redoButton;
+    void updateUndoButtons();
+
+    // Track slider drag start time for gesture duration measurement (undo grouping)
+    double lastSliderDragStartTime = 0.0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (OpenSpatialDelayEditor)
 };
