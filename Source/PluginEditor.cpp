@@ -2422,17 +2422,34 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     objTrajectoryDirBox.addItem ("Forward", 1);
     objTrajectoryDirBox.addItem ("Reverse", 2);
     addChildComponent (objTrajectoryDirBox);  // invisible
+    // Issue #182: Use manual gesture brackets (like Dotted/Triplet) instead of
+    // setSelectedId() which relies on ComboBoxAttachment auto-gestures that don't
+    // create proper undo entries in Ableton.
     objTrajectoryFwdButton->onClick = [this] {
-        objTrajectoryDirBox.setSelectedId (1, juce::sendNotificationSync);
+        auto prefix = "object" + juce::String (currentObjectIndex + 1) + "_";
+        if (auto* param = processorRef.apvts.getParameter (prefix + "trajectoryDirection"))
+        {
+            param->beginChangeGesture();
+            param->setValueNotifyingHost (param->convertTo0to1 (0.0f));  // 0 = Forward
+            param->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Change Trajectory Direction");
+        }
         objTrajectoryFwdButton->setToggleState (true, juce::dontSendNotification);
         objTrajectoryRevButton->setToggleState (false, juce::dontSendNotification);
-        processorRef.captureUndoState ("Change Trajectory Direction");
     };
     objTrajectoryRevButton->onClick = [this] {
-        objTrajectoryDirBox.setSelectedId (2, juce::sendNotificationSync);
+        auto prefix = "object" + juce::String (currentObjectIndex + 1) + "_";
+        if (auto* param = processorRef.apvts.getParameter (prefix + "trajectoryDirection"))
+        {
+            param->beginChangeGesture();
+            param->setValueNotifyingHost (param->convertTo0to1 (1.0f));  // 1 = Reverse
+            param->endChangeGesture();
+            processorRef.notifyHostStateChanged();
+            processorRef.captureUndoState ("Change Trajectory Direction");
+        }
         objTrajectoryRevButton->setToggleState (true, juce::dontSendNotification);
         objTrajectoryFwdButton->setToggleState (false, juce::dontSendNotification);
-        processorRef.captureUndoState ("Change Trajectory Direction");
     };
     objTrajectoryDirBox.onChange = [this] {
         int sel = objTrajectoryDirBox.getSelectedId();  // 1=Forward, 2=Reverse
@@ -2440,7 +2457,10 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         if (objTrajectoryRevButton) objTrajectoryRevButton->setToggleState (sel == 2, juce::dontSendNotification);
     };
 
+    // Issue #182: Add notifyHostStateChanged() so the host creates a separate
+    // undo entry for trajectory shape changes (ComboBoxAttachment handles gestures).
     objTrajectoryBox.onChange = [this] {
+        processorRef.notifyHostStateChanged();
         processorRef.captureUndoState ("Change Trajectory Shape");
     };
 
@@ -2734,11 +2754,21 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
         };
 
         // Cycle on click: L+R (1) → L (2) → R (3) → L+R (1)
+        // Issue #182: Use manual gesture brackets (like Dotted/Triplet) instead of
+        // setSelectedId() which relies on ComboBoxAttachment auto-gestures that don't
+        // create proper undo entries in Ableton.
         objInputChannelButton->onClick = [this] {
-            int cur = objInputChannelBox.getSelectedId();
-            int next = (cur >= 3) ? 1 : cur + 1;
-            objInputChannelBox.setSelectedId (next, juce::sendNotificationSync);
-            processorRef.captureUndoState ("Change Input Channel");
+            auto prefix = "object" + juce::String (currentObjectIndex + 1) + "_";
+            if (auto* param = processorRef.apvts.getParameter (prefix + "inputChannel"))
+            {
+                int cur = objInputChannelBox.getSelectedId();  // 1-based
+                int next = (cur >= 3) ? 1 : cur + 1;
+                param->beginChangeGesture();
+                param->setValueNotifyingHost (param->convertTo0to1 (static_cast<float> (next - 1)));
+                param->endChangeGesture();
+                processorRef.notifyHostStateChanged();
+                processorRef.captureUndoState ("Change Input Channel");
+            }
         };
     }
 
@@ -2853,14 +2883,14 @@ OpenSpatialDelayEditor::OpenSpatialDelayEditor (OpenSpatialDelayProcessor& p)
     undoButton->setTooltip ("Undo");
     undoButton->setColour (juce::TextButton::buttonColourId, Colours_OSD::bgRecessed);
     undoButton->setColour (juce::TextButton::textColourOffId, Colours_OSD::textSecondary);
-    undoButton->onClick = [this] { processorRef.performInternalUndo(); updateUndoButtons(); };
+    undoButton->onClick = [this] { processorRef.performInternalUndo(); updatePresetButtonText(); updateUndoButtons(); };
     addAndMakeVisible (*undoButton);
 
     redoButton = std::make_unique<juce::TextButton> (juce::CharPointer_UTF8 ("\xe2\x86\xaa"));  // arrow right hook
     redoButton->setTooltip ("Redo");
     redoButton->setColour (juce::TextButton::buttonColourId, Colours_OSD::bgRecessed);
     redoButton->setColour (juce::TextButton::textColourOffId, Colours_OSD::textSecondary);
-    redoButton->onClick = [this] { processorRef.performInternalRedo(); updateUndoButtons(); };
+    redoButton->onClick = [this] { processorRef.performInternalRedo(); updatePresetButtonText(); updateUndoButtons(); };
     addAndMakeVisible (*redoButton);
 
     selectObject (0);
@@ -2911,12 +2941,14 @@ bool OpenSpatialDelayEditor::keyPressed (const juce::KeyPress& key)
     if (key == juce::KeyPress ('z', juce::ModifierKeys::commandModifier, 0))
     {
         processorRef.performInternalUndo();
+        updatePresetButtonText();
         updateUndoButtons();
         return true;
     }
     if (key == juce::KeyPress ('z', juce::ModifierKeys::commandModifier | juce::ModifierKeys::shiftModifier, 0))
     {
         processorRef.performInternalRedo();
+        updatePresetButtonText();
         updateUndoButtons();
         return true;
     }
@@ -3529,6 +3561,9 @@ void OpenSpatialDelayEditor::timerCallback()
     }
 
     // v0.9: Sync preset name button text from processor
+    // Issue #182: Also force sync after host state restore (Undo/Redo)
+    if (processorRef.stateJustRestored.exchange (false, std::memory_order_relaxed))
+        updatePresetButtonText();
     {
         int idx = processorRef.getCurrentPresetIndex();
         auto names = processorRef.getPresetNames();

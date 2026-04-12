@@ -783,6 +783,9 @@ public:
     // updateHostDisplay() calls that create ghost undo points.
     std::atomic<bool> stateRestoreInProgress { false };
 
+    // Issue #182: Flag set after setStateInformation() so editor can sync preset name
+    std::atomic<bool> stateJustRestored { false };
+
     // Issue E15b/182: Suppress host gesture notifications during internal undo/redo
     std::atomic<bool> internalUndoInProgress { false };
 

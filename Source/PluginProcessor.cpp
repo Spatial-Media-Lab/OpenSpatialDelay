@@ -6409,6 +6409,9 @@ void OpenSpatialDelayProcessor::setStateInformation (const void* data, int sizeI
     // Issue E15b/182: Consume dirty flag and clear restore guard
     configStateDirty.store (false, std::memory_order_relaxed);
     stateRestoreInProgress.store (false, std::memory_order_relaxed);
+
+    // Issue #182: Signal editor to sync preset name after host state restore (Undo/Redo)
+    stateJustRestored.store (true, std::memory_order_relaxed);
 }
 
 //==============================================================================
