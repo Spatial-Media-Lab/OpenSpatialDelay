@@ -325,7 +325,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     // G7: High-Pass Frequency (was "High-Pass Filter" — HP grouped before LP)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterHP", 7), "High-Pass Frequency",
-        juce::NormalisableRange<float> (20.0f, 5000.0f, 1.0f, 0.3f), 50.0f,
+        juce::NormalisableRange<float> (20.0f, 20000.0f, 1.0f, 0.3f), 50.0f,
         juce::AudioParameterFloatAttributes()
             .withStringFromValueFunction (fmtFreq)
             .withValueFromStringFunction (parseFreq)));
@@ -333,14 +333,14 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     // G8: High-Pass Resonance (was "HP Resonance")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterHPQ", 8), "High-Pass Resonance",
-        juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
+        juce::NormalisableRange<float> (0.1f, 8.0f, 0.01f, 0.4f), 0.707f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2); })));
 
     // G9: Low-Pass Frequency (was "Low-Pass Filter")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterLP", 9), "Low-Pass Frequency",
-        juce::NormalisableRange<float> (200.0f, 20000.0f, 1.0f, 0.3f), 5000.0f,
+        juce::NormalisableRange<float> (20.0f, 20000.0f, 1.0f, 0.3f), 5000.0f,
         juce::AudioParameterFloatAttributes()
             .withStringFromValueFunction (fmtFreq)
             .withValueFromStringFunction (parseFreq)));
@@ -348,7 +348,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     // G10: Low-Pass Resonance (was "LP Resonance")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterLPQ", 10), "Low-Pass Resonance",
-        juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
+        juce::NormalisableRange<float> (0.1f, 8.0f, 0.01f, 0.4f), 0.707f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2); })));
 
