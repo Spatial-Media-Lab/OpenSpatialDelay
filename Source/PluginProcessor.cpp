@@ -325,7 +325,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     // G7: High-Pass Frequency (was "High-Pass Filter" — HP grouped before LP)
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterHP", 7), "High-Pass Frequency",
-        juce::NormalisableRange<float> (20.0f, 5000.0f, 1.0f, 0.3f), 50.0f,
+        juce::NormalisableRange<float> (20.0f, 20000.0f, 1.0f, 0.3f), 50.0f,
         juce::AudioParameterFloatAttributes()
             .withStringFromValueFunction (fmtFreq)
             .withValueFromStringFunction (parseFreq)));
@@ -340,7 +340,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     // G9: Low-Pass Frequency (was "Low-Pass Filter")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterLP", 9), "Low-Pass Frequency",
-        juce::NormalisableRange<float> (200.0f, 20000.0f, 1.0f, 0.3f), 5000.0f,
+        juce::NormalisableRange<float> (20.0f, 20000.0f, 1.0f, 0.3f), 5000.0f,
         juce::AudioParameterFloatAttributes()
             .withStringFromValueFunction (fmtFreq)
             .withValueFromStringFunction (parseFreq)));
