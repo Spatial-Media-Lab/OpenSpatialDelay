@@ -632,11 +632,11 @@ Active source in `Source/`:
 
 ---
 
-## v1.0 (2026-03-19) — Active Development
-**Real-World Testing Release**
+## v1.0.0 (2026-04-12) — Release
+**First Public Release**
 
-Starting point for real-world testing. Carries forward all v0.9 features.
-Plugin identity: `Os10` (PLUGIN_CODE).
+Released as GitHub release v1.0.0 (commit 768c248). 169 development patches squashed into a single release commit.
+Plugin identity: `O100` (PLUGIN_CODE).
 
 ### New Features
 - **SpatialMediaLab 13.1 output format:** Custom 13-speaker room layout (8 ear-level + 4 height + 1 zenith + LFE). Derived from IEM AllRADecoder config. 14-channel discrete bus support added.
