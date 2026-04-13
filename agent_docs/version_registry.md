@@ -21,7 +21,7 @@ The `O10Z` code is a short identifier used in the plugin display name (e.g., O10
 | Version | Code | Description | Commit |
 |---------|------|-------------|--------|
 | v1.0.1 | O101 | Fix Immersive HRTF bass boost — correct low-shelf filter profile index (issue #198) | 70cc5d8 |
-| v1.0.2 | O102 | Filter graph UX: EQ8-style log grid + dB labels + proportional scale + extended drag (issue #196) | e3a0519 |
+| v1.0.2 | O102 | Filter graph UX: EQ8-style log grid, dB labels, proportional scale, log Q drag (issue #196) | 82d9f6f |
 
 ## Next available
 
