@@ -1662,10 +1662,9 @@ void FilterGraphComponent::mouseDrag (const juce::MouseEvent& e)
     else
         lpFreq = juce::jlimit (20.0f, 20000.0f, freq);
 
-    // Vertical: resonance Q (drag up = more Q, drag down = less)
+    // Vertical: resonance Q — logarithmic scaling for uniform feel across full range
     float dy = dragStartY - static_cast<float> (e.y);  // positive = dragged up
-    float qDelta = dy * 0.075f;  // sensitivity: ~13px drag = 1.0 Q change (full range in graph height)
-    float newQ = juce::jlimit (0.1f, 8.0f, dragStartQ + qDelta);
+    float newQ = juce::jlimit (0.1f, 8.0f, dragStartQ * std::exp (dy * 0.042f));
 
     if (currentDrag == HP)
     {
