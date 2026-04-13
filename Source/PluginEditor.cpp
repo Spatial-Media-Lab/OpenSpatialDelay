@@ -1499,17 +1499,14 @@ void FilterGraphComponent::paint (juce::Graphics& g)
     g.drawRoundedRectangle (bounds.reduced (0.5f), 4.0f, 1.0f);
 
     // --- dB-to-Y mapping (used by both grid lines and curve) ---
-    float plotTop = 2.0f;           // top of drawable area (peak headroom)
-    float plotBot = h + 20.0f;      // extend PAST bottom edge so curve disappears off-screen
-    float passbaseY = plotTop + (h - plotTop) * 0.25f;  // 0 dB line at 25% of visible height
-    float dbPerPixelAbove = 18.0f / (passbaseY - plotTop);    // 18 dB headroom above baseline
-    float dbPerPixelBelow = 48.0f / (plotBot - passbaseY);    // 48 dB rolloff — steeper visual slope
+    // Uniform ±18 dB scale with 0 dB centered — proportional like EQ8
+    float plotTop = 2.0f;
+    float plotBot = h - 2.0f;
+    float passbaseY = plotTop + (plotBot - plotTop) * 0.5f;   // 0 dB at vertical center
+    float dbPerPixel = 18.0f / (passbaseY - plotTop);         // 18 dB above and below
 
     auto dbToY = [&] (float dB) -> float {
-        if (dB >= 0.0f)
-            return juce::jlimit (plotTop, passbaseY, passbaseY - dB / dbPerPixelAbove);
-        else
-            return juce::jlimit (passbaseY, plotBot, passbaseY - dB / dbPerPixelBelow);
+        return juce::jlimit (plotTop, plotBot, passbaseY - dB / dbPerPixel);
     };
 
     // Vertical grid lines at key frequencies (Observatory v6)
@@ -1647,8 +1644,8 @@ void FilterGraphComponent::mouseDrag (const juce::MouseEvent& e)
 
     // Vertical: resonance Q (drag up = more Q, drag down = less)
     float dy = dragStartY - static_cast<float> (e.y);  // positive = dragged up
-    float qDelta = dy * 0.05f;  // sensitivity: 20px drag = 1.0 Q change
-    float newQ = juce::jlimit (0.5f, 8.0f, dragStartQ + qDelta);
+    float qDelta = dy * 0.075f;  // sensitivity: ~13px drag = 1.0 Q change (full range in graph height)
+    float newQ = juce::jlimit (0.1f, 8.0f, dragStartQ + qDelta);
 
     if (currentDrag == HP)
     {

@@ -333,7 +333,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     // G8: High-Pass Resonance (was "HP Resonance")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterHPQ", 8), "High-Pass Resonance",
-        juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
+        juce::NormalisableRange<float> (0.1f, 8.0f, 0.01f, 0.4f), 0.707f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2); })));
 
@@ -348,7 +348,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout
     // G10: Low-Pass Resonance (was "LP Resonance")
     params.push_back (std::make_unique<juce::AudioParameterFloat> (
         juce::ParameterID ("filterLPQ", 10), "Low-Pass Resonance",
-        juce::NormalisableRange<float> (0.5f, 8.0f, 0.01f, 0.4f), 0.707f,
+        juce::NormalisableRange<float> (0.1f, 8.0f, 0.01f, 0.4f), 0.707f,
         juce::AudioParameterFloatAttributes().withStringFromValueFunction (
             [](float value, int) { return juce::String (value, 2); })));
 
