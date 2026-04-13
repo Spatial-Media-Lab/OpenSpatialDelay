@@ -1501,22 +1501,36 @@ void FilterGraphComponent::paint (juce::Graphics& g)
     // --- dB-to-Y mapping (used by both grid lines and curve) ---
     // Uniform ±18 dB scale with 0 dB centered — proportional like EQ8
     float plotTop = 2.0f;
-    float plotBot = h - 2.0f;
-    float passbaseY = plotTop + (plotBot - plotTop) * 0.5f;   // 0 dB at vertical center
-    float dbPerPixel = 18.0f / (passbaseY - plotTop);         // 18 dB above and below
+    float plotVisBot = h - 2.0f;          // visible graph bottom (for grid line bounds)
+    float passbaseY = plotTop + (plotVisBot - plotTop) * 0.5f;  // 0 dB at vertical center
+    float dbPerPixel = 18.0f / (passbaseY - plotTop);           // 18 dB above and below
 
     auto dbToY = [&] (float dB) -> float {
-        return juce::jlimit (plotTop, plotBot, passbaseY - dB / dbPerPixel);
+        return std::max (plotTop, passbaseY - dB / dbPerPixel);  // clamp top only — curve clips off-screen at bottom
     };
 
-    // Vertical grid lines at key frequencies (Observatory v6)
-    g.setColour (Colours_OSD::borderDim.withAlpha (alpha * 0.7f));
-    for (float freq : { 50.0f, 200.0f, 500.0f, 2000.0f, 5000.0f })
+    // --- Logarithmic frequency grid (EQ8-style per-decade subdivisions) ---
+    // Tier 1: subdivision lines at every integer multiple per decade (faintest)
+    g.setColour (Colours_OSD::borderDim.withAlpha (alpha * 0.25f));
+    for (int decade : { 10, 100, 1000, 10000 })
+    {
+        for (int mult = 2; mult <= 9; ++mult)
+        {
+            float freq = static_cast<float> (decade * mult);
+            if (freq < 20.0f || freq > 20000.0f) continue;
+            if (mult == 5) continue;  // drawn brighter below
+            float x = freqToX (freq);
+            g.drawVerticalLine (juce::roundToInt (x), bounds.getY() + 2, bounds.getBottom() - 2);
+        }
+    }
+    // Tier 2: half-decade anchors — 50, 500, 5k (medium brightness)
+    g.setColour (Colours_OSD::borderDim.withAlpha (alpha * 0.5f));
+    for (float freq : { 50.0f, 500.0f, 5000.0f })
     {
         float x = freqToX (freq);
         g.drawVerticalLine (juce::roundToInt (x), bounds.getY() + 2, bounds.getBottom() - 2);
     }
-    // Primary vertical grid lines (brighter)
+    // Tier 3: decade markers — 100, 1k, 10k (brightest)
     g.setColour (Colours_OSD::borderDim.withAlpha (alpha * 1.0f));
     for (float freq : { 100.0f, 1000.0f, 10000.0f })
     {
@@ -1524,33 +1538,39 @@ void FilterGraphComponent::paint (juce::Graphics& g)
         g.drawVerticalLine (juce::roundToInt (x), bounds.getY() + 2, bounds.getBottom() - 2);
     }
 
-    // Horizontal dB grid lines (EQ8-style)
-    for (float dB : { -12.0f, -6.0f, 0.0f, 6.0f, 12.0f, 18.0f })
+    // --- Horizontal dB grid lines with labels (EQ8-style) ---
+    {
+        auto* lfPtr = dynamic_cast<OSDLookAndFeel*> (&getLookAndFeel());
+        if (lfPtr) g.setFont (makeFont (lfPtr->jetbrainsRegular, 7.0f));
+        else       g.setFont (juce::FontOptions (7.0f));
+    }
+    for (float dB : { -12.0f, -6.0f, 0.0f, 6.0f, 12.0f })
     {
         float y = dbToY (dB);
-        if (y < bounds.getY() + 2 || y > bounds.getBottom() - 12) continue;
-        float lineAlpha = (dB == 0.0f) ? 0.6f : 0.35f;
+        if (y < bounds.getY() + 2 || y > plotVisBot) continue;
+        float lineAlpha = (dB == 0.0f) ? 0.6f : 0.3f;
         g.setColour (Colours_OSD::borderDim.withAlpha (alpha * lineAlpha));
         g.drawHorizontalLine (juce::roundToInt (y), bounds.getX() + 2, bounds.getRight() - 2);
+        // dB label on left edge
+        juce::String label = (dB > 0.0f) ? ("+" + juce::String ((int) dB))
+                                          : juce::String ((int) dB);
+        g.setColour (Colours_OSD::textDim.withAlpha (alpha * 0.5f));
+        g.drawText (label, (int) bounds.getX() + 3, juce::roundToInt (y) - 5,
+                    22, 10, juce::Justification::left);
     }
 
-    // Frequency labels — extended frequency marker set
+    // Frequency labels at bottom — decade markers only (EQ8-style)
     {
         auto* lfPtr = dynamic_cast<OSDLookAndFeel*> (&getLookAndFeel());
         if (lfPtr) g.setFont (makeFont (lfPtr->jetbrainsRegular, 8.0f));
         else       g.setFont (juce::FontOptions (8.0f));
     }
-    struct FreqLabel { const char* text; float freq; bool primary; };
-    static constexpr FreqLabel freqLabels[] = {
-        {"50", 50.0f, false}, {"200", 200.0f, false}, {"500", 500.0f, false},
-        {"2k", 2000.0f, false}, {"5k", 5000.0f, false},
-        {"100", 100.0f, true}, {"1k", 1000.0f, true}, {"10k", 10000.0f, true}
-    };
-    for (auto& fl : freqLabels)
+    g.setColour (Colours_OSD::textDim.withAlpha (alpha * 0.7f));
+    for (auto& [text, freq] : std::initializer_list<std::pair<const char*, float>>{
+             {"100", 100.0f}, {"1k", 1000.0f}, {"10k", 10000.0f}})
     {
-        g.setColour (Colours_OSD::textDim.withAlpha (alpha * (fl.primary ? 0.7f : 0.5f)));
-        int lw = (std::strlen (fl.text) >= 3) ? 24 : 20;
-        g.drawText (fl.text, juce::roundToInt (freqToX (fl.freq)) - lw / 2,
+        int lw = (std::strlen (text) >= 3) ? 24 : 20;
+        g.drawText (text, juce::roundToInt (freqToX (freq)) - lw / 2,
                     juce::roundToInt (h) - 11, lw, 10, juce::Justification::centred);
     }
 
@@ -1576,10 +1596,10 @@ void FilterGraphComponent::paint (juce::Graphics& g)
         }
     }
 
-    // Fill under curve
+    // Fill under curve (extend past bottom so fill clips at component edge)
     juce::Path fillPath (curve);
-    fillPath.lineTo (w, plotBot);
-    fillPath.lineTo (0.0f, plotBot);
+    fillPath.lineTo (w, h + 20.0f);
+    fillPath.lineTo (0.0f, h + 20.0f);
     fillPath.closeSubPath();
     g.setColour (Colours_OSD::accentViolet.withAlpha (0.10f * alpha));
     g.fillPath (fillPath);
