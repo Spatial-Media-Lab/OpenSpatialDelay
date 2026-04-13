@@ -16,9 +16,15 @@ The `O10Z` code is a short identifier used in the plugin display name (e.g., O10
 |---------|------|-------------|--------|
 | v1.0.0 | O100 | **Release v1.0.0** — all fixes issues #76–#200 squashed into one commit | 768c248 |
 
+## Post-release patches
+
+| Version | Code | Description | Commit |
+|---------|------|-------------|--------|
+| v1.0.1 | O101 | Fix Immersive HRTF bass boost — correct low-shelf filter profile index (issue #198) | 70cc5d8 |
+
 ## Next available
 
-**v1.0.1 / O101** (use for any post-release patches)
+**v1.0.2 / O102** (use for any post-release patches)
 
 ## Archive — internal patch builds (v1.0.1–v1.0.36)
 

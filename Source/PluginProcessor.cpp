@@ -1249,7 +1249,7 @@ void BinauralRenderer::setProfile (int profileIndex)
     // Design a low-shelf biquad filter to boost post-convolution output.
     // Applied per-source to the convolved signal — bass remains spatialized since
     // it amplifies whatever LF the HRTF captured at each direction.
-    lfShelfActive = (profileIndex == 1);  // Only MIT KEMAR needs compensation
+    lfShelfActive = (profileIndex == 5);  // Only MIT KEMAR needs compensation
     if (lfShelfActive)
     {
         // Low-shelf: +12 dB at 200 Hz, Q=0.7 (gentle slope)
