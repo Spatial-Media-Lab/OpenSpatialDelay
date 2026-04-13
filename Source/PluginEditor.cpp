@@ -1498,19 +1498,43 @@ void FilterGraphComponent::paint (juce::Graphics& g)
     g.setColour (Colours_OSD::borderDim);
     g.drawRoundedRectangle (bounds.reduced (0.5f), 4.0f, 1.0f);
 
-    // Grid lines at key frequencies (Observatory v6)
-    g.setColour (Colours_OSD::borderDim.withAlpha (alpha * 0.5f));
+    // --- dB-to-Y mapping (used by both grid lines and curve) ---
+    float plotTop = 2.0f;           // top of drawable area (peak headroom)
+    float plotBot = h + 20.0f;      // extend PAST bottom edge so curve disappears off-screen
+    float passbaseY = plotTop + (h - plotTop) * 0.25f;  // 0 dB line at 25% of visible height
+    float dbPerPixelAbove = 18.0f / (passbaseY - plotTop);    // 18 dB headroom above baseline
+    float dbPerPixelBelow = 48.0f / (plotBot - passbaseY);    // 48 dB rolloff — steeper visual slope
+
+    auto dbToY = [&] (float dB) -> float {
+        if (dB >= 0.0f)
+            return juce::jlimit (plotTop, passbaseY, passbaseY - dB / dbPerPixelAbove);
+        else
+            return juce::jlimit (passbaseY, plotBot, passbaseY - dB / dbPerPixelBelow);
+    };
+
+    // Vertical grid lines at key frequencies (Observatory v6)
+    g.setColour (Colours_OSD::borderDim.withAlpha (alpha * 0.7f));
     for (float freq : { 50.0f, 200.0f, 500.0f, 2000.0f, 5000.0f })
     {
         float x = freqToX (freq);
         g.drawVerticalLine (juce::roundToInt (x), bounds.getY() + 2, bounds.getBottom() - 2);
     }
-    // Primary grid lines (brighter)
-    g.setColour (Colours_OSD::borderDim.withAlpha (alpha * 0.8f));
+    // Primary vertical grid lines (brighter)
+    g.setColour (Colours_OSD::borderDim.withAlpha (alpha * 1.0f));
     for (float freq : { 100.0f, 1000.0f, 10000.0f })
     {
         float x = freqToX (freq);
         g.drawVerticalLine (juce::roundToInt (x), bounds.getY() + 2, bounds.getBottom() - 2);
+    }
+
+    // Horizontal dB grid lines (EQ8-style)
+    for (float dB : { -12.0f, -6.0f, 0.0f, 6.0f, 12.0f, 18.0f })
+    {
+        float y = dbToY (dB);
+        if (y < bounds.getY() + 2 || y > bounds.getBottom() - 12) continue;
+        float lineAlpha = (dB == 0.0f) ? 0.6f : 0.35f;
+        g.setColour (Colours_OSD::borderDim.withAlpha (alpha * lineAlpha));
+        g.drawHorizontalLine (juce::roundToInt (y), bounds.getX() + 2, bounds.getRight() - 2);
     }
 
     // Frequency labels — extended frequency marker set
@@ -1534,20 +1558,6 @@ void FilterGraphComponent::paint (juce::Graphics& g)
     }
 
     // --- Compute combined HP+LP magnitude response curve ---
-    // Layout: passband baseline in upper portion, peaks above, rolloff extends well past bottom
-    float plotTop = 2.0f;           // top of drawable area (peak headroom)
-    float plotBot = h + 20.0f;      // extend PAST bottom edge so curve disappears off-screen
-    float passbaseY = plotTop + (h - plotTop) * 0.25f;  // 0 dB line at 25% of visible height
-    float dbPerPixelAbove = 18.0f / (passbaseY - plotTop);    // 18 dB headroom above baseline
-    float dbPerPixelBelow = 48.0f / (plotBot - passbaseY);    // 48 dB rolloff — steeper visual slope
-
-    auto dbToY = [&] (float dB) -> float {
-        if (dB >= 0.0f)
-            return juce::jlimit (plotTop, passbaseY, passbaseY - dB / dbPerPixelAbove);
-        else
-            return juce::jlimit (passbaseY, plotBot, passbaseY - dB / dbPerPixelBelow);
-    };
-
     // Build the magnitude response path (2px steps for smoothness)
     juce::Path curve;
     bool started = false;
@@ -1631,9 +1641,9 @@ void FilterGraphComponent::mouseDrag (const juce::MouseEvent& e)
     float clampedX = juce::jlimit (0.0f, static_cast<float> (getWidth()), static_cast<float> (e.x));
     float freq = xToFreq (clampedX);
     if (currentDrag == HP)
-        hpFreq = juce::jlimit (20.0f, 5000.0f, freq);
+        hpFreq = juce::jlimit (20.0f, 20000.0f, freq);
     else
-        lpFreq = juce::jlimit (200.0f, 20000.0f, freq);
+        lpFreq = juce::jlimit (20.0f, 20000.0f, freq);
 
     // Vertical: resonance Q (drag up = more Q, drag down = less)
     float dy = dragStartY - static_cast<float> (e.y);  // positive = dragged up
