@@ -36,7 +36,7 @@
 - Up to 12 manually placeable delay taps with preset trajectory system
 - Cumulative pitch shifting across taps
 - ADM-OSC integration for interoperability with spatial audio ecosystems (by v1.0)
-- Open-source (initial release), with potential commercial licensing later
+- Open-source, licensed under GPL-3.0
 - macOS (Apple Silicon) + Windows (x64), VST3 + AU
 
 **Target delivery:** Usable v0.1 by end of March 2026.
@@ -69,7 +69,7 @@ A spatial delay plugin where each repeat occurs at a different, definable positi
 ### 2.5 Brand Identity
 - **Suite name:** Spatial Media Library
 - **First plugin:** OpenSpatialDelay
-- **License:** Open-source (initial), potential commercial licensing in future versions
+- **License:** GPL-3.0
 - **Distribution:** GitHub (initial), potential website sales later
 
 ---
@@ -1003,7 +1003,7 @@ The `Spatial64/` directory contains the proof-of-concept test plugin. Its code w
 This checklist covers the complete v1.0 release process, including freezing v0.9, migrating the repository to the Spatial Media Lab organization, and publishing the first public release.
 
 **Decisions finalized on 2026-03-18:**
-- **License:** Dual license — GPL-3.0 (open-source) + commercial license from Spatial Media Lab
+- **License:** GPL-3.0
 - **Repository:** Fresh repo under `github.com/Spatial-Media-Lab/OpenSpatialDelay` (not transfer)
 - **Git history:** Squash to single v1.0 commit for public repo; full dev history stays in archived private repo
 - **Downloads:** GitHub Releases page (not website)
@@ -1065,7 +1065,7 @@ Execute when v1.0 is feature-complete and tested:
 | 5 | `gh release create v1.0.0 --repo Spatial-Media-Lab/OpenSpatialDelay --title "v1.0.0" --notes "First public release"` | Release created |
 | 6 | Attach macOS + Windows builds to release | Both platforms downloadable |
 | 7 | Attach user manual PDF to release | Manual downloadable |
-| 8 | Verify LICENSE file visible at repo root | GPL-3.0 + commercial header |
+| 8 | Verify LICENSE file visible at repo root | GPL-3.0 header |
 
 #### Phase 5: Archive Personal Repo
 

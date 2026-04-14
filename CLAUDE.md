@@ -1,7 +1,7 @@
 # OpenSpatialDelay
 
 ## Why
-Spatial delay plugin — each echo lives in 3D space. VST3 + AU, macOS + Windows. Dual-licensed GPL-3.0 / Commercial (Spatial Media Lab).
+Spatial delay plugin — each echo lives in 3D space. VST3 + AU, macOS + Windows. Licensed under GPL-3.0. See LICENSE for full text.
 
 ## What
 - `Source/` — plugin processor, editor, DSP (PluginProcessor.cpp is ~175KB)

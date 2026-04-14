@@ -123,10 +123,8 @@ Over 30 bugs resolved during the v1.0 development cycle, including:
 
 ## Licensing
 
-OpenSpatialDelay is dual-licensed:
-
-- **GPL-3.0** — Free and open-source. Fork it, modify it, ship it under GPL.
-- **Commercial License** — Available from [Spatial Media Lab](https://spatialmedialab.org) for proprietary/closed-source use.
+### License
+Licensed under the [GNU General Public License v3.0 (GPL-3.0)](LICENSE).
 
 Third-party licenses and attribution are included in the Legal Notices document bundled with the release.
 

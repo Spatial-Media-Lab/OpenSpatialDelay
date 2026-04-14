@@ -1,8 +1,8 @@
 # Licensing Reference
 
-## Dual-License Model
+## License
 
-OpenSpatialDelay is dual-licensed: **GPL-3.0** (free/open-source) and **Commercial License** (proprietary/closed-source, via Spatial Media Lab). Both paths must be compatible with every distributed third-party component.
+OpenSpatialDelay is licensed under **GPL-3.0**. All distributed third-party components must be compatible with GPL-3.0.
 
 ## JUCE 8 Commercial Tiers (as of April 2026)
 
@@ -18,7 +18,7 @@ Source: [JUCE 8 EULA](https://juce.com/legal/juce-8-licence/) and [juce.com/get-
 
 ## Third-Party License Compatibility (verified 2026-04-05)
 
-All distributed third-party components are compatible with both GPL-3.0 and commercial licensing:
+All distributed third-party components are compatible with GPL-3.0:
 
 | Component | License | Commercial Use | Obligation |
 |-----------|---------|----------------|------------|

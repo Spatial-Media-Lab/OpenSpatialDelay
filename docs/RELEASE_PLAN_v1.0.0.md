@@ -15,7 +15,7 @@
 - **Closed bugs:** 30+ since v0.9
 - **Manual:** PDF + DOCX generated, update plan marked COMPLETED
 - **Legal notices:** Generated (DOCX)
-- **License:** Dual GPL-3.0 / Commercial, LICENSE file at repo root
+- **License:** GPL-3.0, LICENSE file at repo root
 - **Presets:** 70 factory presets compiled into binary
 - **Notion test DB:** Populated with manual test items (sections A-H)
 
@@ -62,7 +62,7 @@
 3. Verify AU + VST3 install to `~/Library/Audio/Plug-Ins/`
 4. Verify in REAPER: load plugin, cycle 3 presets, confirm audio
 5. Verify user manual PDF opens and TOC links work
-6. Verify LICENSE file at repo root has dual-license header
+6. Verify LICENSE file at repo root has GPL-3.0 header
 7. Verify legal notices doc generated (`docs/OpenSpatialDelay_Legal_Notices.docx`)
 8. Ensure `docs/RELEASE_TEST_CHECKLIST.md` counts match source code (23 formats, 8 algos, 70 presets, 14 trajectories)
 
@@ -140,7 +140,7 @@ Since Windows CI can only run after the repo goes public, and there is no local 
 | `docs/VERSION_HISTORY.md` | Current | Up to date through pre-release audit |
 | `docs/OpenSpatialDelay_Manual_v1.0.pdf` | Current | Manual update plan marked COMPLETED |
 | `docs/OpenSpatialDelay_Legal_Notices.docx` | Current | All third-party licenses covered |
-| `LICENSE` | Current | Dual GPL-3.0 / Commercial header |
+| `LICENSE` | Current | GPL-3.0 header |
 | `docs/RELEASE_NOTES_v1.0.0.md` | Current | Created 2026-04-08, referenced by `gh release create` |
 
 ### Documentation Discrepancy — RESOLVED (2026-04-08)
