@@ -31,8 +31,8 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. Installation instructions include the macOS Sequoia xattr command and are accurate for all supported platforms
 **Plans**: 2 plans
 Plans:
-- [ ] 01-01-PLAN.md — License cleanup: update 11 files from dual-license to GPL-3.0 only
-- [ ] 01-02-PLAN.md — Release metadata update and README system requirements/installation review
+- [x] 01-01-PLAN.md — License cleanup: update 11 files from dual-license to GPL-3.0 only
+- [x] 01-02-PLAN.md — Release metadata update and README system requirements/installation review
 
 ### Phase 2: Email Capture & Funding Infrastructure
 **Goal**: Visitors who want to follow the project have two working paths — email capture via Tally and direct Patreon support — before the website goes live
