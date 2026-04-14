@@ -29,7 +29,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. GitHub repo is publicly visible and the v1.0.0 Release page shows macOS and Windows binaries ready to download
   3. A documented list of supported OS versions, CPU architectures, and DAWs exists and can be referenced by the install page
   4. Installation instructions include the macOS Sequoia xattr command and are accurate for all supported platforms
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 01-01-PLAN.md — License cleanup: update 11 files from dual-license to GPL-3.0 only
+- [ ] 01-02-PLAN.md — Release metadata update and README system requirements/installation review
 
 ### Phase 2: Email Capture & Funding Infrastructure
 **Goal**: Visitors who want to follow the project have two working paths — email capture via Tally and direct Patreon support — before the website goes live
@@ -81,7 +84,7 @@ Phases execute in dependency order. Phase 4 (Content) depends on Phase 1 only an
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Repo & License Readiness | 0/? | Not started | - |
+| 1. Repo & License Readiness | 0/2 | Planning complete | - |
 | 2. Email Capture & Funding Infrastructure | 0/? | Not started | - |
 | 3. Personal Website | 0/? | Not started | - |
 | 4. Demo Content | 0/? | Not started | - |
