@@ -62,7 +62,7 @@ OpenSpatialDelay is the first plugin in the **Spatial Media Library** — an ope
 
 Grab the latest release from the [Releases page](https://github.com/Spatial-Media-Lab/OpenSpatialDelay/releases).
 
-- **macOS:** Download the AU and VST3 plugins and copy them to `~/Library/Audio/Plug-Ins/Components/` (AU) and `~/Library/Audio/Plug-Ins/VST3/` (VST3). Then remove the macOS quarantine flag — see [macOS security note](#macos-security-note) below.
+- **macOS:** Download the ZIP, extract it, then copy the `.component` file to `~/Library/Audio/Plug-Ins/Components/` (AU) and the `.vst3` bundle to `~/Library/Audio/Plug-Ins/VST3/` (VST3). Then remove the macOS quarantine flag — see [macOS security note](#macos-security-note-gatekeeper--sequoia) below.
 - **Windows:** Download the VST3 plugin and copy it to `C:\Program Files\Common Files\VST3\`.
 
 ### Build from source
@@ -83,7 +83,7 @@ On macOS, the post-build script automatically copies the AU and VST3 plugins to 
 - [libmysofa](https://github.com/hoene/libmysofa) v1.3.2 (CMake FetchContent)
 - zlib (system on macOS, [vcpkg](https://vcpkg.io/) on Windows)
 
-### macOS security note
+### macOS security note (Gatekeeper / Sequoia)
 
 OpenSpatialDelay is not yet notarized with Apple. macOS will block the plugin on first launch with a "cannot be verified" warning. To fix this, open Terminal and run:
 
@@ -111,7 +111,7 @@ See the [User Manual](docs/OpenSpatialDelay_Manual_v1.0.pdf) for the full guide.
 | **macOS** | Apple Silicon (arm64), macOS 12+ |
 | **Windows** | x64, Windows 10+ |
 | **Formats** | VST3, AU (macOS only) |
-| **DAWs** | Any VST3/AU host — tested in Reaper; expected to work in Logic Pro, Ableton Live, Cubase, Bitwig, and others |
+| **DAWs** | Tested: REAPER. Should work with any VST3/AU host (Logic Pro, Ableton Live, Cubase, Bitwig, and others) |
 
 ## Documentation
 
