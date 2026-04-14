@@ -12,6 +12,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { execSync } = require("child_process");
 const {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   ImageRun, Header, Footer, AlignmentType, LevelFormat,
@@ -26,6 +27,7 @@ const {
 const DOCS_DIR = __dirname;
 const ASSETS_DIR = path.join(DOCS_DIR, "assets");
 const OUTPUT_PATH = path.join(DOCS_DIR, "OpenSpatialDelay_Legal_Notices.docx");
+const OUTPUT_PDF_PATH = path.join(DOCS_DIR, "OpenSpatialDelay_Legal_Notices.pdf");
 
 const C = {
   navy:       "001633",
@@ -668,6 +670,20 @@ async function buildDocument() {
   fs.writeFileSync(OUTPUT_PATH, buffer);
   console.log(`Legal notices generated: ${OUTPUT_PATH}`);
   console.log(`File size: ${(buffer.length / 1024).toFixed(1)} KB`);
+
+  // Convert DOCX → PDF using LibreOffice headless.
+  // Matches the repo's established approach (no in-script PDF library).
+  try {
+    execSync(
+      `soffice --headless --convert-to pdf "${OUTPUT_PATH}" --outdir "${DOCS_DIR}"`,
+      { stdio: "inherit" }
+    );
+    console.log(`Wrote ${OUTPUT_PDF_PATH}`);
+  } catch (err) {
+    console.error("PDF conversion failed. Is LibreOffice installed and `soffice` on PATH?");
+    console.error("macOS install: brew install --cask libreoffice");
+    throw err;
+  }
 }
 
 buildDocument().catch(err => {
