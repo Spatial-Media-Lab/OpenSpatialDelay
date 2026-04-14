@@ -158,7 +158,7 @@ Source: [JUCE 8 EULA](https://juce.com/legal/juce-8-licence/) and [juce.com/get-
 
 ### Third-party license compatibility (verified 2026-04-05)
 
-All distributed third-party components are compatible with both GPL-3.0 and commercial licensing:
+All distributed third-party components are compatible with GPL-3.0:
 
 | Component | License | Commercial Use | Obligation |
 |-----------|---------|----------------|------------|
