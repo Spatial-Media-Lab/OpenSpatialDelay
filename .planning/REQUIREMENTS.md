@@ -71,30 +71,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REPO-01 | -- | Pending |
-| REPO-02 | -- | Pending |
-| REPO-03 | -- | Pending |
-| REPO-04 | -- | Pending |
-| WEB-01 | -- | Pending |
-| WEB-02 | -- | Pending |
-| WEB-03 | -- | Pending |
-| DIST-01 | -- | Pending |
-| DIST-02 | -- | Pending |
-| DIST-03 | -- | Pending |
-| CONT-01 | -- | Pending |
-| CONT-02 | -- | Pending |
-| CONT-03 | -- | Pending |
-| ANNC-01 | -- | Pending |
-| ANNC-02 | -- | Pending |
-| ANNC-03 | -- | Pending |
-| ANNC-04 | -- | Pending |
-| ANNC-05 | -- | Pending |
+| REPO-01 | Phase 1 | Pending |
+| REPO-02 | Phase 1 | Pending |
+| REPO-03 | Phase 1 | Pending |
+| REPO-04 | Phase 1 | Pending |
+| WEB-01 | Phase 3 | Pending |
+| WEB-02 | Phase 3 | Pending |
+| WEB-03 | Phase 3 | Pending |
+| DIST-01 | Phase 2 | Pending |
+| DIST-02 | Phase 2 | Pending |
+| DIST-03 | Phase 2 | Pending |
+| CONT-01 | Phase 4 | Pending |
+| CONT-02 | Phase 4 | Pending |
+| CONT-03 | Phase 4 | Pending |
+| ANNC-01 | Phase 5 | Pending |
+| ANNC-02 | Phase 5 | Pending |
+| ANNC-03 | Phase 5 | Pending |
+| ANNC-04 | Phase 5 | Pending |
+| ANNC-05 | Phase 5 | Pending |
 
 **Coverage:**
 - v1.0 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18
+- Mapped to phases: 18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-14*
-*Last updated: 2026-04-14 after initial definition*
+*Last updated: 2026-04-14 after roadmap creation*
