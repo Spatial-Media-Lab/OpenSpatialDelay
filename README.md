@@ -131,10 +131,8 @@ For bug reports and feature requests, please [open an issue](https://github.com/
 
 ## License
 
-OpenSpatialDelay is dual-licensed:
-
-- **[GPL-3.0](LICENSE)** — free for open-source use
-- **Commercial License** — available for proprietary/closed-source projects. Contact [Spatial Media Lab](https://spatialmedialab.org) for details.
+OpenSpatialDelay is free software, licensed under the
+**[GNU General Public License v3.0 (GPL-3.0)](LICENSE)**.
 
 HRTF data from third-party sources under their respective licenses (MIT, Apache 2.0, CC BY, Public Domain). See [HRTF/](HRTF/) for details.
 

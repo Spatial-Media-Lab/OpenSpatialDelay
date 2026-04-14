@@ -552,20 +552,10 @@ function buildProjectLicense() {
   items.push(heading1("Project License"));
 
   items.push(bodyPara([
-    bodyText("OpenSpatialDelay is dual-licensed:"),
+    bodyText("OpenSpatialDelay is free software, licensed under the "),
+    boldText("GNU General Public License v3.0 (GPL-3.0)"),
+    bodyText(". Any derivative work must also be released under the GPL-3.0. The full license text is included in the LICENSE file distributed with the source code."),
   ]));
-
-  items.push(bodyPara([
-    boldText("1. GNU General Public License v3.0 (GPL-3.0) "),
-    bodyText("\u2014 for open-source use. Any derivative work must also be released under the GPL-3.0. The full license text is included in the LICENSE file distributed with the source code."),
-  ]));
-
-  items.push(bodyPara([
-    boldText("2. Commercial License "),
-    bodyText("\u2014 for use in proprietary or closed-source products. Contact Spatial Media Lab for commercial licensing terms."),
-  ]));
-
-  items.push(spacer(8));
 
   items.push(bodyPara([
     bodyText("Copyright (C) 2026 Spatial Media Lab ("),

@@ -139,10 +139,10 @@ The dry/wet mix happens in a single post-render stage in processBlock — render
 ### ITD delay line
 For MIT KEMAR SOFA file, ITD values are always 0 (embedded in HRIR waveform). The ITD delay line is effectively a pass-through for this dataset.
 
-## Licensing & Monetization
+## Licensing
 
-### Dual-license model
-OpenSpatialDelay is dual-licensed: **GPL-3.0** (free/open-source) and **Commercial License** (proprietary/closed-source, via Spatial Media Lab). Both paths must be compatible with every distributed third-party component.
+### License
+OpenSpatialDelay is licensed under **GPL-3.0**. All distributed third-party components must be compatible with GPL-3.0.
 
 ### JUCE 8 commercial tiers (as of April 2026)
 

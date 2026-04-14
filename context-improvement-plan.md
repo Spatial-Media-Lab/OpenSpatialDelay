@@ -126,14 +126,13 @@ Create `docs/VERSION_REGISTRY.md` containing the full table (moved from CLAUDE.m
 
 **Best practice alignment:** Same as #3 — keep CLAUDE.md focused on build commands, style rules, and critical workflow rules. Reference material belongs in docs [Source 2].
 
-**Exact edit:** In `CLAUDE.md`, replace the full licensing section with:
+**Exact edit:** In `CLAUDE.md`, replace the licensing line with:
 
 ```markdown
-## Licensing
-Dual-licensed: GPL-3.0 + Commercial. See `docs/LICENSING.md` for tiers, third-party compatibility table, and attribution obligations.
+Licensed under GPL-3.0. See LICENSE for full text.
 ```
 
-Create `docs/LICENSING.md` with the full content moved from CLAUDE.md.
+Move the full licensing reference content to `agent_docs/licensing.md`.
 
 ### 5. Audit and consolidate user-level skills
 
