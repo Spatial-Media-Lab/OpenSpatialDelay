@@ -21,7 +21,8 @@ Transition the codebase from dual-licensed (GPL-3.0 + Commercial) to GPL-3.0 onl
 
 ### Release Assets
 - **D-05:** v1.0.0 release must include macOS arm64 binary + Windows x64 binary. No separate macOS x86_64 build (Intel users use Rosetta 2).
-- **D-06:** Windows binary is produced by triggering the existing `build-windows.yml` CI workflow on the v1.0.0 tag, then uploading the artifact to the GitHub Release.
+- **D-06:** Windows binary is produced by triggering the existing `build-windows.yml` CI workflow — but CI tokens are exhausted for this month. The Windows build MUST happen AFTER the repo goes public (Phase 3+), not during Phase 1. Phase 1 prepares the macOS arm64 release only.
+- **D-06b:** Windows binary addition to the release is deferred to post-Phase 3 when CI tokens are available again.
 
 ### System Requirements
 - **D-07:** System requirements go in a new section in README.md (not a separate file).
@@ -29,7 +30,7 @@ Transition the codebase from dual-licensed (GPL-3.0 + Commercial) to GPL-3.0 onl
 
 ### Repo Visibility
 - **D-09:** Repo stays private through Phase 1. The "make repo public" action is moved to Phase 3 scope.
-- **D-10:** REPO-02 success criterion is redefined for Phase 1 as: "Release v1.0.0 is prepared with correct binaries and metadata, ready to go public." The "publicly visible" part is a Phase 3 deliverable.
+- **D-10:** REPO-02 success criterion is redefined for Phase 1 as: "Release v1.0.0 is prepared with macOS arm64 binary and metadata, ready to go public." The "publicly visible" part and Windows binary are Phase 3+ deliverables.
 
 ### Claude's Discretion
 - Order of file updates during license cleanup
@@ -92,6 +93,7 @@ Transition the codebase from dual-licensed (GPL-3.0 + Commercial) to GPL-3.0 onl
 ## Deferred Ideas
 
 - **Make repo public** — Moved to Phase 3 (after website is live, so visitors have a full landing page to reach)
+- **Windows x64 binary** — CI tokens exhausted this month. Build and attach to release after repo goes public (Phase 3+) when CI is available again.
 - **Manual PDF regeneration** — User handles this manually after generator scripts are updated
 - **macOS x86_64 (Intel) binary** — Not included in v1.0.0; Rosetta 2 covers Intel users. Can be added to a future release if requested.
 
