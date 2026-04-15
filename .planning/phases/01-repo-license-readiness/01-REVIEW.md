@@ -1,108 +1,197 @@
 ---
 phase: 01-repo-license-readiness
-reviewed: 2026-04-14T14:45:00Z
+reviewed: 2026-04-15T14:15:00Z
 depth: standard
-files_reviewed: 11
+files_reviewed: 4
 files_reviewed_list:
-  - LICENSE
-  - README.md
-  - CLAUDE.md
-  - agent_docs/licensing.md
-  - SPECIFICATION.md
   - docs/generate_manual.js
   - docs/generate_legal_notices.js
-  - docs/RELEASE_NOTES_v1.0.0.md
-  - docs/RELEASE_PLAN_v1.0.0.md
-  - context-improvement-plan.md
-  - context-audit-report.md
+  - scripts/package_macos_release.sh
+  - .gitignore
 findings:
   critical: 0
-  warning: 0
-  info: 3
-  total: 3
+  warning: 2
+  info: 5
+  total: 7
 status: issues_found
 ---
 
-# Phase 1: Code Review Report
+# Phase 01: Code Review Report (Gap-Closure Re-Review)
 
-**Reviewed:** 2026-04-14T14:45:00Z
+**Reviewed:** 2026-04-15T14:15:00Z
 **Depth:** standard
-**Files Reviewed:** 11
-**Status:** issues_found (Info only — no Critical or Warning)
+**Files Reviewed:** 4
+**Status:** issues_found
 
 ## Summary
 
-Phase 1 is a license transition from OSD dual-license / commercial to GPL-3.0 only across 11 files. The transition is executed cleanly.
+This re-review scopes to the phase-01 gap-closure work (plans 01-03 and 01-04) that
+split third-party legal notices out of the user manual into a standalone PDF and
+added a macOS release packaging script. Diff base is `d30ddbb^..HEAD` covering
+commits `517a39b`, `df5035e`, `e815312`, `d63e7f5`.
 
-Verified outcomes:
+Overall the changes are small, focused, and safe. No critical security or
+correctness issues were found. Two warnings cover a shell-injection antipattern
+in the LibreOffice invocation and missing stale-state cleanup in the packager.
+Five info-level items cover dead code, brittle error paths, and minor robustness
+improvements. The packaging script uses `set -euo pipefail` correctly, quotes
+interpolated paths throughout, and guards all required inputs before staging.
 
-- **OSD license text is consistent across all 11 files.** Every OSD license statement now reads "GPL-3.0" (or the full "GNU General Public License v3.0 (GPL-3.0)" expansion). No OSD dual-license or commercial-license wording remains in any reviewed file.
-- **JUCE's dual-license descriptions are preserved.** Both JS generators (`generate_manual.js:1435`, `generate_legal_notices.js:293`) correctly still describe JUCE as dual-licensed (GPL-3.0 / commercial from Raw Material Software Limited), which is factually accurate. The table rows listing JUCE 8 as "GPL-3.0 / Commercial" (manual.js:1425, notices.js:282) are also preserved. This matches the context brief: JUCE descriptions SHOULD remain dual-license.
-- **JavaScript generators are syntactically valid.** `node --check` passes for both `docs/generate_manual.js` and `docs/generate_legal_notices.js`. Function signatures, `require`s, table structures, and `licenseBlock()` helpers all consistent. No broken edits around the license blocks.
-- **README internal link target resolves.** `[macOS security note](#macos-security-note-gatekeeper--sequoia)` at line 65 correctly targets heading "### macOS security note (Gatekeeper / Sequoia)" at line 86. GitHub slugifier rules produce a match (double-hyphen comes from spaces around the `/`).
-- **README other linked paths exist:** `LICENSE`, `HRTF/`, `docs/OpenSpatialDelay_Manual_v1.0.pdf`, `docs/VERSION_HISTORY.md`, `docs/assets/screenshot.png`, `docs/assets/sml-logo.png` — all present.
-- **README heading hierarchy is flat H2 with H3 sub-sections under Installation only.** No hierarchy violations.
-- **LICENSE file header correctly names Spatial Media Lab + Andrew Rahman and drops any "dual-license" preamble.** Body is standard GPL-3.0 v3 text.
-- **CLAUDE.md `## Why` line now reads "Licensed under GPL-3.0. See LICENSE for full text."** No stale "Spatial Media Lab" commercial-license hint.
-- **`agent_docs/licensing.md` correctly frames OSD as GPL-3.0 while preserving the factual JUCE tier table.**
+## Warnings
 
-Findings below are Info-only style/consistency notes. None block the license transition phase.
+### WR-01: `execSync` with shell interpolation is a command-injection antipattern
+
+**File:** `docs/generate_legal_notices.js:675-678`
+**Issue:** The PDF conversion passes `OUTPUT_PATH` and `DOCS_DIR` directly into a
+shell-interpreted command string via `execSync`. Both values are derived from
+`__dirname`, so there is no external attacker surface today, but if the repo is
+checked out to a path containing a double quote, dollar sign, or backtick (e.g.
+`/Users/alice's work/openspatialdelay`), the command will either break or execute
+unintended shell expansion. This is the textbook pattern flagged by code-quality
+tools and makes the script needlessly fragile across developer machines.
+
+**Fix:** Use `execFileSync` to bypass shell parsing entirely:
+
+```js
+const { execFileSync } = require("child_process");
+// ...
+try {
+  execFileSync(
+    "soffice",
+    ["--headless", "--convert-to", "pdf", OUTPUT_PATH, "--outdir", DOCS_DIR],
+    { stdio: "inherit" }
+  );
+  console.log(`Wrote ${OUTPUT_PDF_PATH}`);
+} catch (err) {
+  console.error("PDF conversion failed. Is LibreOffice installed and `soffice` on PATH?");
+  console.error("macOS install: brew install --cask libreoffice");
+  throw err;
+}
+```
+
+### WR-02: Packager does not clear stale `dist/Legal/` before staging
+
+**File:** `scripts/package_macos_release.sh:40-43`
+**Issue:** `mkdir -p "$LEGAL_DIR"` followed by two `cp` commands will leave any
+stale files from a previous packaging run inside `dist/Legal/`. If a filename
+inside the legal payload ever changes (e.g. the PDF is renamed) or a developer
+manually drops a file into `dist/Legal/` for testing, the resulting ZIP will
+contain unintended content. Because the ZIP is produced with `zip -r .` from
+`$DIST_DIR`, any stray file under `dist/Legal/` ships to end users.
+
+**Fix:** Remove the staging directory before re-creating it, so each packaging
+run is deterministic:
+
+```bash
+# Stage Legal/ inside dist/.
+rm -rf "$LEGAL_DIR"
+mkdir -p "$LEGAL_DIR"
+cp "$LEGAL_PDF"   "$LEGAL_DIR/OpenSpatialDelay_Legal_Notices.pdf"
+cp "$LICENSE_SRC" "$LEGAL_DIR/LICENSE.txt"
+```
 
 ## Info
 
-### IN-01: libmysofa license disagreement across documentation
+### IN-01: Dead code — `buildLegalNotices()` is defined but never called
 
-**File:** `SPECIFICATION.md:82` and `SPECIFICATION.md:487`
-**Issue:** Both lines state `libmysofa (LGPL 2.1+ — compatible with open-source distribution)`. Every other authoritative reference in the repo lists libmysofa v1.3.2 as BSD-3-Clause:
+**File:** `docs/generate_manual.js:1413`
+**Issue:** Plan 01-03 removed the `...buildLegalNotices()` spread at line ~1687
+and the TOC entry at line ~519, but left the ~270-line `buildLegalNotices()`
+function definition in place. It is now orphaned dead code. Keeping it invites
+drift: future edits to the third-party table in this function will silently have
+no effect, and a reviewer glancing at the file may assume legal notices are still
+in the manual.
 
-- `agent_docs/licensing.md:26` → `| libmysofa v1.3.2 | BSD-3-Clause | ...`
-- `docs/generate_manual.js:1426` → `"libmysofa v1.3.2 (SOFA File Reader)", "BSD-3-Clause", ...`
-- `docs/generate_legal_notices.js:283` → `"libmysofa (SOFA File Reader)", "1.3.2", "BSD-3-Clause", ...`
-- `context-audit-report.md:166` → `| libmysofa v1.3.2 | BSD-3-Clause | ...`
+**Fix:** Delete the `buildLegalNotices()` function (and the
+`// SECTION 12: THIRD-PARTY NOTICES` banner comment that precedes it) from
+`generate_manual.js`. The canonical source of this content now lives in
+`generate_legal_notices.js`.
 
-The BSD-3-Clause designation is consistent with the BSD-3-Clause notice block emitted in `generate_legal_notices.js:314`. libmysofa upstream (github.com/hoene/libmysofa) switched from LGPL to BSD-3-Clause at v1.x. This is a pre-existing discrepancy, not introduced by Phase 1, but it surfaces in a file within Phase 1 review scope. Flagging for visibility.
+### IN-02: Packager writes ZIP to repo root rather than `dist/` output dir
 
-**Fix:** In `SPECIFICATION.md`, update line 82 and line 487 to state `BSD-3-Clause`. Example:
+**File:** `scripts/package_macos_release.sh:20`
+**Issue:** `ZIP_PATH="$REPO_ROOT/OpenSpatialDelay-$VERSION-macOS-arm64.zip"` places
+the release artifact at the repo root. `.gitignore` correctly excludes it with
+`OpenSpatialDelay-v*-macOS-*.zip`, but putting build outputs at the repo root
+mixes generated artifacts with source files and is inconsistent with the
+established `build/` and `dist/` staging convention.
 
-```diff
-- **Spatial audio HRTF parsing:** libmysofa (LGPL 2.1+ — compatible with open-source distribution)
-+ **Spatial audio HRTF parsing:** libmysofa (BSD-3-Clause — compatible with GPL-3.0 distribution)
-```
-
-and
-
-```diff
-- **Parser library:** `libmysofa` (LGPL 2.1+) — lightweight C library for reading SOFA files. Compiles natively on macOS and Windows.
-+ **Parser library:** `libmysofa` (BSD-3-Clause) — lightweight C library for reading SOFA files. Compiles natively on macOS and Windows.
-```
-
-Optional: defer to a separate follow-up since it's outside the stated Phase 1 scope (license transition only).
-
-### IN-02: Generators not re-run after JS edits — stale DOCX/PDF artifacts
-
-**File:** `docs/generate_manual.js`, `docs/generate_legal_notices.js`, `docs/OpenSpatialDelay_Manual_v1.0.pdf`, `docs/OpenSpatialDelay_Legal_Notices.docx` (output of the generators, not in review scope)
-**Issue:** Phase 1 context states "The generators were not re-run as part of this phase." Both JS files were edited (or verified) in Phase 1, but the `.pdf` and `.docx` they produce are binary artifacts that will still reflect any pre-transition text they were last built from. `docs/RELEASE_PLAN_v1.0.0.md:142–143` lists them as "Current", and `docs/RELEASE_PLAN_v1.0.0.md:65–66` specifically says "Verify user manual PDF opens and TOC links work" and "Verify LICENSE file at repo root has GPL-3.0 header" as release gates. If the manual PDF still contains any stale license wording, the release checklist's documentation-consistency claim is broken.
-
-This is informational, not a bug in the reviewed JS source. Generator output verification belongs to a later release-gate phase.
-
-**Fix:** Before v1.0.0 release, run:
+**Fix:** Write the ZIP to `dist/` (or a sibling `release/` directory) so all
+generated artifacts live under a single ignored path:
 
 ```bash
-node docs/generate_manual.js
-node docs/generate_legal_notices.js
+ZIP_PATH="$DIST_DIR/../OpenSpatialDelay-$VERSION-macOS-arm64.zip"
+# or
+RELEASE_DIR="$REPO_ROOT/release"
+mkdir -p "$RELEASE_DIR"
+ZIP_PATH="$RELEASE_DIR/OpenSpatialDelay-$VERSION-macOS-arm64.zip"
 ```
 
-and commit the regenerated `.docx` / `.pdf` (or regenerate the PDF via whichever tool converts `.docx` → `.pdf` in the current workflow). Spot-check the "Project License" section and "Third-Party Notices → JUCE" section of each generated document.
+If you keep the current location, at minimum document the output path in the
+header comment so users know where to look.
 
-### IN-03: `context-audit-report.md` and `context-improvement-plan.md` are historical snapshots, not live docs
+### IN-03: VERSION argument is not validated for safe filename characters
 
-**File:** `context-audit-report.md`, `context-improvement-plan.md`
-**Issue:** These two files are review-scope per the config but are dated 2026-04-10 audit/plan artifacts. They contain no OSD dual-license or commercial-license claims (only passing `dual` mentions relating to dual-head pitch, dual Notion integrations, etc. — unrelated to licensing) so they required no Phase 1 edit. They do cite the CLAUDE.md licensing section and reference "Licensing tables" that may now be slimmed (per their own recommendations #1 and #4). This is expected for historical planning documents and not a defect.
+**File:** `scripts/package_macos_release.sh:11-15`
+**Issue:** `VERSION` is interpolated into a filename without format validation.
+A developer typo like `bash scripts/package_macos_release.sh "v1.0 final"` or
+`bash scripts/package_macos_release.sh /` produces a confusingly named ZIP
+(`OpenSpatialDelay-v1.0 final-macOS-arm64.zip`) or writes to an unexpected path.
+This is not an injection issue (quoting is correct), just a usability guard.
 
-**Fix:** None required. If freshness matters, add a "Status: historical snapshot (2026-04-10)" banner at the top of both files so future readers do not treat them as current-state references. Purely cosmetic.
+**Fix:** Validate against the semver-ish pattern used elsewhere in the repo:
+
+```bash
+if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "ERROR: VERSION must match vX.Y.Z (got: '$VERSION')" >&2
+  exit 2
+fi
+```
+
+### IN-04: `find -maxdepth 4` may miss nested plugin bundles
+
+**File:** `scripts/package_macos_release.sh:31`
+**Issue:** The guard `find "$DIST_DIR" -maxdepth 4 \( -name "*.vst3" -o -name
+"*.component" \)` assumes the bundle sits within four directory levels of
+`dist/`. If a developer stages under `dist/macOS/Release/VST3/Foo.vst3` (five
+levels) the guard will false-negative and abort with "No .vst3 or .component
+found" even though the payload is staged correctly. Depth 4 is probably fine for
+the current layout, but the limit is silent and easy to trip.
+
+**Fix:** Remove `-maxdepth 4` (the search is fast and `dist/` is small), or
+raise it explicitly with a comment justifying the ceiling:
+
+```bash
+# -maxdepth 6 covers dist/macOS/Release/VST3/Name.vst3/Contents/... layouts
+if ! find "$DIST_DIR" -maxdepth 6 \( -name "*.vst3" -o -name "*.component" \) -print -quit | grep -q .; then
+  echo "ERROR: No .vst3 or .component found under $DIST_DIR. Build the plugin first." >&2
+  exit 1
+fi
+```
+
+Note also that the current form pipes `find` output to `grep -q .`, which works
+but is less idiomatic than `-print -quit` (which exits `find` on the first
+match).
+
+### IN-05: Inconsistent error recovery — DOCX is kept on PDF failure
+
+**File:** `docs/generate_legal_notices.js:668-684`
+**Issue:** If `Packer.toBuffer` succeeds but `soffice` fails, the DOCX is written
+and left on disk while the PDF step throws. The script's downstream consumer
+(`package_macos_release.sh`) guards on the PDF, so the failure is caught — but
+re-running the script will still regenerate the DOCX first, which is the
+expected happy path. The minor inconsistency: the top-level `buildDocument()`
+`catch` does `process.exit(1)` while the inner `catch` `throw`s, so the two
+logging lines ("PDF conversion failed..." and "Error generating legal notices:")
+are both printed for the same error. Not harmful, just noisy.
+
+**Fix:** Either drop the inner `try/catch` and rely on the top-level handler
+(keeping only the install hint as a `console.error` before re-throwing), or
+suppress the generic outer message when the inner one has already printed.
+Low-priority polish.
 
 ---
 
-_Reviewed: 2026-04-14T14:45:00Z_
+_Reviewed: 2026-04-15T14:15:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
