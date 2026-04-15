@@ -36,7 +36,8 @@ fi
 [[ -f "$LEGAL_PDF"   ]] || { echo "ERROR: missing $LEGAL_PDF — run node docs/generate_legal_notices.js first" >&2; exit 1; }
 [[ -f "$LICENSE_SRC" ]] || { echo "ERROR: missing $LICENSE_SRC" >&2; exit 1; }
 
-# Stage Legal/ inside dist/.
+# Stage Legal/ inside dist/ (clear stale contents for deterministic output).
+rm -rf "$LEGAL_DIR"
 mkdir -p "$LEGAL_DIR"
 cp "$LEGAL_PDF"   "$LEGAL_DIR/OpenSpatialDelay_Legal_Notices.pdf"
 cp "$LICENSE_SRC" "$LEGAL_DIR/LICENSE.txt"
