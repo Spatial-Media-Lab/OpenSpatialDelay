@@ -1687,8 +1687,6 @@ async function buildManual() {
     new Paragraph({ children: [new PageBreak()] }),
     ...buildTroubleshooting(),
     new Paragraph({ children: [new PageBreak()] }),
-    ...buildLegalNotices(),
-    new Paragraph({ children: [new PageBreak()] }),
     ...buildBackPage(),
   ];
 
