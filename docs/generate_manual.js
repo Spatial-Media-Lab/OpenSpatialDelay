@@ -517,7 +517,6 @@ function buildTOC() {
     tocEntry("Receive (Incoming Control)", "adm-osc", 2),
     tocEntry("Send (Broadcast Positions)", "adm-osc", 2),
     tocEntry("Troubleshooting", "troubleshooting"),
-    tocEntry("Third-Party Notices", "legal-notices"),
   ];
   return entries;
 }
