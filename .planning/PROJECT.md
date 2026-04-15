@@ -76,7 +76,7 @@ Release Plan scope — see REQUIREMENTS.md for REQ-IDs.
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Drop commercial license, GPL-3.0 only | Plugin is free; revenue comes from Patreon supporters, not per-seat sales | -- Pending |
+| Drop commercial license, GPL-3.0 only | Plugin is free; revenue comes from Patreon supporters, not per-seat sales | Validated in Phase 1 (2026-04-15) — repo/docs clean, release asset compliant |
 | Patreon as funding model | Funds entire spatial audio tools pipeline; supporters get feature requests + future exclusive plugins | -- Pending |
 | Tally for email capture | Free tier, lightweight, no code needed | -- Pending |
 | Website + mailing list first | Enables social posts immediately; rest can ship later | -- Pending |
