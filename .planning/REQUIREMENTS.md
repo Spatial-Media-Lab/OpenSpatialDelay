@@ -22,7 +22,7 @@ Requirements for the public launch. Each maps to roadmap phases.
 
 ### Distribution & Funding
 
-- [ ] **DIST-01**: Tally email capture form live — optional email, GDPR consent checkbox, redirect to GitHub Releases
+- [ ] **DIST-01**: Tally email capture form live — required email, GDPR consent checkbox, thank-you screen with manual macOS + Windows download buttons linking to the v1.0.0 GitHub Release assets
 - [ ] **DIST-02**: Privacy policy page published (required for GDPR compliance)
 - [ ] **DIST-03**: Patreon page published with 2+ posts and patron-value framing (spatial audio tools pipeline pitch)
 
@@ -58,7 +58,6 @@ Explicitly excluded. Documented to prevent scope creep.
 
 | Feature | Reason |
 |---------|--------|
-| Download gate / mandatory email | Destroys GPL plugin adoption; community shares direct links |
 | Plugin code changes | No new DSP features this milestone — plugin is shipped |
 | AAX format support | VST3 + AU only per project constraints |
 | Mobile or web versions | Desktop plugin only |
