@@ -12,7 +12,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { execSync } = require("child_process");
+const { execFileSync } = require("child_process");
 const {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   ImageRun, Header, Footer, AlignmentType, LevelFormat,
@@ -674,8 +674,9 @@ async function buildDocument() {
   // Convert DOCX → PDF using LibreOffice headless.
   // Matches the repo's established approach (no in-script PDF library).
   try {
-    execSync(
-      `soffice --headless --convert-to pdf "${OUTPUT_PATH}" --outdir "${DOCS_DIR}"`,
+    execFileSync(
+      "soffice",
+      ["--headless", "--convert-to", "pdf", OUTPUT_PATH, "--outdir", DOCS_DIR],
       { stdio: "inherit" }
     );
     console.log(`Wrote ${OUTPUT_PDF_PATH}`);
