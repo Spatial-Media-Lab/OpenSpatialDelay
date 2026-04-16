@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "PAUSED at 03-04 Task 1 (human checkpoint: capture 11 v1.0.0 REAPER screenshots)"
-last_updated: "2026-04-16T22:25:39.944Z"
+stopped_at: Completed 03-04-PLAN.md (asset regeneration via screenshot_tool)
+last_updated: "2026-04-16T22:50:43.972Z"
 last_activity: 2026-04-16
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 20
-  completed_plans: 13
-  percent: 65
+  completed_plans: 14
+  percent: 70
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-14)
 ## Current Position
 
 Phase: 03 (personal-website) — EXECUTING
-Plan: 5 of 9
+Plan: 6 of 9
 Status: Ready to execute
 Last activity: 2026-04-16
 
@@ -57,6 +57,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P01 | 5min | 3 tasks | 2 files |
 | Phase 03 P02 | 3min | 3 tasks | 5 files |
 | Phase 03 P03 | 3min | 2 tasks | 4 files |
+| Phase 03 P04 | 5min | 3 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -80,6 +81,8 @@ Recent decisions affecting current work:
 - [Phase 03]: Plan 02: scripts/verify-production.sh migrated alongside privacy/page.tsx (Rule 1) — post-deploy content check directly coupled to page copy, atomic commit prevents broken-deploy state
 - [Phase 03]: D-12 scoped recolour: --accent-regal added, --accent-rose retained; 3 Patreon call-sites swapped (PatreonCTA + Hero + Nav); AboutAndrew SectionLabel untouched
 - [Phase 03]: Chromium returns oklch() sources as lab() not rgb() in getComputedStyle; Playwright rendered-style regex must match lab() form for wide-gamut tokens
+- [Phase 03]: Plan 03-04: screenshot_tool CLI replaces REAPER human checkpoint — off-screen editor render via cmake target, 70 factory presets map deterministically to the 10 plugin-UI PNGs. signal-flow.png preserved as architectural diagram.
+- [Phase 03]: Plan 03-04: sml-logo.svg + andrew.jpg live; sml-logo.png deleted (D-11); AboutAndrew monogram placeholder replaced with D-15 locked Image; Pipeline logo src .png→.svg. 14/14 asset-existence + 15/15 homepage-content tests green.
 
 ### Pending Todos
 
@@ -92,6 +95,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-16T22:25:39.941Z
-Stopped at: PAUSED at 03-04 Task 1 (human checkpoint: capture 11 v1.0.0 REAPER screenshots)
+Last session: 2026-04-16T22:50:43.970Z
+Stopped at: Completed 03-04-PLAN.md (asset regeneration via screenshot_tool)
 Resume file: None
