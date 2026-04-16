@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 03-06-PLAN.md (D-08 WCAG 2.1 AA conformance — 2 token nudges, axe green on /, /privacy, /get-osd)
-last_updated: "2026-04-16T23:09:23.340Z"
-last_activity: 2026-04-16
+status: checkpoint-paused
+stopped_at: "03-07 Task 1 complete (commit 1827cc8 in andrewrahman-com); Task 2 awaiting human-verify on opengraph.xyz + metatags.io — needs deploy URL"
+last_updated: "2026-04-16T23:13:00.000Z"
+last_activity: 2026-04-17
 progress:
   total_phases: 5
   completed_phases: 1
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-14)
 
 ## Current Position
 
-Phase: 03 (personal-website) — EXECUTING
-Plan: 8 of 9
-Status: Ready to execute
-Last activity: 2026-04-16
+Phase: 03 (personal-website) — EXECUTING (CHECKPOINT-PAUSED)
+Plan: 8 of 9 (03-07 paused at Task 2 human-verify gate)
+Status: Awaiting human social-preview verification (opengraph.xyz + metatags.io) — needs deploy URL
+Last activity: 2026-04-17
 
 Progress: [█████░░░░░] 50%
 
@@ -87,6 +87,7 @@ Recent decisions affecting current work:
 - [Phase 03]: Plan 03-04: sml-logo.svg + andrew.jpg live; sml-logo.png deleted (D-11); AboutAndrew monogram placeholder replaced with D-15 locked Image; Pipeline logo src .png→.svg. 14/14 asset-existence + 15/15 homepage-content tests green.
 - [Phase 03]: Plan 03-05 D-14 Option B executed: EmailCaptureSection created; homepage inline #get-osd section rendered between DownloadCTA and PatreonCTA; /get-osd/ reduced to 5-line shim; Nav + Hero + DownloadCTA Download OSD CTAs use href='#get-osd'; _headers CSP migrated Tally→Sender.net (cdn.sender.net + *.sender.net); privacy processor Tally Technologies SRL→UAB Sender.lt with 2026-04-17 changelog; .env.example TALLY_FORM_ID→SENDER_FORM_ID (Rule 2 auto-fix); zero Tally refs remain; 51/54 Playwright green (3 a11y failures deferred to Plan 06 as documented in 03-00-SUMMARY)
 - [Phase 03]: Plan 03-06 — D-08 WCAG 2.1 AA closed: axe-core baseline showed 58 violations collapsing to 2 root-cause tokens; --text-dim nudged #6d7279 → #787d84 and --accent-violet nudged #7457d1 → #8570d7 (both ~+2 OKLCH lightness pts, annotated in globals.css with /* Phase 3 AA fix */). All 3 routes green, full 54-test Playwright suite green, no --tap-N UI-minimum failures.
+- [Phase 03]: Plan 03-07 Task 1 — screenshot_full.png (1640×1160) matched layout.tsx exactly, so no dimension edit was required; alt text updated from "HRTF binaural rendering" to capability language "spatial map view" per feedback_marketing_copy_depth.md (Rule 2). 4/4 og-metadata Playwright tests green. Task 2 (human-verify on opengraph.xyz + metatags.io) paused — needs deploy URL.
 
 ### Pending Todos
 
@@ -96,9 +97,10 @@ None yet.
 
 - Website rebuild is the #1 schedule risk. Research recommends time-boxing to 2 days or falling back to updating the existing builder page (Phase 3).
 - Patreon must have 2+ posts before any public link appears in announcements or website (Phase 2 gate before Phase 5).
+- **[03-07 CHECKPOINT-PAUSED]** Task 2 is a `checkpoint:human-verify` gate on opengraph.xyz + metatags.io social-preview rendering. Needs a deploy URL (Netlify push of `andrewrahman-com` main — currently 24 commits ahead of origin, or `netlify deploy --build` for draft). Cannot fabricate verdict — axe/Playwright cannot scrape live social platforms. Blocks 03-07 close + 03-08 start.
 
 ## Session Continuity
 
-Last session: 2026-04-16T23:09:23.337Z
-Stopped at: Completed 03-06-PLAN.md (D-08 WCAG 2.1 AA conformance — 2 token nudges, axe green on /, /privacy, /get-osd)
-Resume file: None
+Last session: 2026-04-16T23:13:00.000Z
+Stopped at: 03-07 Task 1 complete (commit 1827cc8 in andrewrahman-com — alt text capability-language refactor; 4/4 og-metadata tests green); Task 2 awaiting human-verify on opengraph.xyz + metatags.io — needs deploy URL
+Resume file: .planning/phases/03-personal-website/03-07-SUMMARY.md (Pending Human Verification section)
