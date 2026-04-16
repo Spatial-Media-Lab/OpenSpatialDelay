@@ -58,7 +58,7 @@ of the site. Each tier maps to one of the 12 taps and the tap strip appears on e
 | # | Patreon slot | Spec | File (repo-relative) | Source |
 |---|--------------|------|----------------------|--------|
 | 1 | **Profile avatar** (circle next to creator name) | 500×500 square | `docs/phase-02-evidence/patreon-graphics/avatar-500x500.png` | Downloaded from spatialmedialab.org/about/ (Andrew's headshot), center-biased square crop |
-| 2 | **Cover image** (page header banner) | 1600×400 | `docs/phase-02-evidence/patreon-graphics/cover-1600x400.png` | Generated — void bg + DM Sans "Spatial Media Library" + 12-tap rainbow strip |
+| 2 | **Cover image** (page header banner) | 2500×1000 (Patreon community-profile spec) | `docs/phase-02-evidence/patreon-graphics/cover-2500x1000.png` | Generated — void bg + centre-safe DM Sans "Spatial Media Library" wordmark, rose underline, cyan "ANDREW RAHMAN \| SPATIAL MEDIA LAB" attribution, 12-tap rainbow strip along the top. Composition accounts for Patreon's desktop creator-card overlay (left ~40%) and mobile centre-crop. |
 | 3 | **Tier 1 image** (Stargazer) | 460×200 landscape (Patreon recommended) | `docs/phase-02-evidence/patreon-graphics/tier-1-stargazer.png` | Generated — light blue (tap 7) star cluster + constellation lines |
 | 4 | **Tier 2 image** (Astronaut) | 460×200 | `docs/phase-02-evidence/patreon-graphics/tier-2-astronaut.png` | Generated — astronaut silhouette, cyan (tap 6) visor |
 | 5 | **Tier 3 image** (Commander) | 460×200 | `docs/phase-02-evidence/patreon-graphics/tier-3-commander.png` | Generated — violet (tap 10) chevrons + command star with orbit arc |
@@ -97,7 +97,7 @@ Funding the Spatial Media Library — spatial audio tools for musicians and soun
 
 - [ ] Enable **2FA** in Account Settings → Security immediately (T-02-26).
 - [ ] **Upload profile avatar** → `docs/phase-02-evidence/patreon-graphics/avatar-500x500.png`
-- [ ] **Upload cover image** → `docs/phase-02-evidence/patreon-graphics/cover-1600x400.png`
+- [ ] **Upload cover image** → `docs/phase-02-evidence/patreon-graphics/cover-2500x1000.png`
 
 ---
 

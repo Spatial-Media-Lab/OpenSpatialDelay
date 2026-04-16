@@ -371,59 +371,115 @@ def make_avatar():
 # ---------------- Cover banner 1600x400 (refreshed to match site) ----------------
 
 def make_cover():
-    W, H = 1600, 400
+    # Center-safe composition for Patreon's actual crop behaviour:
+    #   - Desktop: creator card overlays the left ~40% of the banner (x < 1000
+    #     of W=2500). Anything important must sit centre/right.
+    #   - Mobile: banner is centre-cropped to roughly the middle ~40%
+    #     (x ~ 750..1750). Anything important must sit near the horizontal
+    #     centre and vertical middle.
+    # Intersection of both safe zones is a narrow centre column ~1000px wide
+    # at the vertical middle — so the wordmark is sized to live there, and
+    # the only thing spanning full width is a thin tap strip along the TOP
+    # (desktop overlay is a bottom-left gradient, so the top band stays clear).
+    W, H = 2500, 1000
     img = void_bg((W, H)).convert("RGBA")
-    sprinkle_stars(img, count=260, seed=3, alpha_range=(50, 160))
+    sprinkle_stars(img, count=620, seed=3, alpha_range=(50, 170))
 
-    # Single soft nebula blob in the rose accent (matches site's Patreon accent)
+    cx = W / 2
+
+    # Primary rose nebula directly behind the wordmark (warms the centre)
     blob_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     bd = ImageDraw.Draw(blob_layer, "RGBA")
-    bd.ellipse([W * 0.55 - 260, H * 0.35 - 200, W * 0.55 + 260, H * 0.35 + 200],
-               fill=(*TAPS[11], 40))  # rose tap 12 at low opacity
-    blob_layer = blob_layer.filter(ImageFilter.GaussianBlur(radius=80))
+    bd.ellipse([cx - 560, H * 0.50 - 360, cx + 560, H * 0.50 + 360],
+               fill=(*TAPS[11], 52))
+    blob_layer = blob_layer.filter(ImageFilter.GaussianBlur(radius=180))
     img = Image.alpha_composite(img, blob_layer)
 
-    # Second nebula in the stellar/cyan zone (matches --accent-stellar)
+    # Cyan accent, offset slightly right-of-centre (still in mobile safe zone)
     blob2 = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     b2d = ImageDraw.Draw(blob2, "RGBA")
-    b2d.ellipse([W * 0.25 - 260, H * 0.65 - 200, W * 0.25 + 260, H * 0.65 + 200],
-                fill=(*TAPS[6], 35))  # light blue tap 7
-    blob2 = blob2.filter(ImageFilter.GaussianBlur(radius=80))
+    b2d.ellipse([cx + 220 - 420, H * 0.72 - 300, cx + 220 + 420, H * 0.72 + 300],
+                fill=(*TAPS[6], 36))
+    blob2 = blob2.filter(ImageFilter.GaussianBlur(radius=160))
     img = Image.alpha_composite(img, blob2)
 
+    # Violet accent, offset slightly left-of-centre (still in mobile safe zone)
+    blob3 = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    b3d = ImageDraw.Draw(blob3, "RGBA")
+    b3d.ellipse([cx - 240 - 360, H * 0.28 - 260, cx - 240 + 360, H * 0.28 + 260],
+                fill=(*TAPS[9], 32))
+    blob3 = blob3.filter(ImageFilter.GaussianBlur(radius=150))
+    img = Image.alpha_composite(img, blob3)
+
     d = ImageDraw.Draw(img, "RGBA")
-    # Title — DM Sans Bold, big
-    title_font = load_font(DM_SANS_BOLD, 84)
-    sub_font = load_font(JB_MONO, 22)
-    label_font = load_font(JB_MONO, 14)
 
-    title = "Spatial Media Library"
-    sub = "SPATIAL AUDIO TOOLS  ·  MUSICIANS + SOUND DESIGNERS  ·  OPEN SOURCE"
-    label = "ANDREWRAHMAN.COM  /  PATREON"
-
-    tw = d.textlength(title, font=title_font)
-    sw = d.textlength(sub, font=sub_font)
-    lw = d.textlength(label, font=label_font)
-    d.text(((W - tw) / 2, H * 0.30), title, font=title_font, fill=TEXT_PRIMARY)
-    d.text(((W - sw) / 2, H * 0.58), sub, font=sub_font, fill=TEXT_DIM)
-    d.text(((W - lw) / 2, H * 0.75), label, font=label_font, fill=(*TAPS[6], 230))
-
-    # Full 12-tap rainbow strip across the bottom, all active
-    strip_h = 8
-    strip_y = H - strip_h - 22
-    side_pad = 120
+    # Top tap strip — the only full-width element. Lives in the top ~7% band,
+    # which is outside the desktop creator-card overlay and survives mobile
+    # crop. Bars are slightly tapered in opacity from centre out so the left
+    # edge reads cleanly even if partially obscured.
+    strip_h = 14
+    strip_y = 58
+    side_pad = 90
     inner_w = W - 2 * side_pad
-    bar_gap = 10
+    bar_gap = 18
     total_gap = bar_gap * (len(TAPS) - 1)
     bar_w = (inner_w - total_gap) / len(TAPS)
     for i, col in enumerate(TAPS, start=1):
         x0 = side_pad + (i - 1) * (bar_w + bar_gap)
         x1 = x0 + bar_w
-        d.rectangle([x0, strip_y, x1, strip_y + strip_h], fill=(*col, 235))
+        d.rounded_rectangle([x0, strip_y, x1, strip_y + strip_h],
+                            radius=strip_h // 2, fill=(*col, 230))
 
-    out = ROOT / "cover-1600x400.png"
+    # Wordmark — sized to fit the ~1000px mobile-safe centre column.
+    # fit_font_width shrinks DM Sans Bold until it fits the width budget.
+    safe_title_w = 1050
+    title = "Spatial Media Library"
+    title_font = fit_font_width(title, safe_title_w, DM_SANS_BOLD,
+                                start_size=154, min_size=112)
+    tw = d.textlength(title, font=title_font)
+    _, ascent_top, _, ascent_bot = title_font.getbbox(title)
+    title_h = ascent_bot - ascent_top
+    # Vertical midline is safest for mobile near-square crops.
+    tx = (W - tw) / 2
+    ty = (H - title_h) / 2 - 40  # nudged up to leave room for the underline
+
+    # Soft glow behind the wordmark to lift it off the nebula washes.
+    glow = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow, "RGBA")
+    gd.text((tx, ty), title, font=title_font, fill=(*TAPS[11], 120))
+    glow = glow.filter(ImageFilter.GaussianBlur(radius=36))
+    img = Image.alpha_composite(img, glow)
+    d = ImageDraw.Draw(img, "RGBA")
+
+    d.text((tx, ty), title, font=title_font, fill=TEXT_PRIMARY)
+
+    # Thin rose underline anchors the wordmark (matches the site's Patreon
+    # block accent).
+    underline_w = min(tw * 0.55, 520)
+    underline_h = 4
+    ux0 = (W - underline_w) / 2
+    uy = ty + title_h + 22
+    d.rounded_rectangle([ux0, uy, ux0 + underline_w, uy + underline_h],
+                        radius=underline_h // 2, fill=(*TAPS[11], 235))
+
+    # Attribution under the divider: personal identity first, lab affiliation
+    # second. Short enough to survive mobile centre crop.
+    tag_font = load_font(JB_MONO, 38)
+    tag = "ANDREW RAHMAN | SPATIAL MEDIA LAB"
+    gw = d.textlength(tag, font=tag_font)
+    gx = (W - gw) / 2
+    gy = uy + 32
+    d.text((gx, gy), tag, font=tag_font, fill=(*TAPS[6], 220))
+
+    out = ROOT / "cover-2500x1000.png"
     img.convert("RGB").save(out, "PNG", optimize=True)
     print(f"wrote {out.name} {W}x{H}")
+
+    # Remove the legacy 1600x400 if it exists — Patreon wants the 2500x1000 one
+    legacy = ROOT / "cover-1600x400.png"
+    if legacy.exists():
+        legacy.unlink()
+        print(f"removed legacy {legacy.name}")
 
 
 # ---------------- Post 1 cover 1200x675 ----------------
