@@ -62,7 +62,7 @@ Plans:
 - [x] 03-05-PLAN.md — D-14 inline EmailCaptureSection + /get-osd/ shim + anchor link rewrites (conditional on Wave 0 Option A/B)
 - [x] 03-06-PLAN.md — WCAG-AA accessibility audit (D-08): run axe-core, nudge failing tokens, annotate fixes
 - [x] 03-07-PLAN.md — OG metadata verification (WEB-03): reconcile layout.tsx dimensions + manual social-card preview checkpoint
-- [ ] 03-08-PLAN.md — WEB-02 sentinel: external spatialmedialab.org/about Playwright guard + REQUIREMENTS.md flip to Complete
+- [x] 03-08-PLAN.md — WEB-02 sentinel: external spatialmedialab.org/about Playwright guard + REQUIREMENTS.md flip to Complete
 **UI hint**: yes
 
 ### Phase 4: Demo Content
