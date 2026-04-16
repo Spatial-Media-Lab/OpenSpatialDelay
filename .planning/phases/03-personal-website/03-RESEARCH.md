@@ -464,7 +464,7 @@ D-13 email swap preserves this pattern — only the string changes.
 
 - **Never use `sudo`.** Screenshot capture + file moves in `public/assets/` don't require sudo.
 - **Never run `killall AudioComponentRegistrar`** — destroys AU cache. AU plugin does not need to be reloaded for screenshot captures.
-- **Build versioned plugins** — `bash scripts/build_version.sh <commit> vX.Y.Z OXYZ`. For screenshot capture of v1.0.0, verify `OpenSpatialDelay v1.0.component` is installed in `~/Library/Audio/Plug-Ins/Components/` before capturing. If not: `bash scripts/build_version.sh 768c248 v1.0.0 O100`.
+- **Build versioned plugins** — `bash scripts/build_version.sh <commit> vX.Y.Z OXYZ`. For screenshot capture of v1.0.0, verify `OpenSpatialDelay v1.0.0.component` is installed in `~/Library/Audio/Plug-Ins/Components/` before capturing (the bare `v1.0.component` on disk is a legacy pre-release iteration, NOT the shipped binary). If missing: `bash scripts/build_version.sh 768c248 v1.0.0 O100`.
 - **Never reuse a version number.** Not applicable to Phase 3 (no plugin code changes).
 - **VST3 + AU only.** Phase 3 screenshots should show the plugin in REAPER/AU form (user's standard A/B test environment).
 
@@ -480,7 +480,7 @@ Phase 3 is *not* a rename/refactor/migration phase in the datastore sense — bu
 |----------|-------------|------------------|
 | Stored data | **None in Phase 3 scope.** No databases touched. Sender.net subscriber list (if already populated by Phase 2) does not care about this phase. | None. |
 | Live service config | (1) **Tally form** — to-be-deleted/superseded by Phase 2's Sender.net migration. Phase 3 assumes Phase 2 has handled this. (2) **Netlify deploy** — env var `NEXT_PUBLIC_TALLY_FORM_ID` currently referenced in `app/get-osd/page.tsx` — will be removed when Sender.net inline migration lands. (3) **Netlify `_headers` CSP** — whitelists `https://tally.so` + `https://widgets.tally.so`; must be updated to whitelist `https://cdn.sender.net` (or whichever domain Sender.net uses for `universal.js`) and remove Tally. | Phase 2 (Option A) or Phase 3 (Option B fallback) — see §D-14. |
-| OS-registered state | `OpenSpatialDelay v1.0.component` AU plugin — needs to be installed for screenshot capture. Verify via `ls ~/Library/Audio/Plug-Ins/Components/ \| grep 'v1.0'`. | Wave 0 verification task; if missing, run `bash scripts/build_version.sh 768c248 v1.0.0 O100`. |
+| OS-registered state | `OpenSpatialDelay v1.0.0.component` AU plugin — needs to be installed for screenshot capture. Verify via `ls ~/Library/Audio/Plug-Ins/Components/ \| grep 'v1.0.0.component'`. (The bare `v1.0.component` is a distinct legacy pre-release binary — don't conflate.) | Wave 0 verification task; if missing, run `bash scripts/build_version.sh 768c248 v1.0.0 O100`. |
 | Secrets/env vars | `NEXT_PUBLIC_TALLY_FORM_ID` (referenced in `get-osd/page.tsx`, `.env.example`) — obsolete. Likely replaced by `NEXT_PUBLIC_SENDER_FORM_ID` (Phase 2 naming TBD). | Coordinate with Phase 2 on final env-var name; update `.env.example` and Netlify env config. |
 | Build artifacts | `andrewrahman-com/out/` (static-export dir), `andrewrahman-com/.next/` (cache) — regenerated per build, no Phase 3 action required. | None. |
 
@@ -523,10 +523,10 @@ Phase 3 is *not* a rename/refactor/migration phase in the datastore sense — bu
 **Warning signs:** "First axe run, 40 violations" — means something systemic is wrong (e.g., test running against an un-styled page, static export cache serving stale CSS). Don't fix 40 symptoms; fix the one cause.
 
 ### Pitfall 2: Screenshots from wrong plugin version
-**What goes wrong:** REAPER has multiple OpenSpatialDelay versions installed (v0.1 through v1.0.0+). Accidentally capturing UI from v0.9 breaks the v1.0.0 marketing commitment.
-**Why it happens:** `OpenSpatialDelay v0.5.component`, `v0.4.component`, etc. are all present in `~/Library/Audio/Plug-Ins/Components/` per CLAUDE.md user-preference (A/B testing).
-**How to avoid:** Before capture session, verify the plugin window title reads "OpenSpatialDelay v1.0" (matches `PLUGIN_NAME` set by `build_version.sh 768c248 v1.0.0 O100`). Capture only from that specific window.
-**Warning signs:** UI elements look familiar but parameter names/counts are slightly off from v1.0.0 spec.
+**What goes wrong:** REAPER has multiple OpenSpatialDelay versions installed (v0.1 through v1.0.2). Accidentally capturing UI from a legacy or patch build breaks the v1.0.0 marketing commitment.
+**Why it happens:** `OpenSpatialDelay v0.5.component`, `v0.4.component`, etc. are all present in `~/Library/Audio/Plug-Ins/Components/` per CLAUDE.md user-preference (A/B testing). The bare `v1.0.component` is a legacy pre-release iteration from before the 2026-04-12 squash and is distinct from the shipped `v1.0.0.component`. Post-release patches `v1.0.1.component` + `v1.0.2.component` also coexist.
+**How to avoid:** Before capture session, verify the plugin window title reads exactly "OpenSpatialDelay v1.0.0" (matches `PLUGIN_NAME` set by `build_version.sh 768c248 v1.0.0 O100`). Capture only from that specific window — NOT from `v1.0`, NOT from `v1.0.1`/`v1.0.2`.
+**Warning signs:** UI elements look familiar but parameter names/counts are slightly off from v1.0.0 spec; title bar reads `v1.0` or `v1.0.1`/`v1.0.2`.
 
 ### Pitfall 3: Email-migration assertion miss
 **What goes wrong:** One of the six privacy-policy email occurrences (or one of the three homepage occurrences) is missed in find-replace; Playwright tests pass because they only assert *some* occurrences.

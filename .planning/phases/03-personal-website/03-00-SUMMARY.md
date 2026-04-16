@@ -37,7 +37,7 @@ key-files:
 
 key-decisions:
   - "D-14 Option B: Phase 3 absorbs Sender.net migration (Tally refs still in get-osd/page.tsx, _headers, privacy/page.tsx; zero Sender.net refs anywhere in app/ or components/). Plan 05 will create components/EmailCaptureSection.tsx, migrate _headers CSP, update privacy/page.tsx processor name to UAB Sender.lt, and swap /get-osd/page.tsx body."
-  - "v1.0.0 AU plugin installed: OpenSpatialDelay v1.0.component AND OpenSpatialDelay v1.0.0.component both present in ~/Library/Audio/Plug-Ins/Components/ — Wave 2 (Plan 04) screenshot capture is unblocked, no build_version.sh invocation needed."
+  - "v1.0.0 AU plugin installed: OpenSpatialDelay v1.0.0.component is present in ~/Library/Audio/Plug-Ins/Components/ (alongside legacy v1.0.component from before the 2026-04-12 squash, and post-release patches v1.0.1.component + v1.0.2.component). Wave 2 (Plan 04) screenshot capture target is v1.0.0.component specifically; no build_version.sh invocation needed."
   - "Landed Tasks 1–4 as a single Wave 0 commit per plan instruction (Task 1 step 4: 'Do NOT commit yet — Tasks 2, 3, 4 will land with this one in a single Wave 0 commit')."
 
 patterns-established:
@@ -81,7 +81,16 @@ Plan 03-05 (per its plan-phase mapping) will:
 
 ## v1.0.0 AU Plugin Status
 
-**Installed.** `ls ~/Library/Audio/Plug-Ins/Components/ | grep -E 'OpenSpatialDelay v1\.0(\.component|$)'` returned `OpenSpatialDelay v1.0.component`. Additionally, `OpenSpatialDelay v1.0.0.component`, `v1.0.1.component`, and `v1.0.2.component` are also present (user's A/B test environment). Wave 2 Plan 04 screenshot capture is **unblocked** — no `bash scripts/build_version.sh 768c248 v1.0.0 O100` invocation needed. Executor of Plan 04 must still verify the plugin window title reads `OpenSpatialDelay v1.0` (not v0.9 or v1.0.x) per Pitfall 2 in 03-RESEARCH.md before capturing.
+**Installed.** `ls ~/Library/Audio/Plug-Ins/Components/` returns four distinct v1.0-line binaries:
+
+| Component | Role |
+|-----------|------|
+| `OpenSpatialDelay v1.0.component` | **Legacy** pre-release iteration from before the 2026-04-12 squash (NOT the shipped release) |
+| `OpenSpatialDelay v1.0.0.component` | **Shipped v1.0.0** (commit `768c248`) — the Phase 3 screenshot target |
+| `OpenSpatialDelay v1.0.1.component` | Post-release patch |
+| `OpenSpatialDelay v1.0.2.component` | Post-release patch |
+
+Wave 2 Plan 04 screenshot capture is **unblocked** — no `bash scripts/build_version.sh 768c248 v1.0.0 O100` invocation needed. Executor of Plan 04 must verify the plugin window title reads exactly `OpenSpatialDelay v1.0.0` (NOT `v1.0`, NOT `v1.0.1`/`v1.0.2`, NOT v0.x) per Pitfall 2 in 03-RESEARCH.md before capturing.
 
 ## Phase 2 Tally/Sender.net Triage (informational)
 

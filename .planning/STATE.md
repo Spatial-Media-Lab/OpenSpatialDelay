@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-03-PLAN.md (Patreon recolour)
-last_updated: "2026-04-16T22:22:50.618Z"
+stopped_at: "PAUSED at 03-04 Task 1 (human checkpoint: capture 11 v1.0.0 REAPER screenshots)"
+last_updated: "2026-04-16T22:25:39.944Z"
 last_activity: 2026-04-16
 progress:
   total_phases: 5
@@ -73,7 +73,7 @@ Recent decisions affecting current work:
 - [Phase 02]: Privacy policy effective date = 2026-04-16; Section 9 commits controller to updating effective date on any material change + notifying list before adding a newsletter processor (T-02-08 mitigation).
 - [Phase 02] (2026-04-16): **Email capture + newsletter tool = Sender.net (UAB Sender.lt, Vilnius, Lithuania)**. Overrides Init decision (Tally) and D-10 (defer newsletter to Phase 5). Rationale: Tally is a form builder only — no newsletter send, no double-opt-in email, no file delivery via confirmation. User's flow requires email field → DOI confirmation email with download buttons → subscriber added to list. Sender.net free-forever (2,500 subs / 15k emails/mo) natively supports this pattern plus embeddable forms, unlimited automations, and EU-based data processing (cleaner privacy-policy story than US ESPs). Selected after reviewing Tally, Kit, MailerLite, EmailOctopus, Brevo, Mailchimp, CleverReach, Rapidmail. Trade-off accepted: Sender branding appears in free-tier email footers. Newsletter flow = Option A (download buttons embedded directly in the DOI confirmation email alongside the confirm button).
 - [Phase 03]: D-14 Option B: Phase 3 absorbs Sender.net migration (no Sender.net refs exist in site repo; Tally still active in get-osd, _headers, privacy)
-- [Phase 03]: v1.0.0 AU plugin confirmed installed (v1.0.component + v1.0.0.component both present); Wave 2 screenshot capture unblocked
+- [Phase 03]: v1.0.0 AU plugin confirmed installed — `v1.0.0.component` is the shipped screenshot target; legacy `v1.0.component` is a pre-release iteration from before the 2026-04-12 squash (NOT the same binary). Wave 2 screenshot capture unblocked.
 - [Phase 03]: Plan 03-01 complete — Hero stats locked (D-01: 12/7/5+1/70), FEATURES 5→6 (D-03), hero + DownloadCTA copy polished, ADM-OSC claim verified against Source/PluginProcessor.cpp
 - [Phase 03]: Plan 02: Effective date bumped to 2026-04-17 (current day) rather than leaving baseline 2026-04-16; regex test tolerant either way
 - [Phase 03]: Plan 02: Privacy changelog paragraph deliberately omits legacy Gmail from rendered text — git log is the audit trail, keeps Playwright negative-assertion green
@@ -92,6 +92,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-16T22:22:50.616Z
-Stopped at: Completed 03-03-PLAN.md (Patreon recolour)
+Last session: 2026-04-16T22:25:39.941Z
+Stopped at: PAUSED at 03-04 Task 1 (human checkpoint: capture 11 v1.0.0 REAPER screenshots)
 Resume file: None

@@ -783,8 +783,8 @@ Pitfall 6 — 819×1024 source is slightly under native Retina 2× for 560×560 
 
 **Analog:** existing PNGs in `public/assets/` — overwrite in place, same filenames.
 **Action pattern:** macOS `screencapture` (per RESEARCH.md §Screenshot workflow):
-- Verify v1.0.0 AU installed: `ls ~/Library/Audio/Plug-Ins/Components/ | grep "v1.0"` (Wave 0 gate).
-- Open REAPER → OpenSpatialDelay v1.0 → Cmd-Shift-4 (space+click) per window.
+- Verify v1.0.0 AU installed: `ls ~/Library/Audio/Plug-Ins/Components/ | grep "v1.0.0.component"` (Wave 0 gate — target the shipped binary, not the legacy `v1.0.component`).
+- Open REAPER → OpenSpatialDelay v1.0.0 (NOT the legacy v1.0, NOT post-release v1.0.1/v1.0.2) → Cmd-Shift-4 (space+click) per window.
 - Save to `public/assets/` with exact filenames from UI-SPEC §Asset Contract.
 - Ensure `screenshot_full.png` ≥ 1200×630 (WEB-03 minimum; existing 1640×1160 baseline is the target).
 
