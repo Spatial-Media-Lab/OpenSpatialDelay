@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-02-PLAN.md
-last_updated: "2026-04-16T22:10:10.677Z"
+stopped_at: Completed 03-03-PLAN.md (Patreon recolour)
+last_updated: "2026-04-16T22:22:50.618Z"
 last_activity: 2026-04-16
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 20
-  completed_plans: 12
-  percent: 60
+  completed_plans: 13
+  percent: 65
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-14)
 ## Current Position
 
 Phase: 03 (personal-website) — EXECUTING
-Plan: 4 of 9
+Plan: 5 of 9
 Status: Ready to execute
 Last activity: 2026-04-16
 
@@ -56,6 +56,7 @@ Progress: [█████░░░░░] 50%
 | Phase 03 P00 | 7min | 4 tasks | 5 files |
 | Phase 03 P01 | 5min | 3 tasks | 2 files |
 | Phase 03 P02 | 3min | 3 tasks | 5 files |
+| Phase 03 P03 | 3min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -77,6 +78,8 @@ Recent decisions affecting current work:
 - [Phase 03]: Plan 02: Effective date bumped to 2026-04-17 (current day) rather than leaving baseline 2026-04-16; regex test tolerant either way
 - [Phase 03]: Plan 02: Privacy changelog paragraph deliberately omits legacy Gmail from rendered text — git log is the audit trail, keeps Playwright negative-assertion green
 - [Phase 03]: Plan 02: scripts/verify-production.sh migrated alongside privacy/page.tsx (Rule 1) — post-deploy content check directly coupled to page copy, atomic commit prevents broken-deploy state
+- [Phase 03]: D-12 scoped recolour: --accent-regal added, --accent-rose retained; 3 Patreon call-sites swapped (PatreonCTA + Hero + Nav); AboutAndrew SectionLabel untouched
+- [Phase 03]: Chromium returns oklch() sources as lab() not rgb() in getComputedStyle; Playwright rendered-style regex must match lab() form for wide-gamut tokens
 
 ### Pending Todos
 
@@ -89,6 +92,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-16T22:10:10.674Z
-Stopped at: Completed 03-02-PLAN.md
+Last session: 2026-04-16T22:22:50.616Z
+Stopped at: Completed 03-03-PLAN.md (Patreon recolour)
 Resume file: None
