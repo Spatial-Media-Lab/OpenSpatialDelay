@@ -1,0 +1,83 @@
+{
+  "phase": "03",
+  "phase_name": "personal-website",
+  "timestamp": "2026-04-16T19:25:00+02:00",
+  "session_note": "Session interrupted during Area 1 (Feature pitch & copy) after stale-doc cleanup detour. User paused to resume in next session.",
+  "areas_selected": [
+    "Feature pitch & copy (B-2, B-3)",
+    "Design system scope",
+    "Assets, identity & IA (B-1, B-4\u2026B-8)"
+  ],
+  "areas_completed": [],
+  "areas_in_progress": ["Feature pitch & copy (B-2, B-3)"],
+  "areas_remaining": ["Design system scope", "Assets, identity & IA (B-1, B-4\u2026B-8)"],
+  "web02_verdict": {
+    "status": "complete_offsite",
+    "evidence": "spatialmedialab.org/about lists Andrew Rahman (co-founder 2017), Basel Naouri (joined 2025), Timo Bittner (co-founder 2017, current president). No placeholder sections.",
+    "action_for_next_session": "Strike WEB-02 from Phase 3 scope during CONTEXT.md authoring. Flag REQUIREMENTS.md WEB-02 row for status update to Complete."
+  },
+  "stale_docs_corrected_this_session": [
+    {
+      "file": ".planning/PROJECT.md",
+      "lines": "46-49",
+      "fix": "Algorithm names list (was missing ConstantPower+MDAP, wrongly included Direct Binaural+Simple); HRTF framing (5 measured + 1 CPU-lite option, not HRTF); trajectory list (was 7 wrong shapes; now 13 real shapes). Added source-file refs."
+    },
+    {
+      "file": "README.md",
+      "lines": "36-37",
+      "fix": "8 algorithms \u2192 7 algorithms with correct list; 6 HRTF profiles \u2192 6 binauralization options (5 HRTF + 1 CPU-lite option)."
+    },
+    {
+      "file": "SPECIFICATION.md",
+      "lines": "34-35, 244",
+      "fix": "Fixed algorithm lists (was 5 wrong names with 'HOA' mislabeled); HRTF line clarified; spec-table binaural row expanded."
+    },
+    {
+      "file": "~/.claude/projects/-Users-andrewrahman-conductor-repos-openspatialdelay/memory/reference_spatialization.md",
+      "fix": "Description updated; wrong 'DirectBinauralAlgorithm' replaced with correct 'ConstantPowerAlgorithm'; HRTF section retitled 'Binauralization Modes' with explicit non-HRTF tag on Simple."
+    }
+  ],
+  "decisions": {
+    "Feature pitch & copy (B-2, B-3)": [
+      {
+        "question": "Replacement for the 4-stat Hero grid",
+        "answer": "Structure stays (keep the 4-stat grid, number can be adjusted later); stats themselves need replacing. User will nominate the actual stats.",
+        "status": "partial",
+        "pending": "Q1 open: which 4 stats from the defensible pool? Pool: 12 echoes, 7 spatialization algorithms, 5 measured HRTF profiles (+1 CPU-lite), 13 trajectory shapes, VST3+AU, macOS+Windows, arm64+x86_64+x64, OSC in/out, Doppler, partitioned convolution."
+      },
+      {
+        "question": "Feature cards count + content",
+        "answer": "6 cards (even number). Some current cards survive, others are 'pointlessly complex' per user. User will nominate which 6 capabilities get cards.",
+        "status": "partial",
+        "pending": "Q2 open: which 6 capabilities? Current cards: spatial map, phase-vocoder Doppler, trajectory engine, binaural-first, free+open-source."
+      },
+      {
+        "question": "Primary audience for Hero copy tone",
+        "answer": "Current framing is fine (music producers first, sound designers second). No change needed.",
+        "status": "resolved"
+      },
+      {
+        "question": "B-3 copy-edit pass depth",
+        "answer": "Tackle the first 3 B-2/B-3 issues only (Hero headline, Features subhead+body rewrites, Pipeline copy or Download CTA). Full-page copy review happens later, post-feature-lock.",
+        "status": "resolved"
+      }
+    ]
+  },
+  "deferred_ideas": [],
+  "canonical_refs_accumulated": [
+    ".planning/ROADMAP.md \u00a7Phase 3",
+    ".planning/REQUIREMENTS.md \u00a7WEB-01, \u00a7WEB-02 (verify complete), \u00a7WEB-03",
+    ".planning/phases/02-email-capture-funding-infrastructure/02-CONTEXT.md",
+    ".planning/phases/03-personal-website/03-BACKLOG.md",
+    ".planning/phases/03-personal-website/03-PALETTE-AUDIT.md",
+    "Source/PluginProcessor.cpp:500 (trajectory shape enum)",
+    "Source/PluginProcessor.cpp:1800 (algorithms[] array)",
+    "../andrewrahman-com/app/page.tsx (current hero/features/pipeline structure)",
+    "../andrewrahman-com/app/globals.css (plugin-palette CSS tokens)",
+    "../andrewrahman-com/app/layout.tsx (current OG metadata baseline)"
+  ],
+  "next_session_prompt": {
+    "for_user": "On resume, I will re-read this checkpoint and pick up at Area 1 Q1+Q2 (you nominate the 4 Hero stats and 6 Feature cards from the corrected defensible pool). Then Area 2 (Design system scope) and Area 3 (Assets, identity & IA) follow.",
+    "resume_command": "/gsd-discuss-phase 3"
+  }
+}

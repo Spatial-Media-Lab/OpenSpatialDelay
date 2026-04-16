@@ -31,8 +31,8 @@
 **Spatial Media Library** is an open-source suite of spatial audio VST3/AU plugins that share a common multi-algorithm spatialization engine. The first product, **OpenSpatialDelay**, is a spatial delay effect where each delay tap is positioned in 3D space and rendered to binaural headphones or discrete surround speakers (Quad through 9.1.6 Atmos). The output format is determined by the DAW's track I/O bus, independent from the spatialization algorithm. The plugin targets music producers, live sound engineers, post-production professionals, and installation/research users.
 
 **Key differentiators:**
-- User-selectable spatialization algorithm (VBAP, VBIP, HOA, KNN, DBAP)
-- 5 curated HRTF profiles from academically validated, freely licensed databases
+- User-selectable spatialization algorithm — 7 options (Ambisonics, ConstantPower, DBAP, KNN, MDAP, VBAP, VBIP)
+- 6 binauralization options: 5 curated HRTF profiles from academically validated, freely licensed databases + 1 CPU-lite option (Woodworth ITD+ILD approximation, not an HRTF)
 - Up to 12 manually placeable delay taps with preset trajectory system
 - Cumulative pitch shifting across taps
 - ADM-OSC integration for interoperability with spatial audio ecosystems (by v1.0)
@@ -241,7 +241,7 @@ The plugin queries the host via JUCE's `BusesLayout` system:
 | Feature | Specification |
 |---------|--------------|
 | Output format | Binaural stereo (v0.1+), Quad/5.1/7.1/7.1.4/9.1.6 surround (v0.2+) — see Section 3.4.2 |
-| Spatialization algorithm | User-selectable: Direct Binaural, VBAP, Ambisonics (HOA), VBIP, KNN |
+| Spatialization algorithm | User-selectable: 7 options — Ambisonics, ConstantPower, DBAP, KNN, MDAP, VBAP, VBIP (binaural routing is a separate render path, not an algorithm choice) |
 | HRTF profiles | 5 built-in options (see Section 7) — binaural output only |
 | HRTF convolution | Partitioned FFT convolution for low-latency, artifact-free rendering |
 | Distance attenuation | Inverse distance law applied automatically (no user control in v0.1) |

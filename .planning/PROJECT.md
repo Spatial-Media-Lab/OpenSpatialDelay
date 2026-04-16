@@ -43,10 +43,10 @@ Each delay echo occupies a distinct spatial position, creating immersive 3D soun
 Shipped in v1.0.0 (768c248, 2026-04-12):
 
 - Spatial delay engine with 12 independent echo objects in 3D space
-- 7 spatialization algorithms (VBAP, Ambisonics, KNN, DBAP, VBIP, Direct Binaural, Simple)
-- 5 HRTF binaural profiles (MIT KEMAR, SADIE D2-KU100, CIPIC 003, HUTUBS PP2, Bernschuetz KU100)
+- 7 spatialization algorithms (Ambisonics, ConstantPower, DBAP, KNN, MDAP, VBAP, VBIP) — see Source/PluginProcessor.cpp:1800
+- 6 binauralization options: 5 measured HRTF profiles (MIT KEMAR, SADIE D2-KU100, CIPIC 003, HUTUBS PP2, Bernschuetz KU100) + 1 CPU-lite option "Simple (Low CPU)" — Woodworth ITD + geometric ILD approximation, not an HRTF
 - Phase vocoder pitch shifting (WSOLA-Lite) with PDC compensation
-- Trajectory engine (Circle, Figure-8, Line, Random, Bounce, Spiral, Custom)
+- Trajectory engine — 13 shapes (Bounce, Circle, Cross, Figure-8, Heart, Helix, Infinity, Line, Orbit, Random, Spiral, Square, Triangle) — see Source/PluginProcessor.cpp:500
 - Doppler velocity simulation with per-sample pitch interpolation
 - Filter bank per echo object
 - Partitioned convolution for HRTF rendering
