@@ -16,6 +16,24 @@ Total time: ~45–60 min.
 
 ---
 
+## Progress (as of 2026-04-16 17:42 CEST)
+
+- [x] Step 1 — Creator account, avatar, cover uploaded
+- [x] Step 2 — Vanity URL chosen
+- [ ] **Step 3 — Billing plan** *(deferred — Patreon gates Payouts settings until post-launch; see Step 3 below)*
+- [x] Step 4 — 4 monthly tiers (Stargazer / Astronaut / Commander / Mission Control) with images
+- [x] Step 5 — About section
+- [x] Step 6 — *(dropped — no sidebar slot exists in 2026 Patreon UI; Berlin one-liner folded into Post 4)*
+- [ ] **Step 7 — Cross-links** *(adapted — social slots are platform-gated; revisit socials later together, and Post 4 carries D-26 links)*
+- [x] Step 8 — 4 seed posts uploaded; **Post 4 live and pinned**
+- [ ] **Step 9 — Preview check** ← **resume here**
+- [ ] Step 10 — Launch
+- [ ] Step 11 — Incognito verification
+- [ ] Step 12 — Reader test
+- [ ] Step 13 — Return signal to resume plan
+
+---
+
 ## Pre-flight
 
 - [ ] You have a personal email address NOT tied to the Spatial Media Lab org (D-21 — page is
@@ -95,12 +113,16 @@ Page Settings → URL.
 
 ---
 
-## Step 3 — Billing Plan
+## Step 3 — Billing Plan *(deferred until post-launch)*
 
-Payouts / Earnings settings.
+**Observed 2026-04-16:** Patreon's "Become a creator" checklist gates Payouts / Earnings
+settings until the page is launched. The billing-plan choice surfaces during the payment-
+processing setup that comes after clicking **Launch** in Step 10.
 
-- [ ] Select **Standard plan** (10% fee — default for new creators post 2025-08-04 per RESEARCH.md)
-- [ ] Do **NOT** pick Pro or enterprise tiers — they're not justified for a new creator page
+- [ ] **Skip this step for now** and continue with Steps 4→10.
+- [ ] When the Payouts / Earnings screen appears post-launch, select **Standard plan**
+      (10% fee — default for new creators post 2025-08-04 per RESEARCH.md).
+- [ ] Do **NOT** pick Pro or enterprise tiers — they're not justified for a new creator page.
 
 ---
 
@@ -195,38 +217,40 @@ Annual membership at a ~15% discount is planned — coming once eligibility requ
 
 ---
 
-## Step 6 — Berlin One-Liner (sidebar or footer)
+## Step 6 — Berlin One-Liner *(dropped — no sidebar/footer slot in 2026 Patreon UI)*
 
-Place this somewhere Patreon exposes sidebar/footer copy (D-25 — low-urgency, drop if Patreon
-doesn't give you a slot):
+**Observed 2026-04-16:** Patreon's current UI does not expose a sidebar or footer copy slot
+on creator pages. D-25 was tagged low-urgency with instructions to drop if no slot existed.
 
-📋 **Berlin one-liner:**
-```
-In Berlin? Come by **Spatial Media Lab** — we run events and collaborate with local artists.
-spatialmedialab.org
-```
+- [x] Dropped as a standalone placement. The Berlin one-liner is folded into the public
+      Post 4 (Project home) in Step 8, so nothing is lost.
 
 ---
 
-## Step 7 — Cross-Links (D-26 — 4 links required)
+## Step 7 — Cross-Links (D-26) *(adapted — social slots are platform-gated in 2026 Patreon)*
 
-Page settings → Links / Social. Add these **4 links** (in order of priority):
+**Observed 2026-04-16:** Patreon's "Add your socials" dialog only accepts six fixed
+platforms (YouTube, Instagram, Twitter, Facebook, Twitch, TikTok) — it will not accept
+raw URLs to GitHub, spatialmedialab.org, andrewrahman.com, or a privacy page. The D-26
+cross-links cannot live in the social slots.
 
-1. `https://github.com/Spatial-Media-Lab/OpenSpatialDelay` (label: "Source code")
-2. `https://spatialmedialab.org` (label: "Spatial Media Lab")
-3. `https://andrewrahman.com` (label: "Creator home")
-4. `https://andrewrahman.com/privacy` (label: "Privacy")
+**Adapted placement:**
 
-**If Patreon caps social slots at 3** (it sometimes does), drop the privacy link from the
-social section — instead embed it as a hyperlink inside the About text. The first 3 links must
-stay in the social slots.
+- [ ] Connect whichever of the six supported platforms you actually use (skip the rest).
+      We can revisit account-selection together later.
+- [x] The **four D-26 cross-links** (GitHub source, Spatial Media Lab, andrewrahman.com,
+      privacy) are carried by **public Post 4** in Step 8, which is pinned to the top of
+      the page. This keeps all four links discoverable on page 1 of the Patreon.
 
 ---
 
-## Step 8 — Upload 3 Seed Posts
+## Step 8 — Upload 4 Seed Posts
 
 Post in **this exact publish order**. For each post: paste the body verbatim (skip frontmatter
 lines like `**Visibility:** PUBLIC`), confirm preview rendering, then publish.
+
+**Post 4 is pinned** (Step 7 workaround — carries the D-26 cross-links in lieu of the
+platform-gated social slots).
 
 ### Post 1 (PUBLIC, anchor post) — *"Welcome to the Spatial Media Library Patreon"*
 
@@ -387,6 +411,51 @@ consider becoming a patron. The pace of the pipeline is the pace you set.
 — Andrew
 ```
 
+### Post 4 (PUBLIC, **PINNED**) — *"Project home — code, organization, and creator pages"*
+
+Carries the D-26 cross-links (Step 7 workaround). Pin this post after publishing so it
+stays on top of the page.
+
+- [ ] Visibility: **Public**
+- [ ] Title: `Project home — code, organization, and creator pages`
+- [ ] After publishing: **Pin to top of page** (Post menu → Pin post)
+
+📋 **Body (paste verbatim):**
+```markdown
+Patreon's social link slots only support a fixed set of platforms (YouTube, Instagram, Twitter, Facebook, Twitch, TikTok). The Spatial Media Library lives across a few other places that don't fit those slots — here they all are in one post.
+
+## Source code
+
+**OpenSpatialDelay** — the first Spatial Media Library tool, GPL-3.0, VST3 + AU on macOS and Windows:
+[github.com/Spatial-Media-Lab/OpenSpatialDelay](https://github.com/Spatial-Media-Lab/OpenSpatialDelay)
+
+The full **Spatial Media Lab** organization on GitHub (where every Library tool's source will live):
+[github.com/Spatial-Media-Lab](https://github.com/Spatial-Media-Lab)
+
+## Spatial Media Lab — the organization
+
+The legal home of the code, plus events and collaborations in Berlin:
+[spatialmedialab.org](https://spatialmedialab.org)
+
+If you're in Berlin, come by — Spatial Media Lab runs events and collaborates with local artists. The Patreon funds the Library pipeline; Spatial Media Lab runs the in-person side.
+
+## Creator home
+
+My personal site (background, writing, projects beyond the Library):
+[andrewrahman.com](https://andrewrahman.com)
+
+## Privacy
+
+How any data tied to this work gets handled:
+[andrewrahman.com/privacy](https://andrewrahman.com/privacy)
+
+---
+
+I'll pin this post so it stays near the top of the page — bookmark it if you ever need to find any of the project's homes.
+
+— Andrew
+```
+
 ---
 
 ## Step 9 — Preview Check (before launching)
@@ -397,10 +466,13 @@ Before clicking Launch, flip through the preview:
       as literal asterisks
 - [ ] Tagline visible in header area
 - [ ] All 4 tiers visible with correct prices ($3/$10/$25/$100), no annual option
-- [ ] All 4 cross-links visible (or 3 if the privacy link was folded into About)
-- [ ] Post 1 rendered publicly (anyone can read end-to-end)
-- [ ] Post 2 shows public teaser; rest is locked behind "support to unlock"
-- [ ] Post 3 rendered publicly (anyone can read end-to-end)
+- [ ] Post 1 (Welcome) rendered publicly (anyone can read end-to-end)
+- [ ] Post 2 (Technical) shows public teaser; rest is locked behind "support to unlock"
+- [ ] Post 3 (Roadmap) rendered publicly (anyone can read end-to-end)
+- [ ] Post 4 (Project home / cross-links) rendered publicly AND shown as pinned at top
+      (Step 7 workaround — must be pinned for the D-26 links to be discoverable)
+- [ ] Any connected social accounts (YouTube/Instagram/Twitter/Facebook/Twitch/TikTok) appear
+      as expected in the header area
 
 ---
 
@@ -431,8 +503,10 @@ Confirm ALL of these in the incognito view:
 - [ ] Post 1 (Welcome) visible end-to-end
 - [ ] Post 2 (Technical) visible as locked/teased
 - [ ] Post 3 (Roadmap) visible end-to-end
-- [ ] All 4 D-26 cross-links present (or 3 with privacy in About)
-- [ ] Berlin one-liner visible if Patreon rendered a sidebar/footer for it
+- [ ] Post 4 (Project home) visible end-to-end AND pinned at top of post list
+- [ ] All 4 D-26 cross-links clickable inside Post 4 (GitHub/OpenSpatialDelay, Spatial
+      Media Lab org, andrewrahman.com, andrewrahman.com/privacy)
+- [ ] Berlin one-liner visible inside Post 4 (dropped from sidebar per Step 6 — lives in Post 4 now)
 - [ ] 📸 Screenshot → `docs/phase-02-evidence/patreon-page-live.png`
 
 ---
@@ -458,6 +532,8 @@ Patreon launched
 
 Vanity URL used: <andrewrahman | andrew-rahman | andrewjrahman | other>
 Drafts revised during voice pass: <yes, list files | no, drafts as-is>
+Post 4 (Project home) pinned: yes/no
+Billing plan selected post-launch: Standard 10% / other
 Screenshots stored at:
   docs/phase-02-evidence/patreon-vanity-url.png
   docs/phase-02-evidence/patreon-tiers.png
