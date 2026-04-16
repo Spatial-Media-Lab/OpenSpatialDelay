@@ -32,18 +32,20 @@ Total time: ~45–60 min.
 
 All images below are committed to the repo at `docs/phase-02-evidence/patreon-graphics/`.
 Upload them verbatim into Patreon — no cropping or resizing needed (Patreon will handle
-any final fit). The set uses a space-exploration visual language that matches the tier names
-(Stargazer → Astronaut → Commander → Mission Control).
+any final fit). The set uses the same visual system as andrewrahman.com — `#03060b` void
+background, 12-tap rainbow palette sourced from `Source/PluginEditor.cpp`, DM Sans Bold
+display type, JetBrains Mono accents — so the Patreon page reads as a natural extension
+of the site. Each tier maps to one of the 12 taps and the tap strip appears on every card.
 
 | # | Patreon slot | Spec | File (repo-relative) | Source |
 |---|--------------|------|----------------------|--------|
 | 1 | **Profile avatar** (circle next to creator name) | 500×500 square | `docs/phase-02-evidence/patreon-graphics/avatar-500x500.png` | Downloaded from spatialmedialab.org/about/ (Andrew's headshot), center-biased square crop |
-| 2 | **Cover image** (page header banner) | 1600×400 | `docs/phase-02-evidence/patreon-graphics/cover-1600x400.png` | Generated — dark starfield + "SPATIAL MEDIA LIBRARY" wordmark + tagline |
-| 3 | **Tier 1 image** (Stargazer) | 512×512 | `docs/phase-02-evidence/patreon-graphics/tier-1-stargazer.png` | Generated — gold star + constellation |
-| 4 | **Tier 2 image** (Astronaut) | 512×512 | `docs/phase-02-evidence/patreon-graphics/tier-2-astronaut.png` | Generated — astronaut silhouette with visor + antenna |
-| 5 | **Tier 3 image** (Commander) | 512×512 | `docs/phase-02-evidence/patreon-graphics/tier-3-commander.png` | Generated — rank chevrons + command star |
-| 6 | **Tier 4 image** (Mission Control) | 512×512 | `docs/phase-02-evidence/patreon-graphics/tier-4-mission-control.png` | Generated — Earth + orbit ring + launch rocket |
-| 7 | **Post 1 cover** (Welcome anchor post) | 1200×675 | `docs/phase-02-evidence/patreon-graphics/post-01-cover-1200x675.png` | Plugin screenshot (`docs/assets/screenshot_full.png`) + branded title overlay |
+| 2 | **Cover image** (page header banner) | 1600×400 | `docs/phase-02-evidence/patreon-graphics/cover-1600x400.png` | Generated — void bg + DM Sans "Spatial Media Library" + 12-tap rainbow strip |
+| 3 | **Tier 1 image** (Stargazer) | 460×200 landscape (Patreon recommended) | `docs/phase-02-evidence/patreon-graphics/tier-1-stargazer.png` | Generated — light blue (tap 7) star cluster + constellation lines |
+| 4 | **Tier 2 image** (Astronaut) | 460×200 | `docs/phase-02-evidence/patreon-graphics/tier-2-astronaut.png` | Generated — astronaut silhouette, cyan (tap 6) visor |
+| 5 | **Tier 3 image** (Commander) | 460×200 | `docs/phase-02-evidence/patreon-graphics/tier-3-commander.png` | Generated — violet (tap 10) chevrons + command star with orbit arc |
+| 6 | **Tier 4 image** (Mission Control) | 460×200 | `docs/phase-02-evidence/patreon-graphics/tier-4-mission-control.png` | Generated — Earth + rocket + rose (tap 12) exhaust, matches site's `--accent-rose` Patreon block |
+| 7 | **Post 1 cover** (Welcome anchor post) | 1200×675 | `docs/phase-02-evidence/patreon-graphics/post-01-cover-1200x675.png` | Plugin screenshot + branded overlay + 12-tap strip |
 
 **Regenerating:** if you change the visual style, rerun
 `python3 docs/phase-02-evidence/patreon-graphics/_generate.py` from the repo root
