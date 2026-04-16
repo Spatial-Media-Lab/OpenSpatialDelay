@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 03 UI-SPEC approved (6/6 PASS)
-last_updated: "2026-04-16T21:45:07.235Z"
-last_activity: 2026-04-16 -- Phase 03 planning complete
+stopped_at: Completed 03-00-PLAN.md (Wave 0 validation infra)
+last_updated: "2026-04-16T21:53:53.156Z"
+last_activity: 2026-04-16
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 20
-  completed_plans: 9
-  percent: 45
+  completed_plans: 10
+  percent: 50
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-14)
 
 **Core value:** Each delay echo occupies a distinct spatial position, creating immersive 3D soundscapes that move through space around the listener.
-**Current focus:** Phase 02 — email-capture-funding-infrastructure
+**Current focus:** Phase 03 — personal-website
 
 ## Current Position
 
-Phase: 02 (email-capture-funding-infrastructure) — EXECUTING
-Plan: 5 of 7 complete; 02-05 (Sender.net) and 02-06 (Patreon) remain
+Phase: 03 (personal-website) — EXECUTING
+Plan: 2 of 9
 Status: Ready to execute
-Last activity: 2026-04-16 -- Phase 03 planning complete
+Last activity: 2026-04-16
 
-Progress: [███████░░░] 71%
+Progress: [█████░░░░░] 50%
 
 ## Performance Metrics
 
@@ -53,6 +53,7 @@ Progress: [███████░░░] 71%
 
 *Updated after each plan completion*
 | Phase 02 P03 | 15min | 2 tasks | 2 files |
+| Phase 03 P00 | 7min | 4 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,8 @@ Recent decisions affecting current work:
 - [Phase 02]: Data Controller = Andrew Rahman (natural person), not Spatial Media Lab (D-16 final, overriding plan default 2026-04-16). Rationale: privacy policy governs personal newsletter email collection; SML boundary remains plugin-side only.
 - [Phase 02]: Privacy policy effective date = 2026-04-16; Section 9 commits controller to updating effective date on any material change + notifying list before adding a newsletter processor (T-02-08 mitigation).
 - [Phase 02] (2026-04-16): **Email capture + newsletter tool = Sender.net (UAB Sender.lt, Vilnius, Lithuania)**. Overrides Init decision (Tally) and D-10 (defer newsletter to Phase 5). Rationale: Tally is a form builder only — no newsletter send, no double-opt-in email, no file delivery via confirmation. User's flow requires email field → DOI confirmation email with download buttons → subscriber added to list. Sender.net free-forever (2,500 subs / 15k emails/mo) natively supports this pattern plus embeddable forms, unlimited automations, and EU-based data processing (cleaner privacy-policy story than US ESPs). Selected after reviewing Tally, Kit, MailerLite, EmailOctopus, Brevo, Mailchimp, CleverReach, Rapidmail. Trade-off accepted: Sender branding appears in free-tier email footers. Newsletter flow = Option A (download buttons embedded directly in the DOI confirmation email alongside the confirm button).
+- [Phase 03]: D-14 Option B: Phase 3 absorbs Sender.net migration (no Sender.net refs exist in site repo; Tally still active in get-osd, _headers, privacy)
+- [Phase 03]: v1.0.0 AU plugin confirmed installed (v1.0.component + v1.0.0.component both present); Wave 2 screenshot capture unblocked
 
 ### Pending Todos
 
@@ -80,6 +83,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-16T20:51:29.727Z
-Stopped at: Phase 03 UI-SPEC approved (6/6 PASS)
-Resume file: .planning/phases/03-personal-website/03-UI-SPEC.md
+Last session: 2026-04-16T21:53:53.154Z
+Stopped at: Completed 03-00-PLAN.md (Wave 0 validation infra)
+Resume file: None

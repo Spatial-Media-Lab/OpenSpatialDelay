@@ -54,7 +54,7 @@ Plans:
   3. The SML About Us page names Andrew and all current board members
 **Plans**: 9 plans
 Plans:
-- [ ] 03-00-PLAN.md — Wave 0 infra: install @axe-core/playwright, scaffold a11y/og/asset-existence specs, triage Phase 2 Sender.net/Tally state + AU plugin presence
+- [x] 03-00-PLAN.md — Wave 0 infra: install @axe-core/playwright, scaffold a11y/og/asset-existence specs, triage Phase 2 Sender.net/Tally state + AU plugin presence
 - [ ] 03-01-PLAN.md — Hero stats (D-01) + 6 feature cards (D-03) + subhead + Hero/DownloadCTA headline polish (B-3 scoped)
 - [ ] 03-02-PLAN.md — Email migration: andrewjrahman@gmail.com → andrew@spatialmedialab.org across page.tsx + privacy/page.tsx (6 sites) + version bump + changelog
 - [ ] 03-03-PLAN.md — Patreon CTA recolour: add --accent-regal token, swap --accent-rose in PatreonCTA + Hero ghost + Nav ghost (D-12)
@@ -96,6 +96,6 @@ Phases execute in dependency order. Phase 4 (Content) depends on Phase 1 only an
 |-------|----------------|--------|-----------|
 | 1. Repo & License Readiness | 0/2 | Planning complete | - |
 | 2. Email Capture & Funding Infrastructure | 0/? | Not started | - |
-| 3. Personal Website | 0/? | Not started | - |
+| 3. Personal Website | 1/9 | In Progress | - |
 | 4. Demo Content | 0/? | Not started | - |
 | 5. Launch Announcements | 0/? | Not started | - |
