@@ -1,0 +1,1938 @@
+
+Running 3 tests using 1 worker
+
+  ✘  1 [chromium] › tests/a11y.spec.ts:8:9 › WCAG 2.1 AA accessibility › / has zero axe violations (705ms)
+  ✘  2 [chromium] › tests/a11y.spec.ts:8:9 › WCAG 2.1 AA accessibility › /privacy has zero axe violations (326ms)
+  ✘  3 [chromium] › tests/a11y.spec.ts:8:9 › WCAG 2.1 AA accessibility › /get-osd has zero axe violations (284ms)
+
+
+  1) [chromium] › tests/a11y.spec.ts:8:9 › WCAG 2.1 AA accessibility › / has zero axe violations ───
+
+    Error: [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "tags": [
+          "cat.color",
+          "wcag2aa",
+          "wcag143",
+          "TTv5",
+          "TT13.c",
+          "EN-301-549",
+          "EN-9.1.4.3",
+          "ACT",
+          "RGAAv4",
+          "RGAA-3.2.1"
+        ],
+        "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.11/color-contrast?application=playwright",
+        "nodes": [
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#03060b",
+                  "contrastRatio": 4.18,
+                  "fontSize": "8.3pt (11px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",
+                    "target": [
+                      "body"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<dd class=\"mt-1 text-[11px] uppercase tracking-[0.15em]\" style=\"color:var(--text-dim)\">Delay Taps</dd>",
+            "target": [
+              "div:nth-child(1) > dd"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#03060b",
+                  "contrastRatio": 4.18,
+                  "fontSize": "8.3pt (11px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",
+                    "target": [
+                      "body"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<dd class=\"mt-1 text-[11px] uppercase tracking-[0.15em]\" style=\"color:var(--text-dim)\">Spatialization Algorithms</dd>",
+            "target": [
+              "div:nth-child(2) > dd"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#03060b",
+                  "contrastRatio": 4.18,
+                  "fontSize": "8.3pt (11px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",
+                    "target": [
+                      "body"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<dd class=\"mt-1 text-[11px] uppercase tracking-[0.15em]\" style=\"color:var(--text-dim)\">HRTF Profiles<sup class=\"font-mono-osd ml-1 text-[10px] tracking-[0.1em] normal-case\" style=\"color:var(--text-dim)\" aria-label=\"plus one Simple mode for low CPU\">+1 Simple</sup></dd>",
+            "target": [
+              "div:nth-child(3) > dd"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#03060b",
+                  "contrastRatio": 4.18,
+                  "fontSize": "7.5pt (10px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",
+                    "target": [
+                      "body"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 7.5pt (10px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<sup class=\"font-mono-osd ml-1 text-[10px] tracking-[0.1em] normal-case\" style=\"color:var(--text-dim)\" aria-label=\"plus one Simple mode for low CPU\">+1 Simple</sup>",
+            "target": [
+              "sup"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 7.5pt (10px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#03060b",
+                  "contrastRatio": 4.18,
+                  "fontSize": "8.3pt (11px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",
+                    "target": [
+                      "body"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<dd class=\"mt-1 text-[11px] uppercase tracking-[0.15em]\" style=\"color:var(--text-dim)\">Factory Presets</dd>",
+            "target": [
+              "div:nth-child(4) > dd"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#0a0d12",
+                  "contrastRatio": 4.01,
+                  "fontSize": "8.3pt (11px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<li class=\"rounded-lg border p-6 flex flex-col\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",
+                    "target": [
+                      ".flex-col.p-6:nth-child(1)"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<span class=\"font-mono-osd text-[11px] leading-none\" style=\"color:var(--text-dim)\">0<!-- -->1</span>",
+            "target": [
+              ".flex-col.p-6:nth-child(1) > .mb-4.gap-3.items-center > .leading-none.text-\\[11px\\]"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#0a0d12",
+                  "contrastRatio": 4.01,
+                  "fontSize": "8.3pt (11px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<li class=\"rounded-lg border p-6 flex flex-col\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",
+                    "target": [
+                      ".flex-col.p-6:nth-child(2)"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<span class=\"font-mono-osd text-[11px] leading-none\" style=\"color:var(--text-dim)\">0<!-- -->2</span>",
+            "target": [
+              ".flex-col.p-6:nth-child(2) > .mb-4.gap-3.items-center > .leading-none.text-\\[11px\\]"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#0a0d12",
+                  "contrastRatio": 4.01,
+                  "fontSize": "8.3pt (11px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<li class=\"rounded-lg border p-6 flex flex-col\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",
+                    "target": [
+                      ".flex-col.p-6:nth-child(3)"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<span class=\"font-mono-osd text-[11px] leading-none\" style=\"color:var(--text-dim)\">0<!-- -->3</span>",
+            "target": [
+              ".flex-col.p-6:nth-child(3) > .mb-4.gap-3.items-center > .leading-none.text-\\[11px\\]"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#0a0d12",
+                  "contrastRatio": 4.01,
+                  "fontSize": "8.3pt (11px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<li class=\"rounded-lg border p-6 flex flex-col\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",
+                    "target": [
+                      ".flex-col.p-6:nth-child(4)"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<span class=\"font-mono-osd text-[11px] leading-none\" style=\"color:var(--text-dim)\">0<!-- -->4</span>",
+            "target": [
+              ".flex-col.p-6:nth-child(4) > .mb-4.gap-3.items-center > .leading-none.text-\\[11px\\]"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#0a0d12",
+                  "contrastRatio": 4.01,
+                  "fontSize": "8.3pt (11px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<li class=\"rounded-lg border p-6 flex flex-col\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",
+                    "target": [
+                      ".flex-col.p-6:nth-child(5)"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<span class=\"font-mono-osd text-[11px] leading-none\" style=\"color:var(--text-dim)\">0<!-- -->5</span>",
+            "target": [
+              ".flex-col.p-6:nth-child(5) > .mb-4.gap-3.items-center > .leading-none.text-\\[11px\\]"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#0a0d12",
+                  "contrastRatio": 4.01,
+                  "fontSize": "8.3pt (11px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<li class=\"rounded-lg border p-6 flex flex-col\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",
+                    "target": [
+                      ".flex-col.p-6:nth-child(6)"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<span class=\"font-mono-osd text-[11px] leading-none\" style=\"color:var(--text-dim)\">0<!-- -->6</span>",
+            "target": [
+              ".flex-col.p-6:nth-child(6) > .mb-4.gap-3.items-center > .leading-none.text-\\[11px\\]"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#03060b",
+                  "contrastRatio": 4.18,
+                  "fontSize": "9.8pt (13px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",
+                    "target": [
+                      "body"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<figcaption class=\"mt-3 text-[13px] font-mono-osd\" style=\"color:var(--text-dim)\">Partitioned convolver → phase vocoder → trajectory engine → HRTF binaural stage → dry-path latency compensation (2048 samples).</figcaption>",
+            "target": [
+              ".max-w-\\[1200px\\].sm\\:px-8.mx-auto > figure > figcaption"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#7457d1",
+                  "bgColor": "#03060b",
+                  "contrastRatio": 3.89,
+                  "fontSize": "8.3pt (11px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",
+                    "target": [
+                      "body"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 3.89 (foreground color: #7457d1, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<div class=\"font-mono-osd text-[11px] uppercase tracking-[0.18em] mb-3 flex items-center gap-2\" style=\"color:var(--accent-violet)\"><span class=\"inline-block h-[8px] w-[8px] rounded-full\" style=\"background:var(--accent-violet)\"></span>03 · Screenshots</div>",
+            "target": [
+              ".sm\\:py-20.py-16:nth-child(5) > .max-w-\\[1200px\\].sm\\:px-8.mx-auto > .tracking-\\[0\\.18em\\].uppercase.gap-2"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.89 (foreground color: #7457d1, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#020307",
+                  "contrastRatio": 4.25,
+                  "fontSize": "9.0pt (12px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"aspect-video rounded-lg border flex items-center justify-center\" style=\"background:var(--bg-well);border-color:var(--border-subtle)\"><span class=\"font-mono-osd text-[12px] uppercase tracking-[0.15em]\" style=\"color:var(--text-dim)\">▶ video placeholder</span></div>",
+                    "target": [
+                      ".aspect-video"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.25 (foreground color: #6d7279, background color: #020307, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<span class=\"font-mono-osd text-[12px] uppercase tracking-[0.15em]\" style=\"color:var(--text-dim)\">▶ video placeholder</span>",
+            "target": [
+              ".tracking-\\[0\\.15em\\].text-\\[12px\\].uppercase"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.25 (foreground color: #6d7279, background color: #020307, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#03060b",
+                  "contrastRatio": 4.18,
+                  "fontSize": "9.8pt (13px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",
+                    "target": [
+                      "body"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<figcaption class=\"mt-3 text-[13px] font-mono-osd\" style=\"color:var(--text-dim)\">Demo reel — coming in Phase 4.</figcaption>",
+            "target": [
+              "figure:nth-child(1) > figcaption"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#03060b",
+                  "contrastRatio": 4.18,
+                  "fontSize": "9.8pt (13px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",
+                    "target": [
+                      "body"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<figcaption class=\"mt-3 text-[13px] font-mono-osd\" style=\"color:var(--text-dim)\">30-second binaural demo — coming in Phase 4. Best on headphones.</figcaption>",
+            "target": [
+              "figure:nth-child(2) > figcaption"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#0a0d12",
+                  "contrastRatio": 4.01,
+                  "fontSize": "10.5pt (14px)",
+                  "fontWeight": "bold",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border overflow-hidden\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",
+                    "target": [
+                      ".max-w-\\[1200px\\].sm\\:px-8.mx-auto > .rounded-lg.overflow-hidden.border"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<th scope=\"row\" class=\"text-left px-5 py-3 w-[140px] sm:w-[180px]\" style=\"color:var(--text-dim)\">macOS</th>",
+            "target": [
+              "tr:nth-child(1) > th"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#0a0d12",
+                  "contrastRatio": 4.01,
+                  "fontSize": "10.5pt (14px)",
+                  "fontWeight": "bold",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border overflow-hidden\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",
+                    "target": [
+                      ".max-w-\\[1200px\\].sm\\:px-8.mx-auto > .rounded-lg.overflow-hidden.border"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<th scope=\"row\" class=\"text-left px-5 py-3 w-[140px] sm:w-[180px]\" style=\"color:var(--text-dim)\">Windows</th>",
+            "target": [
+              "tr:nth-child(2) > th"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#0a0d12",
+                  "contrastRatio": 4.01,
+                  "fontSize": "10.5pt (14px)",
+                  "fontWeight": "bold",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border overflow-hidden\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",
+                    "target": [
+                      ".max-w-\\[1200px\\].sm\\:px-8.mx-auto > .rounded-lg.overflow-hidden.border"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<th scope=\"row\" class=\"text-left px-5 py-3 w-[140px] sm:w-[180px]\" style=\"color:var(--text-dim)\">Formats</th>",
+            "target": [
+              "tr:nth-child(3) > th"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#0a0d12",
+                  "contrastRatio": 4.01,
+                  "fontSize": "10.5pt (14px)",
+                  "fontWeight": "bold",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border overflow-hidden\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",
+                    "target": [
+                      ".max-w-\\[1200px\\].sm\\:px-8.mx-auto > .rounded-lg.overflow-hidden.border"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<th scope=\"row\" class=\"text-left px-5 py-3 w-[140px] sm:w-[180px]\" style=\"color:var(--text-dim)\">RAM</th>",
+            "target": [
+              "tr:nth-child(4) > th"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#0a0d12",
+                  "contrastRatio": 4.01,
+                  "fontSize": "10.5pt (14px)",
+                  "fontWeight": "bold",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border overflow-hidden\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",
+                    "target": [
+                      ".max-w-\\[1200px\\].sm\\:px-8.mx-auto > .rounded-lg.overflow-hidden.border"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<th scope=\"row\" class=\"text-left px-5 py-3 w-[140px] sm:w-[180px]\" style=\"color:var(--text-dim)\">License</th>",
+            "target": [
+              "tr:nth-child(5) > th"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#0a0d12",
+                  "contrastRatio": 4.01,
+                  "fontSize": "10.5pt (14px)",
+                  "fontWeight": "bold",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<div class=\"rounded-lg border overflow-hidden\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",
+                    "target": [
+                      ".max-w-\\[1200px\\].sm\\:px-8.mx-auto > .rounded-lg.overflow-hidden.border"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<th scope=\"row\" class=\"text-left px-5 py-3 w-[140px] sm:w-[180px]\" style=\"color:var(--text-dim)\">Price</th>",
+            "target": [
+              "tr:nth-child(6) > th"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#06090f",
+                  "contrastRatio": 4.11,
+                  "fontSize": "10.5pt (14px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<footer class=\"px-5 sm:px-8 py-8 mt-0 text-sm border-t\" style=\"background:var(--bg-header);border-color:var(--border-dim);color:var(--text-secondary)\">",
+                    "target": [
+                      "footer"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.11 (foreground color: #6d7279, background color: #06090f, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<span style=\"color:var(--text-dim)\">© 2026 Andrew Rahman</span>",
+            "target": [
+              ".gap-5.flex > span"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.11 (foreground color: #6d7279, background color: #06090f, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1"
+          }
+        ]
+      }
+    ]
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoEqual[2m([22m[32mexpected[39m[2m) // deep equality[22m
+
+    [32m- Expected  -   1[39m
+    [31m+ Received  + 828[39m
+
+    [32m- Array [][39m
+    [31m+ Array [[39m
+    [31m+   Object {[39m
+    [31m+     "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",[39m
+    [31m+     "help": "Elements must meet minimum color contrast ratio thresholds",[39m
+    [31m+     "helpUrl": "https://dequeuniversity.com/rules/axe/4.11/color-contrast?application=playwright",[39m
+    [31m+     "id": "color-contrast",[39m
+    [31m+     "impact": "serious",[39m
+    [31m+     "nodes": Array [[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#03060b",[39m
+    [31m+               "contrastRatio": 4.18,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "8.3pt (11px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   "body",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<dd class=\"mt-1 text-[11px] uppercase tracking-[0.15em]\" style=\"color:var(--text-dim)\">Delay Taps</dd>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           "div:nth-child(1) > dd",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#03060b",[39m
+    [31m+               "contrastRatio": 4.18,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "8.3pt (11px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   "body",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<dd class=\"mt-1 text-[11px] uppercase tracking-[0.15em]\" style=\"color:var(--text-dim)\">Spatialization Algorithms</dd>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           "div:nth-child(2) > dd",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#03060b",[39m
+    [31m+               "contrastRatio": 4.18,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "8.3pt (11px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   "body",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<dd class=\"mt-1 text-[11px] uppercase tracking-[0.15em]\" style=\"color:var(--text-dim)\">HRTF Profiles<sup class=\"font-mono-osd ml-1 text-[10px] tracking-[0.1em] normal-case\" style=\"color:var(--text-dim)\" aria-label=\"plus one Simple mode for low CPU\">+1 Simple</sup></dd>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           "div:nth-child(3) > dd",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#03060b",[39m
+    [31m+               "contrastRatio": 4.18,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "7.5pt (10px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 7.5pt (10px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   "body",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 7.5pt (10px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<sup class=\"font-mono-osd ml-1 text-[10px] tracking-[0.1em] normal-case\" style=\"color:var(--text-dim)\" aria-label=\"plus one Simple mode for low CPU\">+1 Simple</sup>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           "sup",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#03060b",[39m
+    [31m+               "contrastRatio": 4.18,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "8.3pt (11px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   "body",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<dd class=\"mt-1 text-[11px] uppercase tracking-[0.15em]\" style=\"color:var(--text-dim)\">Factory Presets</dd>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           "div:nth-child(4) > dd",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#0a0d12",[39m
+    [31m+               "contrastRatio": 4.01,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "8.3pt (11px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<li class=\"rounded-lg border p-6 flex flex-col\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   ".flex-col.p-6:nth-child(1)",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<span class=\"font-mono-osd text-[11px] leading-none\" style=\"color:var(--text-dim)\">0<!-- -->1</span>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           ".flex-col.p-6:nth-child(1) > .mb-4.gap-3.items-center > .leading-none.text-\\[11px\\]",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#0a0d12",[39m
+    [31m+               "contrastRatio": 4.01,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "8.3pt (11px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<li class=\"rounded-lg border p-6 flex flex-col\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   ".flex-col.p-6:nth-child(2)",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<span class=\"font-mono-osd text-[11px] leading-none\" style=\"color:var(--text-dim)\">0<!-- -->2</span>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           ".flex-col.p-6:nth-child(2) > .mb-4.gap-3.items-center > .leading-none.text-\\[11px\\]",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#0a0d12",[39m
+    [31m+               "contrastRatio": 4.01,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "8.3pt (11px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<li class=\"rounded-lg border p-6 flex flex-col\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   ".flex-col.p-6:nth-child(3)",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<span class=\"font-mono-osd text-[11px] leading-none\" style=\"color:var(--text-dim)\">0<!-- -->3</span>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           ".flex-col.p-6:nth-child(3) > .mb-4.gap-3.items-center > .leading-none.text-\\[11px\\]",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#0a0d12",[39m
+    [31m+               "contrastRatio": 4.01,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "8.3pt (11px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<li class=\"rounded-lg border p-6 flex flex-col\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   ".flex-col.p-6:nth-child(4)",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<span class=\"font-mono-osd text-[11px] leading-none\" style=\"color:var(--text-dim)\">0<!-- -->4</span>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           ".flex-col.p-6:nth-child(4) > .mb-4.gap-3.items-center > .leading-none.text-\\[11px\\]",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#0a0d12",[39m
+    [31m+               "contrastRatio": 4.01,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "8.3pt (11px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<li class=\"rounded-lg border p-6 flex flex-col\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   ".flex-col.p-6:nth-child(5)",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<span class=\"font-mono-osd text-[11px] leading-none\" style=\"color:var(--text-dim)\">0<!-- -->5</span>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           ".flex-col.p-6:nth-child(5) > .mb-4.gap-3.items-center > .leading-none.text-\\[11px\\]",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#0a0d12",[39m
+    [31m+               "contrastRatio": 4.01,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "8.3pt (11px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<li class=\"rounded-lg border p-6 flex flex-col\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   ".flex-col.p-6:nth-child(6)",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<span class=\"font-mono-osd text-[11px] leading-none\" style=\"color:var(--text-dim)\">0<!-- -->6</span>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           ".flex-col.p-6:nth-child(6) > .mb-4.gap-3.items-center > .leading-none.text-\\[11px\\]",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#03060b",[39m
+    [31m+               "contrastRatio": 4.18,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "9.8pt (13px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   "body",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<figcaption class=\"mt-3 text-[13px] font-mono-osd\" style=\"color:var(--text-dim)\">Partitioned convolver → phase vocoder → trajectory engine → HRTF binaural stage → dry-path latency compensation (2048 samples).</figcaption>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           ".max-w-\\[1200px\\].sm\\:px-8.mx-auto > figure > figcaption",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#03060b",[39m
+    [31m+               "contrastRatio": 3.89,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#7457d1",[39m
+    [31m+               "fontSize": "8.3pt (11px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 3.89 (foreground color: #7457d1, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   "body",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 3.89 (foreground color: #7457d1, background color: #03060b, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<div class=\"font-mono-osd text-[11px] uppercase tracking-[0.18em] mb-3 flex items-center gap-2\" style=\"color:var(--accent-violet)\"><span class=\"inline-block h-[8px] w-[8px] rounded-full\" style=\"background:var(--accent-violet)\"></span>03 · Screenshots</div>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           ".sm\\:py-20.py-16:nth-child(5) > .max-w-\\[1200px\\].sm\\:px-8.mx-auto > .tracking-\\[0\\.18em\\].uppercase.gap-2",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#020307",[39m
+    [31m+               "contrastRatio": 4.25,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "9.0pt (12px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.25 (foreground color: #6d7279, background color: #020307, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<div class=\"aspect-video rounded-lg border flex items-center justify-center\" style=\"background:var(--bg-well);border-color:var(--border-subtle)\"><span class=\"font-mono-osd text-[12px] uppercase tracking-[0.15em]\" style=\"color:var(--text-dim)\">▶ video placeholder</span></div>",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   ".aspect-video",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.25 (foreground color: #6d7279, background color: #020307, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<span class=\"font-mono-osd text-[12px] uppercase tracking-[0.15em]\" style=\"color:var(--text-dim)\">▶ video placeholder</span>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           ".tracking-\\[0\\.15em\\].text-\\[12px\\].uppercase",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#03060b",[39m
+    [31m+               "contrastRatio": 4.18,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "9.8pt (13px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   "body",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<figcaption class=\"mt-3 text-[13px] font-mono-osd\" style=\"color:var(--text-dim)\">Demo reel — coming in Phase 4.</figcaption>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           "figure:nth-child(1) > figcaption",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#03060b",[39m
+    [31m+               "contrastRatio": 4.18,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "9.8pt (13px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<body class=\"min-h-screen bg-void text-text-primary antialiased\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   "body",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.18 (foreground color: #6d7279, background color: #03060b, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<figcaption class=\"mt-3 text-[13px] font-mono-osd\" style=\"color:var(--text-dim)\">30-second binaural demo — coming in Phase 4. Best on headphones.</figcaption>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           "figure:nth-child(2) > figcaption",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#0a0d12",[39m
+    [31m+               "contrastRatio": 4.01,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "10.5pt (14px)",[39m
+    [31m+               "fontWeight": "bold",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<div class=\"rounded-lg border overflow-hidden\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   ".max-w-\\[1200px\\].sm\\:px-8.mx-auto > .rounded-lg.overflow-hidden.border",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<th scope=\"row\" class=\"text-left px-5 py-3 w-[140px] sm:w-[180px]\" style=\"color:var(--text-dim)\">macOS</th>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           "tr:nth-child(1) > th",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#0a0d12",[39m
+    [31m+               "contrastRatio": 4.01,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "10.5pt (14px)",[39m
+    [31m+               "fontWeight": "bold",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<div class=\"rounded-lg border overflow-hidden\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   ".max-w-\\[1200px\\].sm\\:px-8.mx-auto > .rounded-lg.overflow-hidden.border",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<th scope=\"row\" class=\"text-left px-5 py-3 w-[140px] sm:w-[180px]\" style=\"color:var(--text-dim)\">Windows</th>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           "tr:nth-child(2) > th",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#0a0d12",[39m
+    [31m+               "contrastRatio": 4.01,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "10.5pt (14px)",[39m
+    [31m+               "fontWeight": "bold",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<div class=\"rounded-lg border overflow-hidden\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   ".max-w-\\[1200px\\].sm\\:px-8.mx-auto > .rounded-lg.overflow-hidden.border",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<th scope=\"row\" class=\"text-left px-5 py-3 w-[140px] sm:w-[180px]\" style=\"color:var(--text-dim)\">Formats</th>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           "tr:nth-child(3) > th",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#0a0d12",[39m
+    [31m+               "contrastRatio": 4.01,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "10.5pt (14px)",[39m
+    [31m+               "fontWeight": "bold",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<div class=\"rounded-lg border overflow-hidden\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   ".max-w-\\[1200px\\].sm\\:px-8.mx-auto > .rounded-lg.overflow-hidden.border",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<th scope=\"row\" class=\"text-left px-5 py-3 w-[140px] sm:w-[180px]\" style=\"color:var(--text-dim)\">RAM</th>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           "tr:nth-child(4) > th",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#0a0d12",[39m
+    [31m+               "contrastRatio": 4.01,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "10.5pt (14px)",[39m
+    [31m+               "fontWeight": "bold",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<div class=\"rounded-lg border overflow-hidden\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   ".max-w-\\[1200px\\].sm\\:px-8.mx-auto > .rounded-lg.overflow-hidden.border",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<th scope=\"row\" class=\"text-left px-5 py-3 w-[140px] sm:w-[180px]\" style=\"color:var(--text-dim)\">License</th>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           "tr:nth-child(5) > th",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#0a0d12",[39m
+    [31m+               "contrastRatio": 4.01,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "10.5pt (14px)",[39m
+    [31m+               "fontWeight": "bold",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<div class=\"rounded-lg border overflow-hidden\" style=\"background:var(--bg-panel);border-color:var(--border-subtle)\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   ".max-w-\\[1200px\\].sm\\:px-8.mx-auto > .rounded-lg.overflow-hidden.border",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.01 (foreground color: #6d7279, background color: #0a0d12, font size: 10.5pt (14px), font weight: bold). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<th scope=\"row\" class=\"text-left px-5 py-3 w-[140px] sm:w-[180px]\" style=\"color:var(--text-dim)\">Price</th>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           "tr:nth-child(6) > th",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#06090f",[39m
+    [31m+               "contrastRatio": 4.11,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "10.5pt (14px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.11 (foreground color: #6d7279, background color: #06090f, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<footer class=\"px-5 sm:px-8 py-8 mt-0 text-sm border-t\" style=\"background:var(--bg-header);border-color:var(--border-dim);color:var(--text-secondary)\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   "footer",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.11 (foreground color: #6d7279, background color: #06090f, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<span style=\"color:var(--text-dim)\">© 2026 Andrew Rahman</span>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           ".gap-5.flex > span",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+     ],[39m
+    [31m+     "tags": Array [[39m
+    [31m+       "cat.color",[39m
+    [31m+       "wcag2aa",[39m
+    [31m+       "wcag143",[39m
+    [31m+       "TTv5",[39m
+    [31m+       "TT13.c",[39m
+    [31m+       "EN-301-549",[39m
+    [31m+       "EN-9.1.4.3",[39m
+    [31m+       "ACT",[39m
+    [31m+       "RGAAv4",[39m
+    [31m+       "RGAA-3.2.1",[39m
+    [31m+     ],[39m
+    [31m+   },[39m
+    [31m+ ][39m
+
+      11 |         .withTags([...WCAG_AA_TAGS])
+      12 |         .analyze();
+    > 13 |       expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
+         |                                                               ^
+      14 |     });
+      15 |   }
+      16 | });
+        at /Users/andrewrahman/conductor/repos/andrewrahman-com/tests/a11y.spec.ts:13:63
+
+    Error Context: test-results/a11y-WCAG-2-1-AA-accessibility-has-zero-axe-violations-chromium/error-context.md
+
+  2) [chromium] › tests/a11y.spec.ts:8:9 › WCAG 2.1 AA accessibility › /privacy has zero axe violations 
+
+    Error: [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "tags": [
+          "cat.color",
+          "wcag2aa",
+          "wcag143",
+          "TTv5",
+          "TT13.c",
+          "EN-301-549",
+          "EN-9.1.4.3",
+          "ACT",
+          "RGAAv4",
+          "RGAA-3.2.1"
+        ],
+        "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.11/color-contrast?application=playwright",
+        "nodes": [
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#06090f",
+                  "contrastRatio": 4.11,
+                  "fontSize": "10.5pt (14px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<footer class=\"px-5 sm:px-8 py-8 mt-0 text-sm border-t\" style=\"background:var(--bg-header);border-color:var(--border-dim);color:var(--text-secondary)\">",
+                    "target": [
+                      "footer"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.11 (foreground color: #6d7279, background color: #06090f, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<span style=\"color:var(--text-dim)\">© 2026 Andrew Rahman</span>",
+            "target": [
+              "span"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.11 (foreground color: #6d7279, background color: #06090f, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1"
+          }
+        ]
+      }
+    ]
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoEqual[2m([22m[32mexpected[39m[2m) // deep equality[22m
+
+    [32m- Expected  -  1[39m
+    [31m+ Received  + 58[39m
+
+    [32m- Array [][39m
+    [31m+ Array [[39m
+    [31m+   Object {[39m
+    [31m+     "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",[39m
+    [31m+     "help": "Elements must meet minimum color contrast ratio thresholds",[39m
+    [31m+     "helpUrl": "https://dequeuniversity.com/rules/axe/4.11/color-contrast?application=playwright",[39m
+    [31m+     "id": "color-contrast",[39m
+    [31m+     "impact": "serious",[39m
+    [31m+     "nodes": Array [[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#06090f",[39m
+    [31m+               "contrastRatio": 4.11,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "10.5pt (14px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.11 (foreground color: #6d7279, background color: #06090f, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<footer class=\"px-5 sm:px-8 py-8 mt-0 text-sm border-t\" style=\"background:var(--bg-header);border-color:var(--border-dim);color:var(--text-secondary)\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   "footer",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.11 (foreground color: #6d7279, background color: #06090f, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<span style=\"color:var(--text-dim)\">© 2026 Andrew Rahman</span>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           "span",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+     ],[39m
+    [31m+     "tags": Array [[39m
+    [31m+       "cat.color",[39m
+    [31m+       "wcag2aa",[39m
+    [31m+       "wcag143",[39m
+    [31m+       "TTv5",[39m
+    [31m+       "TT13.c",[39m
+    [31m+       "EN-301-549",[39m
+    [31m+       "EN-9.1.4.3",[39m
+    [31m+       "ACT",[39m
+    [31m+       "RGAAv4",[39m
+    [31m+       "RGAA-3.2.1",[39m
+    [31m+     ],[39m
+    [31m+   },[39m
+    [31m+ ][39m
+
+      11 |         .withTags([...WCAG_AA_TAGS])
+      12 |         .analyze();
+    > 13 |       expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
+         |                                                               ^
+      14 |     });
+      15 |   }
+      16 | });
+        at /Users/andrewrahman/conductor/repos/andrewrahman-com/tests/a11y.spec.ts:13:63
+
+    Error Context: test-results/a11y-WCAG-2-1-AA-accessibi-62b9f-acy-has-zero-axe-violations-chromium/error-context.md
+
+  3) [chromium] › tests/a11y.spec.ts:8:9 › WCAG 2.1 AA accessibility › /get-osd has zero axe violations 
+
+    Error: [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "tags": [
+          "cat.color",
+          "wcag2aa",
+          "wcag143",
+          "TTv5",
+          "TT13.c",
+          "EN-301-549",
+          "EN-9.1.4.3",
+          "ACT",
+          "RGAAv4",
+          "RGAA-3.2.1"
+        ],
+        "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+        "help": "Elements must meet minimum color contrast ratio thresholds",
+        "helpUrl": "https://dequeuniversity.com/rules/axe/4.11/color-contrast?application=playwright",
+        "nodes": [
+          {
+            "any": [
+              {
+                "id": "color-contrast",
+                "data": {
+                  "fgColor": "#6d7279",
+                  "bgColor": "#06090f",
+                  "contrastRatio": 4.11,
+                  "fontSize": "10.5pt (14px)",
+                  "fontWeight": "normal",
+                  "messageKey": null,
+                  "expectedContrastRatio": "4.5:1"
+                },
+                "relatedNodes": [
+                  {
+                    "html": "<footer class=\"px-5 sm:px-8 py-8 mt-0 text-sm border-t\" style=\"background:var(--bg-header);border-color:var(--border-dim);color:var(--text-secondary)\">",
+                    "target": [
+                      "footer"
+                    ]
+                  }
+                ],
+                "impact": "serious",
+                "message": "Element has insufficient color contrast of 4.11 (foreground color: #6d7279, background color: #06090f, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ],
+            "all": [],
+            "none": [],
+            "impact": "serious",
+            "html": "<span style=\"color:var(--text-dim)\">© 2026 Andrew Rahman</span>",
+            "target": [
+              "span"
+            ],
+            "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.11 (foreground color: #6d7279, background color: #06090f, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1"
+          }
+        ]
+      }
+    ]
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoEqual[2m([22m[32mexpected[39m[2m) // deep equality[22m
+
+    [32m- Expected  -  1[39m
+    [31m+ Received  + 58[39m
+
+    [32m- Array [][39m
+    [31m+ Array [[39m
+    [31m+   Object {[39m
+    [31m+     "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",[39m
+    [31m+     "help": "Elements must meet minimum color contrast ratio thresholds",[39m
+    [31m+     "helpUrl": "https://dequeuniversity.com/rules/axe/4.11/color-contrast?application=playwright",[39m
+    [31m+     "id": "color-contrast",[39m
+    [31m+     "impact": "serious",[39m
+    [31m+     "nodes": Array [[39m
+    [31m+       Object {[39m
+    [31m+         "all": Array [],[39m
+    [31m+         "any": Array [[39m
+    [31m+           Object {[39m
+    [31m+             "data": Object {[39m
+    [31m+               "bgColor": "#06090f",[39m
+    [31m+               "contrastRatio": 4.11,[39m
+    [31m+               "expectedContrastRatio": "4.5:1",[39m
+    [31m+               "fgColor": "#6d7279",[39m
+    [31m+               "fontSize": "10.5pt (14px)",[39m
+    [31m+               "fontWeight": "normal",[39m
+    [31m+               "messageKey": null,[39m
+    [31m+             },[39m
+    [31m+             "id": "color-contrast",[39m
+    [31m+             "impact": "serious",[39m
+    [31m+             "message": "Element has insufficient color contrast of 4.11 (foreground color: #6d7279, background color: #06090f, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+             "relatedNodes": Array [[39m
+    [31m+               Object {[39m
+    [31m+                 "html": "<footer class=\"px-5 sm:px-8 py-8 mt-0 text-sm border-t\" style=\"background:var(--bg-header);border-color:var(--border-dim);color:var(--text-secondary)\">",[39m
+    [31m+                 "target": Array [[39m
+    [31m+                   "footer",[39m
+    [31m+                 ],[39m
+    [31m+               },[39m
+    [31m+             ],[39m
+    [31m+           },[39m
+    [31m+         ],[39m
+    [31m+         "failureSummary": "Fix any of the following:[39m
+    [31m+   Element has insufficient color contrast of 4.11 (foreground color: #6d7279, background color: #06090f, font size: 10.5pt (14px), font weight: normal). Expected contrast ratio of 4.5:1",[39m
+    [31m+         "html": "<span style=\"color:var(--text-dim)\">© 2026 Andrew Rahman</span>",[39m
+    [31m+         "impact": "serious",[39m
+    [31m+         "none": Array [],[39m
+    [31m+         "target": Array [[39m
+    [31m+           "span",[39m
+    [31m+         ],[39m
+    [31m+       },[39m
+    [31m+     ],[39m
+    [31m+     "tags": Array [[39m
+    [31m+       "cat.color",[39m
+    [31m+       "wcag2aa",[39m
+    [31m+       "wcag143",[39m
+    [31m+       "TTv5",[39m
+    [31m+       "TT13.c",[39m
+    [31m+       "EN-301-549",[39m
+    [31m+       "EN-9.1.4.3",[39m
+    [31m+       "ACT",[39m
+    [31m+       "RGAAv4",[39m
+    [31m+       "RGAA-3.2.1",[39m
+    [31m+     ],[39m
+    [31m+   },[39m
+    [31m+ ][39m
+
+      11 |         .withTags([...WCAG_AA_TAGS])
+      12 |         .analyze();
+    > 13 |       expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
+         |                                                               ^
+      14 |     });
+      15 |   }
+      16 | });
+        at /Users/andrewrahman/conductor/repos/andrewrahman-com/tests/a11y.spec.ts:13:63
+
+    Error Context: test-results/a11y-WCAG-2-1-AA-accessibi-75aad-osd-has-zero-axe-violations-chromium/error-context.md
+
+  3 failed
+    [chromium] › tests/a11y.spec.ts:8:9 › WCAG 2.1 AA accessibility › / has zero axe violations ────
+    [chromium] › tests/a11y.spec.ts:8:9 › WCAG 2.1 AA accessibility › /privacy has zero axe violations 
+    [chromium] › tests/a11y.spec.ts:8:9 › WCAG 2.1 AA accessibility › /get-osd has zero axe violations 

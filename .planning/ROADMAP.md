@@ -60,7 +60,7 @@ Plans:
 - [x] 03-03-PLAN.md — Patreon CTA recolour: add --accent-regal token, swap --accent-rose in PatreonCTA + Hero ghost + Nav ghost (D-12)
 - [x] 03-04-PLAN.md — Asset swaps: SML SVG logo, headshot, 11× screenshot recapture from v1.0.0 (D-10/D-11/D-15, one human checkpoint)
 - [x] 03-05-PLAN.md — D-14 inline EmailCaptureSection + /get-osd/ shim + anchor link rewrites (conditional on Wave 0 Option A/B)
-- [ ] 03-06-PLAN.md — WCAG-AA accessibility audit (D-08): run axe-core, nudge failing tokens, annotate fixes
+- [x] 03-06-PLAN.md — WCAG-AA accessibility audit (D-08): run axe-core, nudge failing tokens, annotate fixes
 - [ ] 03-07-PLAN.md — OG metadata verification (WEB-03): reconcile layout.tsx dimensions + manual social-card preview checkpoint
 - [ ] 03-08-PLAN.md — WEB-02 sentinel: external spatialmedialab.org/about Playwright guard + REQUIREMENTS.md flip to Complete
 **UI hint**: yes
