@@ -1,6 +1,6 @@
 # Seed Post 2 — Inside OpenSpatialDelay: HRTF, Phase Vocoder, and 3D Trajectory
 
-**Visibility:** PATRON-ONLY ($3+ Supporter tier, per D-28)
+**Visibility:** PATRON-ONLY ($3+ Stargazer tier, per D-28)
 **Publish order:** 2nd
 **Public teaser (shows above the paywall):** A look at the DSP architecture behind OpenSpatialDelay
 — for patrons who want to know how it actually works.

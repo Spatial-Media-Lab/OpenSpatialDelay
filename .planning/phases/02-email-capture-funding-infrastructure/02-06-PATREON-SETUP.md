@@ -24,6 +24,41 @@ Total time: ~45–60 min.
 - [ ] Create `docs/phase-02-evidence/` locally and plan to save 4 screenshots there:
       `patreon-vanity-url.png`, `patreon-tiers.png`, `patreon-launch-confirmation.png`,
       `patreon-page-live.png`.
+- [ ] Graphics bundle ready at `docs/phase-02-evidence/patreon-graphics/` (see Step 0 below).
+
+---
+
+## Step 0 — Graphics You'll Upload
+
+All images below are committed to the repo at `docs/phase-02-evidence/patreon-graphics/`.
+Upload them verbatim into Patreon — no cropping or resizing needed (Patreon will handle
+any final fit). The set uses a space-exploration visual language that matches the tier names
+(Stargazer → Astronaut → Commander → Mission Control).
+
+| # | Patreon slot | Spec | File (repo-relative) | Source |
+|---|--------------|------|----------------------|--------|
+| 1 | **Profile avatar** (circle next to creator name) | 500×500 square | `docs/phase-02-evidence/patreon-graphics/avatar-500x500.png` | Downloaded from spatialmedialab.org/about/ (Andrew's headshot), center-biased square crop |
+| 2 | **Cover image** (page header banner) | 1600×400 | `docs/phase-02-evidence/patreon-graphics/cover-1600x400.png` | Generated — dark starfield + "SPATIAL MEDIA LIBRARY" wordmark + tagline |
+| 3 | **Tier 1 image** (Stargazer) | 512×512 | `docs/phase-02-evidence/patreon-graphics/tier-1-stargazer.png` | Generated — gold star + constellation |
+| 4 | **Tier 2 image** (Astronaut) | 512×512 | `docs/phase-02-evidence/patreon-graphics/tier-2-astronaut.png` | Generated — astronaut silhouette with visor + antenna |
+| 5 | **Tier 3 image** (Commander) | 512×512 | `docs/phase-02-evidence/patreon-graphics/tier-3-commander.png` | Generated — rank chevrons + command star |
+| 6 | **Tier 4 image** (Mission Control) | 512×512 | `docs/phase-02-evidence/patreon-graphics/tier-4-mission-control.png` | Generated — Earth + orbit ring + launch rocket |
+| 7 | **Post 1 cover** (Welcome anchor post) | 1200×675 | `docs/phase-02-evidence/patreon-graphics/post-01-cover-1200x675.png` | Plugin screenshot (`docs/assets/screenshot_full.png`) + branded title overlay |
+
+**Regenerating:** if you change the visual style, rerun
+`python3 docs/phase-02-evidence/patreon-graphics/_generate.py` from the repo root
+(requires PIL / Pillow). The generator is self-contained, deterministic (seeded), and reads
+the headshot from `avatar-andrew-rahman.jpg` + plugin screenshot from `docs/assets/screenshot_full.png`.
+
+**Optional personal replacement:** if you prefer a different headshot, drop a JPG named
+`avatar-andrew-rahman.jpg` into the same directory and rerun the generator — it will re-crop
+to 500×500 automatically.
+
+**Where each graphic is uploaded:**
+- Avatar → upload in Step 1 (Create Creator Account), profile settings.
+- Cover → upload in Step 1 or Step 5 (About Section) — Patreon exposes it in both places.
+- Tier images → upload alongside each tier in Step 4 (the Tier rows below now each reference their specific file).
+- Post 1 cover → upload when creating Post 1 in Step 8, in the "Post image / thumbnail" slot.
 
 ---
 
@@ -41,6 +76,8 @@ Funding the Spatial Media Library — spatial audio tools for musicians and soun
 ```
 
 - [ ] Enable **2FA** in Account Settings → Security immediately (T-02-26).
+- [ ] **Upload profile avatar** → `docs/phase-02-evidence/patreon-graphics/avatar-500x500.png`
+- [ ] **Upload cover image** → `docs/phase-02-evidence/patreon-graphics/cover-1600x400.png`
 
 ---
 
@@ -70,45 +107,49 @@ Payouts / Earnings settings.
 Create exactly **4 monthly tiers**. **DO NOT enable annual billing on any tier** —
 not eligible until the page is 3+ months live and earning $200+/mo (RESEARCH.md Pitfall 4).
 
-### Tier 1 — $3/mo · Supporter
+### Tier 1 — $3/mo · Stargazer
 
-📋 **Name:** `Supporter`
+📋 **Name:** `Stargazer`
 📋 **Price:** `$3 / month`
+📋 **Tier image:** upload `docs/phase-02-evidence/patreon-graphics/tier-1-stargazer.png`
 📋 **Benefits (paste as bullet list):**
 ```
 - Newsletter updates on new Spatial Media Library tools
 - Public acknowledgment as a Spatial Media Library supporter
 ```
 
-### Tier 2 — $10/mo · Patron
+### Tier 2 — $10/mo · Astronaut
 
-📋 **Name:** `Patron`
+📋 **Name:** `Astronaut`
 📋 **Price:** `$10 / month`
+📋 **Tier image:** upload `docs/phase-02-evidence/patreon-graphics/tier-2-astronaut.png`
 📋 **Benefits:**
 ```
-- All Supporter benefits
+- All Stargazer benefits
 - Vote on feature priorities for OpenSpatialDelay and future Spatial Media Library tools
 - Access to early builds before public release
 ```
 
-### Tier 3 — $25/mo · Partner
+### Tier 3 — $25/mo · Commander
 
-📋 **Name:** `Partner`
+📋 **Name:** `Commander`
 📋 **Price:** `$25 / month`
+📋 **Tier image:** upload `docs/phase-02-evidence/patreon-graphics/tier-3-commander.png`
 📋 **Benefits:**
 ```
-- All Patron benefits
+- All Astronaut benefits
 - 1:1 access via Discord or email
 - Early access to future patron-exclusive Spatial Media Library tools
 ```
 
-### Tier 4 — $100/mo · Founder
+### Tier 4 — $100/mo · Mission Control
 
-📋 **Name:** `Founder`
+📋 **Name:** `Mission Control`
 📋 **Price:** `$100 / month`
+📋 **Tier image:** upload `docs/phase-02-evidence/patreon-graphics/tier-4-mission-control.png`
 📋 **Benefits:**
 ```
-- All Partner benefits
+- All Commander benefits
 - Permanent public thank-you credit in the OpenSpatialDelay About dialog
 ```
 
@@ -189,6 +230,7 @@ lines like `**Visibility:** PUBLIC`), confirm preview rendering, then publish.
 
 - [ ] Visibility: **Public**
 - [ ] Title: `Welcome to the Spatial Media Library Patreon`
+- [ ] **Post cover image** → upload `docs/phase-02-evidence/patreon-graphics/post-01-cover-1200x675.png`
 
 📋 **Body (paste verbatim):**
 ```markdown
@@ -227,7 +269,7 @@ Every tier counts. $3/mo keeps one project alive; $100/mo keeps three going.
 
 ### Post 2 (PATRON-ONLY, $3+) — *"Inside OpenSpatialDelay: HRTF, Phase Vocoder, and 3D Trajectory"*
 
-- [ ] Visibility: **Paid members only ($3+ Supporter and above)**
+- [ ] Visibility: **Paid members only ($3+ Stargazer and above)**
 - [ ] Title: `Inside OpenSpatialDelay: HRTF, Phase Vocoder, and 3D Trajectory`
 - [ ] Public teaser (shows above paywall — paste into the teaser field):
 

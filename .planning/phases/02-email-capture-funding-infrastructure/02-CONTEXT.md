@@ -76,10 +76,11 @@ Scope also includes standing up the minimal `andrewrahman.com` Next.js static sh
 - **D-21:** Creator identity = **Andrew Rahman (personal)**. Not SML, not a new brand.
 - **D-22:** Core patron-value pitch = "Funding the **Spatial Media Library** pipeline — OpenSpatialDelay is the first; more are coming. Source code lives at Spatial Media Lab. Your support keeps these tools free and open-source."
 - **D-23:** Tier structure = **4 tiers + annual-payment option**. Claude drafts the following baseline for user review; pricing and benefits finalized in plan:
-  - **$3 Supporter** — newsletter, public thanks, funding acknowledgment
-  - **$10 Patron** — Supporter benefits + feature-request voting + early builds
-  - **$25 Partner** — Patron benefits + 1:1 Discord/email access + early access to future Patreon-exclusive plugins
-  - **$100 Founder** — Partner benefits + public thank-you credit in plugin About dialog
+  - **$3 Stargazer** — newsletter, public thanks, funding acknowledgment
+  - **$10 Astronaut** — Stargazer benefits + feature-request voting + early builds
+  - **$25 Commander** — Astronaut benefits + 1:1 Discord/email access + early access to future Patreon-exclusive plugins
+  - **$100 Mission Control** — Commander benefits + public thank-you credit in plugin About dialog
+  - Tier labels use a space-exploration theme (mirrors spatial/3D nature of SML tools). Prices and benefit structure unchanged from the original Supporter/Patron/Partner/Founder baseline.
   - **Annual option** — ~15% discount on each tier
 - **D-24:** Future Patreon-only plugins = soft-mentioned as a future plan, **no specific timeframe committed**. Copy example: *"OpenSpatialDelay is GPL and free for everyone. Some future plugins in the Spatial Media Library pipeline will launch on Patreon first or as patron-exclusive — those will be announced as they come."*
 - **D-25:** Patreon page must include a **soft one-liner CTA for Berlin residents** to connect with Spatial Media Lab. Placement = sidebar or footer of the Patreon page (not seed posts, not the main pitch). Tone = casual, low-urgency. Suggested baseline: *"In Berlin? Come by Spatial Media Lab — we run events and collaborate with local artists. [link]"* Link target to be confirmed in planning (likely SpatialMediaLab.org About Us or a "join us" contact section).
