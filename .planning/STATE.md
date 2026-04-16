@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: "Completed 03-01-PLAN.md (Wave 1: hero stats + 6 features + copy polish)"
-last_updated: "2026-04-16T22:03:42.652Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-04-16T22:10:10.677Z"
 last_activity: 2026-04-16
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 20
-  completed_plans: 11
-  percent: 55
+  completed_plans: 12
+  percent: 60
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-14)
 ## Current Position
 
 Phase: 03 (personal-website) — EXECUTING
-Plan: 3 of 9
+Plan: 4 of 9
 Status: Ready to execute
 Last activity: 2026-04-16
 
@@ -55,6 +55,7 @@ Progress: [█████░░░░░] 50%
 | Phase 02 P03 | 15min | 2 tasks | 2 files |
 | Phase 03 P00 | 7min | 4 tasks | 5 files |
 | Phase 03 P01 | 5min | 3 tasks | 2 files |
+| Phase 03 P02 | 3min | 3 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,9 @@ Recent decisions affecting current work:
 - [Phase 03]: D-14 Option B: Phase 3 absorbs Sender.net migration (no Sender.net refs exist in site repo; Tally still active in get-osd, _headers, privacy)
 - [Phase 03]: v1.0.0 AU plugin confirmed installed (v1.0.component + v1.0.0.component both present); Wave 2 screenshot capture unblocked
 - [Phase 03]: Plan 03-01 complete — Hero stats locked (D-01: 12/7/5+1/70), FEATURES 5→6 (D-03), hero + DownloadCTA copy polished, ADM-OSC claim verified against Source/PluginProcessor.cpp
+- [Phase 03]: Plan 02: Effective date bumped to 2026-04-17 (current day) rather than leaving baseline 2026-04-16; regex test tolerant either way
+- [Phase 03]: Plan 02: Privacy changelog paragraph deliberately omits legacy Gmail from rendered text — git log is the audit trail, keeps Playwright negative-assertion green
+- [Phase 03]: Plan 02: scripts/verify-production.sh migrated alongside privacy/page.tsx (Rule 1) — post-deploy content check directly coupled to page copy, atomic commit prevents broken-deploy state
 
 ### Pending Todos
 
@@ -85,6 +89,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-16T22:03:42.649Z
-Stopped at: Completed 03-01-PLAN.md (Wave 1: hero stats + 6 features + copy polish)
+Last session: 2026-04-16T22:10:10.674Z
+Stopped at: Completed 03-02-PLAN.md
 Resume file: None
