@@ -16,7 +16,7 @@ Requirements for the public launch. Each maps to roadmap phases.
 
 ### Website
 
-- [ ] **WEB-01**: Personal landing page live on Netlify — hero section, 30s audio demo embed, download CTA, screenshots, system requirements, license statement
+- [x] **WEB-01**: Personal landing page live on Netlify — hero section, 30s audio demo embed, download CTA, screenshots, system requirements, license statement
 - [ ] **WEB-02**: SML About Us page updated with Andrew + board members
 - [ ] **WEB-03**: Open Graph meta tags configured (og:title, og:image, og:description) for social link previews
 
@@ -74,7 +74,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REPO-02 | Phase 1 | Pending |
 | REPO-03 | Phase 1 | Pending |
 | REPO-04 | Phase 1 | Pending |
-| WEB-01 | Phase 3 | Pending |
+| WEB-01 | Phase 3 | Complete |
 | WEB-02 | Phase 3 | Pending |
 | WEB-03 | Phase 3 | Pending |
 | DIST-01 | Phase 2 | Pending |

@@ -55,7 +55,7 @@ Plans:
 **Plans**: 9 plans
 Plans:
 - [x] 03-00-PLAN.md — Wave 0 infra: install @axe-core/playwright, scaffold a11y/og/asset-existence specs, triage Phase 2 Sender.net/Tally state + AU plugin presence
-- [ ] 03-01-PLAN.md — Hero stats (D-01) + 6 feature cards (D-03) + subhead + Hero/DownloadCTA headline polish (B-3 scoped)
+- [x] 03-01-PLAN.md — Hero stats (D-01) + 6 feature cards (D-03) + subhead + Hero/DownloadCTA headline polish (B-3 scoped)
 - [ ] 03-02-PLAN.md — Email migration: andrewjrahman@gmail.com → andrew@spatialmedialab.org across page.tsx + privacy/page.tsx (6 sites) + version bump + changelog
 - [ ] 03-03-PLAN.md — Patreon CTA recolour: add --accent-regal token, swap --accent-rose in PatreonCTA + Hero ghost + Nav ghost (D-12)
 - [ ] 03-04-PLAN.md — Asset swaps: SML SVG logo, headshot, 11× screenshot recapture from v1.0.0 (D-10/D-11/D-15, one human checkpoint)
