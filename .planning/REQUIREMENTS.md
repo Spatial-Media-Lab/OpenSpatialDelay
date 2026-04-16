@@ -23,7 +23,7 @@ Requirements for the public launch. Each maps to roadmap phases.
 ### Distribution & Funding
 
 - [ ] **DIST-01**: Tally email capture form live — required email, GDPR consent checkbox, thank-you screen with manual macOS + Windows download buttons linking to the v1.0.0 GitHub Release assets
-- [ ] **DIST-02**: Privacy policy page published (required for GDPR compliance)
+- [x] **DIST-02**: Privacy policy page published (required for GDPR compliance)
 - [ ] **DIST-03**: Patreon page published with 2+ posts and patron-value framing (spatial audio tools pipeline pitch)
 
 ### Content
@@ -78,7 +78,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WEB-02 | Phase 3 | Pending |
 | WEB-03 | Phase 3 | Pending |
 | DIST-01 | Phase 2 | Pending |
-| DIST-02 | Phase 2 | Pending |
+| DIST-02 | Phase 2 | Complete |
 | DIST-03 | Phase 2 | Pending |
 | CONT-01 | Phase 4 | Pending |
 | CONT-02 | Phase 4 | Pending |

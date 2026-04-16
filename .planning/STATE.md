@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 1 context gathered
-last_updated: "2026-04-15T14:22:04.767Z"
+stopped_at: Completed Plan 02-03 — privacy policy prose authored, pushed to AndrewRahman/andrewrahman-com main (c84864c). Plans 04/05/06 unblocked.
+last_updated: "2026-04-16T07:55:11.911Z"
 last_activity: 2026-04-15
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
-  percent: 100
+  total_plans: 10
+  completed_plans: 7
+  percent: 70
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-14)
 ## Current Position
 
 Phase: 2 of 5 (email capture & funding infrastructure)
-Plan: Not started
+Plan: 3 of 6 (privacy-policy prose complete — authored by Plan 02-03)
 Status: Ready to execute
 Last activity: 2026-04-15
 
@@ -52,6 +52,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: --
 
 *Updated after each plan completion*
+| Phase 02 P03 | 15min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -64,6 +65,8 @@ Recent decisions affecting current work:
 - [Init]: Patreon as funding model — funds entire spatial audio tools pipeline
 - [Init]: Tally for email capture — free tier, no code needed, redirect to GitHub Releases
 - [Init]: Website + mailing list first — enables social posts immediately
+- [Phase 02]: Data Controller = Andrew Rahman (natural person), not Spatial Media Lab (D-16 final, overriding plan default 2026-04-16). Rationale: privacy policy governs personal newsletter email collection; SML boundary remains plugin-side only.
+- [Phase 02]: Privacy policy effective date = 2026-04-16; Section 9 commits controller to updating effective date on any material change + notifying list before adding a newsletter processor (T-02-08 mitigation).
 
 ### Pending Todos
 
@@ -76,6 +79,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-14T13:04:17.678Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-repo-license-readiness/01-CONTEXT.md
+Last session: 2026-04-16T07:55:11.908Z
+Stopped at: Completed Plan 02-03 — privacy policy prose authored, pushed to AndrewRahman/andrewrahman-com main (c84864c). Plans 04/05/06 unblocked.
+Resume file: None
