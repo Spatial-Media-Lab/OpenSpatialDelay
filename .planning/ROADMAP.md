@@ -52,7 +52,17 @@ Plans:
   1. The landing page loads at a Netlify URL and contains: hero section, 30-second audio demo embed, download CTA, plugin screenshots, system requirements, and GPL-3.0 license statement
   2. Pasting the landing page URL into Twitter/X or LinkedIn shows a correct social preview card (title, image, description) via Open Graph meta tags
   3. The SML About Us page names Andrew and all current board members
-**Plans**: TBD
+**Plans**: 9 plans
+Plans:
+- [ ] 03-00-PLAN.md — Wave 0 infra: install @axe-core/playwright, scaffold a11y/og/asset-existence specs, triage Phase 2 Sender.net/Tally state + AU plugin presence
+- [ ] 03-01-PLAN.md — Hero stats (D-01) + 6 feature cards (D-03) + subhead + Hero/DownloadCTA headline polish (B-3 scoped)
+- [ ] 03-02-PLAN.md — Email migration: andrewjrahman@gmail.com → andrew@spatialmedialab.org across page.tsx + privacy/page.tsx (6 sites) + version bump + changelog
+- [ ] 03-03-PLAN.md — Patreon CTA recolour: add --accent-regal token, swap --accent-rose in PatreonCTA + Hero ghost + Nav ghost (D-12)
+- [ ] 03-04-PLAN.md — Asset swaps: SML SVG logo, headshot, 11× screenshot recapture from v1.0.0 (D-10/D-11/D-15, one human checkpoint)
+- [ ] 03-05-PLAN.md — D-14 inline EmailCaptureSection + /get-osd/ shim + anchor link rewrites (conditional on Wave 0 Option A/B)
+- [ ] 03-06-PLAN.md — WCAG-AA accessibility audit (D-08): run axe-core, nudge failing tokens, annotate fixes
+- [ ] 03-07-PLAN.md — OG metadata verification (WEB-03): reconcile layout.tsx dimensions + manual social-card preview checkpoint
+- [ ] 03-08-PLAN.md — WEB-02 sentinel: external spatialmedialab.org/about Playwright guard + REQUIREMENTS.md flip to Complete
 **UI hint**: yes
 
 ### Phase 4: Demo Content
