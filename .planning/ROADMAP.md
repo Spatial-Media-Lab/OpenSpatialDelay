@@ -81,14 +81,24 @@ Plans:
 ### Phase 5: Launch Announcements
 **Goal**: The plugin is publicly announced across all channels — blog, newsletter, LinkedIn, Instagram, and KVR Audio — with working links to the website and download
 **Depends on**: Phase 3, Phase 4
-**Requirements**: ANNC-01, ANNC-02, ANNC-03, ANNC-04, ANNC-05
+**Requirements**: ANNC-01, ANNC-02, ANNC-03, ANNC-04, ANNC-05, ANNC-06
 **Success Criteria** (what must be TRUE):
   1. The SML blog post is live and embeds or links to the audio demo
   2. The SML newsletter email is sent with the download and landing page links
-  3. A LinkedIn post is published with the link in the first comment
+  3. A LinkedIn post is published (2026-compliant format: text-only or document carousel with bio-link CTA; NOT 'link in first comment' per LinkedIn 2026 algorithm)
   4. An Instagram post or Reel is published using the video demo content
   5. A KVR Audio product listing for OpenSpatialDelay is live and links to the GitHub release
-**Plans**: TBD
+**Plans**: 9 plans
+Plans:
+- [ ] 05-00-PLAN.md — Launch orchestration: phase5-smoke.sh + T-7 precheck checklist + T-0 launch-day runbook (hard blocker: Phase 4 demo content)
+- [ ] 05-01-PLAN.md — SML blog post draft (ANNC-01) — WordPress-ready Markdown mirroring 2024 Ambisonic-to-Atmos-template precedent, 1000-1400 words
+- [ ] 05-02-PLAN.md — SML Mailchimp newsletter draft (ANNC-02) — teaser body + 2 CTAs, uses SML audience per D-08
+- [ ] 05-03-PLAN.md — LinkedIn post draft (ANNC-03) — 2026-compliant text-only OR document-carousel format (no link in first comment)
+- [ ] 05-04-PLAN.md — Instagram Reel + carousel drafts (ANNC-04) — 5-hashtag cap, 15–30s Reel, descope branch to static post if CONT-02 slips
+- [ ] 05-05-PLAN.md — KVR Audio product listing + news submission (ANNC-05) — metadata + press-release draft; submit T-1 + T-0
+- [ ] 05-06-PLAN.md — Review-pitch batch (ANNC-06 mode A) — template + 34-contact personalisations + outreach log; send T-0 launch morning
+- [ ] 05-07-PLAN.md — Berlin-local Superbooth DMs (D-07) — Hainbach, Peter Kirn, Eric Horstmann, Ulli Scuda (AES Germany re-scope); send 2026-04-21..25
+- [ ] 05-08-PLAN.md — Guest/speaker-pitch wave (ANNC-06 mode B) — podcasts + meetups + ADC CFP; drafts staged, DO NOT SEND BEFORE 2026-05-25
 
 ## Progress
 
@@ -101,4 +111,4 @@ Phases execute in dependency order. Phase 4 (Content) depends on Phase 1 only an
 | 2. Email Capture & Funding Infrastructure | 6/7 | In Progress | - |
 | 3. Personal Website | 9/10 | In Progress | - |
 | 4. Demo Content | 0/? | Not started | - |
-| 5. Launch Announcements | 0/? | Not started | - |
+| 5. Launch Announcements | 0/9 | Planned | - |
