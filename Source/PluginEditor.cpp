@@ -1347,8 +1347,13 @@ void SpatialMapComponent::paint (juce::Graphics& g)
             g.strokePath (textPath, juce::PathStrokeType (0.8f));
         }
 
-        // 5. Elevation degree label (selected object only, non-zero elevation)
-        if (i == selectedObject && std::abs (elDeg) > 1.0f)
+        // 5. Elevation degree label
+        //    - Normal UI: selected object only, non-zero elevation
+        //    - Screenshot mode (#168 round 2): every enabled object regardless of magnitude
+        bool drawElevationLabel = labelAllEnabledForScreenshot
+                                    ? objects[(size_t)i].enabled
+                                    : (i == selectedObject && std::abs (elDeg) > 1.0f);
+        if (drawElevationLabel)
         {
             float labelOffsetY = isAbove ? -(half + 14.0f) : (half + 2.0f);
             g.setColour (objectColours[i].withAlpha (0.85f));
@@ -3395,13 +3400,29 @@ void OpenSpatialDelayEditor::configureGlobalDrawer (bool open, const float* knob
         globalTapDrawer.setKnobValueSilent (i, knobValues[i]);
 }
 
+void OpenSpatialDelayEditor::applyShowcaseHeaderForScreenshot()
+{
+    // Issue #168 round 2: after the tool has written directly to
+    // processor.configOutputFormat / configAlgorithm, refresh the header
+    // combo boxes so the snapshot reflects the new selection. The output-
+    // format combo needs an explicit setSelectedItemIndex (it's only
+    // initialised from processor state in the constructor), and the
+    // algorithm combo needs its category list rebuilt — force this by
+    // invalidating lastAlgoCategoryShown so timerCallback repopulates it.
+    outputFormatBox.setSelectedItemIndex (processorRef.configOutputFormat.load (std::memory_order_relaxed),
+                                          juce::dontSendNotification);
+    lastAlgoCategoryShown = -1;
+    syncForScreenshot();
+}
+
 juce::Rectangle<int> OpenSpatialDelayEditor::getToneSectionBoundsForScreenshot() const
 {
     // TONE section spans: header (14px) + 6px pad + filter graph (104px) + 22px readout
-    // Breathing room: 12px above (clear of MOD section below), 12px below, 10px
-    // left/right. Clamped to the editor width.
-    const int padTop    = 12;
-    const int padBottom = 12;
+    // Round-2 review (#168): padding tightened to 6px top/bottom so the filter
+    // graph fills the frame and doesn't look small inside a large crop.
+    // Horizontal 10px padding retained for breathing room.
+    const int padTop    = 6;
+    const int padBottom = 6;
     const int padX      = 10;
     int top    = toneHeaderY - padTop;
     int height = padTop + 14 + 6 + 104 + 22 + padBottom;
