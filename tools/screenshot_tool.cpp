@@ -11,6 +11,10 @@
 // Options:
 //   --preset <name|path>   Load a factory preset by name or a preset file
 //   --mode <name>          Capture mode (see below). Default: full.
+//   --showcase             Override processor state with a "features-on" demo
+//                          (issue #168 round 2): 9.1.6 Atmos + VBAP, 9 taps
+//                          with an Orbit trajectory on Tap 1, MOD/FLT/AIR
+//                          engaged, Delay Sync + Triplet, OSC Send enabled.
 //   --list-presets         List factory presets and exit
 //
 // Capture modes:
@@ -21,9 +25,9 @@
 //   save-overlay      — Editor with Save Preset overlay composited on top
 //   preset-menu       — Editor with nested preset menu (folders + expanded submenu)
 //   output-dropdown   — Editor with the Output Format dropdown (flat list)
-//   undo-active       — Editor with populated undo/redo history (buttons active)
+//   undo-active       — Editor with populated undo history (undo active, redo inactive)
 //   spatial-map       — Just the SpatialMap component (no drawer, no bottom panel)
-//   elevation-map     — SpatialMap with all 12 taps in a +90°→-90° spiral, labelled
+//   elevation-map     — SpatialMap with all 12 taps in a −90°→+90° spiral, labelled
 //
 // Examples:
 //   screenshot_tool ui.png 2.0
@@ -285,6 +289,10 @@ buildPresetMenuMock (OSDLookAndFeel& lnf,
     }
 
     // Build the parent (category folders) menu.
+    // Issue #168 round 2: tick the category that contains the currently-active
+    // preset, so the parent list mirrors JUCE's real popup (which ticks the
+    // category of the active preset *and* highlights the row where the submenu
+    // is open).
     std::vector<PopupMenuSnapshot::Item> parentItems;
     for (const auto& cat : categories)
     {
@@ -292,6 +300,7 @@ buildPresetMenuMock (OSDLookAndFeel& lnf,
         it.text          = cat;
         it.hasSubMenu    = true;
         it.isHighlighted = (cat == hovered);
+        it.isTicked      = (cat == hovered);
         parentItems.push_back (it);
     }
 
@@ -324,8 +333,10 @@ buildPresetMenuMock (OSDLookAndFeel& lnf,
 }
 
 //==============================================================================
-// Build an output-format dropdown mock that matches the real plugin's popup:
-// a flat list of every format, with the current one ticked. No category headers.
+// Build an output-format dropdown mock that matches the real plugin's popup
+// (issue #168 round 2): juce::ComboBox duplicates the currently-selected item
+// at the top of the popup, followed by a separator, then the full flat list
+// below (with the current item ticked in both positions).
 //==============================================================================
 static std::unique_ptr<PopupMenuSnapshot>
 buildOutputDropdownMock (OSDLookAndFeel& lnf,
@@ -335,6 +346,21 @@ buildOutputDropdownMock (OSDLookAndFeel& lnf,
     std::vector<PopupMenuSnapshot::Item> items;
     int currentFmt = processor.configOutputFormat.load();
 
+    // 1. Current item repeated at the top of the popup (ticked).
+    if (currentFmt >= 0 && currentFmt < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS)
+    {
+        const auto& cur = OpenSpatialDelayProcessor::outputFormatRegistry[(size_t) currentFmt];
+        PopupMenuSnapshot::Item head;
+        head.text     = cur.name;
+        head.isTicked = true;
+        items.push_back (head);
+
+        PopupMenuSnapshot::Item sep;
+        sep.isSeparator = true;
+        items.push_back (sep);
+    }
+
+    // 2. Full flat list — current item ticked again so both occurrences match.
     for (int i = 0; i < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS; ++i)
     {
         const auto& info = OpenSpatialDelayProcessor::outputFormatRegistry[(size_t) i];
@@ -344,13 +370,137 @@ buildOutputDropdownMock (OSDLookAndFeel& lnf,
         items.push_back (it);
     }
 
-    // Compact row height so all 23 formats fit within the editor.
+    // Compact row height so the duplicated current item + separator + 23 formats
+    // still fit within the editor height.
     return std::make_unique<PopupMenuSnapshot> (lnf, std::move (items), minWidth, /*row h*/ 18);
 }
 
 //==============================================================================
-// Populate the internal undo history with a few state changes so the undo
-// and redo arrows are both active in the screenshot.
+// Apply the "feature showcase" state — every major section of the plugin
+// engaged, 9 taps with an Orbit trajectory on Tap 1, 9.1.6 Atmos + VBAP.
+// Called before snapshot when --showcase is passed.
+//==============================================================================
+static void applyShowcaseState (OpenSpatialDelayProcessor& processor,
+                                OpenSpatialDelayEditor& editor)
+{
+    auto& apvts = processor.apvts;
+
+    auto setFloat = [&] (const juce::String& id, float v) {
+        if (auto* p = apvts.getParameter (id))
+            p->setValueNotifyingHost (p->convertTo0to1 (v));
+    };
+    auto setChoice = [&] (const juce::String& id, int choiceIndex) {
+        if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (id)))
+        {
+            int n = p->choices.size();
+            if (n > 1)
+                p->setValueNotifyingHost ((float) choiceIndex / (float) (n - 1));
+        }
+    };
+    auto setBool = [&] (const juce::String& id, bool v) {
+        if (auto* p = apvts.getParameter (id))
+            p->setValueNotifyingHost (v ? 1.0f : 0.0f);
+    };
+
+    // --- Header: output format + algorithm -----------------------------------
+    // 9.1.6 Atmos sits at registry index 15; VBAP is algorithm index 5.
+    constexpr int kOutputFormat_9_1_6 = 15;
+    constexpr int kAlgorithm_VBAP     = 5;
+    processor.configOutputFormat.store (kOutputFormat_9_1_6, std::memory_order_relaxed);
+    processor.configAlgorithm.store    (kAlgorithm_VBAP,     std::memory_order_relaxed);
+    processor.markConfigStateDirty();
+    processor.requestOutputFormatChange (kOutputFormat_9_1_6);
+
+    // --- DELAY section: Sync on, Triplet --------------------------------------
+    setBool   ("tempoSync",     true);
+    setChoice ("syncMode",      2);          // 0=Straight, 1=Dotted, 2=Triplet
+    setFloat  ("noteDivision",  4.0f);        // 1/4
+    setFloat  ("feedback",      0.45f);
+
+    // --- MOD section (wobble): on with visible, non-zero knobs ---------------
+    // wobbleAmount / wobbleMorph are 0..100% ranges (not 0..1), so pass
+    // percentages directly.
+    setBool  ("wobbleEnabled", true);
+    setFloat ("wobbleAmount",  55.0f);
+    setFloat ("wobbleMorph",   40.0f);
+
+    // --- TONE section: FLT on, min-Q one side / max-Q the other --------------
+    // Qs span the 0.1 → 8.0 param range, so HP at 0.1 is maximally broad and
+    // LP at 8.0 is sharply resonant — the filter graph shows a clear asymmetry.
+    setBool  ("filterEnabled", true);
+    setFloat ("filterHP",      120.0f);
+    setFloat ("filterHPQ",     0.10f);
+    setFloat ("filterLP",      4000.0f);
+    setFloat ("filterLPQ",     8.00f);
+
+    // --- MIX section: AIR on, Dry/Wet + gains at pleasing values -------------
+    setBool  ("airAbsorption", true);
+    setFloat ("dryWet",        0.55f);
+    setFloat ("inputGain",     0.0f);
+    setFloat ("outputGain",    0.0f);
+
+    // --- OSC: Send on, Receive off -------------------------------------------
+    processor.setOscReceiveEnabled (false);
+    processor.setOscSendEnabled    (true);
+
+    // --- Taps: 9 enabled, varied az / el / dist ------------------------------
+    // Tap 1 carries an Orbit trajectory so the spatial map shows a visible
+    // trail. Other taps stay static but varied so the scene looks busy.
+    struct TapDef { float az, el, dist; int trajShape; float trajSpeed; };
+    const TapDef defs[9] = {
+        {   15.0f,  20.0f, 0.35f, 9, 0.40f },  // Tap 1: Orbit trajectory
+        {  -60.0f,   0.0f, 0.55f, 0, 0.0f  },
+        {  120.0f,  35.0f, 0.75f, 0, 0.0f  },
+        { -120.0f, -15.0f, 0.70f, 0, 0.0f  },
+        {   70.0f,  55.0f, 0.45f, 0, 0.0f  },
+        {  175.0f, -30.0f, 0.60f, 0, 0.0f  },
+        {  -30.0f,  45.0f, 0.50f, 0, 0.0f  },
+        {   45.0f, -40.0f, 0.85f, 0, 0.0f  },
+        { -150.0f,  10.0f, 0.65f, 0, 0.0f  },
+    };
+    for (int i = 0; i < 12; ++i)
+    {
+        auto pre = "object" + juce::String (i + 1) + "_";
+        auto setObjFloat = [&] (const juce::String& id, float v) {
+            if (auto* p = apvts.getParameter (pre + id))
+                p->setValueNotifyingHost (p->convertTo0to1 (v));
+        };
+        auto setObjChoice = [&] (const juce::String& id, int idx) {
+            if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (pre + id)))
+            {
+                int n = p->choices.size();
+                if (n > 1)
+                    p->setValueNotifyingHost ((float) idx / (float) (n - 1));
+            }
+        };
+        auto setObjBool = [&] (const juce::String& id, bool v) {
+            if (auto* p = apvts.getParameter (pre + id))
+                p->setValueNotifyingHost (v ? 1.0f : 0.0f);
+        };
+
+        if (i < 9)
+        {
+            const auto& d = defs[i];
+            setObjBool   ("enabled",             true);
+            setObjFloat  ("azimuth",             d.az);
+            setObjFloat  ("elevation",           d.el);
+            setObjFloat  ("distance",            d.dist);
+            setObjChoice ("trajectoryShape",     d.trajShape);
+            setObjFloat  ("trajectorySpeed",     d.trajSpeed);
+        }
+        else
+        {
+            setObjBool ("enabled", false);
+        }
+    }
+
+    editor.applyShowcaseHeaderForScreenshot();
+}
+
+//==============================================================================
+// Populate the internal undo history with a few state changes so the undo arrow
+// is active in the screenshot. Redo stays inactive — we capture with a fresh
+// forward history so only the back-arrow is live.
 //==============================================================================
 static void populateUndoHistory (OpenSpatialDelayProcessor& processor)
 {
@@ -378,8 +528,7 @@ static void populateUndoHistory (OpenSpatialDelayProcessor& processor)
         processor.captureUndoState ("delayTime → 420ms");
     }
 
-    // 5. Undo once → both undo AND redo arrows become active
-    processor.performInternalUndo();
+    // Leave redo empty: undo arrow active, redo arrow inactive.
 }
 
 //==============================================================================
@@ -425,6 +574,7 @@ int main (int argc, char* argv[])
     float scaleFactor = 2.0f;
     juce::String presetArg;
     juce::String mode = "full";
+    bool showcase = false;
 
     std::vector<juce::String> positional;
     for (int i = 1; i < argc; ++i)
@@ -439,9 +589,10 @@ int main (int argc, char* argv[])
                           << factoryPresets[j].name.toStdString() << "\n";
             return 0;
         }
-        else if (a == "--preset" && i + 1 < argc) { presetArg = juce::String (argv[++i]); }
-        else if (a == "--mode"   && i + 1 < argc) { mode      = juce::String (argv[++i]); }
-        else if (! a.startsWith ("--"))           { positional.push_back (a); }
+        else if (a == "--preset"   && i + 1 < argc) { presetArg = juce::String (argv[++i]); }
+        else if (a == "--mode"     && i + 1 < argc) { mode      = juce::String (argv[++i]); }
+        else if (a == "--showcase")                 { showcase  = true; }
+        else if (! a.startsWith ("--"))             { positional.push_back (a); }
     }
 
     if (positional.size() > 0) outputPath = positional[0];
@@ -488,7 +639,8 @@ int main (int argc, char* argv[])
         }
     }
 
-    // OSC Receive: leave enabled for visual completeness
+    // OSC Receive: leave enabled for visual completeness (--showcase overrides
+    // this and flips Send on / Receive off to reflect the demo state).
     processor.setOscReceiveEnabled (true);
 
     auto* editorRaw = processor.createEditor();
@@ -507,6 +659,9 @@ int main (int argc, char* argv[])
         return 1;
     }
     osd->syncForScreenshot();
+
+    if (showcase)
+        applyShowcaseState (processor, *osd);
 
     // ── Apply per-mode state and render ───────────────────────────────────
     juce::Image result;
@@ -610,8 +765,8 @@ int main (int argc, char* argv[])
     {
         // Populate AFTER editor creation. The editor's constructor calls
         // captureUndoState("Initial State") which would trim any prior redo
-        // history. So we build the history here, then undo once to leave
-        // both arrows active.
+        // history. Build a linear forward history so only the undo arrow is
+        // active (redo inactive) — matches spec from issue #168 round 2.
         populateUndoHistory (processor);
         osd->syncForScreenshot();  // triggers timerCallback → updateUndoButtons
         result = snapshotComponent (*osd, scaleFactor);
@@ -627,9 +782,11 @@ int main (int argc, char* argv[])
     else if (mode == "elevation-map")
     {
         // Configure all 12 taps as a spiral: azimuths evenly spread around the
-        // circle, distances progressing outward, elevations running from +90°
-        // down to -90°. Then snapshot the spatial map and overlay each tap's
-        // elevation value as a label next to its dot.
+        // circle, distances progressing outward, elevations running from −90°
+        // (Tap 1) up to +90° (Tap 12). Issue #168 round 2 corrects the prior
+        // direction. Labels are now rendered by the plugin itself via the
+        // screenshot-mode flag on SpatialMapComponent, so every enabled tap
+        // shows its in-plugin label in the tap's own colour (no tool overlay).
         auto& apvts = processor.apvts;
         for (int i = 0; i < 12; ++i)
         {
@@ -643,66 +800,21 @@ int main (int argc, char* argv[])
                     p->setValueNotifyingHost (v ? 1.0f : 0.0f);
             };
 
-            float t   = (float) i / 11.0f;              // 0..1
-            float az  = -180.0f + t * 360.0f;           // full sweep
-            float dist = 0.38f + t * 0.55f;             // 0.38 → 0.93
-            float elev = 90.0f - t * 180.0f;            // +90 → -90
+            float t    = (float) i / 11.0f;              // 0..1
+            float az   = -180.0f + t * 360.0f;           // full azimuth sweep
+            float dist = 0.38f + t * 0.55f;              // 0.38 → 0.93
+            float elev = -90.0f + t * 180.0f;            // −90 (Tap 1) → +90 (Tap 12)
 
             setBool  ("enabled",    true);
             setFloat ("azimuth",    az);
             setFloat ("elevation",  elev);
             setFloat ("distance",   dist);
         }
-        osd->syncForScreenshot();
 
         auto& map = osd->getSpatialMapForScreenshot();
-        juce::Image base = snapshotComponent (map, scaleFactor);
-
-        // Overlay elevation labels on the rendered image.
-        juce::Graphics g (base);
-        g.addTransform (juce::AffineTransform::scale (scaleFactor));
-        juce::Font labelFont (osd->getOSDLookAndFeel().jetbrainsMedium);
-        labelFont.setHeight (11.0f);
-        g.setFont (labelFont);
-
-        for (int i = 0; i < 12; ++i)
-        {
-            if (! map.isObjectEnabled (i)) continue;
-            auto pos = map.getObjectScreenPos (i);
-            float z = std::sin (juce::degreesToRadians (map.getObjectElevation (i)));
-            float dotR = 7.0f + (z >= 0.0f ? 2.5f * z : 1.5f * z);
-
-            juce::String text = juce::String (juce::roundToInt (map.getObjectElevation (i)))
-                              + juce::String (juce::CharPointer_UTF8 ("\xc2\xb0"));
-
-            // Place label outside the dot — right side if the dot is on the
-            // left half of the map, left side otherwise. Small vertical nudge
-            // so labels for neighbouring taps don't overlap too badly.
-            float mapCx = map.getWidth() * 0.5f;
-            bool placeRight = pos.x < mapCx;
-            int labelW = 30;
-            int labelH = 14;
-            float lx = placeRight ? (pos.x + dotR + 4.0f)
-                                  : (pos.x - dotR - 4.0f - labelW);
-            float ly = pos.y - labelH * 0.5f;
-
-            // Soft drop shadow for legibility against the starfield.
-            g.setColour (juce::Colour (0x99000000));
-            g.drawText (text,
-                        juce::Rectangle<float> (lx + 1.0f, ly + 1.0f,
-                                                (float) labelW, (float) labelH),
-                        placeRight ? juce::Justification::centredLeft
-                                   : juce::Justification::centredRight,
-                        false);
-            g.setColour (juce::Colour (0xfff0f4f8));
-            g.drawText (text,
-                        juce::Rectangle<float> (lx, ly,
-                                                (float) labelW, (float) labelH),
-                        placeRight ? juce::Justification::centredLeft
-                                   : juce::Justification::centredRight,
-                        false);
-        }
-        result = base;
+        map.setLabelAllEnabledObjectsForScreenshot (true);
+        osd->syncForScreenshot();
+        result = snapshotComponent (map, scaleFactor);
     }
     else
     {

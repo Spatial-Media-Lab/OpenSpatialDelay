@@ -33,7 +33,8 @@ if [ ! -x "$TOOL" ]; then
 fi
 
 # Presets chosen per screenshot for visual clarity:
-MAIN_PRESET="Quad Ping-Pong"          # 4 taps at cardinal positions — clean reference
+MAIN_PRESET="Quad Ping-Pong"          # 4 taps at cardinal positions — baseline preset
+PRESET_MENU_PRESET="Merry-Go-Round"   # nested submenu demo — Spatial Movement category (issue #168 r2)
 ELEVATION_PRESET="Hemisphere Spread"  # varied elevations — feature showcase
 WOBBLE_PRESET="Tape Wow"              # wobble section engaged
 SHIMMER_PRESET="Shimmer"              # shimmer preset for feature screenshot
@@ -41,18 +42,23 @@ SHIMMER_PRESET="Shimmer"              # shimmer preset for feature screenshot
 echo ""
 echo "=== Regenerating screenshots ==="
 
-# --- Full editor screenshot (used as source for header / bottom-panel crops)
-"$TOOL" "$OUT_DIR/screenshot.png"         "$SCALE" --preset "$MAIN_PRESET"      --mode full
+# --- Full editor screenshot: "features-on" showcase state (issue #168 r2) ---
+# The --showcase flag overrides preset state with 9.1.6 + VBAP, MOD/FLT/AIR on,
+# Sync+Triplet, OSC Send on, 9 taps with an Orbit trajectory on Tap 1.
+# This image is the PIL-crop source for header / right-panel / bottom-panel.
+"$TOOL" "$OUT_DIR/screenshot.png"         "$SCALE" --preset "$MAIN_PRESET"      --mode full --showcase
 cp "$OUT_DIR/screenshot.png" "$OUT_DIR/screenshot_full.png"
 
 # --- Direct-snapshot captures (no PIL crop required) -----------------------
 "$TOOL" "$OUT_DIR/screenshot_spatial_map.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode spatial-map
 "$TOOL" "$OUT_DIR/screenshot_elevation_map.png" "$SCALE" --preset "$MAIN_PRESET"      --mode elevation-map
 "$TOOL" "$OUT_DIR/screenshot_drawer.png"        "$SCALE" --preset "$MAIN_PRESET"      --mode drawer-open
-"$TOOL" "$OUT_DIR/screenshot_tone_section.png"  "$SCALE" --preset "$MAIN_PRESET"      --mode tone-section
+# TONE crop uses showcase state so the filter graph is on with asymmetric Q.
+"$TOOL" "$OUT_DIR/screenshot_tone_section.png"  "$SCALE" --preset "$MAIN_PRESET"      --mode tone-section --showcase
 "$TOOL" "$OUT_DIR/screenshot_osc_section.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode osc-section
 "$TOOL" "$OUT_DIR/screenshot_save_preset.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode save-overlay
-"$TOOL" "$OUT_DIR/screenshot_preset_menu.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode preset-menu
+# Preset menu: Merry-Go-Round lives in "Spatial Movement" — the submenu ticks it.
+"$TOOL" "$OUT_DIR/screenshot_preset_menu.png"   "$SCALE" --preset "$PRESET_MENU_PRESET" --mode preset-menu
 "$TOOL" "$OUT_DIR/screenshot_output_menu.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode output-dropdown
 "$TOOL" "$OUT_DIR/screenshot_undo_active.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode undo-active
 

@@ -30,6 +30,12 @@ public:
     void setOscOverride (int index, bool active) { if (index >= 0 && index < MAX_OBJECTS) oscOverride[(size_t)index] = active; }
     void setSelectedObject (int index) { selectedObject = index; repaint(); }
 
+    /** Round-2 screenshot hook (#168): when true, the elevation-readout label
+        is drawn next to every enabled tap rather than only the selected one.
+        Used by the screenshot tool's elevation-map mode so the spiral of 12
+        taps all display their in-plugin elevation label in the tap's colour. */
+    void setLabelAllEnabledObjectsForScreenshot (bool enabled) { labelAllEnabledForScreenshot = enabled; }
+
     void addListener (Listener* l)    { listeners.add (l); }
     void removeListener (Listener* l) { listeners.remove (l); }
 
@@ -51,6 +57,7 @@ private:
     std::array<bool, MAX_OBJECTS> oscOverride = {};  // v0.6: per-object OSC override indicator
     int selectedObject = -1;
     int draggedObject  = -1;
+    bool labelAllEnabledForScreenshot = false;  // issue #168 round 2: elevation-map mode
     OpenSpatialDelayProcessor* processor = nullptr;  // for Random trail look-ahead
 
     juce::ListenerList<Listener> listeners;
@@ -569,6 +576,12 @@ public:
 
     /** Access the embedded PresetSaveOverlay (for screenshot compositing). */
     PresetSaveOverlay& getPresetSaveOverlay() { return presetSaveOverlay; }
+
+    /** Issue #168 round 2: apply the "feature showcase" UI state — refresh
+        dropdown selections after the tool has written to processor.configX
+        directly, and force the algorithm combo to rebuild for the new
+        output-format category. Call after seeding processor state. */
+    void applyShowcaseHeaderForScreenshot();
 
 private:
     std::unique_ptr<StyledButton> smlButton;  // header branding link
