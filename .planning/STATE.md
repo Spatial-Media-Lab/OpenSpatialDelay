@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan 02-06 complete (Patreon live at patreon.com/AndrewRahman — HTTP/2 301 verified 2026-04-17T11:38:29Z; 4-screenshot evidence requirement waived per user override; DIST-03 satisfied). Plan 02-05 (Sender.net email capture) remaining for Phase 02. Phase 03 also has 03-07 Task 2 checkpoint-paused on social-preview human-verify needing Netlify deploy URL.
-last_updated: "2026-04-17T11:40:00.000Z"
-last_activity: 2026-04-17 -- Plan 02-06 closed. Patreon live at patreon.com/AndrewRahman. DIST-03 complete. Canonical casing aligned in live-facing docs.
+stopped_at: Plan 02-05 Task 2 (code) complete — sender-embed.spec.ts + noscript fallback committed on andrewrahman-com main (fce5663 RED, a4ef090 GREEN). Task 1 dashboard work marked complete 2026-04-16 but resume-signal (FORM_ID, asset URLs, data region) never captured. Tasks 3 (Netlify env var + clear-cache redeploy) and 4 (production UAT) are human checkpoints — CHECKPOINT RETURNED to orchestrator.
+last_updated: "2026-04-17T11:55:24.133Z"
+last_activity: 2026-04-17 -- Plan 02-06 closed. Patreon live at patreon.com/AndrewRahman.
 progress:
   total_phases: 5
   completed_phases: 2
@@ -104,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-17T11:40:00.000Z
-Stopped at: Plan 02-06 complete — Patreon live at patreon.com/AndrewRahman; DIST-03 satisfied; evidence artifact requirement waived per user override. Plan 02-05 (Sender.net email capture) remains for Phase 02. 03-07 Task 2 also still awaiting Netlify deploy URL for social-preview verify (separate queue).
-Resume file: .planning/phases/02-email-capture-funding-infrastructure/02-05-PLAN.md
+Last session: 2026-04-17T11:55:24.128Z
+Stopped at: Plan 02-05 Task 2 (code) complete — sender-embed.spec.ts + noscript fallback committed on andrewrahman-com main (fce5663 RED, a4ef090 GREEN). Task 1 dashboard work marked complete 2026-04-16 but resume-signal (FORM_ID, asset URLs, data region) never captured. Tasks 3 (Netlify env var + clear-cache redeploy) and 4 (production UAT) are human checkpoints — CHECKPOINT RETURNED to orchestrator.
+Resume file: None
