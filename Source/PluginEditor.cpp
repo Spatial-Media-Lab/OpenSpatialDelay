@@ -384,6 +384,26 @@ void PresetSaveOverlay::show (const juce::String& existingName, juce::Component*
     nameEditor.setHighlightedRegion ({ 0, nameEditor.getText().length() });
 }
 
+void PresetSaveOverlay::showForSnapshot (const juce::String& existingName,
+                                         juce::Component* parentEditor)
+{
+    nameEditor.setText (existingName, false);
+
+    if (parentEditor != nullptr)
+        setLookAndFeel (&parentEditor->getLookAndFeel());
+
+    setSize (cardW, cardH);
+
+    if (parentEditor != nullptr)
+    {
+        setTopLeftPosition ((parentEditor->getWidth()  - cardW) / 2,
+                            (parentEditor->getHeight() - cardH) / 2);
+        parentEditor->addAndMakeVisible (this);
+    }
+
+    setVisible (true);
+}
+
 void PresetSaveOverlay::dismiss()
 {
     if (isCurrentlyModal())
@@ -3373,6 +3393,33 @@ void OpenSpatialDelayEditor::configureGlobalDrawer (bool open, const float* knob
     processorRef.setGlobalDrawerOpen (open);
     for (int i = 0; i < numKnobs && i < GlobalTapDrawerComponent::kNumKnobs; ++i)
         globalTapDrawer.setKnobValueSilent (i, knobValues[i]);
+}
+
+juce::Rectangle<int> OpenSpatialDelayEditor::getToneSectionBoundsForScreenshot() const
+{
+    // TONE section spans: header (14px) + 6px pad + filter graph (104px) + 22px readout
+    // Add 4px of breathing room above the header so the FLT toggle isn't clipped.
+    const int top    = toneHeaderY - 4;
+    const int height = 14 + 6 + 104 + 22 + 4;
+    return { rpX, top, rpW, height };
+}
+
+juce::Rectangle<int> OpenSpatialDelayEditor::getOscSectionBoundsForScreenshot() const
+{
+    // OSC section: header at oscHeaderY + 16px gap + 2 x 20px control rows + 4px padding
+    const int top    = oscHeaderY - 4;
+    const int height = 4 + 14 + 16 + 20 + 4 + 20 + 4;  // pad + header + gap + row + gap + row + pad
+    return { rpX, top, rpW, height };
+}
+
+juce::Rectangle<int> OpenSpatialDelayEditor::getPresetNameButtonBounds() const
+{
+    return presetNameButton.getBounds();
+}
+
+juce::Rectangle<int> OpenSpatialDelayEditor::getOutputFormatBoxBounds() const
+{
+    return outputFormatBox.getBounds();
 }
 
 void OpenSpatialDelayEditor::updateMapFromParameters()

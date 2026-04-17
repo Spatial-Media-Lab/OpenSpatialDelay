@@ -1,77 +1,79 @@
 //==============================================================================
-// screenshot_tool — Standalone CLI tool for capturing plugin UI as PNG
+// screenshot_tool — Standalone CLI for capturing plugin UI states as PNG
 //
 // Creates an OpenSpatialDelayProcessor instance, instantiates the editor,
-// optionally loads a preset, renders to an off-screen image, and saves to PNG.
-// No DAW required.
+// optionally loads a preset, drives it into a specific UI state, renders to an
+// off-screen image, and saves to PNG. No DAW required.
 //
 // Usage:
-//   screenshot_tool [output_path] [scale_factor] [--preset name_or_path]
+//   screenshot_tool [output_path] [scale_factor] [options]
+//
+// Options:
+//   --preset <name|path>   Load a factory preset by name or a preset file
+//   --mode <name>          Capture mode (see below). Default: full.
+//   --list-presets         List factory presets and exit
+//
+// Capture modes:
+//   full              — Entire 820x580 editor, baseline state
+//   drawer-open       — Editor with Global Tap Drawer open and populated
+//   tone-section      — Crop of the TONE section (filter graph + readout)
+//   osc-section       — Crop of the OSC section (receive + send rows)
+//   save-overlay      — Editor with Save Preset overlay composited on top
+//   preset-menu       — Editor with the Preset popup (largest category expanded)
+//   output-dropdown   — Editor with the Output Format dropdown (all formats)
+//   undo-active       — Editor with populated undo/redo history (buttons active)
 //
 // Examples:
-//   screenshot_tool                                       # default state, 2x
-//   screenshot_tool ui.png 2.0                            # custom path, 2x
-//   screenshot_tool orbit.png 2.0 --preset "Orbit Dance"  # load factory preset
-//   screenshot_tool custom.png 2.0 --preset /path/to.osdpreset  # load file
-//   screenshot_tool --list-presets                         # list all factory presets
+//   screenshot_tool ui.png 2.0
+//   screenshot_tool orbit.png 2.0 --preset "Orbit Dance"
+//   screenshot_tool tone.png 2.0 --mode tone-section --preset "Warm Room"
+//   screenshot_tool dropdown.png 2.0 --mode output-dropdown
 //==============================================================================
 
 #include "../Source/PluginProcessor.h"
 #include "../Source/PluginEditor.h"
 #include "../Source/PresetData.h"
 #include <iostream>
+#include <algorithm>
+#include <vector>
 
 //==============================================================================
-// Find a factory preset by name (case-insensitive partial match)
+// Preset helpers
 //==============================================================================
 static int findPresetByName (const juce::String& searchName)
 {
     const int numPresets = NUM_FACTORY_PRESETS;
-
-    // Exact match first (case-insensitive)
     for (int i = 0; i < numPresets; ++i)
-    {
-        if (factoryPresets[static_cast<size_t> (i)].name.equalsIgnoreCase (searchName))
+        if (factoryPresets[(size_t) i].name.equalsIgnoreCase (searchName))
             return i;
-    }
-
-    // Partial match (case-insensitive, name contains search string)
     for (int i = 0; i < numPresets; ++i)
-    {
-        if (factoryPresets[static_cast<size_t> (i)].name.containsIgnoreCase (searchName))
+        if (factoryPresets[(size_t) i].name.containsIgnoreCase (searchName))
             return i;
-    }
-
-    return -1; // not found
+    return -1;
 }
 
-//==============================================================================
-// Apply a PresetData to the processor via APVTS parameter updates
-//==============================================================================
 static void applyPresetToProcessor (OpenSpatialDelayProcessor& processor,
                                     const PresetData& preset)
 {
     auto& apvts = processor.apvts;
 
-    auto setFloat = [&] (const juce::String& paramId, float value) {
-        if (auto* p = apvts.getParameter (paramId))
-            p->setValueNotifyingHost (p->convertTo0to1 (value));
+    auto setFloat = [&] (const juce::String& id, float v) {
+        if (auto* p = apvts.getParameter (id))
+            p->setValueNotifyingHost (p->convertTo0to1 (v));
     };
-    auto setChoice = [&] (const juce::String& paramId, int choiceIndex) {
-        if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (paramId)))
+    auto setChoice = [&] (const juce::String& id, int choiceIndex) {
+        if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (id)))
         {
-            int numItems = p->choices.size();
-            if (numItems > 1)
-                p->setValueNotifyingHost (static_cast<float> (choiceIndex)
-                                          / static_cast<float> (numItems - 1));
+            int n = p->choices.size();
+            if (n > 1)
+                p->setValueNotifyingHost ((float) choiceIndex / (float) (n - 1));
         }
     };
-    auto setBool = [&] (const juce::String& paramId, bool value) {
-        if (auto* p = apvts.getParameter (paramId))
-            p->setValueNotifyingHost (value ? 1.0f : 0.0f);
+    auto setBool = [&] (const juce::String& id, bool v) {
+        if (auto* p = apvts.getParameter (id))
+            p->setValueNotifyingHost (v ? 1.0f : 0.0f);
     };
 
-    // Global params
     setFloat  ("delayTime",     preset.delayTime);
     setBool   ("tempoSync",     preset.tempoSync);
     setFloat  ("noteDivision",  preset.noteDivision);
@@ -92,229 +94,499 @@ static void applyPresetToProcessor (OpenSpatialDelayProcessor& processor,
     setChoice ("algorithm",     preset.algorithm);
     setChoice ("hrtfProfile",   preset.hrtfProfile);
 
-    // Per-tap params
     for (int i = 0; i < 12; ++i)
     {
-        auto prefix = "object" + juce::String (i + 1) + "_";
-        const auto& tap = preset.taps[i];
-
-        setBool   (prefix + "enabled",             tap.enabled);
-        setFloat  (prefix + "azimuth",             tap.azimuthDeg);
-        setFloat  (prefix + "elevation",           tap.elevationDeg);
-        setFloat  (prefix + "distance",            tap.distance);
-        setFloat  (prefix + "dopplerAmount",       tap.dopplerAmount);
-        setFloat  (prefix + "pitchShift",          tap.pitchShift);
-        setChoice (prefix + "trajectoryShape",     tap.trajectoryShape);
-        setFloat  (prefix + "trajectorySpeed",     tap.trajectorySpeed);
-        setChoice (prefix + "trajectoryDirection", tap.trajectoryDirection);
-        setChoice (prefix + "inputChannel",        tap.inputChannel);
+        auto pre = "object" + juce::String (i + 1) + "_";
+        const auto& t = preset.taps[i];
+        setBool   (pre + "enabled",             t.enabled);
+        setFloat  (pre + "azimuth",             t.azimuthDeg);
+        setFloat  (pre + "elevation",           t.elevationDeg);
+        setFloat  (pre + "distance",            t.distance);
+        setFloat  (pre + "dopplerAmount",       t.dopplerAmount);
+        setFloat  (pre + "pitchShift",          t.pitchShift);
+        setChoice (pre + "trajectoryShape",     t.trajectoryShape);
+        setFloat  (pre + "trajectorySpeed",     t.trajectorySpeed);
+        setChoice (pre + "trajectoryDirection", t.trajectoryDirection);
+        setChoice (pre + "inputChannel",        t.inputChannel);
     }
 }
 
-//==============================================================================
-// Load a preset from a .osdpreset / .json file on disk
-//==============================================================================
 static bool loadPresetFromFile (OpenSpatialDelayProcessor& processor,
                                 const juce::File& file)
 {
     if (! file.existsAsFile())
     {
         std::cerr << "Error: preset file not found: "
-                  << file.getFullPathName().toStdString() << std::endl;
+                  << file.getFullPathName().toStdString() << "\n";
         return false;
     }
-
-    auto json = file.loadFileAsString();
-    auto parsed = parsePresetJson (json);
+    auto parsed = parsePresetJson (file.loadFileAsString());
     if (parsed.name.isEmpty())
     {
         std::cerr << "Error: could not parse preset file: "
-                  << file.getFullPathName().toStdString() << std::endl;
+                  << file.getFullPathName().toStdString() << "\n";
         return false;
     }
-
     applyPresetToProcessor (processor, parsed);
     std::cout << "Loaded preset from file: " << parsed.name.toStdString()
-              << " (" << parsed.category.toStdString() << ")" << std::endl;
+              << " (" << parsed.category.toStdString() << ")\n";
+    return true;
+}
+
+//==============================================================================
+// PopupMenuSnapshot — renders a list of items using OSDLookAndFeel's popup
+// routines so the snapshot is pixel-identical to the real popup.
+//==============================================================================
+class PopupMenuSnapshot : public juce::Component
+{
+public:
+    struct Item
+    {
+        juce::String text;
+        bool isHeader     = false;
+        bool isSeparator  = false;
+        bool isTicked     = false;
+        bool isHighlighted = false;
+        bool hasSubMenu   = false;
+    };
+
+    PopupMenuSnapshot (OSDLookAndFeel& lnf, std::vector<Item> items_, int fixedWidth,
+                       int rowHeight = 22)
+        : look (lnf), items (std::move (items_)), itemHeight (rowHeight)
+    {
+        setLookAndFeel (&look);
+
+        int h = kCardPadding;
+        for (const auto& it : items)
+            h += rowHeightFor (it);
+        h += kCardPadding;
+        setSize (fixedWidth, h);
+    }
+
+    ~PopupMenuSnapshot() override { setLookAndFeel (nullptr); }
+
+    void paint (juce::Graphics& g) override
+    {
+        look.drawPopupMenuBackground (g, getWidth(), getHeight());
+
+        int y = kCardPadding;
+        for (const auto& it : items)
+        {
+            int ih = rowHeightFor (it);
+            auto area = juce::Rectangle<int> (0, y, getWidth(), ih);
+
+            if (it.isHeader)
+            {
+                g.setColour (juce::Colour (0xff7fc9ff));
+                g.setFont (look.getPopupMenuFont().boldened());
+                g.drawText (it.text, area.reduced (8, 0),
+                            juce::Justification::centredLeft, true);
+            }
+            else
+            {
+                look.drawPopupMenuItem (g, area,
+                                        it.isSeparator,
+                                        /*isActive*/ true,
+                                        it.isHighlighted,
+                                        it.hasSubMenu,
+                                        it.isTicked,
+                                        it.text,
+                                        /*shortcut*/ juce::String(),
+                                        /*icon*/ nullptr,
+                                        nullptr);
+            }
+            y += ih;
+        }
+    }
+
+private:
+    int rowHeightFor (const Item& it) const
+    {
+        if (it.isSeparator) return 8;
+        return itemHeight;  // headers + regular rows use the same row height
+    }
+
+    OSDLookAndFeel& look;
+    std::vector<Item> items;
+    int itemHeight = 22;
+    static constexpr int kCardPadding = 6;
+};
+
+//==============================================================================
+// Composite a popup snapshot onto the editor snapshot at a given anchor point.
+//==============================================================================
+static juce::Image compositeOverlay (juce::Image base,
+                                     juce::Image overlay,
+                                     int anchorX,
+                                     int anchorY,
+                                     float scale)
+{
+    // anchorX/Y are in editor-local (unscaled) coordinates. Base image is
+    // already scaled. We convert anchor → scaled pixel coords, then paint
+    // overlay (which was rendered at the same scale) onto the base.
+    juce::Graphics g (base);
+    int px = juce::roundToInt (anchorX * scale);
+    int py = juce::roundToInt (anchorY * scale);
+    g.drawImageAt (overlay, px, py);
+    return base;
+}
+
+//==============================================================================
+// Render a Component to a PNG-ready Image at a given scale.
+//==============================================================================
+static juce::Image snapshotComponent (juce::Component& c, float scale)
+{
+    return c.createComponentSnapshot (c.getLocalBounds(), true, scale);
+}
+
+//==============================================================================
+// Build a preset menu mock — picks the category with the most presets and
+// renders it fully expanded with all items.
+//==============================================================================
+static std::unique_ptr<PopupMenuSnapshot>
+buildPresetMenuMock (OSDLookAndFeel& lnf,
+                     OpenSpatialDelayProcessor& processor,
+                     int minWidth)
+{
+    auto presets = processor.getCategorizedPresets();
+
+    // Count presets per category, pick the largest
+    juce::HashMap<juce::String, int> counts;
+    for (const auto& p : presets)
+        counts.set (p.category, counts[p.category] + 1);
+
+    juce::String largest;
+    int best = 0;
+    for (juce::HashMap<juce::String, int>::Iterator it (counts); it.next();)
+    {
+        if (it.getValue() > best)
+        {
+            best = it.getValue();
+            largest = it.getKey();
+        }
+    }
+
+    std::vector<PopupMenuSnapshot::Item> items;
+
+    // Show the largest category expanded
+    PopupMenuSnapshot::Item header;
+    header.text = largest.toUpperCase();
+    header.isHeader = true;
+    items.push_back (header);
+
+    int currentIdx = processor.getCurrentPresetIndex();
+    bool sawFactory = false, insertedSep = false;
+    for (const auto& p : presets)
+    {
+        if (p.category != largest) continue;
+        if (! p.isFactory && sawFactory && ! insertedSep)
+        {
+            PopupMenuSnapshot::Item sep;
+            sep.isSeparator = true;
+            items.push_back (sep);
+            insertedSep = true;
+        }
+        PopupMenuSnapshot::Item it;
+        it.text    = p.name;
+        it.isTicked = (p.originalIndex == currentIdx);
+        items.push_back (it);
+        if (p.isFactory) sawFactory = true;
+    }
+
+    return std::make_unique<PopupMenuSnapshot> (lnf, std::move (items), minWidth);
+}
+
+//==============================================================================
+// Build an output-format dropdown mock — all 23 formats, current one ticked.
+//==============================================================================
+static std::unique_ptr<PopupMenuSnapshot>
+buildOutputDropdownMock (OSDLookAndFeel& lnf,
+                         OpenSpatialDelayProcessor& processor,
+                         int minWidth)
+{
+    std::vector<PopupMenuSnapshot::Item> items;
+    int currentFmt = processor.configOutputFormat.load();
+
+    auto categoryFor = [] (const OpenSpatialDelayProcessor::OutputFormatInfo& info) -> juce::String
+    {
+        if (info.isStereoVariant)     return "Stereo";
+        if (info.isAmbisonicsOutput)  return "Ambisonics";
+        if (juce::String (info.name) == "Binaural") return "Binaural";
+        if (info.hasHeight)           return "Immersive";
+        return "Surround";
+    };
+
+    juce::String currentCategory;
+    for (int i = 0; i < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS; ++i)
+    {
+        const auto& info = OpenSpatialDelayProcessor::outputFormatRegistry[(size_t) i];
+        juce::String cat = categoryFor (info);
+        if (cat != currentCategory)
+        {
+            PopupMenuSnapshot::Item header;
+            header.text = cat.toUpperCase();
+            header.isHeader = true;
+            items.push_back (header);
+            currentCategory = cat;
+        }
+
+        PopupMenuSnapshot::Item it;
+        it.text    = info.name;
+        it.isTicked = (i == currentFmt);
+        items.push_back (it);
+    }
+
+    // Compact row height so all 23 formats + 5 headers fit within the editor.
+    return std::make_unique<PopupMenuSnapshot> (lnf, std::move (items), minWidth, /*row h*/ 18);
+}
+
+//==============================================================================
+// Populate the internal undo history with a few state changes so the undo
+// and redo arrows are both active in the screenshot.
+//==============================================================================
+static void populateUndoHistory (OpenSpatialDelayProcessor& processor)
+{
+    // 1. Initial baseline capture
+    processor.captureUndoState ("baseline");
+
+    // 2. Change feedback — capture
+    if (auto* p = processor.apvts.getParameter ("feedback"))
+    {
+        p->setValueNotifyingHost (p->convertTo0to1 (0.55f));
+        processor.captureUndoState ("feedback → 55%");
+    }
+
+    // 3. Change dryWet — capture
+    if (auto* p = processor.apvts.getParameter ("dryWet"))
+    {
+        p->setValueNotifyingHost (p->convertTo0to1 (0.65f));
+        processor.captureUndoState ("dryWet → 65%");
+    }
+
+    // 4. Change delay time — capture
+    if (auto* p = processor.apvts.getParameter ("delayTime"))
+    {
+        p->setValueNotifyingHost (p->convertTo0to1 (0.42f));
+        processor.captureUndoState ("delayTime → 420ms");
+    }
+
+    // 5. Undo once → both undo AND redo arrows become active
+    processor.performInternalUndo();
+}
+
+//==============================================================================
+// Simple, clean PNG writer.
+//==============================================================================
+static bool savePng (const juce::Image& image, const juce::File& out, float scale)
+{
+    if (! image.isValid())
+    {
+        std::cerr << "Error: image is not valid.\n";
+        return false;
+    }
+    out.getParentDirectory().createDirectory();
+    // JUCE's FileOutputStream does not truncate by default — delete any existing
+    // file first so we don't append the new PNG onto the old one (which yields
+    // a valid-looking file whose first IDAT chunk is stale).
+    if (out.existsAsFile()) out.deleteFile();
+    juce::FileOutputStream stream (out);
+    if (stream.failedToOpen())
+    {
+        std::cerr << "Error: could not open " << out.getFullPathName().toStdString() << "\n";
+        return false;
+    }
+    juce::PNGImageFormat png;
+    if (! png.writeImageToStream (image, stream))
+    {
+        std::cerr << "Error: failed to write PNG data.\n";
+        return false;
+    }
+    std::cout << "Saved " << out.getFullPathName().toStdString()
+              << " (" << image.getWidth() << "x" << image.getHeight()
+              << " @ " << scale << "x)\n";
     return true;
 }
 
 //==============================================================================
 int main (int argc, char* argv[])
 {
-    // ScopedJuceInitialiser_GUI initialises the MessageManager, graphics
-    // subsystem, and everything else JUCE GUI components need to function.
     juce::ScopedJuceInitialiser_GUI juceInit;
 
-    // ── Check for --list-presets ──────────────────────────────────────────
-    for (int i = 1; i < argc; ++i)
-    {
-        if (juce::String (argv[i]) == "--list-presets")
-        {
-            std::cout << "Factory presets (" << NUM_FACTORY_PRESETS << "):" << std::endl;
-            for (int j = 0; j < NUM_FACTORY_PRESETS; ++j)
-            {
-                std::cout << "  " << j << ": ["
-                          << factoryPresets[j].category.toStdString() << "] "
-                          << factoryPresets[j].name.toStdString() << std::endl;
-            }
-            return 0;
-        }
-    }
-
-    // ── Parse CLI arguments ──────────────────────────────────────────────
+    // ── Parse CLI ────────────────────────────────────────────────────────
     juce::String outputPath = "plugin_screenshot.png";
     float scaleFactor = 2.0f;
     juce::String presetArg;
+    juce::String mode = "full";
 
-    // Collect positional args and --preset flag
-    std::vector<juce::String> positionalArgs;
+    std::vector<juce::String> positional;
     for (int i = 1; i < argc; ++i)
     {
-        juce::String arg (argv[i]);
-        if (arg == "--preset" && i + 1 < argc)
+        juce::String a (argv[i]);
+        if (a == "--list-presets")
         {
-            presetArg = juce::String (argv[++i]);
+            std::cout << "Factory presets (" << NUM_FACTORY_PRESETS << "):\n";
+            for (int j = 0; j < NUM_FACTORY_PRESETS; ++j)
+                std::cout << "  " << j << ": ["
+                          << factoryPresets[j].category.toStdString() << "] "
+                          << factoryPresets[j].name.toStdString() << "\n";
+            return 0;
         }
-        else if (! arg.startsWith ("--"))
-        {
-            positionalArgs.push_back (arg);
-        }
+        else if (a == "--preset" && i + 1 < argc) { presetArg = juce::String (argv[++i]); }
+        else if (a == "--mode"   && i + 1 < argc) { mode      = juce::String (argv[++i]); }
+        else if (! a.startsWith ("--"))           { positional.push_back (a); }
     }
 
-    if (positionalArgs.size() > 0)
-        outputPath = positionalArgs[0];
-
-    if (positionalArgs.size() > 1)
+    if (positional.size() > 0) outputPath = positional[0];
+    if (positional.size() > 1)
     {
-        float parsed = positionalArgs[1].getFloatValue();
-        if (parsed > 0.0f && parsed <= 8.0f)
-            scaleFactor = parsed;
-        else
-            std::cerr << "Warning: scale factor must be between 0 and 8. "
-                      << "Using default 2x." << std::endl;
+        float s = positional[1].getFloatValue();
+        if (s > 0.0f && s <= 8.0f) scaleFactor = s;
     }
 
-    // ── Create processor and editor ──────────────────────────────────────
+    // ── Set up processor + editor ─────────────────────────────────────────
     OpenSpatialDelayProcessor processor;
-
-    // prepareToPlay is required before the processor is in a valid state.
     processor.prepareToPlay (48000.0, 512);
 
-    // ── Load preset if requested ─────────────────────────────────────────
     if (presetArg.isNotEmpty())
     {
-        // Check if it's a file path
-        juce::File presetFile (presetArg);
-        if (presetFile.existsAsFile())
+        juce::File f (presetArg);
+        if (f.existsAsFile())
         {
-            if (! loadPresetFromFile (processor, presetFile))
-                return 1;
+            if (! loadPresetFromFile (processor, f)) return 1;
         }
         else
         {
-            // Try as a factory preset name
-            int idx = findPresetByName (presetArg);
-            if (idx >= 0)
+            // Look up the preset name in the processor's loaded preset list
+            // (factoryPresets[] is a compile-time array; processor.getPresetNames()
+            // is the runtime-merged list in the same order loadPreset() expects).
+            auto names = processor.getPresetNames();
+            int runtimeIdx = -1;
+            for (int n = 0; n < names.size(); ++n)
             {
-                const auto& preset = factoryPresets[static_cast<size_t> (idx)];
-                applyPresetToProcessor (processor, preset);
-
-                // Find the matching index in the processor's allPresets (loaded from disk)
-                // since allPresets is sorted differently from factoryPresets[]
-                auto names = processor.getPresetNames();
-                for (int n = 0; n < names.size(); ++n)
+                if (names[n].equalsIgnoreCase (presetArg)
+                    || names[n].containsIgnoreCase (presetArg))
                 {
-                    if (names[n] == preset.name)
-                    {
-                        processor.setCurrentPresetIndex (n);
-                        break;
-                    }
+                    runtimeIdx = n;
+                    break;
                 }
-
-                std::cout << "Loaded factory preset: "
-                          << preset.name.toStdString() << std::endl;
             }
-            else
+            if (runtimeIdx < 0)
             {
-                std::cerr << "Error: preset not found: "
-                          << presetArg.toStdString() << std::endl;
-                std::cerr << "Use --list-presets to see available factory presets."
-                          << std::endl;
+                std::cerr << "Error: preset not found: " << presetArg.toStdString() << "\n";
                 return 1;
             }
+            processor.loadPreset (runtimeIdx);
+            std::cout << "Loaded preset: " << names[runtimeIdx].toStdString() << "\n";
         }
     }
 
-    // ── Enable OSC Receive for visual completeness in screenshots ──────
+    // OSC Receive: leave enabled for visual completeness
     processor.setOscReceiveEnabled (true);
 
-    // ── Create editor ────────────────────────────────────────────────────
     auto* editorRaw = processor.createEditor();
     if (editorRaw == nullptr)
     {
-        std::cerr << "Error: createEditor() returned nullptr." << std::endl;
+        std::cerr << "Error: createEditor() returned nullptr.\n";
         return 1;
     }
-
     std::unique_ptr<juce::AudioProcessorEditor> editor (editorRaw);
-
-    // Set bounds to the plugin's designed window size
     editor->setBounds (0, 0, 820, 580);
 
-    // ── Sync editor state from processor parameters ─────────────────────
-    // The editor normally reads tap positions via a 30Hz timer callback.
-    // Since no timer fires during screenshot capture, we manually trigger
-    // the parameter-to-UI sync so the spatial map shows tap positions.
-    if (auto* osdEditor = dynamic_cast<OpenSpatialDelayEditor*> (editor.get()))
-        osdEditor->syncForScreenshot();
-
-    // ── Render to image ──────────────────────────────────────────────────
-    auto image = editor->createComponentSnapshot (
-        editor->getLocalBounds(),
-        true,   // paintEntireComponent
-        scaleFactor
-    );
-
-    if (! image.isValid())
+    auto* osd = dynamic_cast<OpenSpatialDelayEditor*> (editor.get());
+    if (osd == nullptr)
     {
-        std::cerr << "Error: createComponentSnapshot returned an invalid image."
-                  << std::endl;
+        std::cerr << "Error: editor is not an OpenSpatialDelayEditor.\n";
+        return 1;
+    }
+    osd->syncForScreenshot();
+
+    // ── Apply per-mode state and render ───────────────────────────────────
+    juce::Image result;
+    juce::File outFile = juce::File::getCurrentWorkingDirectory().getChildFile (outputPath);
+
+    if (mode == "full")
+    {
+        result = snapshotComponent (*osd, scaleFactor);
+    }
+    else if (mode == "drawer-open")
+    {
+        const float demoKnobs[6] = { 0.0f, 0.0f, 0.15f, -0.1f, 0.0f, 0.0f };
+        osd->configureGlobalDrawer (true, demoKnobs, 6);
+        osd->resized();
+        osd->syncForScreenshot();
+        result = snapshotComponent (*osd, scaleFactor);
+    }
+    else if (mode == "tone-section")
+    {
+        auto b = osd->getToneSectionBoundsForScreenshot();
+        result = osd->createComponentSnapshot (b, true, scaleFactor);
+    }
+    else if (mode == "osc-section")
+    {
+        auto b = osd->getOscSectionBoundsForScreenshot();
+        result = osd->createComponentSnapshot (b, true, scaleFactor);
+    }
+    else if (mode == "save-overlay")
+    {
+        auto& overlay = osd->getPresetSaveOverlay();
+        overlay.showForSnapshot ("My Preset", osd);
+        osd->resized();
+        result = snapshotComponent (*osd, scaleFactor);
+    }
+    else if (mode == "preset-menu")
+    {
+        auto base = snapshotComponent (*osd, scaleFactor);
+        auto mock = buildPresetMenuMock (osd->getOSDLookAndFeel(), processor, 200);
+        auto mockImg = snapshotComponent (*mock, scaleFactor);
+
+        // Anchor popup below the preset-name button
+        auto btn = osd->getPresetNameButtonBounds();
+        int anchorX = btn.getX();
+        int anchorY = btn.getBottom() + 2;
+        result = compositeOverlay (base, mockImg, anchorX, anchorY, scaleFactor);
+    }
+    else if (mode == "output-dropdown")
+    {
+        auto base = snapshotComponent (*osd, scaleFactor);
+        auto mock = buildOutputDropdownMock (osd->getOSDLookAndFeel(), processor, 200);
+        auto mockImg = snapshotComponent (*mock, scaleFactor);
+
+        // Anchor horizontally near the Output Format button, but shift left so the
+        // popup stays inside the editor. Anchor vertically just below the button,
+        // then clamp so the bottom of the mock stays within the editor.
+        auto btn = osd->getOutputFormatBoxBounds();
+        const int mockW = mock->getWidth();
+        const int mockH = mock->getHeight();
+        int anchorX = btn.getRight() - mockW;
+        if (anchorX < 4) anchorX = 4;
+        int anchorY = btn.getBottom() + 2;
+        if (anchorY + mockH > osd->getHeight() - 4)
+            anchorY = osd->getHeight() - 4 - mockH;
+        if (anchorY < 4) anchorY = 4;
+        result = compositeOverlay (base, mockImg, anchorX, anchorY, scaleFactor);
+    }
+    else if (mode == "undo-active")
+    {
+        // Populate AFTER editor creation. The editor's constructor calls
+        // captureUndoState("Initial State") which would trim any prior redo
+        // history. So we build the history here, then undo once to leave
+        // both arrows active.
+        populateUndoHistory (processor);
+        osd->syncForScreenshot();  // triggers timerCallback → updateUndoButtons
+        result = snapshotComponent (*osd, scaleFactor);
+    }
+    else
+    {
+        std::cerr << "Error: unknown --mode: " << mode.toStdString() << "\n";
+        std::cerr << "Valid modes: full, drawer-open, tone-section, osc-section,\n"
+                     "             save-overlay, preset-menu, output-dropdown,\n"
+                     "             undo-active\n";
         return 1;
     }
 
-    // ── Write PNG ────────────────────────────────────────────────────────
-    juce::File outFile = juce::File::getCurrentWorkingDirectory()
-                             .getChildFile (outputPath);
+    if (! savePng (result, outFile, scaleFactor)) return 1;
 
-    // Create parent directories if needed
-    outFile.getParentDirectory().createDirectory();
-
-    juce::FileOutputStream stream (outFile);
-    if (stream.failedToOpen())
-    {
-        std::cerr << "Error: could not open output file: "
-                  << outFile.getFullPathName().toStdString() << std::endl;
-        return 1;
-    }
-
-    juce::PNGImageFormat pngFormat;
-    if (! pngFormat.writeImageToStream (image, stream))
-    {
-        std::cerr << "Error: failed to write PNG data." << std::endl;
-        return 1;
-    }
-
-    std::cout << "Screenshot saved to "
-              << outFile.getFullPathName().toStdString()
-              << " (" << image.getWidth() << "x" << image.getHeight()
-              << " @ " << scaleFactor << "x)"
-              << std::endl;
-
-    // ── Cleanup ──────────────────────────────────────────────────────────
-    // Release editor before processor goes out of scope
     editor.reset();
     processor.releaseResources();
-
     return 0;
 }

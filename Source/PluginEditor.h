@@ -407,6 +407,11 @@ public:
     void show (const juce::String& existingName, juce::Component* parentEditor);
     void dismiss();
 
+    /** Attach the overlay as a child of parentEditor (not as a desktop window)
+        and centre it. For headless screenshot capture. */
+    void showForSnapshot (const juce::String& existingName,
+                          juce::Component* parentEditor);
+
     // v1.0: callback with preset name only (always saves to User/)
     std::function<void (const juce::String&)> onSave;
 
@@ -521,6 +526,27 @@ public:
 
     /** Open/close global drawer and set knob values (for screenshot tool). */
     void configureGlobalDrawer (bool open, const float* knobValues = nullptr, int numKnobs = 0);
+
+    /** Return the rectangle covering the entire TONE section (header + filter graph
+        + readout) in editor-local coordinates. For screenshot cropping. */
+    juce::Rectangle<int> getToneSectionBoundsForScreenshot() const;
+
+    /** Return the rectangle covering the entire OSC section (header + receive + send
+        rows) in editor-local coordinates. For screenshot cropping. */
+    juce::Rectangle<int> getOscSectionBoundsForScreenshot() const;
+
+    /** Return the preset-name button bounds so popup mocks can anchor correctly. */
+    juce::Rectangle<int> getPresetNameButtonBounds() const;
+
+    /** Return the output-format ComboBox bounds so popup mocks can anchor correctly. */
+    juce::Rectangle<int> getOutputFormatBoxBounds() const;
+
+    /** Expose the look-and-feel so screenshot helpers can render popup mocks
+        with the exact same styling. */
+    OSDLookAndFeel& getOSDLookAndFeel() { return *osdLookAndFeel; }
+
+    /** Access the embedded PresetSaveOverlay (for screenshot compositing). */
+    PresetSaveOverlay& getPresetSaveOverlay() { return presetSaveOverlay; }
 
 private:
     std::unique_ptr<StyledButton> smlButton;  // header branding link

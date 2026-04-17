@@ -8,9 +8,12 @@ from PIL import Image, ImageDraw, ImageFont
 import math
 
 # --- Configuration ---
-SRC = "/Users/andrewrahman/conductor/workspaces/openspatialdelay/moscow-v1/docs/assets/screenshot.png"
-DST = "/Users/andrewrahman/conductor/workspaces/openspatialdelay/moscow-v1/docs/assets/screenshot_annotated.png"
-FONT_PATH = "/Users/andrewrahman/conductor/workspaces/openspatialdelay/moscow-v1/fonts/DM_Sans-Bold.ttf"
+# Paths resolve relative to the repository root (parent of docs/).
+import os
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+SRC = os.path.join(REPO_ROOT, "docs/assets/screenshot.png")
+DST = os.path.join(REPO_ROOT, "docs/assets/screenshot_annotated.png")
+FONT_PATH = os.path.join(REPO_ROOT, "fonts/DM_Sans-Bold.ttf")
 
 CIRCLE_RADIUS = 18  # 36px diameter
 CIRCLE_COLOR = (128, 216, 255)  # #80D8FF cyan
@@ -25,19 +28,21 @@ LEGEND_NUM_COLOR = CIRCLE_COLOR
 # target = point on the UI element; callout = where the circle goes (outside the element)
 CALLOUTS = [
     (1,  "SML Badge",          80,   52,   80,    -40),
-    (2,  "Preset Browser",     340,  52,   340,   -40),
-    (3,  "Input Format",       640,  52,   640,   -40),
-    (4,  "Output Format",      900,  52,   900,   -40),
-    (5,  "HRTF Profile",       1150, 52,   1150,  -40),
-    (6,  "Spatial Map",        500,  450,  -50,   450),
-    (7,  "DELAY Section",      1350, 180,  1590,  140),
-    (8,  "MOD Section",        1350, 320,  1590,  320),
-    (9,  "TONE Section",       1350, 460,  1590,  460),
-    (10, "MIX Section",        1350, 600,  1590,  600),
-    (11, "OSC Section",        1350, 740,  1590,  740),
-    (12, "Tap Selector",       200,  878,  -50,   878),
-    (13, "Per-Tap Controls",   620,  1010, 420,   1130),
-    (14, "Trajectory Controls",1100, 1010, 1100,  1130),
+    (2,  "Preset Browser",     540,  52,   540,   -40),
+    (3,  "Undo / Redo",        900,  52,   900,   -40),
+    (4,  "Input Format",       1100, 52,   1100,  -40),
+    (5,  "Output Format",      1280, 52,   1280,  -40),
+    (6,  "HRTF Profile",       1500, 52,   1500,  -40),
+    (7,  "Global Drawer",      30,   420,  -50,   420),
+    (8,  "Spatial Map",        500,  450,  -50,   560),
+    (9,  "DELAY Section",      1350, 200,  1590,  160),
+    (10, "MOD Section",        1350, 360,  1590,  340),
+    (11, "TONE Section",       1350, 520,  1590,  520),
+    (12, "MIX Section",        1350, 680,  1590,  680),
+    (13, "OSC Section",        1350, 890,  1590,  890),
+    (14, "Tap Selector",       200,  878,  -50,   878),
+    (15, "Per-Tap Controls",   620,  1010, 420,   1130),
+    (16, "Trajectory Controls",1100, 1010, 1100,  1130),
 ]
 
 
@@ -91,7 +96,7 @@ def draw_legend(canvas, draw, font_label, font_num, img_width, start_y):
     line_height = 30
     col_width = 360
     num_cols = 3
-    items_per_col = 5  # ceil(14/3)
+    items_per_col = (len(CALLOUTS) + num_cols - 1) // num_cols  # ceil
 
     legend_width = col_width * num_cols + padding * 2
     legend_height = items_per_col * line_height + padding * 2
