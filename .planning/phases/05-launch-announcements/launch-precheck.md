@@ -9,19 +9,25 @@ each checkbox (e.g. `2026-04-22: Mailchimp role = Manager confirmed`) keeps the 
 ## Hard blockers (any one unresolved = delay launch to 2026-05-05)
 
 - [ ] Phase 4 (Demo Content) has a 04-00-PLAN.md OR an explicit descope decision by 2026-04-20. Current status as of 2026-04-17: NO PLANS. Escalate at 2026-04-20 standup if unchanged.
-- [ ] SML Mailchimp audience owner identified — Andrew (self) OR Timo Bittner (president) OR Basel Naouri (board). Role confirmed = Manager or Admin on the audience.
+  - 2026-04-17: Andrew committed to plan 04-00 by 2026-04-20. Not descoped. IG Reel assumed as primary asset in 05-04.
+- [x] SML Mailchimp audience owner identified — Andrew (self) OR Timo Bittner (president) OR Basel Naouri (board). Role confirmed = Manager or Admin on the audience.
+  - 2026-04-17: Andrew (self) confirmed as audience owner. 05-02 drafts for direct send.
 - [ ] andrewrahman.com is live on Netlify production domain (Phase 3-09 gate).
 - [ ] GitHub release v1.0.0 downloadable — both macOS and Windows binaries attached.
 
 ## Email-deliverability preconditions (gates the 34-contact review batch in 05-06)
 
-- [ ] SPF record exists on spatialmedialab.org (check: `dig TXT spatialmedialab.org | grep spf1`)
+- [x] SPF record exists on spatialmedialab.org (check: `dig TXT spatialmedialab.org | grep spf1`)
+  - 2026-04-17: SPF verified — `v=spf1 a include:spf.jackhost.net -all`.
 - [ ] DKIM record exists on spatialmedialab.org (check: `dig TXT default._domainkey.spatialmedialab.org` or inspect a test send's Authentication-Results header)
+  - 2026-04-17: DKIM NOT found at `default._domainkey` or `google._domainkey` selectors. DMARC also missing. Andrew handling DKIM+DMARC setup at jackhost.net as separate HITL. Target: verified by 2026-04-25 (T-3). Do NOT tick — pending.
 - [ ] Decision: if SPF+DKIM not verified by 2026-04-25 (T-3), review-pitch batch sends from andrewjrahman@gmail.com instead of andrew@spatialmedialab.org. Document the chosen from-address in 05-06 outreach log.
+  - 2026-04-17: 05-06 will draft BOTH from-address variants. Final selection at T-3 based on test-send Authentication-Results inspection.
 
 ## External-account preconditions
 
 - [ ] KVR Developer Account: login-check at https://www.kvraudio.com/ — if no existing account, apply at https://www.kvraudio.com/developer_application.php (free; < 1-day turnaround). Fallback: email press release to contactus@kvraudio.com.
+  - 2026-04-17: No account yet. Andrew applying at kvraudio.com/developer_application.php. 05-05 drafts BOTH Developer DB listing AND contactus@kvraudio.com press-release fallback.
 - [ ] LinkedIn: Andrew logged in + bio-link field accessible (pre-launch bio will be updated to andrewrahman.com/get-osd on 2026-04-27 T-1).
 - [ ] Instagram: Andrew's personal IG login verified. SML IG handle `@spatialmedialab` is a cross-post option (confirmed in RESEARCH sources).
 - [ ] Bluesky: Andrew's handle exists (verify or create — target send to Hainbach and Peter Kirn requires Bluesky DM).
