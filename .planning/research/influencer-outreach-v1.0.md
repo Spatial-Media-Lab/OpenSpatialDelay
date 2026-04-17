@@ -5,129 +5,213 @@ requirement: ANNC-06
 phase: 05-launch-announcements
 status: draft
 created: 2026-04-17
-methodology: web-search + AI curation; every entry flagged verify-before-send
+updated: 2026-04-17
+methodology: web-search + AI curation; every entry flagged verify-before-send. v2 after user targeting refinement.
 ---
 
 # OpenSpatialDelay v1.0.0 — Outreach Candidate List
 
 ## Context
-Curated candidate list for the v1.0.0 launch of OpenSpatialDelay (free GPL-3.0 VST3+AU spatial delay plugin where each echo occupies a 3D position around the listener; macOS + Windows; Berlin-based solo dev Andrew Rahman, funded via Patreon). This is research-only — contact details, audience sizes, and handles drift constantly, so every row is flagged `verify-before-send`. The list spans YouTube plugin reviewers, spatial-audio practitioners, experimental/ambient musicians, sound-design/film creators, audio press, and posting communities. EU candidates get a slight priority for time-zone overlap.
 
-Hook angles to lean on depending on recipient:
-- "Free GPL-3.0 spatial delay — each echo lives in 3D space (VST3/AU, mac+Win)"
-- "Binaural HRTF + spatial panning on a delay, not a reverb"
-- "Built by a Berlin solo dev, Patreon-funded, no paywall, no account"
+This is **v2** of the outreach list, narrowed after a targeting refinement on 2026-04-17. v1 (43 candidates) optimised for audience size across generic plugin reviewers, modular synth YouTubers, and ambient-musician channels. The user's verdict: wrong audience. OSD is a spatial/immersive delay plugin, not a generic creative FX — its ideal reviewers are the creators who cover **immersive tools**: Sound Particles, dearVR, Flux SPAT, L-ISA, Dolby Atmos workflows, Ambisonics, binaural/VR audio, object-based panning for film and game post.
 
----
+The **strongest selection heuristic** is Sound Particles coverage. Sound Particles is the dominant immersive/spatial sound-design tool in film, game, and XR audio; creators who have reviewed Sound Particles products (inDelay, Space Controller, Energy Panner, SkyDust 3D, Doppler) cover the exact slice of tool-nerd that OSD sits inside. A Sound Particles-reviewing creator is 10× more likely to be a natural fit than a 1M-sub generic plugin reviewer.
 
-## Segment 1 — YouTube Plugin Reviewers
+This list still flags every row `verify-before-send`. Audience numbers and handles drift; no row should be contacted without a last-check on the channel/email.
 
-| Name / Handle | Platform | Audience | Hook | Contact | Priority | Verified |
-|---------------|----------|----------|------|---------|----------|----------|
-| In The Mix (Michael Wynne) | YouTube / michaelwynneaudio.com | ~1M YouTube | Large-audience plugin-tutorial channel; covers creative FX alongside mix-tools; Scotland-based EU | michaelwynneaudio.com contact form; IG @michael.inthemix | high | verify-before-send |
-| White Sea Studio | YouTube / whiteseastudio.com | approx. 200k–400k YouTube | Known for honest, technical reviews of "any plug-in you've ever heard of"; Netherlands-based EU; critical but fair to free/small-dev plugins | whiteseastudio.com contact; Patreon DM | high | verify-before-send |
-| Venus Theory (Cameron) | YouTube / venustheory.com | approx. 300k–600k YouTube | Ambient/experimental producer + sound designer; signature affinity for atmospheric FX; does deep-dive plugin videos | venustheory.com contact page; IG @venustheory | high | verify-before-send |
-| Dan Worrall | YouTube (@DanWorrall) | approx. 200k–400k YouTube | DSP-literate explainer style; has covered small-dev and free plugins from platinumears and others; Sheffield UK | platinumears.com contact; KVR forum PM (@IIRs) | high | verify-before-send |
-| Production Expert (Dan Cooper / team) | production-expert.com + YouTube | approx. 150k–300k YouTube + blog readership | Regularly reviews creative FX and spatial/immersive tools; UK-based EU; covers free/pro mix | production-expert.com contact form | high | verify-before-send |
-| Alex Ball | YouTube (@AlexBallMusic) / alexballmusic.com | approx. 200k–400k YouTube | Synth/FX historian + SoundOnSound columnist; experimental sound bent; occasionally covers plugins with unusual character | alexballmusic.com contact | medium | verify-before-send |
-| Andrew Huang (@andrewismusic) | YouTube / andrewhuang.com | ~2M+ YouTube | Annual Top 10 Plugins rundown; "big tent" experimental creator who'd vibe with a weird spatial delay; long-shot but covered free tools before | andrewhuang.com contact (newsletter/contact) | exploratory | verify-before-send |
-| Cuckoo (Andreas Paleologos) | YouTube (@CUCKOO) / cuckoo.no | approx. 150k–250k YouTube | Sweden/EU synth tutorial personality with experimental bent; covers FX occasionally | cuckoo.no contact; X @cuckoomusic | medium | verify-before-send |
-| DivKid (Ben Wilson) | YouTube (@DivKid) / divkidvideo.com | approx. 100k–200k YouTube | Modular/utility deep-dives; UK-based EU; would appreciate the "spatial per-tap" framing | divkidvideo.com contact | medium | verify-before-send |
-| Red Means Recording (Jeremy Blake) | YouTube (@RedMeansRecording) + "Red Means Recording Ambient" channel | approx. 150k–300k main YouTube | Runs a dedicated ambient sub-channel; lush-tones community; US | rmr.media/findme; Patreon DM | high | verify-before-send |
+Hook angles by recipient type:
+- **Immersive/spatial tool reviewer:** "Free GPL-3.0 spatial delay — each echo lives in 3D space (binaural HRTF + object-based positioning, VST3/AU, mac+Win). A complement to Sound Particles inDelay / dearVR Pro in the free-tool tier."
+- **Dolby Atmos educator:** "Object-based delay for Atmos music / post workflows — each tap is an XYZ position inside your bed."
+- **Film / post-production sound designer:** "Sound-design delay where each echo has spatial presence — useful for UI, effect stacks, reverb tails, Foley worlding."
+- **Berlin-local press / practitioner:** "Built by a Berlin solo dev, Patreon-funded, GPL-3.0, no paywall, no account."
 
 ---
 
-## Segment 2 — Spatial Audio Practitioners / Ambisonics / Immersive Engineers
+## Targeting priority
 
-| Name / Handle | Platform | Audience | Hook | Contact | Priority | Verified |
-|---------------|----------|----------|------|---------|----------|----------|
-| Eric Horstmann (Immersive Lab Berlin) | Blog/press via LiquidSonics, studio site | niche industry (1k–10k follower bands) | Berlin-based Dolby Atmos mix-room operator; 1100+ Atmos mixes; direct local contact for Andrew | Immersive Lab Berlin site contact; LinkedIn | high | verify-before-send |
-| Joseph Anderson (Ambisonic Toolkit lead) | joseph-anderson.org / AES / DXARTS | academic/AES niche | Lead author of Ambisonic Toolkit; AES presenter; the kind of person who'd cite OSD in a spatial-music talk | joseph-anderson.org contact | medium | verify-before-send |
-| Justin Gray (Justin Gray Sound) | justingraysound.com / YouTube | niche industry | Dolby Atmos mix engineer, Toronto; publishes "Mastering Dolby Atmos Music Production" series | justingraysound.com contact | medium | verify-before-send |
-| Mert Özcan | Blog/interviews via IAA | niche industry | Profiled Dolby Atmos mix engineer; engaged with creative Atmos FX discussion | via IAA editorial intro or LinkedIn | exploratory | verify-before-send |
-| Nate Mars | Course platforms / YouTube | niche industry | Producer/sound designer teaching object-based mixing, binaural monitoring, 3D panning | public site contact (TBC) | medium | verify-before-send |
-| IEM Graz / Ambisonics community | ambisonics.at | academic niche | Runs annual Ambisonics Symposium; newsletter/forum post could reach spatial-audio researchers at once | iem.at contact form | exploratory | verify-before-send |
-| Envelop (E4L / SF) | envelop.us | niche creator community | Free-and-open-source Ambisonic tool ecosystem; GPL-3.0 aligns culturally | envelop.us contact | exploratory | verify-before-send |
+1. **Immersive / spatial tool reviewers (Sound Particles reviewers specifically)** — primary, the prototype fit
+2. **Film / game / post sound designers reviewing spatial plugins** — primary
+3. **Dolby Atmos / Ambisonics / VR audio educators** — secondary
+4. **Spatial audio practitioners + Berlin-local cluster** — secondary
+5. **Press (immersive-adjacent only)** — selective
+6. **Communities (posting destinations)**
+7. **Tertiary keep-on-radar** (Benn Jordan delay-design angle, Hainbach Berlin-local angle)
 
 ---
 
-## Segment 3 — Ambient / IDM / Experimental Musicians With Public Platforms
+## Segment 1 — Immersive tool reviewers (PRIMARY)
 
-| Name / Handle | Platform | Audience | Hook | Contact | Priority | Verified |
-|---------------|----------|----------|------|---------|----------|----------|
-| Hainbach (Stefan Paul Goetsch) | YouTube / hainbachmusik.com / X @hainbachmusik | approx. 400k–600k YouTube | Berlin-based like Andrew; literally sells plugins with AudioThing; audience is the exact "weird spatial FX" target; tape/test-equipment aesthetic overlaps with spatial-echo framing | hainbachmusik.com contact; IG DM | high | verify-before-send |
-| Benn Jordan (The Flashbulb) | YouTube (@bennjordan) / IG @bennjordan | approx. 500k–900k YouTube | Experimental producer who co-designed a creative-delay plugin (Taps & Portals with Lunacy Audio); literally made a delay-design video last year; prime fit | bennjordan.com / IG DM | high | verify-before-send |
-| Look Mum No Computer (Sam Battle) | YouTube / lookmumnocomputer.com | approx. 1M+ YouTube | DIY/eccentric electronic creator; occasional plugin coverage; UK-based EU | lookmumnocomputer.com contact; forum DM | medium | verify-before-send |
-| Colin Benders | Twitch / IG @colinbenders | approx. 50k–150k across platforms | Modular/improv eurorack techno; NL/EU; tangential fit — would depend on whether he streams plugin sets | IG DM | exploratory | verify-before-send |
-| Mylar Melodies | YouTube (@MylarMelodies) / Patreon | approx. 80k–150k YouTube | North Yorkshire UK; synth/modular-focused but curious about experimental software; "why we bleep" podcast host | Patreon DM; mylarmelodies.com contact (TBC) | medium | verify-before-send |
-| Ricky Tinez | YouTube (@rickytinez) / synthshit.com | approx. 180k YouTube | DAWless/live-jam producer; US; ambient-adjacent content | synthshit.com contact; IG DM | medium | verify-before-send |
-| Marc Weidenbaum (Disquiet) | disquiet.com / Bluesky @disquiet.bsky.social / X @disquiet | approx. 10k–30k across newsletter/social | Runs Disquiet Junto weekly music-prompt community; ambient-experimental curator; perfect audience for a free spatial tool | disquiet.com contact (editor); Bluesky DM | high | verify-before-send |
-| Dash Glitch | YouTube / dashglitch.com | approx. 50k–100k YouTube | South Africa-based; sound-design and preset focus; covers experimental FX | dashglitch.com contact | exploratory | verify-before-send |
+Sound Particles coverage noted where verified in web search. All rows still need a pre-send verification pass.
 
----
+| Name / Handle | Platform | Audience | Covers (Sound Particles / dearVR / Atmos / etc.) | Hook | Contact | Priority | Verified |
+|---------------|----------|----------|---------------------------------------------------|------|---------|----------|----------|
+| Michael G Wagner | YouTube @michaelgwagner / Substack "Space For Audio" (spaceforaudio.com) / Patreon | niche immersive-audio audience (small YouTube but high-authority) | PROTOTYPE TARGET. Covers Sound Particles InShaper (Patreon post "Coming March 6: Sound Particles InShaper — Multi-Channel Waveshaping Up to 22.2"), Orbit Spatial Atmos Player review, "Top 10 Immersive Audio Plugins for Professional Spatial Mixing" blog. Co-hosts "Spatial Audio Monthly" podcast with Sam Hocking. Drexel University faculty. Wrote "STEREO – WAS A NICE TRY: Creating and Producing Immersive Music". | Immersive-audio evangelist; OSD free + GPL + binaural is exactly his beat. Pitch as a Patreon deep-dive + Spatial Audio Monthly segment. | michaelgwagner.com contact form; Patreon DM; LinkedIn /in/michael-g-wagner | **high (anchor #1)** | verify-before-send |
+| White Sea Studio | YouTube @Whiteseastudio / whiteseastudio.com | approx. 200k-400k YouTube | Honest technical plugin reviews covering immersive/creative FX; Netherlands-based EU; has covered spatial and unusual plugins | Critical-but-fair stance suits a GPL free plugin; EU time-zone | whiteseastudio.com contact; Patreon DM | **high (anchor #2)** | verify-before-send |
+| Matt Glenn (Ears Up Sound Design) | earsupdesign.com / The REAPER Blog guest tutorials / LinkedIn /in/mattrglenn | niche industry | Sound Particles Space Controller review + tutorial on The REAPER Blog (Nov 2021); "Introduction to Spatial Audio" series; 360° studio in Glendale CA purpose-built for spatial prototyping | Ears Up is precisely OSD's target user: themed entertainment + immersive audio post. Space Controller reviewer = immediate fit. | earsupdesign.com contact; LinkedIn DM | high | verify-before-send |
+| Production Expert (Julian Rodgers, Russ Hughes, Mark Wherry, plus guest host Andrew Scheps for immersive segments) | production-expert.com + YouTube + Production Expert Podcast | approx. 150k-300k YouTube + large blog/podcast | Sound Particles inDelay Expert Review (2024); regular coverage of dearVR, L-ISA, Flux SPAT, Dolby Atmos workflows; Andrew Scheps hosts "Andrew Scheps Discusses Immersive" segments; Alex Solano covered as Atmos specialist | Their audience is the target: Pro Tools + immersive-music mixers. Pitch as a "new free spatial delay worth knowing about" news piece, not a full review. | production-expert.com contact form; Julian Rodgers via Muck Rack | high | verify-before-send |
+| Martin Rieger (VRtonung) | vrtonung.de blog + YouTube + speaking | niche industry | 3D audio consultant; tutorials on Ambisonics, binaural production, XR audio, YouTube VR spatial workflows; runs German-language + English spatial-audio educational content; speaks at Immersive Forum Audio Pro | EU (Munich-based); fits Berlin-local cluster loosely; perfect for the XR/VR-post slice of OSD's audience | vrtonung.de contact; LinkedIn /in/martin-rieger | high | verify-before-send |
+| Oliver Kadel (Immersive Audio Podcast / 1.618 Digital) | immersiveaudiopodcast.com + Spotify/Apple | niche industry (100+ episodes) | Hosts THE immersive-audio interview podcast; London-based sound designer with 200+ immersive projects (VR/MR/AR/360); has interviewed virtually every serious spatial-audio practitioner | Podcast slot pitch — "free GPL spatial delay from a Berlin solo dev" is exactly a niche-community hook Oliver's audience would share | immersiveaudiopodcast.com contact; Patreon DM | high | verify-before-send |
+| Sam Hocking | spatialaudiomonthly.com (co-host with Michael G Wagner) + own consulting | niche immersive audience | Co-hosts Spatial Audio Monthly; discusses latest immersive/spatial tech with industry experts | Pair pitch with Michael G Wagner — a single ask gets both the Substack and the podcast | via michaelgwagner.com or podcast contact | high | verify-before-send |
+| Tom Lowe (via Production Expert guest tutorials) | Production Expert + independent | niche industry | Produced the dearVR Pro Immersive Soundscape tutorial for Production Expert; covers binaural, Ambisonics 1st/2nd/3rd order, stereo renders from Atmos | Direct dearVR-reviewer fit | via Production Expert editorial intro | medium | verify-before-send |
+| Sound Particles official content team (soundparticles.com blog + YouTube @SoundParticlesSW) | company channel | industry niche | NOT a reviewer — the developer. Framed here as a potential cross-pollination: their blog/channel covers new immersive tools + tutorials; OSD could be mentioned in a "free tools worth trying" roundup or a Sound Particles Blog "3D audio" tag post | Long shot — pitch a guest blog or "spatial delay comparison" angle; do not expect a product review | hello@soundparticles.com; blog editorial | exploratory | verify-before-send |
+| Guillaume le Nost (Flux:: Immersive / SPAT Revolution demos) | flux.audio + conferences/webinars | niche industry | Runs SPAT Revolution product webinars and tutorials; AES-adjacent | Not a reviewer per se; possible collaboration/webinar angle for a "free spatial delay alongside SPAT" demo | via Flux:: contact form | exploratory | verify-before-send |
 
-## Segment 4 — Sound Design / Film Scoring Creators
-
-| Name / Handle | Platform | Audience | Hook | Contact | Priority | Verified |
-|---------------|----------|----------|------|---------|----------|----------|
-| A Sound Effect (editorial + Mattia Cellotto coverage) | asoundeffect.com | industry niche | Primary SFX/sound-design news outlet; regularly covers creative plugins with a sound-design angle | asoundeffect.com contact form | high | verify-before-send |
-| Designing Sound | designingsound.org | industry niche | Long-running sound-design editorial hub; open to guest posts about unconventional tools | designingsound.org contact | medium | verify-before-send |
-| Mattia Cellotto | asoundeffect.com / IG | niche industry | Independent sound designer with contest platform; spatial-delay = a natural design tool for his audience | via A Sound Effect intro; IG DM | medium | verify-before-send |
-| Tim Prebble (Music of Sound) | musicofsound.co.nz blog | niche industry | Long-form sound-design blog; values unusual creative tools | blog contact | exploratory | verify-before-send |
-| Charles Maynes (film SFX) | X / LinkedIn | niche industry | AES-adjacent film sound designer; active social presence | LinkedIn / X DM | exploratory | verify-before-send |
+**Segment 1 count: 10 candidates (2 anchors + 8 additions).**
 
 ---
 
-## Segment 5 — Audio Press / Journalism
+## Segment 2 — Film / game / post sound designers reviewing spatial plugins (PRIMARY)
 
-| Publication | Platform | Audience | Hook | Contact | Priority | Verified |
-|-------------|----------|----------|------|---------|----------|----------|
-| Sound on Sound | soundonsound.com | 100k+ print/online readership | Reviews free/paid plugins; UK/EU; prefers tech depth — strong binaural-HRTF angle pitchable | soundonsound.com Contact SOS form (Editorial Director Dave Lockwood) | high | verify-before-send |
-| CDM (Create Digital Music) — Peter Kirn | cdm.link | 50k–150k newsletter + social | Berlin-based editor; prime fit (same city, experimental beat, covers GPL/open tools) | editor@createdigitalmusic.com | high | verify-before-send |
-| Attack Magazine | attackmagazine.com | 100k+ monthly | Electronic-music focus; publishes plugin reviews; accepts pitches but no press-release dumps | attackmagazine.com/about/contact | high | verify-before-send |
-| Bedroom Producers Blog (Tomislav Zlatic) | bedroomproducersblog.com | 200k+ monthly + newsletter | Primary free-plugin aggregator; covered "unusual free VST" roundups in 2025; natural home for OSD | bedroomproducersblog.com contact form | high | verify-before-send |
-| Synthtopia | synthtopia.com | 200k+ monthly | News-submission-friendly electronic-music/synth blog; fast turnaround | synthtopia.com feedback/news-submission form | high | verify-before-send |
-| MusicTech | musictech.com | 500k+ monthly | UK publication; annual favourite-plugins guide; covers Atmos/immersive trends | musictech.com/contact | medium | verify-before-send |
-| Gearnews | gearnews.com | 100k+ monthly | DE-based gear/plugin news aggregator; press-release-friendly | gearnews.com contact page (TBC) | medium | verify-before-send |
-| Ask.Audio | ask.audio | 100k+ monthly | Plugin news + tutorials; submission-friendly | ask.audio contact (TBC) | medium | verify-before-send |
-| Audio Plugin Guy (APG) | audiopluginguy.com | smaller niche | Has public news-submission form; low-friction first listing | audiopluginguy.com/audio-software-news-submission-form/ | high | verify-before-send |
-| Gearspace (editorial + forum) | gearspace.com | 500k+ forum/readers | Not strictly press, but New Product Alert forum reaches industry editors; see Communities section | via New Product Alert forum post | medium | verify-before-send |
-| Immersive Audio Album (IAA) | immersiveaudioalbum.com | immersive-audio niche | Dolby Atmos / immersive editorial with product-review slot; Q&As welcome | immersiveaudioalbum.com/editorial contact | medium | verify-before-send |
-| ResidentAdvisor / RA | ra.co | mainstream electronic readership | Very long-shot — rarely covers plugins, but ambient/experimental tie-in could interest features desk | ra.co contact | exploratory | verify-before-send |
-| MusicRadar | musicradar.com | 1M+ monthly | Covers "most powerful sound design tools on earth" style features; broad reach | musicradar.com contact | medium | verify-before-send |
+| Name / Handle | Platform | Audience | Covers | Hook | Contact | Priority | Verified |
+|---------------|----------|----------|--------|------|---------|----------|----------|
+| Doug Siebum, MPSE | asoundeffect.com author / krotosaudio.com Sound Magazine author / LinkedIn | niche industry | Film/TV post-production sound (Star Wars: Visions, Young Jedi Adventures); writes editorially about sound-design tools at A Sound Effect + Krotos Sound Magazine; MPSE member | Editorial channel — pitch an OSD mention in a "creative spatial tools" roundup rather than a solo review | via asoundeffect.com editorial; LinkedIn DM | high | verify-before-send |
+| A Sound Effect (editorial) | asoundeffect.com | industry niche (large SFX/post-pro readership) | Primary sound-design news outlet; has run multi-piece Sound Particles coverage ("Sound Particles explored"); covers dearVR, Flux, immersive tools regularly | Natural home for a free GPL spatial delay news + interview piece | asoundeffect.com contact form; editorial DM | high | verify-before-send |
+| Designing Sound | designingsound.org | industry niche | Long-running sound-design editorial hub; has run Randy Coppinger interview, Sound Particles coverage; open to unusual-tool guest posts | Pitch a guest-post tutorial ("designing haunted rooms with a free spatial delay") | designingsound.org contact | high | verify-before-send |
+| Randy Coppinger | randycoppinger.com / X @RandyCoppinger | niche industry | Disney Character Voices engineer; active X + blog on microphones, mixing, voice; Designing Sound interview subject | Voice/post angle — less spatial-native but plugged-into-sound-design-twitter | X DM; randycoppinger.com contact | medium | verify-before-send |
+| Scott Gershin (Sound Lab / Keywords Studios) | soundlab.la / LinkedIn / postPerspective interviews | industry niche (Technicolor Sound Lab alumni) | Film+VR+AR immersive sound designer (Nightcrawler, Pacific Rim, Star Trek); has publicly spoken about immersive/VR sound tooling | Too corporate for a direct review ask; pitch as AES-talk citation or "send him a copy, see what happens" | LinkedIn DM | exploratory | verify-before-send |
+| Pro Sound Effects (editorial + blog) | blog.prosoundeffects.com + YouTube | industry niche | Runs sound-designer interview series (Richard King/Dune, Andrew Lackey Wabi Sabi, SoundBits); VR audio coverage history | Editorial + possible giveaway/newsletter mention angle | blog.prosoundeffects.com contact | medium | verify-before-send |
+| Krotos Audio Sound Magazine | sound.krotosaudio.com | industry niche | Sound-design editorial (Doug Siebum contributes); covers creative spatial tools | Editorial pitch | via Krotos editorial | medium | verify-before-send |
+| Mattia Cellotto (independent sound designer) | asoundeffect.com / IG / own contests | niche industry | Sound-design contest host; creative-tool user; OSD = natural fit for a contest "featured tool" slot | Contest-co-launch angle (spatial-delay-only sound-design contest) | via A Sound Effect intro; IG DM | medium | verify-before-send |
+| Tim Prebble (Music of Sound) | musicofsound.co.nz | niche industry | NZ sound-design blog; values unusual creative tools | Blog mention pitch | blog contact | exploratory | verify-before-send |
+
+**Segment 2 count: 9 candidates.**
+
+*Note on game audio:* intentionally thin in this list. OSD is a DAW plugin (VST3/AU), not a Wwise/FMOD plugin — creators who work primarily in middleware (e.g., Javier Zumer, Akash Thakkar) are a poor fit unless they also run a VST plugin review channel. A dedicated game-audio pass would only pay off if OSD ships a Wwise/FMOD integration later.
 
 ---
 
-## Communities & Posting Destinations
+## Segment 3 — Dolby Atmos / Ambisonics / VR audio educators (SECONDARY)
+
+| Name / Handle | Platform | Audience | Covers | Hook | Contact | Priority | Verified |
+|---------------|----------|----------|--------|------|---------|----------|----------|
+| Justin Gray (Justin Gray Sound) | justingraysound.com / YouTube | niche industry | Runs "Mastering Dolby Atmos Music Production" tutorial series on YouTube; Toronto-based Atmos mix engineer; educator | Perfect fit for Atmos music producers segment | justingraysound.com contact | high | verify-before-send |
+| Joseph Anderson (Ambisonic Toolkit lead) | joseph-anderson.org / AES / DXARTS | academic/AES niche | Lead author of Ambisonic Toolkit; AES presenter | Academic citation / AES-talk target rather than a viewership pitch | joseph-anderson.org contact | medium | verify-before-send |
+| Nate Mars | Course platforms / YouTube | niche industry | Producer/sound designer teaching object-based mixing, binaural monitoring, 3D panning | Course-adjacent mention angle | public site contact (TBC) | medium | verify-before-send |
+| Mert Özcan | Interviews via IAA | niche industry | Profiled Atmos mix engineer; engaged with creative Atmos FX discussion | IAA editorial intro | via IAA editorial; LinkedIn | exploratory | verify-before-send |
+| Kim Aava (Dolby Atmos producer) | TBD — user-nominated but no recent YouTube presence surfaced in research | niche | User flagged for verification; may be active on other platforms (Instagram, Soundcloud, Mixcloud) rather than YouTube | Needs handle-verification before contact | TBC | exploratory | **verify-before-send — handle not yet confirmed** |
+| Leah Callahan | TBD — nominated name not resolved in web search | niche | User flagged for verification; no public spatial-audio profile surfaced | Needs handle-verification before contact | TBC | exploratory | **verify-before-send — handle not yet confirmed** |
+| IEM Graz / Ambisonics community | ambisonics.at / iem.at | academic niche | Runs annual Ambisonics Symposium; newsletter/forum | Research-community reach via newsletter or forum post | iem.at contact form | exploratory | verify-before-send |
+| AES Technical Committee — Spatial Audio | aes.org/technical/sa | academic/industry | Committee with public roster; natural citation target for an open-source spatial tool | Academic outreach (AES talk/paper mention), not a product review | via AES editorial; committee member LinkedIns | exploratory | verify-before-send |
+
+**Segment 3 count: 8 candidates (2 of which are unresolved user nominations requiring handle verification).**
+
+---
+
+## Segment 4 — Spatial audio practitioners + Berlin-local cluster (SECONDARY)
+
+| Name / Handle | Platform | Audience | Covers | Hook | Contact | Priority | Verified |
+|---------------|----------|----------|--------|------|---------|----------|----------|
+| Eric Horstmann (Immersive Lab Berlin) | Immersive Lab Berlin site / LinkedIn / Genelec Immersive Audio Hub videos hosted by him on Production Expert | niche industry | 1100+ Atmos mixes; Berlin-based Dolby Atmos mix-room operator; hosts Genelec immersive-audio video series featured on Production Expert | Anchor Berlin-local contact for Andrew; in-person studio visit possible | Immersive Lab Berlin site contact; LinkedIn | high | verify-before-send |
+| Peter Kirn / CDM (Create Digital Music) | cdm.link | 50k-150k newsletter + social | Berlin-based editor; covers experimental, GPL/open-source tools, spatial experiments | Berlin-local + experimental + GPL = prime fit; editor known to cover free/small-dev plugins | editor@createdigitalmusic.com | **high (Berlin-local press anchor)** | verify-before-send |
+| Hainbach (Stefan Paul Goetsch) | YouTube / hainbachmusik.com | approx. 220k YouTube | Berlin-based electro-acoustic composer; co-designs plugins with AudioThing (Dials, Lines, Noises, Octaves); tape/test-equipment aesthetic | Berlin-local peer, plugin-literate audience; not a reviewer of spatial tools specifically but the Berlin proximity + experimental-FX beat justifies the outreach | hainbachmusik.com contact; IG DM | **high (Berlin-local)** | verify-before-send |
+| Envelop (E4L / SF) | envelop.us | niche creator community | Free-and-open-source Ambisonic tool ecosystem; GPL-3.0 aligns culturally | Community-level endorsement / roundup mention | envelop.us contact | medium | verify-before-send |
+| Immersive Audio Album (IAA) | immersiveaudioalbum.com | immersive-audio niche | Dolby Atmos / immersive editorial; product-review slot; Q&A-friendly | Pitch Q&A + product news | immersiveaudioalbum.com/editorial | medium | verify-before-send |
+| Digital in Berlin | digitalinberlin.de | Berlin-local niche | Hosts Norient's digital sound/media-art gallery; covers Berlin experimental music scene | Berlin-local press pickup | digitalinberlin.de contact | medium | verify-before-send |
+| Norient | norient.com | academic/critical niche | Global experimental-music network; 700+ contributors; editorial hub for experimental electronics | Long-form editorial pitch (open-source spatial-delay from Berlin solo dev) | norient.com contact | exploratory | verify-before-send |
+
+**Segment 4 count: 7 candidates.**
+
+---
+
+## Segment 5 — Press (SELECTIVE — immersive-adjacent only)
+
+Dropped from v1: Bedroom Producers Blog (generic free-plugin aggregator — covered Dear Reality free-plugin story but otherwise EDM-weighted), Ask.Audio, Gearnews (though they did cover Lunacy Taps & Portals — keep on radar), Audio Plugin Guy, MusicRadar (generic — demote), ResidentAdvisor.
+
+| Publication | Platform | Audience | Immersive fit | Hook | Contact | Priority | Verified |
+|-------------|----------|----------|--------------|------|---------|----------|----------|
+| Sound on Sound | soundonsound.com | 100k+ print/online | Reviewed Sound Particles SkyDust 3D, Energy Panner, inDelay; runs "Sound Particles Podcast"; covers dearVR, Flux, Atmos regularly | Direct technical-depth review pitch — strong HRTF/binaural angle | Contact SOS form (Editorial Director Dave Lockwood) | **high** | verify-before-send |
+| CDM (Peter Kirn) | cdm.link | 50k-150k | Berlin-local editor; experimental/GPL beat; covered open-source spatial tools historically | Berlin-local press anchor (duplicated from Segment 4) | editor@createdigitalmusic.com | **high** | verify-before-send |
+| A Sound Effect | asoundeffect.com | industry niche | Primary sound-design editorial; Sound Particles, dearVR, Flux coverage | Primary editorial target for sound-design framing (duplicated from Segment 2) | asoundeffect.com contact | high | verify-before-send |
+| Designing Sound | designingsound.org | industry niche | Sound Particles, Randy Coppinger, Matt Glenn-level creators | Guest-post or news pickup | designingsound.org contact | high | verify-before-send |
+| MusicTech | musictech.com | 500k+ monthly | Reviewed Sound Particles SkyDust 3D, L-Acoustics L-ISA Studio; annual immersive-plugin guide | News pickup + potential review slot | musictech.com/contact | medium | verify-before-send |
+| Synthtopia | synthtopia.com | 200k+ monthly | News-submission-friendly; covers unusual synth/FX; immersive pickup possible | News submission | synthtopia.com feedback/news-submission form | medium | verify-before-send |
+| audioXpress | audioxpress.com | industry niche | Covered Sound Particles inDelay spatial-control announcement | Technical-press slot | audioxpress.com contact | medium | verify-before-send |
+| SonicScoop | sonicscoop.com | niche pro-audio | Plugin reviews including Sound Particles SkyDust 3D; spatial-audio guides | News pitch | sonicscoop.com contact | medium | verify-before-send |
+| gearnews.com | gearnews.com | 100k+ monthly | DE-based; covered Neumann RIME immersive monitoring, Lunacy Taps & Portals, Dear Reality free-plugins | News submission (covers spatial enough to keep) | gearnews.com contact | medium | verify-before-send |
+| Production Expert editorial | production-expert.com | 150k-300k | See Segment 1 — doubling as press | News pitch (already listed above) | production-expert.com contact | high | verify-before-send |
+
+**Segment 5 count: 10 publications (with 3 double-listed as editorial + primary creator targets).**
+
+---
+
+## Segment 6 — Communities & Posting Destinations
+
+Dropped from v1: r/edmproduction, r/WATMM, r/ambientmusic, r/modular, r/VSTs as a primary target (keep on radar but not front-line). Elektronauts demoted to exploratory — not a spatial-audio community.
 
 | Community | URL | Posting rules | Best timing / notes |
 |-----------|-----|---------------|---------------------|
-| KVR Audio — Effects Forum (New Product Alert) | https://www.kvraudio.com/forum/viewforum.php?f=1 | Self-promo OK in this forum for new plugin releases; also submit via https://www.kvraudio.com/submissions for news-listing; only post within 3 months of release | Post on launch day; update same thread on subsequent versions rather than starting new threads |
-| Gearspace — New Product Alert | https://gearspace.com/board/new-product-alert/ | Designed for manufacturer/dev press releases; one thread per product; avoid reposts | Post on launch day; tag in description for SEO |
-| r/VSTs | https://reddit.com/r/VSTs | Self-promo tolerated for free plugins but read subreddit rules (flair required on some days); 90/10 rule applies | Keep title factual ("Free GPL-3.0 spatial delay for macOS/Windows — VST3/AU") |
-| r/WeAreTheMusicMakers | https://reddit.com/r/WeAreTheMusicMakers | Strict anti-self-promo outside weekly threads; use "Feedback Friday" or designated promo threads only | Feedback Friday thread; reciprocate with feedback first |
-| r/edmproduction | https://reddit.com/r/edmproduction | Self-promo allowed in Marketplace Monday thread; read pinned rules | Marketplace Monday post; keep hype language minimal |
-| r/spatialaudio | https://reddit.com/r/spatialaudio | Smaller niche subreddit; rules TBC — check sidebar for self-promo policy before posting | Frame as "free tool for experimenting with spatial delay/HRTF" — technical-forward |
-| r/audioengineering | https://reddit.com/r/audioengineering | Self-promo limited; often redirects to Gear Friday or similar | Post in allowed thread only |
-| r/ambientmusic | https://reddit.com/r/ambientmusic | Self-promo rules vary; mostly music-sharing rather than tools — check before | Possibly frame as demo track made with OSD rather than tool-promo |
-| r/modular | https://reddit.com/r/modular | Modular-focused; plugin posts tolerated if relevant | Emphasise DAW-modular-hybrid workflows |
-| Elektronauts | https://www.elektronauts.com/ | General Discussion category; Elektron-user community but tolerant of external tool mentions | Frame as companion to Elektron Overbridge / Octatrack workflows |
-| Lines (Monome forum) | https://llllllll.co/ | Cultured experimental-music forum; extremely on-brand for OSD | Post in "development" or "announcements" category; low-key tone expected |
-| Disquiet Junto | https://llllllll.co/c/disquiet-junto/ and disquiet.com | Weekly prompt-based community run by Marc Weidenbaum; prompts frequently feature new tools | Pitch Marc directly for a Junto prompt that uses OSD |
-| Hacker News | https://news.ycombinator.com/ | One Show HN post per project; needs "Show HN:" prefix | Launch-day or weekend morning (US-time); emphasise GPL-3.0 + macOS/Windows + native code angle |
-| AudioSEX forum | https://audiosex.pro/ | Free-plugin posts welcome; moderate self-promo tolerance | Include VST3/AU screenshots + short video |
-| VI-CONTROL | https://vi-control.net/ | Film/composer-focused; new-product threads welcome | Frame around film-scoring spatial FX use case |
+| r/spatialaudio | https://reddit.com/r/spatialaudio | Smaller niche subreddit; check sidebar for self-promo policy | **Primary community target.** Frame as "free tool for experimenting with spatial delay/HRTF" — technical-forward |
+| r/audioengineering | https://reddit.com/r/audioengineering | Self-promo limited; often redirects to Gear Friday thread | Gear Friday post only |
+| r/gameaudio | https://reddit.com/r/gameaudio | Self-promo tolerated if relevant to game-audio practitioners | Frame around sound-design / 3D positional use cases |
+| KVR Audio — Effects Forum / New Product Alert | https://www.kvraudio.com/forum/viewforum.php?f=1 | Self-promo OK for new releases; also submit via kvraudio.com/submissions | Post on launch day; update same thread for new versions |
+| Gearspace — VR / Atmos / Immersive forum | https://gearspace.com/board/vr-virtual-reality-spatial-atmos-immersive-ambisonics/ | Designed for dev announcements; one thread per product | **Better fit than the generic New Product Alert forum.** Post on launch day |
+| Gearspace — New Product Alert | https://gearspace.com/board/new-product-alert/ | Dev-press-release-friendly | Cross-post with link to the VR/Immersive thread |
+| AES Spatial Audio TC forum | aes.org/technical/sa + mailing list | Academic niche; no explicit self-promo, but tool announcements welcomed if framed as research/open-source | Frame as GPL research tool |
+| VI-CONTROL | https://vi-control.net/ | Film/composer-focused; new-product threads welcome | Frame around film-scoring spatial FX; covered Lunacy Taps & Portals precedent |
+| Lines (Monome forum) | https://llllllll.co/ | Experimental-music forum; on-brand for OSD | "Development" or "announcements" thread; low-key tone |
+| Hacker News | https://news.ycombinator.com/ | One Show HN post per project | Weekend morning US-time; emphasise GPL-3.0 + native code + HRTF |
+| r/VSTs | https://reddit.com/r/VSTs | Self-promo tolerated for free plugins; read subreddit rules | Keep title factual |
+
+**Segment 6 count: 11 destinations.**
 
 ---
 
-## Gaps & Next-Research
+## Tertiary — keep-on-radar
 
-- **Binaural/immersive YouTubers**: thinly covered — Eric Horstmann is a strong Berlin-local lead but only 1 strong YouTube-native candidate in that niche. Worth a second-round search for German-language immersive YouTubers (e.g., tonstudio-focused channels) and for binaural-mixing specialists with 10k+ subscribers.
-- **AES members with public profiles**: only Joseph Anderson surfaced cleanly. A second pass through AES committee lists (Immersive Audio TC, Spatial Audio TC) would yield more targeted researcher/engineer contacts.
-- **Berlin-local press**: CDM is covered, but Digital in Berlin and Norient are worth adding for hyperlocal pickup (time-zone + in-person potential).
-- **X-only personalities**: intentionally underweighted — confirm whether OSD has an X account and whether to invest here before building that sub-list.
-- **Podcasts**: none in this pass. Worth researching: Sonic Talk, Working Audio Tools, Tape Notes, Song Exploder-adjacent production podcasts. A podcast slot could replace 5 newsletter pickups.
-- **TikTok / Reels creators**: skipped — if OSD has a demo reel it's worth scouting 2–3 short-form audio creators (e.g., producer-demo accounts with 100k+ followers).
-- **Verified audience numbers**: every "approx." in this file should be confirmed via SocialBlade or direct channel pages before an outreach batch is sent.
-- **Email deliverability**: several outlets only expose contact forms (Sound on Sound, Attack, MusicTech). Before launch, confirm whether to use forms or hunt for direct editorial addresses via Muck Rack / Hunter.
-- **Contest/co-launch opportunities**: Mattia Cellotto runs annual sound-design contests; a sponsored-tool slot could earn OSD coverage in exchange for prizes. Worth researching similar programs at A Sound Effect and Splice.
+| Name | Why kept | Notes |
+|------|---------|-------|
+| Benn Jordan (The Flashbulb) | Co-designed Lunacy **Taps & Portals** creative-delay plugin (launched Nov 2025) — he literally made a delay-design product. Not a spatial-audio creator per se, but delay-design is his current beat. | Long-shot outreach as "have you seen this other creative-delay take?" pitch. YouTube @bennjordan. verify-before-send. |
+
+All other v1 tertiary/exploratory entries dropped — see next section.
+
+---
+
+## Dropped from v1 (with rationale)
+
+**Modular / Eurorack creators** — dropped because OSD is a DAW plugin, not a modular-world tool, and these creators do not typically cover immersive/spatial plugins:
+- Cuckoo
+- Look Mum No Computer (Sam Battle)
+- Mylar Melodies
+- DivKid (Ben Wilson)
+- Red Means Recording (Jeremy Blake)
+- Colin Benders
+- Ricky Tinez
+
+**Generic plugin reviewers** — dropped because they don't cover immersive tools specifically:
+- In The Mix (Michael Wynne) — EDM/mix plugins, not immersive
+- Dan Worrall — DSP-depth but overwhelmingly mix-processor focused
+- Alex Ball — synth/FX historian; could be tertiary later but not immersive-native
+
+**Ambient-musician YouTubers** — dropped except for delay-design-specific angle:
+- Andrew Huang — wrong audience for spatial-delay; annual-top-10 angle doesn't suit a niche GPL tool
+- Venus Theory — ambient producer, not spatial-tool reviewer
+- Dash Glitch — preset/sound-design focus but not immersive
+- Marc Weidenbaum / Disquiet Junto — kept as a possible community destination via Lines forum but not front-line (dropped from creator segment)
+
+---
+
+## Gaps & follow-up research
+
+- **Sound Particles-reviewing creators are thinner than hoped.** Web search surfaced: Michael G Wagner (strongest), Matt Glenn (Space Controller review), Production Expert (inDelay review), Tom Lowe (dearVR via Production Expert), and the editorial-press tier (SOS, SonicScoop, MusicRadar, audioXpress, MusicTech). Only ~5 named individual YouTubers with confirmed Sound Particles coverage emerged — much of Sound Particles tutorial content is produced by Sound Particles itself. A deeper second-pass, searching YouTube natively for "Sound Particles inDelay tutorial" / "Sound Particles Doppler review" channel-by-channel, would likely surface 3-5 more niche reviewers not indexed by web search.
+- **Kim Aava and Leah Callahan are unresolved.** User-nominated but web search returned nothing definitive. Possibly active on Instagram/Mixcloud/LinkedIn rather than YouTube. Needs manual handle-confirmation before outreach.
+- **Game-audio creators underrepresented (by design).** Without a Wwise/FMOD build, the game-audio middleware crowd is a poor fit. Javier Zumer, Akash Thakkar, atmoky, and Resonance Audio users would become viable targets if OSD ships middleware integration.
+- **Academic spatial-audio YouTubers are thin.** IEM Graz and Joseph Anderson are the practical ceiling; AES TC spatial-audio has members but no mass-audience YouTube presence. This niche is better reached via conference paper/poster or AES technical-committee presentation.
+- **Film-scoring YouTubers (Christian Henson / David Hilowitz / Spitfire orbit)** are cinematic-tool-focused, not spatial-plugin-focused. Hilowitz is a plugin dev himself (Decent Sampler, Refractions) and could be a peer-to-peer outreach rather than a review pitch; Henson works via Spitfire Audio/Pianobook and is unlikely to cover a free GPL tool. Deferred from this list.
+- **EU short-form creators (TikTok/Reels/Shorts immersive-audio demos)** unexplored. If OSD has a social-media demo reel, a follow-up pass on EU/UK short-form audio creators with 50k+ followers could unlock a different distribution surface.
+- **Verification pass required.** Every audience number (prefixed "approx.") needs a SocialBlade or direct channel-page confirmation before sending a batch. Every Sound Particles coverage claim links to a specific post/video URL where possible — verify the link is still live at send time.
+- **Berlin-local in-person opportunities.** Eric Horstmann, Peter Kirn, and Hainbach are all Berlin-based. An in-person pitch or studio-visit ask is a stronger first move than a cold email for all three.
+
+---
+
+## Verification sources (selected)
+
+- Michael G Wagner — https://www.michaelgwagner.com/ ; Patreon "Coming March 6: Sound Particles InShaper" ; Substack spaceforaudio.com ; "Top 10 Immersive Audio Plugins for Professional Spatial Mixing" blog
+- Matt Glenn Space Controller review — https://reaper.blog/2021/11/space-controller/ and https://reaper.blog/2021/11/matt-glenn-spatial-audio-pt1/
+- Production Expert Sound Particles inDelay review — https://www.production-expert.com/production-expert-1/sound-particles-indelay-expert-review
+- Production Expert dearVR Pro tutorial (Tom Lowe) — https://www.production-expert.com/production-expert-1/dear-reality-dearvr-pro-creating-an-immersive-soundscape-free-tutorial
+- Genelec Immersive Audio Hub videos hosted by Eric Horstmann — https://www.production-expert.com/production-expert-1/the-genelec-guide-to-immersive-audio
+- Immersive Audio Podcast (Oliver Kadel) — https://immersiveaudiopodcast.com/
+- Spatial Audio Monthly (Wagner + Hocking) — https://podcasts.apple.com/mv/podcast/spatial-audio-monthly/id1712377950
+- Martin Rieger / VRtonung — https://www.vrtonung.de/en/
+- Benn Jordan / Lunacy Taps & Portals — https://lunacy.audio/products/tapsandportals/
+- Sound Particles inDelay / SkyDust 3D / Energy Panner / Space Controller reviews in SOS — https://www.soundonsound.com/manufacturer/sound-particles
