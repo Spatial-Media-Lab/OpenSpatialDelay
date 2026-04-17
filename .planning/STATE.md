@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 5 context gathered — launch target Tue Apr 28 pre-Superbooth; Phase 4 on critical path
-last_updated: "2026-04-17T14:18:39.200Z"
-last_activity: 2026-04-17 -- Plan 02-06 closed. Patreon live at patreon.com/AndrewRahman.
+stopped_at: Completed 05-00-PLAN.md — launch coordination scaffold (smoke + precheck + runbook) + T-11 precheck walk decisions committed
+last_updated: "2026-04-17T16:01:51.008Z"
+last_activity: 2026-04-17
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 21
-  completed_plans: 19
-  percent: 90
+  total_plans: 30
+  completed_plans: 20
+  percent: 67
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-14)
 
 **Core value:** Each delay echo occupies a distinct spatial position, creating immersive 3D soundscapes that move through space around the listener.
-**Current focus:** Phase 02 — email-capture-funding-infrastructure
+**Current focus:** Phase 05 — launch-announcements
 
 ## Current Position
 
-Phase: 02 (email-capture-funding-infrastructure) — EXECUTING
-Plan: 6 of 7 complete (02-06 Patreon closed — live at patreon.com/AndrewRahman, DIST-03 complete). Plan 02-05 (Sender.net) remains for Phase 02.
-Status: Executing — 02-05 Sender.net email capture next
-Last activity: 2026-04-17 -- Plan 02-06 closed. Patreon live at patreon.com/AndrewRahman.
+Phase: 05 (launch-announcements) — EXECUTING
+Plan: 2 of 9
+Status: Ready to execute
+Last activity: 2026-04-17
 
 Progress: [█████████░] 95%
 
@@ -61,6 +61,7 @@ Progress: [█████████░] 95%
 | Phase 03 P05 | 6min | 3 tasks | 10 files |
 | Phase 03 P06 | 8min | 1 tasks | 2 files |
 | Phase 03 P08 | 1min 26s | 2 tasks | 2 files |
+| Phase 05 P00 | 90min | 4 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -90,6 +91,7 @@ Recent decisions affecting current work:
 - [Phase 03]: Plan 03-06 — D-08 WCAG 2.1 AA closed: axe-core baseline showed 58 violations collapsing to 2 root-cause tokens; --text-dim nudged #6d7279 → #787d84 and --accent-violet nudged #7457d1 → #8570d7 (both ~+2 OKLCH lightness pts, annotated in globals.css with /* Phase 3 AA fix */). All 3 routes green, full 54-test Playwright suite green, no --tap-N UI-minimum failures.
 - [Phase 03]: Plan 03-07 Task 1 — screenshot_full.png (1640×1160) matched layout.tsx exactly, so no dimension edit was required; alt text updated from "HRTF binaural rendering" to capability language "spatial map view" per feedback_marketing_copy_depth.md (Rule 2). 4/4 og-metadata Playwright tests green. Task 2 (human-verify on opengraph.xyz + metatags.io) paused — needs deploy URL.
 - [Phase 03]: Plan 03-08: WEB-02 flipped to Complete via external-site Playwright guard on spatialmedialab.org/about. sml-about.spec.ts (4 tests, @external, retries: 2) lives in andrewrahman-com repo; REQUIREMENTS.md checkbox + traceability row flipped in openspatialdelay repo. WEB-01/WEB-03 untouched. CONTEXT.md D-02 scope-strike now reflected in requirements tracker.
+- [Phase 05]: Plan 05-00: T-11 precheck walk — Mailchimp owner=Andrew (resolved), SPF verified (v=spf1 a include:spf.jackhost.net -all), DKIM+DMARC pending HITL at jackhost.net target T-3, KVR Developer Account=no-account (dual path: apply + contactus@kvraudio.com fallback), Phase 4 plan 04-00 committed by 2026-04-20 (not descoped)
 
 ### Pending Todos
 
@@ -104,6 +106,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-04-17T14:18:39.197Z
-Stopped at: Phase 5 context gathered — launch target Tue Apr 28 pre-Superbooth; Phase 4 on critical path
-Resume file: .planning/phases/05-launch-announcements/05-CONTEXT.md
+Last session: 2026-04-17T16:01:51.004Z
+Stopped at: Completed 05-00-PLAN.md — launch coordination scaffold (smoke + precheck + runbook) + T-11 precheck walk decisions committed
+Resume file: None
