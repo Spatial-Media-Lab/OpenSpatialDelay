@@ -16,12 +16,16 @@ DST = os.path.join(REPO_ROOT, "docs/assets/screenshot_annotated.png")
 FONT_PATH = os.path.join(REPO_ROOT, "fonts/DM_Sans-Bold.ttf")
 
 CIRCLE_RADIUS = 18  # 36px diameter
-CIRCLE_COLOR = (128, 216, 255)  # #80D8FF cyan
-LINE_COLOR = (128, 216, 255, 153)  # #80D8FF at 60% opacity
+# Amber/orange callouts: high contrast against the plugin's cyan/blue accent
+# so the numbers never blend into the UI colour. Dark text on top keeps the
+# numerals legible without relying on hue against the bright circle.
+CIRCLE_COLOR = (255, 176, 59)      # #FFB03B warm amber
+CIRCLE_OUTLINE = (70, 40, 0)       # dark amber outline for pop
+LINE_COLOR = (255, 176, 59, 210)   # amber at ~82% opacity
 LINE_WIDTH = 2
-TEXT_COLOR = (255, 255, 255)  # White
-LEGEND_BG = (20, 24, 32, 220)  # Dark semi-transparent
-LEGEND_TEXT_COLOR = (200, 210, 220)
+TEXT_COLOR = (20, 14, 2)           # near-black for legibility on amber
+LEGEND_BG = (20, 24, 32, 220)      # dark semi-transparent
+LEGEND_TEXT_COLOR = (225, 228, 235)
 LEGEND_NUM_COLOR = CIRCLE_COLOR
 
 # Callout definitions: (number, label, target_x, target_y, callout_x, callout_y)
@@ -47,7 +51,7 @@ CALLOUTS = [
 
 
 def draw_circle_with_number(draw, cx, cy, number, font):
-    """Draw a filled cyan circle with a white number centered inside."""
+    """Draw a filled amber circle with a dark number centered inside."""
     bbox = [cx - CIRCLE_RADIUS, cy - CIRCLE_RADIUS,
             cx + CIRCLE_RADIUS, cy + CIRCLE_RADIUS]
     # Outer glow / shadow for visibility
@@ -56,8 +60,8 @@ def draw_circle_with_number(draw, cx, cy, number, font):
                      bbox[2] + offset, bbox[3] + offset]
         alpha = int(40 * (5 - offset) / 4)
         draw.ellipse(glow_bbox, fill=(0, 0, 0, alpha))
-    # Main circle
-    draw.ellipse(bbox, fill=CIRCLE_COLOR)
+    # Main circle with a thin dark outline for separation against light UI
+    draw.ellipse(bbox, fill=CIRCLE_COLOR, outline=CIRCLE_OUTLINE, width=2)
 
     # Center the number text
     text = str(number)
@@ -120,7 +124,7 @@ def draw_legend(canvas, draw, font_label, font_num, img_width, start_y):
         cx = x + small_r
         cy = y + small_r
         draw.ellipse([cx - small_r, cy - small_r, cx + small_r, cy + small_r],
-                      fill=CIRCLE_COLOR)
+                      fill=CIRCLE_COLOR, outline=CIRCLE_OUTLINE, width=1)
         # Number in small circle
         text = str(num)
         tb = font_num.getbbox(text)
@@ -142,11 +146,20 @@ def main():
     src_w, src_h = src.size
     print(f"Source image: {src_w}x{src_h}")
 
-    # Expand canvas: add margin at top, right, bottom, left for callout placement
+    # Expand canvas: add margin at top, right, bottom, left for callout placement.
+    # Legend height depends on the number of callouts — size margin_bottom
+    # dynamically so the last row is never clipped.
     margin_top = 60
     margin_right = 80
-    margin_bottom = 210  # Space for legend
     margin_left = 80
+
+    legend_padding = 24
+    legend_line_height = 30
+    legend_num_cols = 3
+    legend_items_per_col = (len(CALLOUTS) + legend_num_cols - 1) // legend_num_cols
+    legend_block_height = legend_items_per_col * legend_line_height + legend_padding * 2
+    # 4px lead-in (above legend) + 16px vertical offset + legend block + 24px tail buffer
+    margin_bottom = 4 + 16 + legend_block_height + 24
 
     canvas_w = src_w + margin_left + margin_right
     canvas_h = src_h + margin_top + margin_bottom

@@ -19,9 +19,11 @@
 //   tone-section      — Crop of the TONE section (filter graph + readout)
 //   osc-section       — Crop of the OSC section (receive + send rows)
 //   save-overlay      — Editor with Save Preset overlay composited on top
-//   preset-menu       — Editor with the Preset popup (largest category expanded)
-//   output-dropdown   — Editor with the Output Format dropdown (all formats)
+//   preset-menu       — Editor with nested preset menu (folders + expanded submenu)
+//   output-dropdown   — Editor with the Output Format dropdown (flat list)
 //   undo-active       — Editor with populated undo/redo history (buttons active)
+//   spatial-map       — Just the SpatialMap component (no drawer, no bottom panel)
+//   elevation-map     — SpatialMap with all 12 taps in a +90°→-90° spiral, labelled
 //
 // Examples:
 //   screenshot_tool ui.png 2.0
@@ -240,64 +242,90 @@ static juce::Image snapshotComponent (juce::Component& c, float scale)
 }
 
 //==============================================================================
-// Build a preset menu mock — picks the category with the most presets and
-// renders it fully expanded with all items.
+// Build a preset-menu mock that mirrors the real plugin's nested popup:
+// a top-level list of category folders (each with hasSubMenu=true), with one
+// shown in the hovered state, and a second popup rendered alongside it listing
+// that category's presets. The second popup is returned separately so the
+// caller can composite it next to the first.
 //==============================================================================
-static std::unique_ptr<PopupMenuSnapshot>
+struct PresetMenuMockPair
+{
+    std::unique_ptr<PopupMenuSnapshot> parent;
+    std::unique_ptr<PopupMenuSnapshot> submenu;
+    juce::String hoveredCategory;
+};
+
+static PresetMenuMockPair
 buildPresetMenuMock (OSDLookAndFeel& lnf,
                      OpenSpatialDelayProcessor& processor,
-                     int minWidth)
+                     int parentWidth,
+                     int submenuWidth)
 {
     auto presets = processor.getCategorizedPresets();
 
-    // Count presets per category, pick the largest
-    juce::HashMap<juce::String, int> counts;
+    // Preserve the category order as they appear in the flat list.
+    std::vector<juce::String> categories;
     for (const auto& p : presets)
-        counts.set (p.category, counts[p.category] + 1);
-
-    juce::String largest;
-    int best = 0;
-    for (juce::HashMap<juce::String, int>::Iterator it (counts); it.next();)
     {
-        if (it.getValue() > best)
+        if (std::find (categories.begin(), categories.end(), p.category) == categories.end())
+            categories.push_back (p.category);
+    }
+
+    // Pick the category that contains the currently-selected preset to render
+    // as "hovered". If none are current, fall back to the first category.
+    int currentIdx = processor.getCurrentPresetIndex();
+    juce::String hovered = categories.empty() ? juce::String() : categories.front();
+    for (const auto& p : presets)
+    {
+        if (p.originalIndex == currentIdx)
         {
-            best = it.getValue();
-            largest = it.getKey();
+            hovered = p.category;
+            break;
         }
     }
 
-    std::vector<PopupMenuSnapshot::Item> items;
+    // Build the parent (category folders) menu.
+    std::vector<PopupMenuSnapshot::Item> parentItems;
+    for (const auto& cat : categories)
+    {
+        PopupMenuSnapshot::Item it;
+        it.text          = cat;
+        it.hasSubMenu    = true;
+        it.isHighlighted = (cat == hovered);
+        parentItems.push_back (it);
+    }
 
-    // Show the largest category expanded
-    PopupMenuSnapshot::Item header;
-    header.text = largest.toUpperCase();
-    header.isHeader = true;
-    items.push_back (header);
+    PresetMenuMockPair result;
+    result.parent = std::make_unique<PopupMenuSnapshot> (lnf, std::move (parentItems), parentWidth);
+    result.hoveredCategory = hovered;
 
-    int currentIdx = processor.getCurrentPresetIndex();
+    // Build the submenu (presets inside the hovered category).
+    std::vector<PopupMenuSnapshot::Item> subItems;
     bool sawFactory = false, insertedSep = false;
     for (const auto& p : presets)
     {
-        if (p.category != largest) continue;
+        if (p.category != hovered) continue;
         if (! p.isFactory && sawFactory && ! insertedSep)
         {
             PopupMenuSnapshot::Item sep;
             sep.isSeparator = true;
-            items.push_back (sep);
+            subItems.push_back (sep);
             insertedSep = true;
         }
         PopupMenuSnapshot::Item it;
-        it.text    = p.name;
+        it.text     = p.name;
         it.isTicked = (p.originalIndex == currentIdx);
-        items.push_back (it);
+        subItems.push_back (it);
         if (p.isFactory) sawFactory = true;
     }
 
-    return std::make_unique<PopupMenuSnapshot> (lnf, std::move (items), minWidth);
+    result.submenu = std::make_unique<PopupMenuSnapshot> (lnf, std::move (subItems), submenuWidth);
+    return result;
 }
 
 //==============================================================================
-// Build an output-format dropdown mock — all 23 formats, current one ticked.
+// Build an output-format dropdown mock that matches the real plugin's popup:
+// a flat list of every format, with the current one ticked. No category headers.
 //==============================================================================
 static std::unique_ptr<PopupMenuSnapshot>
 buildOutputDropdownMock (OSDLookAndFeel& lnf,
@@ -307,36 +335,16 @@ buildOutputDropdownMock (OSDLookAndFeel& lnf,
     std::vector<PopupMenuSnapshot::Item> items;
     int currentFmt = processor.configOutputFormat.load();
 
-    auto categoryFor = [] (const OpenSpatialDelayProcessor::OutputFormatInfo& info) -> juce::String
-    {
-        if (info.isStereoVariant)     return "Stereo";
-        if (info.isAmbisonicsOutput)  return "Ambisonics";
-        if (juce::String (info.name) == "Binaural") return "Binaural";
-        if (info.hasHeight)           return "Immersive";
-        return "Surround";
-    };
-
-    juce::String currentCategory;
     for (int i = 0; i < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS; ++i)
     {
         const auto& info = OpenSpatialDelayProcessor::outputFormatRegistry[(size_t) i];
-        juce::String cat = categoryFor (info);
-        if (cat != currentCategory)
-        {
-            PopupMenuSnapshot::Item header;
-            header.text = cat.toUpperCase();
-            header.isHeader = true;
-            items.push_back (header);
-            currentCategory = cat;
-        }
-
         PopupMenuSnapshot::Item it;
         it.text    = info.name;
         it.isTicked = (i == currentFmt);
         items.push_back (it);
     }
 
-    // Compact row height so all 23 formats + 5 headers fit within the editor.
+    // Compact row height so all 23 formats fit within the editor.
     return std::make_unique<PopupMenuSnapshot> (lnf, std::move (items), minWidth, /*row h*/ 18);
 }
 
@@ -536,14 +544,47 @@ int main (int argc, char* argv[])
     else if (mode == "preset-menu")
     {
         auto base = snapshotComponent (*osd, scaleFactor);
-        auto mock = buildPresetMenuMock (osd->getOSDLookAndFeel(), processor, 200);
-        auto mockImg = snapshotComponent (*mock, scaleFactor);
+        auto pair = buildPresetMenuMock (osd->getOSDLookAndFeel(), processor,
+                                         /*parentWidth*/ 170,
+                                         /*submenuWidth*/ 190);
+        auto parentImg  = snapshotComponent (*pair.parent, scaleFactor);
+        auto submenuImg = snapshotComponent (*pair.submenu, scaleFactor);
 
-        // Anchor popup below the preset-name button
+        // Parent popup anchored below the preset-name button.
         auto btn = osd->getPresetNameButtonBounds();
-        int anchorX = btn.getX();
-        int anchorY = btn.getBottom() + 2;
-        result = compositeOverlay (base, mockImg, anchorX, anchorY, scaleFactor);
+        int parentX = btn.getX();
+        int parentY = btn.getBottom() + 2;
+
+        // Submenu anchored to the right of the parent at the hovered row.
+        // Each category row in the parent uses the default 22px row height,
+        // plus the 6px card padding at the top.
+        int rowH  = 22;
+        int pad   = 6;
+        int hoverIdx = 0;
+        auto presets = processor.getCategorizedPresets();
+        std::vector<juce::String> seen;
+        for (const auto& p : presets)
+        {
+            if (std::find (seen.begin(), seen.end(), p.category) == seen.end())
+            {
+                if (p.category == pair.hoveredCategory) break;
+                seen.push_back (p.category);
+                ++hoverIdx;
+            }
+        }
+        int submenuX = parentX + pair.parent->getWidth() - 2;
+        int submenuY = parentY + pad + hoverIdx * rowH - pad;
+
+        // Clamp so both popups stay inside the editor.
+        int maxRight = osd->getWidth() - 4;
+        if (submenuX + pair.submenu->getWidth() > maxRight)
+            submenuX = maxRight - pair.submenu->getWidth();
+        if (submenuY + pair.submenu->getHeight() > osd->getHeight() - 4)
+            submenuY = osd->getHeight() - 4 - pair.submenu->getHeight();
+        if (submenuY < 4) submenuY = 4;
+
+        result = compositeOverlay (base, parentImg,  parentX,  parentY,  scaleFactor);
+        result = compositeOverlay (result, submenuImg, submenuX, submenuY, scaleFactor);
     }
     else if (mode == "output-dropdown")
     {
@@ -575,12 +616,100 @@ int main (int argc, char* argv[])
         osd->syncForScreenshot();  // triggers timerCallback → updateUndoButtons
         result = snapshotComponent (*osd, scaleFactor);
     }
+    else if (mode == "spatial-map")
+    {
+        // Snapshot the SpatialMap component directly — this excludes the
+        // Global Drawer tab (sibling component, not a child) and yields a
+        // clean square map with no bottom-panel bleed.
+        auto& map = osd->getSpatialMapForScreenshot();
+        result = snapshotComponent (map, scaleFactor);
+    }
+    else if (mode == "elevation-map")
+    {
+        // Configure all 12 taps as a spiral: azimuths evenly spread around the
+        // circle, distances progressing outward, elevations running from +90°
+        // down to -90°. Then snapshot the spatial map and overlay each tap's
+        // elevation value as a label next to its dot.
+        auto& apvts = processor.apvts;
+        for (int i = 0; i < 12; ++i)
+        {
+            auto pre = "object" + juce::String (i + 1) + "_";
+            auto setFloat = [&] (const juce::String& id, float v) {
+                if (auto* p = apvts.getParameter (pre + id))
+                    p->setValueNotifyingHost (p->convertTo0to1 (v));
+            };
+            auto setBool  = [&] (const juce::String& id, bool v) {
+                if (auto* p = apvts.getParameter (pre + id))
+                    p->setValueNotifyingHost (v ? 1.0f : 0.0f);
+            };
+
+            float t   = (float) i / 11.0f;              // 0..1
+            float az  = -180.0f + t * 360.0f;           // full sweep
+            float dist = 0.38f + t * 0.55f;             // 0.38 → 0.93
+            float elev = 90.0f - t * 180.0f;            // +90 → -90
+
+            setBool  ("enabled",    true);
+            setFloat ("azimuth",    az);
+            setFloat ("elevation",  elev);
+            setFloat ("distance",   dist);
+        }
+        osd->syncForScreenshot();
+
+        auto& map = osd->getSpatialMapForScreenshot();
+        juce::Image base = snapshotComponent (map, scaleFactor);
+
+        // Overlay elevation labels on the rendered image.
+        juce::Graphics g (base);
+        g.addTransform (juce::AffineTransform::scale (scaleFactor));
+        juce::Font labelFont (osd->getOSDLookAndFeel().jetbrainsMedium);
+        labelFont.setHeight (11.0f);
+        g.setFont (labelFont);
+
+        for (int i = 0; i < 12; ++i)
+        {
+            if (! map.isObjectEnabled (i)) continue;
+            auto pos = map.getObjectScreenPos (i);
+            float z = std::sin (juce::degreesToRadians (map.getObjectElevation (i)));
+            float dotR = 7.0f + (z >= 0.0f ? 2.5f * z : 1.5f * z);
+
+            juce::String text = juce::String (juce::roundToInt (map.getObjectElevation (i)))
+                              + juce::String (juce::CharPointer_UTF8 ("\xc2\xb0"));
+
+            // Place label outside the dot — right side if the dot is on the
+            // left half of the map, left side otherwise. Small vertical nudge
+            // so labels for neighbouring taps don't overlap too badly.
+            float mapCx = map.getWidth() * 0.5f;
+            bool placeRight = pos.x < mapCx;
+            int labelW = 30;
+            int labelH = 14;
+            float lx = placeRight ? (pos.x + dotR + 4.0f)
+                                  : (pos.x - dotR - 4.0f - labelW);
+            float ly = pos.y - labelH * 0.5f;
+
+            // Soft drop shadow for legibility against the starfield.
+            g.setColour (juce::Colour (0x99000000));
+            g.drawText (text,
+                        juce::Rectangle<float> (lx + 1.0f, ly + 1.0f,
+                                                (float) labelW, (float) labelH),
+                        placeRight ? juce::Justification::centredLeft
+                                   : juce::Justification::centredRight,
+                        false);
+            g.setColour (juce::Colour (0xfff0f4f8));
+            g.drawText (text,
+                        juce::Rectangle<float> (lx, ly,
+                                                (float) labelW, (float) labelH),
+                        placeRight ? juce::Justification::centredLeft
+                                   : juce::Justification::centredRight,
+                        false);
+        }
+        result = base;
+    }
     else
     {
         std::cerr << "Error: unknown --mode: " << mode.toStdString() << "\n";
         std::cerr << "Valid modes: full, drawer-open, tone-section, osc-section,\n"
                      "             save-overlay, preset-menu, output-dropdown,\n"
-                     "             undo-active\n";
+                     "             undo-active, spatial-map, elevation-map\n";
         return 1;
     }
 

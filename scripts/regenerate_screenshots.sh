@@ -33,55 +33,63 @@ if [ ! -x "$TOOL" ]; then
 fi
 
 # Presets chosen per screenshot for visual clarity:
-MAIN_PRESET="Quad Ping-Pong"      # 4 taps at cardinal positions — clean reference
-ELEVATION_PRESET="Rising Spiral"  # shows varied elevations in the dome view
+MAIN_PRESET="Quad Ping-Pong"          # 4 taps at cardinal positions — clean reference
+ELEVATION_PRESET="Hemisphere Spread"  # varied elevations — feature showcase
+WOBBLE_PRESET="Tape Wow"              # wobble section engaged
+SHIMMER_PRESET="Shimmer"              # shimmer preset for feature screenshot
 
 echo ""
 echo "=== Regenerating screenshots ==="
 
-# --- Full editor screenshot (used as source for header/panel/map crops) -----
+# --- Full editor screenshot (used as source for header / bottom-panel crops)
 "$TOOL" "$OUT_DIR/screenshot.png"         "$SCALE" --preset "$MAIN_PRESET"      --mode full
 cp "$OUT_DIR/screenshot.png" "$OUT_DIR/screenshot_full.png"
 
-# --- Elevation-focused full editor (source for elevation_map crop) ----------
-"$TOOL" "$OUT_DIR/_tmp_elevation.png"      "$SCALE" --preset "$ELEVATION_PRESET" --mode full
+# --- Direct-snapshot captures (no PIL crop required) -----------------------
+"$TOOL" "$OUT_DIR/screenshot_spatial_map.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode spatial-map
+"$TOOL" "$OUT_DIR/screenshot_elevation_map.png" "$SCALE" --preset "$MAIN_PRESET"      --mode elevation-map
+"$TOOL" "$OUT_DIR/screenshot_drawer.png"        "$SCALE" --preset "$MAIN_PRESET"      --mode drawer-open
+"$TOOL" "$OUT_DIR/screenshot_tone_section.png"  "$SCALE" --preset "$MAIN_PRESET"      --mode tone-section
+"$TOOL" "$OUT_DIR/screenshot_osc_section.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode osc-section
+"$TOOL" "$OUT_DIR/screenshot_save_preset.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode save-overlay
+"$TOOL" "$OUT_DIR/screenshot_preset_menu.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode preset-menu
+"$TOOL" "$OUT_DIR/screenshot_output_menu.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode output-dropdown
+"$TOOL" "$OUT_DIR/screenshot_undo_active.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode undo-active
 
-# --- New captures -----------------------------------------------------------
-"$TOOL" "$OUT_DIR/screenshot_drawer.png"       "$SCALE" --preset "$MAIN_PRESET"      --mode drawer-open
-"$TOOL" "$OUT_DIR/screenshot_tone_section.png" "$SCALE" --preset "$MAIN_PRESET"      --mode tone-section
-"$TOOL" "$OUT_DIR/screenshot_osc_section.png"  "$SCALE" --preset "$MAIN_PRESET"      --mode osc-section
-"$TOOL" "$OUT_DIR/screenshot_save_preset.png"  "$SCALE" --preset "$MAIN_PRESET"      --mode save-overlay
-"$TOOL" "$OUT_DIR/screenshot_preset_menu.png"  "$SCALE" --preset "$MAIN_PRESET"      --mode preset-menu
-"$TOOL" "$OUT_DIR/screenshot_output_menu.png"  "$SCALE" --preset "$MAIN_PRESET"      --mode output-dropdown
-"$TOOL" "$OUT_DIR/screenshot_undo_active.png"  "$SCALE" --preset "$MAIN_PRESET"      --mode undo-active
+# --- Per-preset feature captures (full editor, different preset each) -------
+"$TOOL" "$OUT_DIR/screenshot_elevation.png"     "$SCALE" --preset "$ELEVATION_PRESET" --mode full
+"$TOOL" "$OUT_DIR/screenshot_wobble.png"        "$SCALE" --preset "$WOBBLE_PRESET"    --mode full
+"$TOOL" "$OUT_DIR/screenshot_shimmer.png"       "$SCALE" --preset "$SHIMMER_PRESET"   --mode full
 
-# --- Crops derived from the full screenshots (via PIL) ----------------------
+# --- PIL crops derived from the full editor screenshot ----------------------
 # Native plugin dimensions: 820 x 580. At scale=2, image is 1640 x 1160.
-# - Header:        y  0 – 104  (native 0 – 52)
-# - Spatial map:   x  0 – 1112, y 104 – 860  (native 0 – 556, 52 – 430)
-# - Right panel:   x  1112 – 1640, y 104 – 860
-# - Bottom panel:  y 860 – 1160
+# Layout constants (scaled):
+#   Header            y   0 –  104  (top 52 native)
+#   Right panel X     x 1112 – 1640 (width 264 native)
+#   OSC header Y      y ≈ 1028       (rpBottom - 60 native = 514 native — rightPanel
+#                                    is reduced by 6px vertical padding, so rpBottom
+#                                    lands at 574 native, not the window bottom)
+#   Bottom panel Y    y  920 – 1160 (height 120 native)
 python3 - <<'PY'
 from PIL import Image
 from pathlib import Path
 
 OUT_DIR = Path("docs/assets")
 full = Image.open(OUT_DIR / "screenshot.png")
-elev = Image.open(OUT_DIR / "_tmp_elevation.png")
 
 crops = {
+    # Top header strip — full width, SML + preset row + format dropdowns
     "screenshot_header.png":       (full, (0,    0,   1640, 104 )),
-    "screenshot_spatial_map.png":  (full, (0,    104, 1112, 860 )),
-    "screenshot_right_panel.png":  (full, (1112, 104, 1640, 860 )),
-    "screenshot_bottom_panel.png": (full, (0,    860, 1640, 1160)),
-    "screenshot_elevation_map.png":(elev, (0,    104, 1112, 860 )),
+    # Right panel — DELAY + MOD + TONE + MIX (stops 10px above OSC section header)
+    "screenshot_right_panel.png":  (full, (1112, 104, 1640, 1018)),
+    # Bottom panel — per-tap row only (tap selector + per-tap controls)
+    # Stops at right-panel edge so MIX / OSC don't bleed in.
+    "screenshot_bottom_panel.png": (full, (0,    920, 1112, 1160)),
 }
 
 for fname, (src, box) in crops.items():
     src.crop(box).save(OUT_DIR / fname)
     print(f"  crop → {fname} ({box[2]-box[0]}x{box[3]-box[1]})")
-
-(OUT_DIR / "_tmp_elevation.png").unlink()
 PY
 
 # --- Regenerate annotated screenshot ----------------------------------------
