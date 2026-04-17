@@ -95,7 +95,7 @@ Phases execute in dependency order. Phase 4 (Content) depends on Phase 1 only an
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Repo & License Readiness | 0/2 | Planning complete | - |
-| 2. Email Capture & Funding Infrastructure | 0/? | Not started | - |
+| 2. Email Capture & Funding Infrastructure | 6/7 | In Progress | - |
 | 3. Personal Website | 1/9 | In Progress | - |
 | 4. Demo Content | 0/? | Not started | - |
 | 5. Launch Announcements | 0/? | Not started | - |

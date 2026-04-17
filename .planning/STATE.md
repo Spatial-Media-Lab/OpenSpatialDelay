@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan 02-06 checkpoint-paused on Task 4 human-action gate. Tasks 1-3 substantively complete: 6 Markdown drafts + 9 graphics + 02-06-PATREON-SETUP.md walkthrough all committed; user completed dashboard Steps 1,2,4,5,8 (account/vanity/tiers/About/posts-as-drafts) per 02-06-PATREON-SETUP.md progress tracker. Task 4 blocks on user executing 02-06-PATREON-SETUP.md Steps 9-13 (preview → click Launch → incognito verify → 4 screenshots to docs/phase-02-evidence/ → return resume signal with curl -sI patreon.com/andrewrahman). DIST-03 not yet satisfied. Also 03-07 Task 2 still checkpoint-paused on social-preview human-verify needing Netlify deploy URL; Phase 03 unable to close until 03-07 Task 2 resolved.
-last_updated: "2026-04-17T10:15:00.000Z"
-last_activity: 2026-04-17 -- Plan 02-06 partial SUMMARY recorded; checkpoint-paused on Task 4 LAUNCH
+stopped_at: Plan 02-06 complete (Patreon live at patreon.com/AndrewRahman — HTTP/2 301 verified 2026-04-17T11:38:29Z; 4-screenshot evidence requirement waived per user override; DIST-03 satisfied). Plan 02-05 (Sender.net email capture) remaining for Phase 02. Phase 03 also has 03-07 Task 2 checkpoint-paused on social-preview human-verify needing Netlify deploy URL.
+last_updated: "2026-04-17T11:40:00.000Z"
+last_activity: 2026-04-17 -- Plan 02-06 closed. Patreon live at patreon.com/AndrewRahman. DIST-03 complete. Canonical casing aligned in live-facing docs.
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 20
-  completed_plans: 18
-  percent: 90
+  completed_plans: 19
+  percent: 95
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-14)
 ## Current Position
 
 Phase: 02 (email-capture-funding-infrastructure) — EXECUTING
-Plan: 6 of 7 (02-06 Patreon) — CHECKPOINT-PAUSED on Task 4 human-action (user LAUNCH + incognito verify + 4 screenshots)
-Status: Checkpoint-paused — Tasks 1-3 substantively complete; Task 4 user-side
-Last activity: 2026-04-17 -- Plan 02-06 partial SUMMARY recorded; checkpoint-paused on Task 4 LAUNCH
+Plan: 6 of 7 complete (02-06 Patreon closed — live at patreon.com/AndrewRahman, DIST-03 complete). Plan 02-05 (Sender.net) remains for Phase 02.
+Status: Executing — 02-05 Sender.net email capture next
+Last activity: 2026-04-17 -- Plan 02-06 closed. Patreon live at patreon.com/AndrewRahman.
 
-Progress: [█████░░░░░] 50%
+Progress: [█████████░] 95%
 
 ## Performance Metrics
 
@@ -100,10 +100,10 @@ None yet.
 - Website rebuild is the #1 schedule risk. Research recommends time-boxing to 2 days or falling back to updating the existing builder page (Phase 3).
 - Patreon must have 2+ posts before any public link appears in announcements or website (Phase 2 gate before Phase 5).
 - **[03-07 CHECKPOINT-PAUSED]** Task 2 is a `checkpoint:human-verify` gate on opengraph.xyz + metatags.io social-preview rendering. Needs a deploy URL (Netlify push of `andrewrahman-com` main — currently 24 commits ahead of origin, or `netlify deploy --build` for draft). Cannot fabricate verdict — axe/Playwright cannot scrape live social platforms. Blocks 03-07 close + 03-08 start.
-- **[02-06 CHECKPOINT-PAUSED]** Task 4 is a `checkpoint:human-action` gate on Patreon LAUNCH + incognito verify. User must execute 02-06-PATREON-SETUP.md Steps 9-13 (preview each post → click "Launch page" → incognito visit patreon.com/andrewrahman → save 4 screenshots to docs/phase-02-evidence/ → reader test → return resume signal `Patreon launched` + curl -sI output). DIST-03 satisfaction hinges on this. Cannot be automated — Patreon has no creator-side API for page-launch or post-publish.
+- **[02-06 CLOSED 2026-04-17]** Patreon LAUNCHED and live at `https://patreon.com/AndrewRahman` (HTTP/2 301 → www.patreon.com/AndrewRahman). 4-screenshot evidence requirement waived by user override (non-load-bearing ceremony for solo-creator context — see 02-06-SUMMARY.md Decisions §A). DIST-03 complete. Creator-verified 7 incognito checks at launch time + self-verified reader test.
 
 ## Session Continuity
 
-Last session: 2026-04-17T10:15:00.000Z
-Stopped at: Plan 02-06 partial SUMMARY recorded. Tasks 1-3 substantively complete; Task 4 checkpoint-paused on user LAUNCH + incognito verify. See 02-06-SUMMARY.md "Next Steps (User)" for the 5-step resume path. 03-07 Task 2 still awaiting Netlify deploy URL for social-preview verify.
-Resume file: .planning/phases/02-email-capture-funding-infrastructure/02-06-SUMMARY.md (Next Steps section)
+Last session: 2026-04-17T11:40:00.000Z
+Stopped at: Plan 02-06 complete — Patreon live at patreon.com/AndrewRahman; DIST-03 satisfied; evidence artifact requirement waived per user override. Plan 02-05 (Sender.net email capture) remains for Phase 02. 03-07 Task 2 also still awaiting Netlify deploy URL for social-preview verify (separate queue).
+Resume file: .planning/phases/02-email-capture-funding-infrastructure/02-05-PLAN.md
