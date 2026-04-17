@@ -14,14 +14,16 @@ The `O10Z` code is a short identifier used in the plugin display name (e.g., O10
 
 | Version | Code | Description | Commit |
 |---------|------|-------------|--------|
-| v1.0.0 | O100 | **Release v1.0.0** — all fixes issues #76–#200 squashed into one commit | 768c248 |
+| v1.0.0 | O100 | **Release v1.0.0** — issues #76–#200 + Immersive HRTF bass-boost fix (#198) + filter graph UX overhaul (#196). Rebuilt 2026-04-17 at ff9ec24. | ff9ec24 |
 
 ## Post-release patches
 
-| Version | Code | Description | Commit |
-|---------|------|-------------|--------|
-| v1.0.1 | O101 | Fix Immersive HRTF bass boost — correct low-shelf filter profile index (issue #198) | 70cc5d8 |
-| v1.0.2 | O102 | Filter graph UX: EQ8-style log grid, dB labels, proportional scale, log Q drag (issue #196) | 82d9f6f |
+_None active._ Fixes previously labelled v1.0.1 (#198) and v1.0.2 (#196) were folded back into the v1.0.0 bundle on 2026-04-17; those bundles were removed from the local plugins folder. See history below.
+
+| Version | Code | Description | Commit | Status |
+|---------|------|-------------|--------|--------|
+| v1.0.1 | O101 | Fix Immersive HRTF bass boost — correct low-shelf filter profile index (issue #198) | 70cc5d8 | Merged into v1.0.0 (2026-04-17) |
+| v1.0.2 | O102 | Filter graph UX: EQ8-style log grid, dB labels, proportional scale, log Q drag (issue #196) | 82d9f6f | Merged into v1.0.0 (2026-04-17) |
 
 ## Next available
 
