@@ -716,9 +716,11 @@ After the v1.0 real-world testing release, the following features and fixes were
 - **8 spatialization algorithms** (was 7, added Constant Power as default)
 - **291 Catch2 tests, 110,205 assertions** (was 162/1,255 at baseline). Added pre-release coverage: stereo input routing (4), 9.1/SML 13.1 surround (7), HOA 4OA–6OA initialization and stress (5).
 
-### v1.0.0 Rebuild (2026-04-17)
+### v1.0.0 Re-tag + Re-cut (2026-04-17)
 
-Local v1.0.0 plugin bundle rebuilt at commit `ff9ec24` to fold in two fixes that had been issued as separate versioned builds for testing. The v1.0.0 plugin identity (`O100`) and release tag (`768c248`) are unchanged; this is a local rebuild so the single installed bundle carries all fixes. v1.0.1 and v1.0.2 bundles removed from the local plugins folder.
+The `v1.0.0` GitHub release and tag originally pointed at commit `768c248` (cut 2026-04-12). Two fixes were completed before the release but accidentally omitted from the release build, so the `v1.0.0` tag was force-moved to the current main tip on 2026-04-17 and the release assets were re-cut to include both fixes. `v1.0.1` and `v1.0.2` interim local bundles — which had been used to test these two fixes in isolation — were retired. Plugin identity (`O100`) is unchanged.
 
-- **Immersive HRTF bass-boost fix (Issue #198):** Corrected low-shelf filter profile index for the Immersive HRTF preset (was formerly issued as v1.0.1/O101 at 70cc5d8).
-- **Filter graph UX overhaul (Issue #196):** EQ8-style logarithmic frequency grid, dB labels, proportional ±18 dB scale, extended Q range (0.1–8.0), off-screen curve clipping, and logarithmic Q drag for uniform feel across the full range (was formerly issued as v1.0.2/O102 at 82d9f6f).
+- **Immersive HRTF bass-boost fix (Issue #198):** Corrected low-shelf filter profile index for the Immersive HRTF preset (interim build was v1.0.1/O101 at `70cc5d8`).
+- **Filter graph UX overhaul (Issue #196):** EQ8-style logarithmic frequency grid, dB labels, proportional ±18 dB scale, extended Q range (0.1–8.0), off-screen curve clipping, and logarithmic Q drag for uniform feel across the full range (interim build was v1.0.2/O102 at `82d9f6f`).
+
+The original pre-retag commit (`768c248`) remains reachable via history; only the `v1.0.0` ref was moved.
