@@ -34,7 +34,7 @@ Requirements for the public launch. Each maps to roadmap phases.
 
 ### Announcements
 
-- [ ] **ANNC-01**: SML blog post published with demo embed
+- [x] **ANNC-01**: SML blog post published with demo embed
 - [ ] **ANNC-02**: SML newsletter email sent announcing OSD
 - [ ] **ANNC-03**: LinkedIn post published (link in first comment)
 - [ ] **ANNC-04**: Instagram post/Reel published with demo content
@@ -84,7 +84,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CONT-01 | Phase 4 | Pending |
 | CONT-02 | Phase 4 | Pending |
 | CONT-03 | Phase 4 | Pending |
-| ANNC-01 | Phase 5 | Pending |
+| ANNC-01 | Phase 5 | Complete |
 | ANNC-02 | Phase 5 | Pending |
 | ANNC-03 | Phase 5 | Pending |
 | ANNC-04 | Phase 5 | Pending |
