@@ -8,41 +8,50 @@ from PIL import Image, ImageDraw, ImageFont
 import math
 
 # --- Configuration ---
-SRC = "/Users/andrewrahman/conductor/workspaces/openspatialdelay/moscow-v1/docs/assets/screenshot.png"
-DST = "/Users/andrewrahman/conductor/workspaces/openspatialdelay/moscow-v1/docs/assets/screenshot_annotated.png"
-FONT_PATH = "/Users/andrewrahman/conductor/workspaces/openspatialdelay/moscow-v1/fonts/DM_Sans-Bold.ttf"
+# Paths resolve relative to the repository root (parent of docs/).
+import os
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+SRC = os.path.join(REPO_ROOT, "docs/assets/screenshot.png")
+DST = os.path.join(REPO_ROOT, "docs/assets/screenshot_annotated.png")
+FONT_PATH = os.path.join(REPO_ROOT, "fonts/DM_Sans-Bold.ttf")
 
 CIRCLE_RADIUS = 18  # 36px diameter
-CIRCLE_COLOR = (128, 216, 255)  # #80D8FF cyan
-LINE_COLOR = (128, 216, 255, 153)  # #80D8FF at 60% opacity
+# Amber/orange callouts: high contrast against the plugin's cyan/blue accent
+# so the numbers never blend into the UI colour. Dark text on top keeps the
+# numerals legible without relying on hue against the bright circle.
+CIRCLE_COLOR = (255, 176, 59)      # #FFB03B warm amber
+CIRCLE_OUTLINE = (70, 40, 0)       # dark amber outline for pop
+LINE_COLOR = (255, 176, 59, 210)   # amber at ~82% opacity
 LINE_WIDTH = 2
-TEXT_COLOR = (255, 255, 255)  # White
-LEGEND_BG = (20, 24, 32, 220)  # Dark semi-transparent
-LEGEND_TEXT_COLOR = (200, 210, 220)
+TEXT_COLOR = (20, 14, 2)           # near-black for legibility on amber
+LEGEND_BG = (20, 24, 32, 220)      # dark semi-transparent
+LEGEND_TEXT_COLOR = (225, 228, 235)
 LEGEND_NUM_COLOR = CIRCLE_COLOR
 
 # Callout definitions: (number, label, target_x, target_y, callout_x, callout_y)
 # target = point on the UI element; callout = where the circle goes (outside the element)
 CALLOUTS = [
     (1,  "SML Badge",          80,   52,   80,    -40),
-    (2,  "Preset Browser",     340,  52,   340,   -40),
-    (3,  "Input Format",       640,  52,   640,   -40),
-    (4,  "Output Format",      900,  52,   900,   -40),
-    (5,  "HRTF Profile",       1150, 52,   1150,  -40),
-    (6,  "Spatial Map",        500,  450,  -50,   450),
-    (7,  "DELAY Section",      1350, 180,  1590,  140),
-    (8,  "MOD Section",        1350, 320,  1590,  320),
-    (9,  "TONE Section",       1350, 460,  1590,  460),
-    (10, "MIX Section",        1350, 600,  1590,  600),
-    (11, "OSC Section",        1350, 740,  1590,  740),
-    (12, "Tap Selector",       200,  878,  -50,   878),
-    (13, "Per-Tap Controls",   620,  1010, 420,   1130),
-    (14, "Trajectory Controls",1100, 1010, 1100,  1130),
+    (2,  "Preset Browser",     540,  52,   540,   -40),
+    (3,  "Undo / Redo",        900,  52,   900,   -40),
+    (4,  "Input Format",       1100, 52,   1100,  -40),
+    (5,  "Output Format",      1280, 52,   1280,  -40),
+    (6,  "HRTF Profile",       1500, 52,   1500,  -40),
+    (7,  "Global Drawer",      30,   420,  -50,   420),
+    (8,  "Spatial Map",        500,  450,  -50,   560),
+    (9,  "DELAY Section",      1350, 200,  1590,  160),
+    (10, "MOD Section",        1350, 360,  1590,  340),
+    (11, "TONE Section",       1350, 520,  1590,  520),
+    (12, "MIX Section",        1350, 680,  1590,  680),
+    (13, "OSC Section",        1350, 890,  1590,  890),
+    (14, "Tap Selector",       200,  878,  -50,   878),
+    (15, "Per-Tap Controls",   620,  1010, 420,   1130),
+    (16, "Trajectory Controls",1100, 1010, 1100,  1130),
 ]
 
 
 def draw_circle_with_number(draw, cx, cy, number, font):
-    """Draw a filled cyan circle with a white number centered inside."""
+    """Draw a filled amber circle with a dark number centered inside."""
     bbox = [cx - CIRCLE_RADIUS, cy - CIRCLE_RADIUS,
             cx + CIRCLE_RADIUS, cy + CIRCLE_RADIUS]
     # Outer glow / shadow for visibility
@@ -51,8 +60,8 @@ def draw_circle_with_number(draw, cx, cy, number, font):
                      bbox[2] + offset, bbox[3] + offset]
         alpha = int(40 * (5 - offset) / 4)
         draw.ellipse(glow_bbox, fill=(0, 0, 0, alpha))
-    # Main circle
-    draw.ellipse(bbox, fill=CIRCLE_COLOR)
+    # Main circle with a thin dark outline for separation against light UI
+    draw.ellipse(bbox, fill=CIRCLE_COLOR, outline=CIRCLE_OUTLINE, width=2)
 
     # Center the number text
     text = str(number)
@@ -91,7 +100,7 @@ def draw_legend(canvas, draw, font_label, font_num, img_width, start_y):
     line_height = 30
     col_width = 360
     num_cols = 3
-    items_per_col = 5  # ceil(14/3)
+    items_per_col = (len(CALLOUTS) + num_cols - 1) // num_cols  # ceil
 
     legend_width = col_width * num_cols + padding * 2
     legend_height = items_per_col * line_height + padding * 2
@@ -115,7 +124,7 @@ def draw_legend(canvas, draw, font_label, font_num, img_width, start_y):
         cx = x + small_r
         cy = y + small_r
         draw.ellipse([cx - small_r, cy - small_r, cx + small_r, cy + small_r],
-                      fill=CIRCLE_COLOR)
+                      fill=CIRCLE_COLOR, outline=CIRCLE_OUTLINE, width=1)
         # Number in small circle
         text = str(num)
         tb = font_num.getbbox(text)
@@ -137,11 +146,20 @@ def main():
     src_w, src_h = src.size
     print(f"Source image: {src_w}x{src_h}")
 
-    # Expand canvas: add margin at top, right, bottom, left for callout placement
+    # Expand canvas: add margin at top, right, bottom, left for callout placement.
+    # Legend height depends on the number of callouts — size margin_bottom
+    # dynamically so the last row is never clipped.
     margin_top = 60
     margin_right = 80
-    margin_bottom = 210  # Space for legend
     margin_left = 80
+
+    legend_padding = 24
+    legend_line_height = 30
+    legend_num_cols = 3
+    legend_items_per_col = (len(CALLOUTS) + legend_num_cols - 1) // legend_num_cols
+    legend_block_height = legend_items_per_col * legend_line_height + legend_padding * 2
+    # 4px lead-in (above legend) + 16px vertical offset + legend block + 24px tail buffer
+    margin_bottom = 4 + 16 + legend_block_height + 24
 
     canvas_w = src_w + margin_left + margin_right
     canvas_h = src_h + margin_top + margin_bottom
