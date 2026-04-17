@@ -39,7 +39,7 @@ Requirements for the public launch. Each maps to roadmap phases.
 - [ ] **ANNC-03**: LinkedIn post published (link in first comment)
 - [ ] **ANNC-04**: Instagram post/Reel published with demo content
 - [ ] **ANNC-05**: KVR Audio product listing created
-- [ ] **ANNC-06**: Influencer outreach — researched contact list (spatial audio practitioners, plugin reviewers, relevant YouTubers / journalists / creators) with per-contact personalised intro emails drafted and ready to send at launch
+- [ ] **ANNC-06**: Immersive-audio outreach — researched contact list across two outreach modes: (a) **review pitch** for creators covering immersive-tool reviews/workflows and audio press, and (b) **guest/speaker pitch** for podcast hosts and spatial-audio meetup organisers where Andrew can discuss OSD in-conversation (podcast guest spots, meetup demos/talks). Per-contact personalised intro emails drafted for both modes and ready to send at launch.
 
 ## v2 Requirements
 

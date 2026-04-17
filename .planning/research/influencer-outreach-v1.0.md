@@ -24,18 +24,31 @@ Hook angles by recipient type:
 - **Dolby Atmos educator:** "Object-based delay for Atmos music / post workflows — each tap is an XYZ position inside your bed."
 - **Film / post-production sound designer:** "Sound-design delay where each echo has spatial presence — useful for UI, effect stacks, reverb tails, Foley worlding."
 - **Berlin-local press / practitioner:** "Built by a Berlin solo dev, Patreon-funded, GPL-3.0, no paywall, no account."
+- **Podcast host / meetup organiser (guest-pitch):** "Happy to come on as a guest and walk through the design decisions behind OSD — spatial delay as a DSP problem, HRTF on echoes vs reverb, free-plugin economics, solo-dev workflow. Berlin-based, available in person for EU meetups."
+
+## Outreach modes
+
+Per ANNC-06 scope, outreach has two distinct email templates (drafted in a later plan):
+
+| Mode | Target segments | Purpose | Template tone |
+|------|-----------------|---------|---------------|
+| **A. Review pitch** | Segments 1, 2, 3, 5 (reviewers + press) | Get OSD covered on a channel / in a publication | "Here's a free tool worth a look — shipping v1.0.0 on {date}. Binaries attached / link below." |
+| **B. Guest/speaker pitch** | Segment 7 (podcasts + meetups) | Get Andrew booked on podcasts / invited to meetups to discuss OSD in conversation | "I'd love to come on / present at {X}. Happy to walk through the spatial-delay design, HRTF tradeoffs, solo-dev economics — whatever fits your format." |
+
+A handful of creators sit in both modes (e.g., Michael G Wagner runs Spatial Audio Monthly podcast; Oliver Kadel runs Immersive Audio Podcast). Flag them for both templates — the order matters (guest-pitch is higher-leverage than a review, so lead with the guest ask).
 
 ---
 
 ## Targeting priority
 
-1. **Immersive / spatial tool reviewers (Sound Particles reviewers specifically)** — primary, the prototype fit
-2. **Film / game / post sound designers reviewing spatial plugins** — primary
-3. **Dolby Atmos / Ambisonics / VR audio educators** — secondary
+1. **Immersive / spatial tool reviewers (Sound Particles reviewers specifically)** — primary review-pitch target
+2. **Film / game / post sound designers reviewing spatial plugins** — primary review-pitch target
+3. **Dolby Atmos / Ambisonics / VR audio educators** — secondary review-pitch
 4. **Spatial audio practitioners + Berlin-local cluster** — secondary
 5. **Press (immersive-adjacent only)** — selective
 6. **Communities (posting destinations)**
-7. **Tertiary keep-on-radar** (Benn Jordan delay-design angle, Hainbach Berlin-local angle)
+7. **Podcasts + meetup organisers** — primary guest-pitch target (conversation-format outreach)
+8. **Tertiary keep-on-radar** (Benn Jordan delay-design angle, Hainbach Berlin-local angle)
 
 ---
 
@@ -156,6 +169,43 @@ Dropped from v1: r/edmproduction, r/WATMM, r/ambientmusic, r/modular, r/VSTs as 
 
 ---
 
+## Segment 7 — Podcasts + meetup organisers (PRIMARY guest-pitch)
+
+Different email template than the review-pitch: Andrew's ask here is a **guest spot or meetup talk**, not a review. He walks through the design decisions, HRTF tradeoffs, solo-dev economics, and lets the audience hear live demos in conversation.
+
+**Podcasts** (guest interview format):
+
+| Name | Platform | Audience / Format | Hook | Contact | Priority | Verified |
+|------|----------|-------------------|------|---------|----------|----------|
+| Immersive Audio Podcast (Oliver Kadel, 1.618 Digital) | Apple/Spotify/Web | 100+ eps, London-based, the definitive immersive-audio interview show | Guest spot on spatial-delay design + free-plugin economics; dovetails with Kadel's audience of Atmos/Ambisonics pros | immersiveaudiopodcast.com contact form | **HIGH — lead the guest-pitch batch** | ❌ verify-before-send |
+| Spatial Audio Monthly (Michael G Wagner + Sam Hocking) | Apple Podcasts | Monthly; immersive production deep-dives | Twofer — pitching Wagner for guest spot also opens a review pitch via his YouTube | michaelgwagner.com contact or Substack DM | **HIGH** | ❌ verify-before-send |
+| Audio Developer Conference Podcast / ADC talks | Web / YouTube | JUCE-adjacent dev community | JUCE-built plugin, solo-dev DSP walkthrough — natural ADC speaker format | audio.dev / ADC submissions | **HIGH** (speaking slot > guest spot) | ❌ verify-before-send |
+| Sound Design Live (Nathan Lively) | Web / podcast | Live-sound + design interviews | Broader audience but Nathan has covered immersive topics before; podcast + Audio Engineering Mentor Program | sounddesignlive.com contact | medium | ❌ verify-before-send |
+| The Sound Design Podcast | Web / podcast | Film/game sound design interviews | Sound-design delay angle for film post | podcast contact form | medium | ❌ verify-before-send |
+| Pro Sound Effects Podcast | Web / YouTube | SFX / immersive audio interviews | Creator-interview format; covers spatial tools | prosoundeffects.com/blog contact | medium | ❌ verify-before-send |
+| Working Class Audio (Matt Boudreau) | Podcast | Audio engineer career interviews — less immersive-focused | Tertiary: solo-dev indie-tool angle could fit; not primary | workingclassaudio.com | low | ❌ verify-before-send |
+
+**Meetups + conferences** (speaker / demo format):
+
+| Event / Group | Location | Format | Hook | Contact | Priority | Verified |
+|---------------|----------|--------|------|---------|----------|----------|
+| **AES Germany — Berlin section** | Berlin | Monthly chapter meetings, often includes technical presentations | Andrew's home chapter; ideal first local talk venue | aes.org/sections/germany + Berlin section chair | **HIGH — Berlin-local, home audience** | ❌ verify chair contact |
+| Audio Developer Conference (ADC) | London (annual, Nov) | Talk / workshop / poster submission | JUCE-built spatial DSP — perfect ADC talk fit; submission window typically June-July | audio.dev/submissions | **HIGH** (annual deadline) | ❌ verify current CFP window |
+| AES International Conference on Audio for Games / Immersive / Interactive | Various (annual) | Paper + poster + demo submissions | Immersive + interactive audio track is the right home for OSD | aes.org/events | medium | ❌ verify next CFP |
+| Tonmeistertagung | Germany (Düsseldorf, biennial) | Major German audio-engineering convention; exhibit + talks | German-speaking immersive audio community; Berlin-local advantage | tonmeister.de | medium | ❌ verify next event date |
+| Music Hackspace | London / online | Regular workshops incl. immersive audio + JUCE | Workshop-leader slot on building a JUCE spatial-delay — very Hackspace-compatible format | musichackspace.org | medium | ❌ verify current programming contact |
+| IRCAM Forum / IRCAM events | Paris | Research + creative-tool gatherings | IRCAM audience overlaps with spatial audio research | forum.ircam.fr | medium | ❌ verify guest-speaker path |
+| MUTEK Berlin / CTM / Atonal | Berlin festivals | Talks + A/V performance slots incl. spatial/immersive tracks | Berlin-local; CTM and Atonal have immersive-sound programming; MUTEK has Forum-Berlin panel slots | mutek.org/berlin, ctm-festival.de, berlin-atonal.com | exploratory | ❌ verify submission process |
+| Silent Green Kulturquartier / Elbphilharmonie Kubus | Berlin / Hamburg | Immersive-audio venues hosting listening events | Demo/listening-session venue if Andrew wants to programme a live demo | direct venue contact | exploratory | ❌ verify programming contact |
+| Audio Engineering Meetups (Meetup.com) | Various (incl. Berlin, LA, NYC, London) | Casual monthly meetups | Casual talk slot for plugin-dev audience | meetup.com search per city | exploratory | ❌ verify active organisers |
+| Spatial Sound Institute (SSI) | Budapest | Residency + immersive-sound research | Residency / workshop format; strong curatorial fit | spatialsoundinstitute.com | exploratory | ❌ verify current programming |
+
+**Note on same-person dual-mode:** Michael G Wagner and Oliver Kadel appear in Segment 1 (YouTube review pitch) AND Segment 7 (podcast guest pitch). Lead with the guest-pitch when emailing them — it's higher-leverage, and a yes on the podcast typically unlocks the YouTube coverage as a side-effect.
+
+**Berlin-local advantage summary:** Andrew is Berlin-based, which makes AES Berlin, MUTEK/CTM/Atonal, Silent Green, and the Hainbach / Peter Kirn / Eric Horstmann trio materially easier to activate in-person. The guest-pitch mode should lean into this wherever it's a genuine local match.
+
+---
+
 ## Tertiary — keep-on-radar
 
 | Name | Why kept | Notes |
@@ -200,6 +250,7 @@ All other v1 tertiary/exploratory entries dropped — see next section.
 - **EU short-form creators (TikTok/Reels/Shorts immersive-audio demos)** unexplored. If OSD has a social-media demo reel, a follow-up pass on EU/UK short-form audio creators with 50k+ followers could unlock a different distribution surface.
 - **Verification pass required.** Every audience number (prefixed "approx.") needs a SocialBlade or direct channel-page confirmation before sending a batch. Every Sound Particles coverage claim links to a specific post/video URL where possible — verify the link is still live at send time.
 - **Berlin-local in-person opportunities.** Eric Horstmann, Peter Kirn, and Hainbach are all Berlin-based. An in-person pitch or studio-visit ask is a stronger first move than a cold email for all three.
+- **Segment 7 (podcasts + meetups) needs a follow-up pass.** The initial list covers the high-signal entries (Immersive Audio Podcast, Spatial Audio Monthly, ADC, AES Berlin) but is thin on Berlin-specific technical meetups, immersive-audio open-mic events, and the active contacts who programme MUTEK/CTM/Atonal immersive tracks. A dedicated round to confirm (a) AES Berlin section chair + next-meeting submission deadline, (b) ADC 2026 CFP dates, (c) currently active Berlin audio-meetup organisers via meetup.com would unlock the fastest guest-pitch wins.
 
 ---
 
