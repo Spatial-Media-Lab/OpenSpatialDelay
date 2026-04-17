@@ -49,7 +49,7 @@ registry.
 | Download gate | `andrewrahman.com/get-osd` | Embedded Tally form |
 | Tally form | `tally.so/r/{FORM_ID}` (embedded) | Email field + consent checkbox |
 | Tally thank-you screen | Tally-rendered | Download buttons + soft Patreon CTA |
-| Patreon page | `patreon.com/andrewrahman` | Creator page + 3 seed posts |
+| Patreon page | `patreon.com/AndrewRahman` | Creator page + 3 seed posts |
 
 **Not in scope for this UI contract:**
 - Full multi-product personal hub (Phase 3+)
@@ -171,7 +171,7 @@ Dark-on-light minimal palette. Low-distraction: the homepage is a placeholder an
 | Body | Thank you for signing up. Click your platform below to download OpenSpatialDelay v1.0.0. |
 | Download button 1 | Download for macOS |
 | Download button 2 | Download for Windows |
-| Soft Patreon CTA | If you find this useful, you can support the Spatial Media Library pipeline on [Patreon](https://patreon.com/andrewrahman). Every tier helps keep these tools free and open-source. |
+| Soft Patreon CTA | If you find this useful, you can support the Spatial Media Library pipeline on [Patreon](https://patreon.com/AndrewRahman). Every tier helps keep these tools free and open-source. |
 
 **No auto-redirect. No email-confirmation step. User clicks the download button themselves (D-09).**
 

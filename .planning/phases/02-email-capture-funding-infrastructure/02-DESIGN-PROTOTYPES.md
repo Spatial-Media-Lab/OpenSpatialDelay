@@ -83,7 +83,7 @@ Each prototype loads its fonts only on its own route (scoped in that route's `la
 ## Shared content (all 11 sections, per brief)
 
 All three prototypes contain:
-1. Hero (headline, subheadline, primary CTA to `/get-osd`, secondary to `https://patreon.com/andrewrahman`)
+1. Hero (headline, subheadline, primary CTA to `/get-osd`, secondary to `https://patreon.com/AndrewRahman`)
 2. Product showcase with screenshots + 5 feature callouts
 3. Video demo placeholder (16:9, "Phase 4" label, no real URL)
 4. 30-second audio demo placeholder (HTML5 `<audio>` with no `src`, "pending" note)
@@ -92,7 +92,7 @@ All three prototypes contain:
 7. Spatial Media Library pipeline positioning paragraph
 8. System requirements (macOS Apple Silicon+Intel 11+, Windows 10/11 x64, VST3+AU, 4GB RAM)
 9. Download section with CTA to `/get-osd` + secondary GitHub link to `github.com/Spatial-Media-Lab/OpenSpatialDelay`
-10. Patreon CTA with `https://patreon.com/andrewrahman` (vanity URL TBD — comments in code note it may need to flip to `andrew-rahman` or `andrewjrahman`)
+10. Patreon CTA with `https://patreon.com/AndrewRahman` (vanity URL locked to `AndrewRahman` mixed-case; Patreon URL resolver is case-insensitive)
 11. Existing `<Footer />` from `components/Footer.tsx` (untouched)
 
 All accuracy anchors match codebase:
@@ -113,7 +113,7 @@ All accuracy anchors match codebase:
 - **Design 2 background:** brief said "off-white `#FAFAF8` or pure white — I'd go WHITE". I committed to `#fafaf8` (the warmer off-white value from the brief) because the Fraunces serif renders slightly better on a warm page than stark white. Grayscale hierarchy is still the only decoration; no saturated accent. If stark white is preferred, a single variable swap in `design-2.module.css` covers it.
 - **Design 1 accent:** chose `#FF4D12` (warm orange) over `#E91E63` (magenta) per brief's first suggestion.
 - **Design 3 hero phrase:** brief offered "SPATIAL / DELAY / FOR / MUSICIANS" split across 4 tiles — used that exact phrase and split.
-- **Vanity Patreon URL:** kept `https://patreon.com/andrewrahman` as the default placeholder per brief; added a comment in each of the three Patreon components noting it may need to flip to `andrew-rahman` or `andrewjrahman`.
+- **Vanity Patreon URL:** locked to `https://patreon.com/AndrewRahman` (mixed case, canonical per Patreon vanity registration 2026-04-17). Patreon URL resolver is case-insensitive so pre-existing lowercase inbound links continue to resolve.
 - **Layout refactor (commit 1):** took Option 2 from the brief — restructured `app/layout.tsx` so `<main>` has no max-width and each route sets its own container locally. Smoke + privacy-content tests (10/10) still pass.
 - **Existing `<Nav />` and `<Footer />`:** untouched and wrap every prototype automatically via the root layout, per brief.
 

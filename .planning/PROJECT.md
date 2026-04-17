@@ -11,7 +11,7 @@ Three distinct names appear in Phase 2+ artifacts and must never be conflated:
 - **Spatial Media Lab (SML)** — the open-source organization that owns the source code at `github.com/Spatial-Media-Lab/OpenSpatialDelay` and the site `SpatialMediaLab.org`. Abbreviation "SML" refers to this entity only.
 - **Spatial Media Library** — the pipeline brand for the set of spatial-audio tools funded via Patreon. OpenSpatialDelay is the first. Always written as three separate words. Do NOT abbreviate.
 - **OpenSpatialDelay (OSD)** — the first plugin product in the Spatial Media Library pipeline, developed under Spatial Media Lab.
-- **Andrew Rahman** — personal creator identity used on Patreon (`patreon.com/andrewrahman`) and `andrewrahman.com`.
+- **Andrew Rahman** — personal creator identity used on Patreon (`patreon.com/AndrewRahman`) and `andrewrahman.com`.
 
 Every externally-published Phase 2 artifact (Tally form copy, privacy policy, Patreon page, andrewrahman.com pages, seed posts) MUST disambiguate "Spatial Media Lab" from "Spatial Media Library" on first reference in any given document.
 
