@@ -715,3 +715,10 @@ After the v1.0 real-world testing release, the following features and fixes were
 - **23 output formats** (was 22 at baseline, added 9.1 Surround)
 - **8 spatialization algorithms** (was 7, added Constant Power as default)
 - **291 Catch2 tests, 110,205 assertions** (was 162/1,255 at baseline). Added pre-release coverage: stereo input routing (4), 9.1/SML 13.1 surround (7), HOA 4OA–6OA initialization and stress (5).
+
+### v1.0.0 Rebuild (2026-04-17)
+
+Local v1.0.0 plugin bundle rebuilt at commit `ff9ec24` to fold in two fixes that had been issued as separate versioned builds for testing. The v1.0.0 plugin identity (`O100`) and release tag (`768c248`) are unchanged; this is a local rebuild so the single installed bundle carries all fixes. v1.0.1 and v1.0.2 bundles removed from the local plugins folder.
+
+- **Immersive HRTF bass-boost fix (Issue #198):** Corrected low-shelf filter profile index for the Immersive HRTF preset (was formerly issued as v1.0.1/O101 at 70cc5d8).
+- **Filter graph UX overhaul (Issue #196):** EQ8-style logarithmic frequency grid, dB labels, proportional ±18 dB scale, extended Q range (0.1–8.0), off-screen curve clipping, and logarithmic Q drag for uniform feel across the full range (was formerly issued as v1.0.2/O102 at 82d9f6f).
