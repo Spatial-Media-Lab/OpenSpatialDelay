@@ -384,6 +384,26 @@ void PresetSaveOverlay::show (const juce::String& existingName, juce::Component*
     nameEditor.setHighlightedRegion ({ 0, nameEditor.getText().length() });
 }
 
+void PresetSaveOverlay::showForSnapshot (const juce::String& existingName,
+                                         juce::Component* parentEditor)
+{
+    nameEditor.setText (existingName, false);
+
+    if (parentEditor != nullptr)
+        setLookAndFeel (&parentEditor->getLookAndFeel());
+
+    setSize (cardW, cardH);
+
+    if (parentEditor != nullptr)
+    {
+        setTopLeftPosition ((parentEditor->getWidth()  - cardW) / 2,
+                            (parentEditor->getHeight() - cardH) / 2);
+        parentEditor->addAndMakeVisible (this);
+    }
+
+    setVisible (true);
+}
+
 void PresetSaveOverlay::dismiss()
 {
     if (isCurrentlyModal())
@@ -3373,6 +3393,46 @@ void OpenSpatialDelayEditor::configureGlobalDrawer (bool open, const float* knob
     processorRef.setGlobalDrawerOpen (open);
     for (int i = 0; i < numKnobs && i < GlobalTapDrawerComponent::kNumKnobs; ++i)
         globalTapDrawer.setKnobValueSilent (i, knobValues[i]);
+}
+
+juce::Rectangle<int> OpenSpatialDelayEditor::getToneSectionBoundsForScreenshot() const
+{
+    // TONE section spans: header (14px) + 6px pad + filter graph (104px) + 22px readout
+    // Breathing room: 12px above (clear of MOD section below), 12px below, 10px
+    // left/right. Clamped to the editor width.
+    const int padTop    = 12;
+    const int padBottom = 12;
+    const int padX      = 10;
+    int top    = toneHeaderY - padTop;
+    int height = padTop + 14 + 6 + 104 + 22 + padBottom;
+    int x      = juce::jmax (0, rpX - padX);
+    int w      = juce::jmin (getWidth() - x, rpW + padX * 2);
+    return { x, top, w, height };
+}
+
+juce::Rectangle<int> OpenSpatialDelayEditor::getOscSectionBoundsForScreenshot() const
+{
+    // OSC section: header at oscHeaderY + 16px gap + 2 x 20px control rows.
+    // Add left breathing room so "OSC" isn't flush against the crop edge.
+    const int padTop    = 8;
+    const int padBottom = 8;
+    const int padLeft   = 12;
+    const int padRight  = 10;
+    int top    = oscHeaderY - padTop;
+    int height = padTop + 14 + 16 + 20 + 4 + 20 + padBottom;
+    int x      = juce::jmax (0, rpX - padLeft);
+    int w      = juce::jmin (getWidth() - x, rpW + padLeft + padRight);
+    return { x, top, w, height };
+}
+
+juce::Rectangle<int> OpenSpatialDelayEditor::getPresetNameButtonBounds() const
+{
+    return presetNameButton.getBounds();
+}
+
+juce::Rectangle<int> OpenSpatialDelayEditor::getOutputFormatBoxBounds() const
+{
+    return outputFormatBox.getBounds();
 }
 
 void OpenSpatialDelayEditor::updateMapFromParameters()

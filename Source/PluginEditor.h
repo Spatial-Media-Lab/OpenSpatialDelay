@@ -73,6 +73,24 @@ private:
 
 public:
     static const juce::Colour objectColours[MAX_OBJECTS];
+    /** Return the object's centre position within this component, in local
+        pixel coordinates. Used by the screenshot tool to overlay labels. */
+    juce::Point<float> getObjectScreenPos (int index) const
+    {
+        if (index < 0 || index >= MAX_OBJECTS) return {};
+        const auto& o = objects[(size_t)index];
+        return spatialToPixel (o.azimuthDeg, o.distance);
+    }
+    float getObjectElevation (int index) const
+    {
+        if (index < 0 || index >= MAX_OBJECTS) return 0.0f;
+        return objects[(size_t)index].elevationDeg;
+    }
+    bool isObjectEnabled (int index) const
+    {
+        if (index < 0 || index >= MAX_OBJECTS) return false;
+        return objects[(size_t)index].enabled;
+    }
     void setTrajectoryState (int index, const TrajectoryState& ts) { if (index >= 0 && index < MAX_OBJECTS) trajectoryStates[(size_t)index] = ts; }
     void advanceStarAnimation (float dt) { starTime += dt; }
     void setObjectActivityLevel (int index, float level) { if (index >= 0 && index < MAX_OBJECTS) activityLevel[(size_t)index] = level; }
@@ -407,6 +425,11 @@ public:
     void show (const juce::String& existingName, juce::Component* parentEditor);
     void dismiss();
 
+    /** Attach the overlay as a child of parentEditor (not as a desktop window)
+        and centre it. For headless screenshot capture. */
+    void showForSnapshot (const juce::String& existingName,
+                          juce::Component* parentEditor);
+
     // v1.0: callback with preset name only (always saves to User/)
     std::function<void (const juce::String&)> onSave;
 
@@ -521,6 +544,31 @@ public:
 
     /** Open/close global drawer and set knob values (for screenshot tool). */
     void configureGlobalDrawer (bool open, const float* knobValues = nullptr, int numKnobs = 0);
+
+    /** Return the rectangle covering the entire TONE section (header + filter graph
+        + readout) in editor-local coordinates. For screenshot cropping. */
+    juce::Rectangle<int> getToneSectionBoundsForScreenshot() const;
+
+    /** Return the rectangle covering the entire OSC section (header + receive + send
+        rows) in editor-local coordinates. For screenshot cropping. */
+    juce::Rectangle<int> getOscSectionBoundsForScreenshot() const;
+
+    /** Expose the spatial map component so the screenshot tool can snapshot it
+        directly (excluding the overlaid drawer tab and bottom-panel rows). */
+    SpatialMapComponent& getSpatialMapForScreenshot() { return spatialMap; }
+
+    /** Return the preset-name button bounds so popup mocks can anchor correctly. */
+    juce::Rectangle<int> getPresetNameButtonBounds() const;
+
+    /** Return the output-format ComboBox bounds so popup mocks can anchor correctly. */
+    juce::Rectangle<int> getOutputFormatBoxBounds() const;
+
+    /** Expose the look-and-feel so screenshot helpers can render popup mocks
+        with the exact same styling. */
+    OSDLookAndFeel& getOSDLookAndFeel() { return *osdLookAndFeel; }
+
+    /** Access the embedded PresetSaveOverlay (for screenshot compositing). */
+    PresetSaveOverlay& getPresetSaveOverlay() { return presetSaveOverlay; }
 
 private:
     std::unique_ptr<StyledButton> smlButton;  // header branding link
