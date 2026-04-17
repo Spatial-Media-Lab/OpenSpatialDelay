@@ -20,7 +20,8 @@ finding that the thing I actually wanted was missing. Not another ping-pong,
 not a wider stereo image. I wanted each repeat of a sound to live somewhere
 real. Above, behind, four metres to the left, drifting out and upward at
 the end of the tail. A delay that thinks in space rather than in a pair of
-speakers.
+speakers. And once I had it, even on just a stereo track with headphones
+on, I didn't want to go back.
 
 So I built one. I started on March 6, 2026, and seven weeks later — today
 — it ships. Free, GPL-3.0, VST3 and AU, macOS and Windows. That's
@@ -37,6 +38,13 @@ is binaural — it lives in stereo-with-HRTFs, not in the speaker field."]
 
 ![Spatial map view](https://spatialmedialab.org/wp-content/uploads/2026/04/screenshot_spatial_map.png)
 
+And here's the thing: OSD isn't only for immersive work. Load it on a
+stereo bus in Logic or Ableton today and it works — five classic stereo
+modes, all twelve taps, the full preset bank. Then the day you take on a
+headphone piece, a dome installation, or a 7.1.4 session, the same patches
+come with you — different output, same muscle memory. Stereo is where most
+producers live, and OSD can *heighten* your mix there too.
+
 ## What's inside
 
 I wanted the feature surface to match how spatial mixers actually think,
@@ -51,20 +59,28 @@ scene-based spatial tool. So here's what's inside:
   a circle, a spiral, a staircase, a cloud, a line overhead — wherever the
   piece wants them. Each tap has its own feedback, its own filter, its own
   level, its own trajectory.
-- **7 spatialization algorithms** (Ambisonics, ConstantPower, DBAP, KNN,
-  MDAP, VBAP, VBIP) so you can pick the right one for a stereo mix, a
-  5.1 room, a dome, or a full immersive rig. Swap between them per preset.
-  Swap between them mid-session to hear how the same arrangement translates
-  across formats.
-- **5 measured HRTF profiles** (KU100, CIPIC, HUTUBS, MIT KEMAR, SADIE)
-  plus a Simple mode for basic binaural spatialization without the
-  coloration of HRTFs. The profiles are real measured datasets, not
-  modelled approximations — each one places sound differently, and finding
-  the one that works best for your ears is part of the fun.
-- **70 factory presets** to start from — shaped by what real mixers do
-  with real spatial delays, not just programmer demos. Ambient beds,
-  cinematic whooshes, rhythmic counter-lines, binaural-headphone specials,
-  8-channel dome setups, practical utility patches for Atmos sessions.
+- **Works stereo-to-spatial — same 12 taps, same UI, three algorithm
+  families underneath.**
+  - **Stereo (5 modes)** — Equal Power, Stereo VBAP, XY Pair, MS Encode,
+    Blumlein. Load OSD on any stereo track and it works immediately.
+  - **Binaural (6 modes)** — 5 measured HRTF profiles (KU100, CIPIC,
+    HUTUBS, MIT KEMAR, SADIE) plus a Simple mode for basic binaural
+    without HRTF coloration. The profiles are real measured datasets, not
+    modelled approximations — finding the one that works best for your
+    ears is part of the fun.
+  - **Surround (7 algorithms)** — Ambisonics, ConstantPower, DBAP, KNN,
+    MDAP, VBAP, or VBIP for Quad, 5.1, 7.1.4 Atmos, and domes. Or encode
+    to Ambisonics up to 6th order and use your favorite decoder for any
+    speaker configuration.
+
+  Start stereo today. Flip one dropdown the day you step up — your patches
+  come with you.
+- **70 factory presets** to start from — including **Stereo Ping-Pong**
+  and **Wide Stereo** for conventional mixes, binaural-headphone specials
+  for headphone pieces, cinematic whooshes, ambient beds, rhythmic
+  counter-lines, 8-channel dome setups, and practical utility patches for
+  Atmos sessions. Shaped by what real mixers actually reach for, not just
+  programmer demos.
 - **A trajectory engine** that moves each delay tap through space. Linear
   sweeps, orbits, pendulums, random paths. Every delay tap can have its
   own path.
