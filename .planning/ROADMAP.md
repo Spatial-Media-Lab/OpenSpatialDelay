@@ -12,7 +12,7 @@ Five phases turn a shipped plugin into a public product. The sequence is non-neg
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Repo & License Readiness** - GPL transition complete, repo public, release published, install docs written
+- [x] **Phase 1: Repo & License Readiness** - GPL transition complete, repo public, release published, install docs written
 - [ ] **Phase 2: Email Capture & Funding Infrastructure** - Tally form live, privacy policy published, Patreon seeded and ready
 - [ ] **Phase 3: Personal Website** - Landing page live on Netlify, SML About Us updated, Open Graph configured
 - [ ] **Phase 4: Demo Content** - 30s audio demo, video reel, and high-res screenshots produced
@@ -29,10 +29,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   2. GitHub repo is publicly visible and the v1.0.0 Release page shows macOS and Windows binaries ready to download
   3. A documented list of supported OS versions, CPU architectures, and DAWs exists and can be referenced by the install page
   4. Installation instructions include the macOS Sequoia xattr command and are accurate for all supported platforms
-**Plans**: 2 plans
+**Plans**: 4 plans
 Plans:
 - [x] 01-01-PLAN.md — License cleanup: update 11 files from dual-license to GPL-3.0 only
 - [x] 01-02-PLAN.md — Release metadata update and README system requirements/installation review
+- [x] 01-03-PLAN.md — Gap closure: regenerate manual PDF + DOCX to remove spread Third-Party Notices / Project License sections (REPO-02 G-01)
+- [x] 01-04-PLAN.md — Gap closure: generate_legal_notices.js emits PDF via soffice + scripts/package_macos_release.sh produces release ZIP bundling Legal/LICENSE.txt + Legal Notices PDF (REPO-02 G-02)
 
 ### Phase 2: Email Capture & Funding Infrastructure
 **Goal**: Visitors who want to follow the project have two working paths — email capture via Tally and direct Patreon support — before the website goes live
@@ -95,8 +97,8 @@ Phases execute in dependency order. Phase 4 (Content) depends on Phase 1 only an
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Repo & License Readiness | 0/2 | Planning complete | - |
+| 1. Repo & License Readiness | 4/4 | Complete | 2026-04-15 |
 | 2. Email Capture & Funding Infrastructure | 6/7 | In Progress | - |
-| 3. Personal Website | 1/9 | In Progress | - |
+| 3. Personal Website | 9/10 | In Progress | - |
 | 4. Demo Content | 0/? | Not started | - |
 | 5. Launch Announcements | 0/? | Not started | - |

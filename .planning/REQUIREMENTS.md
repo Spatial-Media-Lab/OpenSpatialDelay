@@ -9,10 +9,10 @@ Requirements for the public launch. Each maps to roadmap phases.
 
 ### Repo & License
 
-- [ ] **REPO-01**: GPL-3.0 license audit complete — all dual-license references removed across source headers, README, manual PDF, About dialog, CLAUDE.md, agent_docs/licensing.md
-- [ ] **REPO-02**: GitHub repo public with Release v1.0.0 published (macOS + Windows binaries)
-- [ ] **REPO-03**: System requirements reviewed and documented (supported OS versions, CPU architectures, DAW compatibility)
-- [ ] **REPO-04**: Installation instructions written — includes macOS Sequoia xattr command, based on verified system requirements from REPO-03
+- [x] **REPO-01**: GPL-3.0 license audit complete — all dual-license references removed across source headers, README, manual PDF, About dialog, CLAUDE.md, agent_docs/licensing.md
+- [x] **REPO-02**: Release v1.0.0 prepared — macOS arm64 binary + legal notices bundled in release ZIP at GitHub (Spatial-Media-Lab/OpenSpatialDelay). Repo-going-public deferred to Phase 3 per D-09; Windows binary deferred to post-Phase 3 per D-06b.
+- [x] **REPO-03**: System requirements reviewed and documented (supported OS versions, CPU architectures, DAW compatibility)
+- [x] **REPO-04**: Installation instructions written — includes macOS Sequoia xattr command, based on verified system requirements from REPO-03
 
 ### Website
 
@@ -22,7 +22,7 @@ Requirements for the public launch. Each maps to roadmap phases.
 
 ### Distribution & Funding
 
-- [ ] **DIST-01**: Tally email capture form live — required email, GDPR consent checkbox, thank-you screen with manual macOS + Windows download buttons linking to the v1.0.0 GitHub Release assets
+- [ ] **DIST-01**: Sender.net email capture live on andrewrahman.com/get-osd — required email, privacy-policy link, DOI confirmation email with inline macOS + Windows download buttons linking to v1.0.0 GitHub Release assets + Patreon CTA. (Supersedes original Tally spec 2026-04-16.) Cross-phase closeout tracked in Plan 03-09.
 - [x] **DIST-02**: Privacy policy page published (required for GDPR compliance)
 - [x] **DIST-03**: Patreon page published with 2+ posts and patron-value framing (spatial audio tools pipeline pitch)
 
@@ -39,6 +39,7 @@ Requirements for the public launch. Each maps to roadmap phases.
 - [ ] **ANNC-03**: LinkedIn post published (link in first comment)
 - [ ] **ANNC-04**: Instagram post/Reel published with demo content
 - [ ] **ANNC-05**: KVR Audio product listing created
+- [ ] **ANNC-06**: Influencer outreach — researched contact list (spatial audio practitioners, plugin reviewers, relevant YouTubers / journalists / creators) with per-contact personalised intro emails drafted and ready to send at launch
 
 ## v2 Requirements
 
@@ -70,10 +71,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REPO-01 | Phase 1 | Pending |
-| REPO-02 | Phase 1 | Pending |
-| REPO-03 | Phase 1 | Pending |
-| REPO-04 | Phase 1 | Pending |
+| REPO-01 | Phase 1 | Complete |
+| REPO-02 | Phase 1 | Complete (release prepared; public-repo flip + Windows binary deferred per D-06b/D-09) |
+| REPO-03 | Phase 1 | Complete |
+| REPO-04 | Phase 1 | Complete |
 | WEB-01 | Phase 3 | Complete |
 | WEB-02 | Phase 3 | Complete |
 | WEB-03 | Phase 3 | Pending |
@@ -88,12 +89,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | ANNC-03 | Phase 5 | Pending |
 | ANNC-04 | Phase 5 | Pending |
 | ANNC-05 | Phase 5 | Pending |
+| ANNC-06 | Phase 5 | Pending |
 
 **Coverage:**
-- v1.0 requirements: 18 total
-- Mapped to phases: 18
+- v1.0 requirements: 19 total
+- Mapped to phases: 19
 - Unmapped: 0
 
 ---
 *Requirements defined: 2026-04-14*
-*Last updated: 2026-04-14 after roadmap creation*
+*Last updated: 2026-04-17 — Phase-1 REPO-01..04 verified complete, DIST-01 scope rewritten Tally→Sender.net, ANNC-06 added for influencer outreach*
