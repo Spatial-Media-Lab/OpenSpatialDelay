@@ -52,7 +52,7 @@ Plans:
   1. The landing page loads at a Netlify URL and contains: hero section, 30-second audio demo embed, download CTA, plugin screenshots, system requirements, and GPL-3.0 license statement
   2. Pasting the landing page URL into Twitter/X or LinkedIn shows a correct social preview card (title, image, description) via Open Graph meta tags
   3. The SML About Us page names Andrew and all current board members
-**Plans**: 9 plans
+**Plans**: 10 plans
 Plans:
 - [x] 03-00-PLAN.md — Wave 0 infra: install @axe-core/playwright, scaffold a11y/og/asset-existence specs, triage Phase 2 Sender.net/Tally state + AU plugin presence
 - [x] 03-01-PLAN.md — Hero stats (D-01) + 6 feature cards (D-03) + subhead + Hero/DownloadCTA headline polish (B-3 scoped)
@@ -63,6 +63,7 @@ Plans:
 - [x] 03-06-PLAN.md — WCAG-AA accessibility audit (D-08): run axe-core, nudge failing tokens, annotate fixes
 - [x] 03-07-PLAN.md — OG metadata verification (WEB-03): reconcile layout.tsx dimensions + manual social-card preview checkpoint
 - [x] 03-08-PLAN.md — WEB-02 sentinel: external spatialmedialab.org/about Playwright guard + REQUIREMENTS.md flip to Complete
+- [ ] 03-09-PLAN.md — Cross-phase Sender.net production flip + DIST-01 UAT (queued 2026-04-17; depends on site launch + Sender dashboard completion)
 **UI hint**: yes
 
 ### Phase 4: Demo Content
