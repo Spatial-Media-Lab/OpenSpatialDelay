@@ -4,9 +4,9 @@
 # From: Andrew Rahman <andrew@spatialmedialab.org>
 # Reply-to: andrew@spatialmedialab.org
 
-Subject: Free spatial delay — OpenSpatialDelay v1.0.0 is out
+Subject: Free delay that grows with your mix — OSD v1.0.0
 
-Preview: A VST3/AU plugin where each echo has a 3D position. Free, GPL-3.0.
+Preview: Stereo to 7.1.4 Atmos in one plugin. 12 taps, three algorithm families.
 
 ---
 
@@ -15,24 +15,29 @@ Preview: A VST3/AU plugin where each echo has a 3D position. Free, GPL-3.0.
 Hi —
 
 I just released **OpenSpatialDelay v1.0.0**, the first tool in the Spatial
-Media Library pipeline. Each echo has a 3D position in space. Free, GPL-3.0,
-VST3 and AU, macOS and Windows.
+Media Library pipeline. It's a free VST3/AU delay where each echo has a 3D
+position in space — and it works as well on a plain stereo track in Logic
+or Ableton as it does on a 7.1.4 Atmos bed or a first-order Ambisonics bus.
 
-I started on March 6 this year. Seven weeks later, it ships. It's the delay
-I've wanted for years — one that thinks in space rather than in a pair of
-speakers. If you've ever reached for a delay in an Ambisonics session, an
-Atmos mix, or a binaural headphone piece and found that what you actually
-wanted was missing, this is the one I built for that feeling.
+I started building it on March 6 this year. Seven weeks later, here it
+is. I've been wanting a delay like this for years — one that thinks in
+space rather than in a pair of speakers — but it's not only for immersive
+work. Load it on a stereo bus today and you get five classic stereo
+microphone modes (Equal Power, XY, MS, Blumlein, Stereo VBAP), all twelve
+independently-positioned taps, and the full preset bank. Then the day you
+step up to headphones or a 5.1 room or a dome, flip one dropdown — the
+same patches come with you.
 
-Inside: 12 delay taps, each with an independent 3D position and its own
-feedback, filter, and trajectory. 7 spatialization algorithms so the same
-arrangement can sit in a stereo mix, a 5.1 room, a dome, or a full immersive
-rig. 5 measured HRTF profiles plus a CPU-lite mode for basic binaural work.
-70 factory presets. ADM-OSC in and out so it talks to Spat Revolution,
-Panoramix, Iannix, and the rest of the object-based ecosystem. No trial
-timer, no licence server.
+Inside: 12 delay taps, each with independent 3D position, feedback,
+filter, and trajectory. Three algorithm families — 5 stereo modes, 6
+binaural modes (5 measured HRTFs plus a Simple mode), 7 surround/immersive
+algorithms covering 5.1 through 7.1.4 Atmos and Ambisonics up to 6th
+order. 70 factory presets, including Stereo Ping-Pong and Wide Stereo for
+conventional mixes. ADM-OSC in and out so it talks to Spat Revolution,
+Panoramix, and the object-based ecosystem. No trial timer. No licence
+server.
 
-There's a 30-second binaural demo on the blog post — headphones required.
+A 30-second binaural demo is on the blog post — headphones required.
 
 ## [Read the full post →]({SML_BLOG_POST_URL})
 
@@ -42,7 +47,7 @@ If you like it and want to see more where that came from, Patreon keeps
 the tools free and funds the next one:
 [patreon.com/AndrewRahman](https://patreon.com/AndrewRahman).
 
-See you at Superbooth.
+See you at Superbooth!
 
 — Andrew
 Spatial Media Lab • Berlin
