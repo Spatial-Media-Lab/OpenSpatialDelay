@@ -12,13 +12,15 @@ The `O10Z` code is a short identifier used in the plugin display name (e.g., O10
 
 ## Current release
 
-| Version | Code | Description | Commit |
-|---------|------|-------------|--------|
-| v1.0.0 | O100 | **Release v1.0.0** — issues #76–#200 + Immersive HRTF bass-boost fix (#198) + filter graph UX overhaul (#196). Rebuilt 2026-04-17 at ff9ec24. | ff9ec24 |
+| Version | Code | Description | Tag target |
+|---------|------|-------------|------------|
+| v1.0.0 | O100 | **Release v1.0.0** — issues #76–#200 + Immersive HRTF bass-boost fix (#198) + filter graph UX overhaul (#196). Re-tagged and re-cut 2026-04-17 on current main tip. | re-tagged 2026-04-17 |
+
+> **Note:** The `v1.0.0` tag originally pointed at `768c248` (release cut 2026-04-12). The Immersive HRTF and filter graph fixes were accidentally omitted from that release. The tag was force-moved to the current main tip on 2026-04-17 and the GitHub release assets were re-cut to include both fixes. The original pre-retag commit is still reachable as `768c248`.
 
 ## Post-release patches
 
-_None active._ Fixes previously labelled v1.0.1 (#198) and v1.0.2 (#196) were folded back into the v1.0.0 bundle on 2026-04-17; those bundles were removed from the local plugins folder. See history below.
+_None active._ Fixes previously labelled v1.0.1 (#198) and v1.0.2 (#196) were folded back into the re-cut v1.0.0 release on 2026-04-17; the interim local bundles were removed. See history below.
 
 | Version | Code | Description | Commit | Status |
 |---------|------|-------------|--------|--------|
