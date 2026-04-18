@@ -30,6 +30,19 @@ public:
     void setOscOverride (int index, bool active) { if (index >= 0 && index < MAX_OBJECTS) oscOverride[(size_t)index] = active; }
     void setSelectedObject (int index) { selectedObject = index; repaint(); }
 
+    /** Round-2 screenshot hook (#168): when true, the elevation-readout label
+        is drawn next to every enabled tap rather than only the selected one.
+        Used by the screenshot tool's elevation-map mode so the spiral of 12
+        taps all display their in-plugin elevation label in the tap's colour. */
+    void setLabelAllEnabledObjectsForScreenshot (bool enabled) { labelAllEnabledForScreenshot = enabled; }
+
+    /** Round-3 screenshot hook (#168): when true, the selected tap's
+        trajectory trail is drawn at full brightness along the entire
+        sampled path instead of fading based on proximity to the moving
+        dot. Used by the hero screenshot so the Infinity path is visible
+        as a complete figure-∞ on the map. */
+    void setDrawFullTrajectoryForScreenshot (bool enabled) { drawFullTrajectoryForScreenshot = enabled; }
+
     void addListener (Listener* l)    { listeners.add (l); }
     void removeListener (Listener* l) { listeners.remove (l); }
 
@@ -51,6 +64,8 @@ private:
     std::array<bool, MAX_OBJECTS> oscOverride = {};  // v0.6: per-object OSC override indicator
     int selectedObject = -1;
     int draggedObject  = -1;
+    bool labelAllEnabledForScreenshot = false;  // issue #168 round 2: elevation-map mode
+    bool drawFullTrajectoryForScreenshot = false;  // issue #168 round 3: hero screenshot
     OpenSpatialDelayProcessor* processor = nullptr;  // for Random trail look-ahead
 
     juce::ListenerList<Listener> listeners;
@@ -569,6 +584,18 @@ public:
 
     /** Access the embedded PresetSaveOverlay (for screenshot compositing). */
     PresetSaveOverlay& getPresetSaveOverlay() { return presetSaveOverlay; }
+
+    /** Issue #168 round 2: apply the "feature showcase" UI state — refresh
+        dropdown selections after the tool has written to processor.configX
+        directly, and force the algorithm combo to rebuild for the new
+        output-format category. Call after seeding processor state. */
+    void applyShowcaseHeaderForScreenshot();
+
+    /** Issue #168 round 3: override the preset-name button text for the
+        hero screenshot. Must be called AFTER syncForScreenshot() so the
+        subsequent snapshot captures the custom label rather than the one
+        timerCallback derives from getCurrentPresetIndex(). */
+    void setPresetNameForScreenshot (const juce::String& name);
 
 private:
     std::unique_ptr<StyledButton> smlButton;  // header branding link
