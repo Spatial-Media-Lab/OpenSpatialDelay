@@ -93,7 +93,7 @@ Plans:
 - [x] 05-00-PLAN.md — Launch orchestration: phase5-smoke.sh + T-7 precheck checklist + T-0 launch-day runbook (hard blocker: Phase 4 demo content)
 - [x] 05-01-PLAN.md — SML blog post draft (ANNC-01) — WordPress-ready Markdown mirroring 2024 Ambisonic-to-Atmos-template precedent, 1000-1400 words
 - [x] 05-02-PLAN.md — SML Mailchimp newsletter draft (ANNC-02) — teaser body + 2 CTAs, uses SML audience per D-08
-- [ ] 05-03-PLAN.md — LinkedIn post draft (ANNC-03) — 2026-compliant text-only OR document-carousel format (no link in first comment)
+- [x] 05-03-PLAN.md — LinkedIn post draft (ANNC-03) — 2026-compliant text-only OR document-carousel format (no link in first comment)
 - [ ] 05-04-PLAN.md — Instagram Reel + carousel drafts (ANNC-04) — 5-hashtag cap, 15–30s Reel, descope branch to static post if CONT-02 slips
 - [ ] 05-05-PLAN.md — KVR Audio product listing + news submission (ANNC-05) — metadata + press-release draft; submit T-1 + T-0
 - [ ] 05-06-PLAN.md — Review-pitch batch (ANNC-06 mode A) — template + 34-contact personalisations + outreach log; send T-0 launch morning
