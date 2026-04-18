@@ -22,7 +22,7 @@ round 3. User iterates per-item; this table tracks state.
 |---|------|--------|---------------|
 | 2 | `screenshot_annotated.png` | ✅ Done (`063c9f6`) | see "Item 2 — Annotated screenshot" below |
 | 6 | `screenshot_elevation_map.png` | ✅ Done (no change) | Round-3 review: accepted as-is |
-| 7 | `screenshot.png` | ⏳ Awaiting review | — |
+| 7 | `screenshot.png` | ✅ Done (this commit) | see "Item 7 — Hero screenshot" below |
 | 10 | `screenshot_output_menu.png` | ⏳ Awaiting review | — |
 | 11 | `screenshot_preset_menu.png` | ⏳ Awaiting review | — |
 | 12 | `screenshot_right_panel.png` | ⏳ Awaiting review | — |
@@ -85,11 +85,81 @@ required. The round-2 spiral flip and plugin-native label change are
 considered final for round 3. Item 6 is closed and needs no further
 work.
 
+## Item 7 — Hero screenshot (`screenshot.png`)
+
+Reviewed and revised iteratively in this session. The round-2 output
+was a plain `--mode full --showcase` capture; round 3 upgrades it to a
+new dedicated `hero` mode that renders the full "features-on" demo
+plus narrative elements the round-2 image lacked (drawer open, undo
+lit, tap activity glow, a named custom preset, and a visible Infinity
+trajectory). Source of truth is `tools/screenshot_tool.cpp` (new
+`hero` mode + reworked `applyShowcaseState`), `Source/PluginEditor.*`
+(three new screenshot hooks), and `scripts/regenerate_screenshots.sh`
+(line 49 now calls `--mode hero`).
+
+**What changed versus the round-2 `--mode full --showcase` drop:**
+
+- **New `hero` capture mode** in `screenshot_tool.cpp`. Combines
+  `applyShowcaseState` + `configureGlobalDrawer(true, …)` +
+  `populateUndoHistory` + post-sync overrides for preset name, per-tap
+  activity and the selected object's trajectory state. `--showcase`
+  is implicit so the script doesn't need both flags.
+- **`applyShowcaseState` reworked** to match the round-3 hero spec:
+  - Tap 1 now carries an **Infinity** trajectory (shape 7, not Orbit),
+    with the lead routed from the **L** channel (inputChannel=1,
+    not the default L+R), **+7 st** pitch shift and **75 %** Doppler.
+  - Tap 1 is centred on the listener axis: `az=0°, el=+20°,
+    dist=0.25` — so the lemniscate sweeps symmetrically.
+  - Taps **3, 6, 9 are disabled**; taps **10, 11, 12 are enabled** in
+    their place so the scene still carries 9 active echoes.
+  - Non-Tap-1 taps are hand-placed *outside* the lemniscate bounding
+    region (mapX ∈ [-0.75, 0.75], mapY ∈ [-0.015, 0.515]) at varied
+    distances (0.42–0.95) and elevations (−55° to +72°) so the spread
+    reads 3D rather than a ring.
+- **Three new screenshot hooks in the editor** (`PluginEditor.h/.cpp`):
+  - `SpatialMapComponent::setDrawFullTrajectoryForScreenshot(bool)` —
+    when true, the selected tap's trajectory trail keeps its
+    proximity-focused bright spot near the animated dot but lifts the
+    baseline from 0.05 → 0.18 so the rest of the path is lightly
+    visible in a still frame.
+  - `OpenSpatialDelayEditor::setPresetNameForScreenshot(String)` —
+    manual override for the preset-name button so the snapshot shows
+    "Infinity Halo" instead of the underlying preset index's name.
+  - `OpenSpatialDelayEditor::applyShowcaseHeaderForScreenshot()`
+    extended to re-pull processor state into the OSC Receive / Send
+    toggle buttons — they're initialised once in the editor
+    constructor, so without this resync the hero image kept the
+    wrong lit/dim pattern after `setOscReceiveEnabled(false)` /
+    `setOscSendEnabled(true)`.
+- **Per-tap activity glow** seeded on taps 2, 5, 8, 11
+  (`setObjectActivityLevel` at 0.65–0.85), so the hero image reads as
+  a plugin in motion rather than a dead layout.
+- **TrajectoryState seeded manually** for Tap 1 in the tool — the
+  live view gets this from `trajectory.tick()` inside `processBlock`,
+  which never runs in the offline tool.
+- **Custom preset label "Infinity Halo"** displayed in the header.
+- **`scripts/regenerate_screenshots.sh`** line 49 switched from
+  `--mode full --showcase` to `--mode hero`. Derived PIL crops
+  (`screenshot_header.png`, `screenshot_right_panel.png`,
+  `screenshot_bottom_panel.png`) and the `screenshot_full.png` copy
+  will now carry hero-state content when the script is next run.
+
+**Downstream cascade to watch in the next session:**
+
+Because `screenshot.png` is the PIL-crop source for three other PNGs
+(header / right_panel / bottom_panel) and is also copied to
+`screenshot_full.png`, those four files are now out of sync with the
+new hero state on disk. Regenerate them from the new `screenshot.png`
+before reviewing the remaining round-3 items — in particular
+**#12 `screenshot_right_panel.png`** depends on this source and
+cannot be reviewed against the old round-2 crop.
+
 ## Next session / next item
 
-The next item to review is **#7 — `screenshot.png`** (the main plugin
-screenshot / hero image). Any round-3 revision will come from direct
-user feedback on the current PNG at `docs/assets/screenshot.png`.
+Item 7 is closed. Remaining open items: **10, 11, 12, 16, 17**. User
+has been choosing the next item to review, so the next session should
+prompt with the outstanding list and wait for the pick. Note the
+downstream cascade above before touching item 12.
 
 ## Files the next session needs
 
