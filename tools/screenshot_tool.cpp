@@ -11,6 +11,10 @@
 // Options:
 //   --preset <name|path>   Load a factory preset by name or a preset file
 //   --mode <name>          Capture mode (see below). Default: full.
+//   --showcase             Override processor state with a "features-on" demo
+//                          (issue #168 round 2): 9.1.6 Atmos + VBAP, 9 taps
+//                          with an Orbit trajectory on Tap 1, MOD/FLT/AIR
+//                          engaged, Delay Sync + Triplet, OSC Send enabled.
 //   --list-presets         List factory presets and exit
 //
 // Capture modes:
@@ -21,9 +25,14 @@
 //   save-overlay      — Editor with Save Preset overlay composited on top
 //   preset-menu       — Editor with nested preset menu (folders + expanded submenu)
 //   output-dropdown   — Editor with the Output Format dropdown (flat list)
-//   undo-active       — Editor with populated undo/redo history (buttons active)
+//   undo-active       — Editor with populated undo history (undo active, redo inactive)
+//   annotated-source  — Showcase state + Global Drawer open + undo history populated.
+//                       Source image for the annotated callout overlay (issue #168 r3).
+//   hero              — Hero screenshot for docs/README: showcase + drawer open +
+//                       undo populated + per-tap activity glow + custom preset name
+//                       (issue #168 r3). --showcase is implicit.
 //   spatial-map       — Just the SpatialMap component (no drawer, no bottom panel)
-//   elevation-map     — SpatialMap with all 12 taps in a +90°→-90° spiral, labelled
+//   elevation-map     — SpatialMap with all 12 taps in a −90°→+90° spiral, labelled
 //
 // Examples:
 //   screenshot_tool ui.png 2.0
@@ -285,6 +294,10 @@ buildPresetMenuMock (OSDLookAndFeel& lnf,
     }
 
     // Build the parent (category folders) menu.
+    // Issue #168 round 2: tick the category that contains the currently-active
+    // preset, so the parent list mirrors JUCE's real popup (which ticks the
+    // category of the active preset *and* highlights the row where the submenu
+    // is open).
     std::vector<PopupMenuSnapshot::Item> parentItems;
     for (const auto& cat : categories)
     {
@@ -292,6 +305,7 @@ buildPresetMenuMock (OSDLookAndFeel& lnf,
         it.text          = cat;
         it.hasSubMenu    = true;
         it.isHighlighted = (cat == hovered);
+        it.isTicked      = (cat == hovered);
         parentItems.push_back (it);
     }
 
@@ -324,8 +338,10 @@ buildPresetMenuMock (OSDLookAndFeel& lnf,
 }
 
 //==============================================================================
-// Build an output-format dropdown mock that matches the real plugin's popup:
-// a flat list of every format, with the current one ticked. No category headers.
+// Build an output-format dropdown mock that matches the real plugin's popup
+// (issue #168 round 2): juce::ComboBox duplicates the currently-selected item
+// at the top of the popup, followed by a separator, then the full flat list
+// below (with the current item ticked in both positions).
 //==============================================================================
 static std::unique_ptr<PopupMenuSnapshot>
 buildOutputDropdownMock (OSDLookAndFeel& lnf,
@@ -335,6 +351,21 @@ buildOutputDropdownMock (OSDLookAndFeel& lnf,
     std::vector<PopupMenuSnapshot::Item> items;
     int currentFmt = processor.configOutputFormat.load();
 
+    // 1. Current item repeated at the top of the popup (ticked).
+    if (currentFmt >= 0 && currentFmt < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS)
+    {
+        const auto& cur = OpenSpatialDelayProcessor::outputFormatRegistry[(size_t) currentFmt];
+        PopupMenuSnapshot::Item head;
+        head.text     = cur.name;
+        head.isTicked = true;
+        items.push_back (head);
+
+        PopupMenuSnapshot::Item sep;
+        sep.isSeparator = true;
+        items.push_back (sep);
+    }
+
+    // 2. Full flat list — current item ticked again so both occurrences match.
     for (int i = 0; i < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS; ++i)
     {
         const auto& info = OpenSpatialDelayProcessor::outputFormatRegistry[(size_t) i];
@@ -344,13 +375,164 @@ buildOutputDropdownMock (OSDLookAndFeel& lnf,
         items.push_back (it);
     }
 
-    // Compact row height so all 23 formats fit within the editor.
+    // Compact row height so the duplicated current item + separator + 23 formats
+    // still fit within the editor height.
     return std::make_unique<PopupMenuSnapshot> (lnf, std::move (items), minWidth, /*row h*/ 18);
 }
 
 //==============================================================================
-// Populate the internal undo history with a few state changes so the undo
-// and redo arrows are both active in the screenshot.
+// Apply the "feature showcase" state — every major section of the plugin
+// engaged, 9 taps with an Orbit trajectory on Tap 1, 9.1.6 Atmos + VBAP.
+// Called before snapshot when --showcase is passed.
+//==============================================================================
+static void applyShowcaseState (OpenSpatialDelayProcessor& processor,
+                                OpenSpatialDelayEditor& editor)
+{
+    auto& apvts = processor.apvts;
+
+    auto setFloat = [&] (const juce::String& id, float v) {
+        if (auto* p = apvts.getParameter (id))
+            p->setValueNotifyingHost (p->convertTo0to1 (v));
+    };
+    auto setChoice = [&] (const juce::String& id, int choiceIndex) {
+        if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (id)))
+        {
+            int n = p->choices.size();
+            if (n > 1)
+                p->setValueNotifyingHost ((float) choiceIndex / (float) (n - 1));
+        }
+    };
+    auto setBool = [&] (const juce::String& id, bool v) {
+        if (auto* p = apvts.getParameter (id))
+            p->setValueNotifyingHost (v ? 1.0f : 0.0f);
+    };
+
+    // --- Header: output format + algorithm -----------------------------------
+    // 9.1.6 Atmos sits at registry index 15; VBAP is algorithm index 5.
+    constexpr int kOutputFormat_9_1_6 = 15;
+    constexpr int kAlgorithm_VBAP     = 5;
+    processor.configOutputFormat.store (kOutputFormat_9_1_6, std::memory_order_relaxed);
+    processor.configAlgorithm.store    (kAlgorithm_VBAP,     std::memory_order_relaxed);
+    processor.markConfigStateDirty();
+    processor.requestOutputFormatChange (kOutputFormat_9_1_6);
+
+    // --- DELAY section: Sync on, Triplet --------------------------------------
+    setBool   ("tempoSync",     true);
+    setChoice ("syncMode",      2);          // 0=Straight, 1=Dotted, 2=Triplet
+    setFloat  ("noteDivision",  4.0f);        // 1/4
+    setFloat  ("feedback",      0.45f);
+
+    // --- MOD section (wobble): on with visible, non-zero knobs ---------------
+    // wobbleAmount / wobbleMorph are 0..100% ranges (not 0..1), so pass
+    // percentages directly.
+    setBool  ("wobbleEnabled", true);
+    setFloat ("wobbleAmount",  55.0f);
+    setFloat ("wobbleMorph",   40.0f);
+
+    // --- TONE section: FLT on, min-Q one side / max-Q the other --------------
+    // Qs span the 0.1 → 8.0 param range, so HP at 0.1 is maximally broad and
+    // LP at 8.0 is sharply resonant — the filter graph shows a clear asymmetry.
+    setBool  ("filterEnabled", true);
+    setFloat ("filterHP",      120.0f);
+    setFloat ("filterHPQ",     0.10f);
+    setFloat ("filterLP",      4000.0f);
+    setFloat ("filterLPQ",     8.00f);
+
+    // --- MIX section: AIR on, Dry/Wet + gains at pleasing values -------------
+    setBool  ("airAbsorption", true);
+    setFloat ("dryWet",        0.55f);
+    setFloat ("inputGain",     0.0f);
+    setFloat ("outputGain",    0.0f);
+
+    // --- OSC: Send on, Receive off -------------------------------------------
+    processor.setOscReceiveEnabled (false);
+    processor.setOscSendEnabled    (true);
+
+    // --- Taps: 9 enabled, varied az / el / dist ------------------------------
+    // Round-3 update (issue #168): Tap 1 now carries an Infinity trajectory
+    // (figure-∞) so the spatial map shows a figure-8 trail. Tap 1 also
+    // splits out to R-only input with +7 st pitch shift and 75% Doppler —
+    // a soloable "lead" tap. Taps 3, 6 and 9 are disabled; taps 10, 11 and
+    // 12 take their place so the scene still carries 9 active echoes.
+    //
+    // trajectoryShape index 7 = "Infinity" (alphabetical list in
+    // PluginProcessor.cpp: None=0, Bounce=1, Circle=2, Cross=3, Figure-8=4,
+    // Heart=5, Helix=6, Infinity=7, ...).
+    // inputChannel index 1 = "L" (choices: L+R=0, L=1, R=2).
+    //
+    // Round-3 update 2: the Infinity lemniscate centred on Tap 1
+    // (az=15°, el=20°, dist=0.35) extends roughly ±0.65 in map-space on
+    // each side, which would collide with the inner taps from the first
+    // revision. Non-Tap-1 positions have been pushed toward the edges of
+    // the map so the full figure-∞ reads clean, and Tap 1 is now routed
+    // from the L channel rather than R.
+    struct TapDef { bool enabled; float az, el, dist; int trajShape;
+                    float trajSpeed; int inputCh; float dopplerAmt;
+                    float pitchSt; };
+    // Tap 1 is the Infinity-trajectory lead (az=0°, el=+20°, dist=0.25), so
+    // the lemniscate spans mapX ∈ [-0.75, 0.75] and mapY ∈ [-0.015, 0.515]
+    // in (sin(az)·dist, cos(az)·dist) space. The remaining 8 enabled taps
+    // are hand-placed outside that bounding region — a pseudo-random but
+    // deliberately non-uniform distribution: varied azimuths covering
+    // front-high, sides, rear-low and behind; distances span 0.42–0.95 so
+    // they don't form a ring; elevations span −55° to +72° so the scene
+    // reads as a real 3D spread rather than a flat plane.
+    const TapDef defs[12] = {
+        { true,     0.0f,  20.0f, 0.25f, 7, 0.40f, 1, 0.75f, 7.0f },  // Tap 1: Infinity, L, +7st, 75% Doppler
+        { true,   -65.0f, -25.0f, 0.92f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 2:  past left lobe, low
+        { false,   0.0f,   0.0f, 0.50f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 3 DISABLED
+        { true,  -155.0f,  -5.0f, 0.58f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 4:  rear-left mid
+        { true,   115.0f,  45.0f, 0.42f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 5:  side-right upper
+        { false,   0.0f,   0.0f, 0.50f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 6 DISABLED
+        { true,  -110.0f,  28.0f, 0.75f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 7:  rear-left upper
+        { true,   148.0f, -38.0f, 0.55f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 8:  rear-right low
+        { false,   0.0f,   0.0f, 0.50f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 9 DISABLED
+        { true,     0.0f,  72.0f, 0.88f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 10: directly front, very high + far
+        { true,    85.0f, -55.0f, 0.95f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 11: past right lobe, very low
+        { true,   175.0f,  15.0f, 0.50f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 12: directly behind mid
+    };
+    for (int i = 0; i < 12; ++i)
+    {
+        auto pre = "object" + juce::String (i + 1) + "_";
+        auto setObjFloat = [&] (const juce::String& id, float v) {
+            if (auto* p = apvts.getParameter (pre + id))
+                p->setValueNotifyingHost (p->convertTo0to1 (v));
+        };
+        auto setObjChoice = [&] (const juce::String& id, int idx) {
+            if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (pre + id)))
+            {
+                int n = p->choices.size();
+                if (n > 1)
+                    p->setValueNotifyingHost ((float) idx / (float) (n - 1));
+            }
+        };
+        auto setObjBool = [&] (const juce::String& id, bool v) {
+            if (auto* p = apvts.getParameter (pre + id))
+                p->setValueNotifyingHost (v ? 1.0f : 0.0f);
+        };
+
+        const auto& d = defs[i];
+        setObjBool ("enabled", d.enabled);
+        if (d.enabled)
+        {
+            setObjFloat  ("azimuth",             d.az);
+            setObjFloat  ("elevation",           d.el);
+            setObjFloat  ("distance",            d.dist);
+            setObjChoice ("trajectoryShape",     d.trajShape);
+            setObjFloat  ("trajectorySpeed",     d.trajSpeed);
+            setObjChoice ("inputChannel",        d.inputCh);
+            setObjFloat  ("dopplerAmount",       d.dopplerAmt);
+            setObjFloat  ("pitchShift",          d.pitchSt);
+        }
+    }
+
+    editor.applyShowcaseHeaderForScreenshot();
+}
+
+//==============================================================================
+// Populate the internal undo history with a few state changes so the undo arrow
+// is active in the screenshot. Redo stays inactive — we capture with a fresh
+// forward history so only the back-arrow is live.
 //==============================================================================
 static void populateUndoHistory (OpenSpatialDelayProcessor& processor)
 {
@@ -378,8 +560,7 @@ static void populateUndoHistory (OpenSpatialDelayProcessor& processor)
         processor.captureUndoState ("delayTime → 420ms");
     }
 
-    // 5. Undo once → both undo AND redo arrows become active
-    processor.performInternalUndo();
+    // Leave redo empty: undo arrow active, redo arrow inactive.
 }
 
 //==============================================================================
@@ -425,6 +606,7 @@ int main (int argc, char* argv[])
     float scaleFactor = 2.0f;
     juce::String presetArg;
     juce::String mode = "full";
+    bool showcase = false;
 
     std::vector<juce::String> positional;
     for (int i = 1; i < argc; ++i)
@@ -439,9 +621,10 @@ int main (int argc, char* argv[])
                           << factoryPresets[j].name.toStdString() << "\n";
             return 0;
         }
-        else if (a == "--preset" && i + 1 < argc) { presetArg = juce::String (argv[++i]); }
-        else if (a == "--mode"   && i + 1 < argc) { mode      = juce::String (argv[++i]); }
-        else if (! a.startsWith ("--"))           { positional.push_back (a); }
+        else if (a == "--preset"   && i + 1 < argc) { presetArg = juce::String (argv[++i]); }
+        else if (a == "--mode"     && i + 1 < argc) { mode      = juce::String (argv[++i]); }
+        else if (a == "--showcase")                 { showcase  = true; }
+        else if (! a.startsWith ("--"))             { positional.push_back (a); }
     }
 
     if (positional.size() > 0) outputPath = positional[0];
@@ -488,7 +671,8 @@ int main (int argc, char* argv[])
         }
     }
 
-    // OSC Receive: leave enabled for visual completeness
+    // OSC Receive: leave enabled for visual completeness (--showcase overrides
+    // this and flips Send on / Receive off to reflect the demo state).
     processor.setOscReceiveEnabled (true);
 
     auto* editorRaw = processor.createEditor();
@@ -507,6 +691,9 @@ int main (int argc, char* argv[])
         return 1;
     }
     osd->syncForScreenshot();
+
+    if (showcase)
+        applyShowcaseState (processor, *osd);
 
     // ── Apply per-mode state and render ───────────────────────────────────
     juce::Image result;
@@ -610,10 +797,26 @@ int main (int argc, char* argv[])
     {
         // Populate AFTER editor creation. The editor's constructor calls
         // captureUndoState("Initial State") which would trim any prior redo
-        // history. So we build the history here, then undo once to leave
-        // both arrows active.
+        // history. Build a linear forward history so only the undo arrow is
+        // active (redo inactive) — matches spec from issue #168 round 2.
         populateUndoHistory (processor);
         osd->syncForScreenshot();  // triggers timerCallback → updateUndoButtons
+        result = snapshotComponent (*osd, scaleFactor);
+    }
+    else if (mode == "annotated-source")
+    {
+        // Source image for the callout overlay (issue #168 r3). Combines the
+        // showcase state (features-on demo) with the Global Drawer open and a
+        // populated undo history so the annotated overlay can point to every
+        // major UI region — including the drawer tab and the highlighted undo
+        // arrow. Always applies showcase, so --showcase is implicit here.
+        if (! showcase)
+            applyShowcaseState (processor, *osd);
+        const float demoKnobs[6] = { 0.0f, 0.0f, 0.15f, -0.1f, 0.0f, 0.0f };
+        osd->configureGlobalDrawer (true, demoKnobs, 6);
+        populateUndoHistory (processor);
+        osd->resized();
+        osd->syncForScreenshot();
         result = snapshotComponent (*osd, scaleFactor);
     }
     else if (mode == "spatial-map")
@@ -624,12 +827,68 @@ int main (int argc, char* argv[])
         auto& map = osd->getSpatialMapForScreenshot();
         result = snapshotComponent (map, scaleFactor);
     }
+    else if (mode == "hero")
+    {
+        // Issue #168 round 3: hero screenshot for docs/README. Combines the
+        // showcase state (features-on demo) with the Global Drawer open, a
+        // populated undo history (undo arrow lit), per-tap activity glow on
+        // a subset of non-Tap-1 taps, and a custom preset-name label that
+        // better matches the Round-3 Tap-1 characterisation. --showcase is
+        // implicit so the script doesn't need both flags.
+        if (! showcase)
+            applyShowcaseState (processor, *osd);
+        const float demoKnobs[6] = { 0.0f, 0.0f, 0.15f, -0.1f, 0.0f, 0.0f };
+        osd->configureGlobalDrawer (true, demoKnobs, 6);
+        populateUndoHistory (processor);
+        osd->resized();
+        osd->syncForScreenshot();
+
+        // Post-sync overrides — syncForScreenshot calls timerCallback which
+        // (a) resets presetNameButton text from getCurrentPresetIndex(), and
+        // (b) zeroes spatialMap activity to getTapActivityRMS() (== 0 in the
+        // offline tool). Any manual overrides must therefore run AFTER that
+        // sync, right before the snapshot.
+        osd->setPresetNameForScreenshot ("Infinity Halo");
+        auto& map = osd->getSpatialMapForScreenshot();
+        // Light up a handful of non-Tap-1 echoes so the hero image reads as
+        // a plugin in motion. Indices are 0-based: 1 = Tap 2, 4 = Tap 5,
+        // 7 = Tap 8, 10 = Tap 11.
+        map.setObjectActivityLevel (1,  0.75f);
+        map.setObjectActivityLevel (4,  0.65f);
+        map.setObjectActivityLevel (7,  0.85f);
+        map.setObjectActivityLevel (10, 0.70f);
+
+        // The trajectory trail (PluginEditor.cpp ~L1087) only draws when
+        // the selected object's TrajectoryState has shape != 0. That state
+        // is normally set from trajectory.tick() inside processBlock, which
+        // never runs in the offline tool — so we seed it manually here.
+        // Tap 1 (index 0) is the default selected object.
+        TrajectoryState infinityState;
+        infinityState.originAzDeg = 0.0f;
+        infinityState.originElDeg = 20.0f;
+        infinityState.originDist  = 0.25f;
+        infinityState.shape       = 7;       // Infinity (Lemniscate)
+        infinityState.phase       = 0.25f;   // mid-loop — animated dot sits ~¼ along the path
+        infinityState.reverse     = false;
+        infinityState.randomTime  = 0.0f;
+        map.setTrajectoryState (0, infinityState);
+
+        // Round-3 update 2: draw the entire sampled path at peak brightness
+        // so the figure-∞ reads as a complete shape (the live view's
+        // proximity-based glow would render most of the curve near-invisible
+        // at 0.05 alpha in a still frame).
+        map.setDrawFullTrajectoryForScreenshot (true);
+
+        result = snapshotComponent (*osd, scaleFactor);
+    }
     else if (mode == "elevation-map")
     {
         // Configure all 12 taps as a spiral: azimuths evenly spread around the
-        // circle, distances progressing outward, elevations running from +90°
-        // down to -90°. Then snapshot the spatial map and overlay each tap's
-        // elevation value as a label next to its dot.
+        // circle, distances progressing outward, elevations running from −90°
+        // (Tap 1) up to +90° (Tap 12). Issue #168 round 2 corrects the prior
+        // direction. Labels are now rendered by the plugin itself via the
+        // screenshot-mode flag on SpatialMapComponent, so every enabled tap
+        // shows its in-plugin label in the tap's own colour (no tool overlay).
         auto& apvts = processor.apvts;
         for (int i = 0; i < 12; ++i)
         {
@@ -643,73 +902,29 @@ int main (int argc, char* argv[])
                     p->setValueNotifyingHost (v ? 1.0f : 0.0f);
             };
 
-            float t   = (float) i / 11.0f;              // 0..1
-            float az  = -180.0f + t * 360.0f;           // full sweep
-            float dist = 0.38f + t * 0.55f;             // 0.38 → 0.93
-            float elev = 90.0f - t * 180.0f;            // +90 → -90
+            float t    = (float) i / 11.0f;              // 0..1
+            float az   = -180.0f + t * 360.0f;           // full azimuth sweep
+            float dist = 0.38f + t * 0.55f;              // 0.38 → 0.93
+            float elev = -90.0f + t * 180.0f;            // −90 (Tap 1) → +90 (Tap 12)
 
             setBool  ("enabled",    true);
             setFloat ("azimuth",    az);
             setFloat ("elevation",  elev);
             setFloat ("distance",   dist);
         }
-        osd->syncForScreenshot();
 
         auto& map = osd->getSpatialMapForScreenshot();
-        juce::Image base = snapshotComponent (map, scaleFactor);
-
-        // Overlay elevation labels on the rendered image.
-        juce::Graphics g (base);
-        g.addTransform (juce::AffineTransform::scale (scaleFactor));
-        juce::Font labelFont (osd->getOSDLookAndFeel().jetbrainsMedium);
-        labelFont.setHeight (11.0f);
-        g.setFont (labelFont);
-
-        for (int i = 0; i < 12; ++i)
-        {
-            if (! map.isObjectEnabled (i)) continue;
-            auto pos = map.getObjectScreenPos (i);
-            float z = std::sin (juce::degreesToRadians (map.getObjectElevation (i)));
-            float dotR = 7.0f + (z >= 0.0f ? 2.5f * z : 1.5f * z);
-
-            juce::String text = juce::String (juce::roundToInt (map.getObjectElevation (i)))
-                              + juce::String (juce::CharPointer_UTF8 ("\xc2\xb0"));
-
-            // Place label outside the dot — right side if the dot is on the
-            // left half of the map, left side otherwise. Small vertical nudge
-            // so labels for neighbouring taps don't overlap too badly.
-            float mapCx = map.getWidth() * 0.5f;
-            bool placeRight = pos.x < mapCx;
-            int labelW = 30;
-            int labelH = 14;
-            float lx = placeRight ? (pos.x + dotR + 4.0f)
-                                  : (pos.x - dotR - 4.0f - labelW);
-            float ly = pos.y - labelH * 0.5f;
-
-            // Soft drop shadow for legibility against the starfield.
-            g.setColour (juce::Colour (0x99000000));
-            g.drawText (text,
-                        juce::Rectangle<float> (lx + 1.0f, ly + 1.0f,
-                                                (float) labelW, (float) labelH),
-                        placeRight ? juce::Justification::centredLeft
-                                   : juce::Justification::centredRight,
-                        false);
-            g.setColour (juce::Colour (0xfff0f4f8));
-            g.drawText (text,
-                        juce::Rectangle<float> (lx, ly,
-                                                (float) labelW, (float) labelH),
-                        placeRight ? juce::Justification::centredLeft
-                                   : juce::Justification::centredRight,
-                        false);
-        }
-        result = base;
+        map.setLabelAllEnabledObjectsForScreenshot (true);
+        osd->syncForScreenshot();
+        result = snapshotComponent (map, scaleFactor);
     }
     else
     {
         std::cerr << "Error: unknown --mode: " << mode.toStdString() << "\n";
         std::cerr << "Valid modes: full, drawer-open, tone-section, osc-section,\n"
                      "             save-overlay, preset-menu, output-dropdown,\n"
-                     "             undo-active, spatial-map, elevation-map\n";
+                     "             undo-active, annotated-source, hero,\n"
+                     "             spatial-map, elevation-map\n";
         return 1;
     }
 

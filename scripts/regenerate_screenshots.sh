@@ -33,7 +33,8 @@ if [ ! -x "$TOOL" ]; then
 fi
 
 # Presets chosen per screenshot for visual clarity:
-MAIN_PRESET="Quad Ping-Pong"          # 4 taps at cardinal positions — clean reference
+MAIN_PRESET="Quad Ping-Pong"          # 4 taps at cardinal positions — baseline preset
+PRESET_MENU_PRESET="Merry-Go-Round"   # nested submenu demo — Spatial Movement category (issue #168 r2)
 ELEVATION_PRESET="Hemisphere Spread"  # varied elevations — feature showcase
 WOBBLE_PRESET="Tape Wow"              # wobble section engaged
 SHIMMER_PRESET="Shimmer"              # shimmer preset for feature screenshot
@@ -41,20 +42,31 @@ SHIMMER_PRESET="Shimmer"              # shimmer preset for feature screenshot
 echo ""
 echo "=== Regenerating screenshots ==="
 
-# --- Full editor screenshot (used as source for header / bottom-panel crops)
-"$TOOL" "$OUT_DIR/screenshot.png"         "$SCALE" --preset "$MAIN_PRESET"      --mode full
+# --- Full editor screenshot: hero state (issue #168 r3, item 7) -------------
+# Hero mode renders the "features-on" showcase state + Global Drawer open +
+# populated undo history + per-tap activity glow + custom preset label
+# ("Infinity Halo") + an Infinity trajectory drawn on the spatial map.
+# Tap 1 is L-only, +7 st pitch, 75% Doppler; taps 3/6/9 disabled, 10/11/12
+# enabled and redistributed. --showcase is implicit in this mode.
+# This image is the PIL-crop source for header / right-panel / bottom-panel.
+"$TOOL" "$OUT_DIR/screenshot.png"         "$SCALE" --preset "$MAIN_PRESET"      --mode hero
 cp "$OUT_DIR/screenshot.png" "$OUT_DIR/screenshot_full.png"
 
 # --- Direct-snapshot captures (no PIL crop required) -----------------------
 "$TOOL" "$OUT_DIR/screenshot_spatial_map.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode spatial-map
 "$TOOL" "$OUT_DIR/screenshot_elevation_map.png" "$SCALE" --preset "$MAIN_PRESET"      --mode elevation-map
 "$TOOL" "$OUT_DIR/screenshot_drawer.png"        "$SCALE" --preset "$MAIN_PRESET"      --mode drawer-open
-"$TOOL" "$OUT_DIR/screenshot_tone_section.png"  "$SCALE" --preset "$MAIN_PRESET"      --mode tone-section
+# TONE crop uses showcase state so the filter graph is on with asymmetric Q.
+"$TOOL" "$OUT_DIR/screenshot_tone_section.png"  "$SCALE" --preset "$MAIN_PRESET"      --mode tone-section --showcase
 "$TOOL" "$OUT_DIR/screenshot_osc_section.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode osc-section
 "$TOOL" "$OUT_DIR/screenshot_save_preset.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode save-overlay
-"$TOOL" "$OUT_DIR/screenshot_preset_menu.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode preset-menu
+# Preset menu: Merry-Go-Round lives in "Spatial Movement" — the submenu ticks it.
+"$TOOL" "$OUT_DIR/screenshot_preset_menu.png"   "$SCALE" --preset "$PRESET_MENU_PRESET" --mode preset-menu
 "$TOOL" "$OUT_DIR/screenshot_output_menu.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode output-dropdown
 "$TOOL" "$OUT_DIR/screenshot_undo_active.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode undo-active
+# Annotated source (issue #168 r3): showcase state + Global Drawer open + undo
+# history populated. annotate_screenshot.py reads this as its SRC.
+"$TOOL" "$OUT_DIR/screenshot_annotated_source.png" "$SCALE" --preset "$MAIN_PRESET"    --mode annotated-source
 
 # --- Per-preset feature captures (full editor, different preset each) -------
 "$TOOL" "$OUT_DIR/screenshot_elevation.png"     "$SCALE" --preset "$ELEVATION_PRESET" --mode full

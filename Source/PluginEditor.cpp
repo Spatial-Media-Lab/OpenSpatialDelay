@@ -1131,12 +1131,19 @@ void SpatialMapComponent::paint (juce::Graphics& g)
                     continue;
 
                 // Brightness: proximity to current animated dot position
-                // Tighter focus (×6) for concentrated glow near the moving dot
+                // Tighter focus (×6) for concentrated glow near the moving dot.
+                // Issue #168 r3: in hero-screenshot mode, keep the proximity
+                // fade so the animated dot still has a bright focus, but
+                // lift the baseline so the rest of the path reads as a faint
+                // continuous curve rather than a near-invisible 0.05-alpha
+                // outline. Peak brightness stays the same.
                 float phaseDist = std::abs (p0.phase - ts.phase);
                 if (phaseDist > 0.5f) phaseDist = 1.0f - phaseDist;
                 float proximity = 1.0f - (phaseDist * 6.0f);
                 proximity = juce::jlimit (0.0f, 1.0f, proximity);
-                float glowAlpha = 0.05f + proximity * 0.55f;
+                float glowAlpha = drawFullTrajectoryForScreenshot
+                                ? (0.18f + proximity * 0.42f)
+                                : (0.05f + proximity * 0.55f);
 
                 // Elevation encoding: opacity + thickness
                 float avgEl = (p0.elDeg + p1.elDeg) * 0.5f;
@@ -1347,8 +1354,13 @@ void SpatialMapComponent::paint (juce::Graphics& g)
             g.strokePath (textPath, juce::PathStrokeType (0.8f));
         }
 
-        // 5. Elevation degree label (selected object only, non-zero elevation)
-        if (i == selectedObject && std::abs (elDeg) > 1.0f)
+        // 5. Elevation degree label
+        //    - Normal UI: selected object only, non-zero elevation
+        //    - Screenshot mode (#168 round 2): every enabled object regardless of magnitude
+        bool drawElevationLabel = labelAllEnabledForScreenshot
+                                    ? objects[(size_t)i].enabled
+                                    : (i == selectedObject && std::abs (elDeg) > 1.0f);
+        if (drawElevationLabel)
         {
             float labelOffsetY = isAbove ? -(half + 14.0f) : (half + 2.0f);
             g.setColour (objectColours[i].withAlpha (0.85f));
@@ -3395,13 +3407,52 @@ void OpenSpatialDelayEditor::configureGlobalDrawer (bool open, const float* knob
         globalTapDrawer.setKnobValueSilent (i, knobValues[i]);
 }
 
+void OpenSpatialDelayEditor::applyShowcaseHeaderForScreenshot()
+{
+    // Issue #168 round 2: after the tool has written directly to
+    // processor.configOutputFormat / configAlgorithm, refresh the header
+    // combo boxes so the snapshot reflects the new selection. The output-
+    // format combo needs an explicit setSelectedItemIndex (it's only
+    // initialised from processor state in the constructor), and the
+    // algorithm combo needs its category list rebuilt — force this by
+    // invalidating lastAlgoCategoryShown so timerCallback repopulates it.
+    outputFormatBox.setSelectedItemIndex (processorRef.configOutputFormat.load (std::memory_order_relaxed),
+                                          juce::dontSendNotification);
+    lastAlgoCategoryShown = -1;
+
+    // Issue #168 round 3: the OSC Receive / Send toggle buttons only read
+    // the processor state once, in the editor constructor. By the time
+    // applyShowcaseState() has flipped Receive off and Send on, the
+    // buttons still carry their construction-time state — so the snapshot
+    // shows the wrong lit/dim pattern. Re-pull processor state here so
+    // the buttons reflect the showcase.
+    if (oscToggleButton     != nullptr)
+        oscToggleButton->setToggleState     (processorRef.getOscReceiveEnabled(), juce::dontSendNotification);
+    if (oscSendToggleButton != nullptr)
+        oscSendToggleButton->setToggleState (processorRef.getOscSendEnabled(),    juce::dontSendNotification);
+
+    syncForScreenshot();
+}
+
+void OpenSpatialDelayEditor::setPresetNameForScreenshot (const juce::String& name)
+{
+    // Issue #168 round 3: manual override for the preset-name button. Used
+    // by the screenshot tool's hero mode to show a custom label instead of
+    // the name derived from getCurrentPresetIndex(). Call AFTER
+    // syncForScreenshot() — the timerCallback inside that sync resets the
+    // label from processorRef.getPresetNames(), so any override must run
+    // last, right before snapshotComponent().
+    presetNameButton.setButtonText (name);
+}
+
 juce::Rectangle<int> OpenSpatialDelayEditor::getToneSectionBoundsForScreenshot() const
 {
     // TONE section spans: header (14px) + 6px pad + filter graph (104px) + 22px readout
-    // Breathing room: 12px above (clear of MOD section below), 12px below, 10px
-    // left/right. Clamped to the editor width.
-    const int padTop    = 12;
-    const int padBottom = 12;
+    // Round-2 review (#168): padding tightened to 6px top/bottom so the filter
+    // graph fills the frame and doesn't look small inside a large crop.
+    // Horizontal 10px padding retained for breathing room.
+    const int padTop    = 6;
+    const int padBottom = 6;
     const int padX      = 10;
     int top    = toneHeaderY - padTop;
     int height = padTop + 14 + 6 + 104 + 22 + padBottom;
