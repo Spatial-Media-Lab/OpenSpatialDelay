@@ -22,7 +22,7 @@ The plugin works in stereo today and grows with your mix into binaural, surround
 
 The plugin also includes a trajectory engine (13 path shapes), ADM-OSC send and receive for integration with Spat Revolution, Panoramix, Iannix, and TouchDesigner, and a full factory preset bank of 70 patches spanning stereo production, headphone pieces, cinematic design, and Atmos sessions.
 
-OpenSpatialDelay is developed by Andrew Rahman, a Berlin-based audio software developer and the founder of Spatial Media Lab. Andrew started the project on March 6, 2026; v1.0.0 ships seven weeks later. The plugin is funded through Andrew's Patreon, which supports the full Spatial Media Library pipeline. The source is open under GPL-3.0.
+OpenSpatialDelay is developed by Andrew Rahman, a Berlin-based spatial media expert and co-founder of Spatial Media Lab (with Timo Bittner). It's the first piece of software Andrew has shipped — built over seven weeks starting March 6, 2026. The plugin is funded through Andrew's Patreon, which supports the full Spatial Media Library pipeline. The source is open under GPL-3.0.
 
 **Availability:**
 
