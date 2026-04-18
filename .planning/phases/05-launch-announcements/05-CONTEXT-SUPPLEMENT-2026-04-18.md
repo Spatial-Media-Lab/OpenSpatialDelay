@@ -108,11 +108,46 @@ Per 05-01 revision, the Andrew-voice baseline:
 - First-person, warm, direct. No vulnerable framings like "unpaid" or "alone at a kitchen table" on surfaces other than the blog (blog keeps it; short-form drops it).
 - Capability-level language only. No DSP jargon (FFT size, paper names, partition method). No commercial-product vocabulary ("buy", "purchase", "upgrade").
 
+## Rule 8a — Andrew identity framing (added 2026-04-18 by Andrew override)
+
+Andrew is **NOT** a "software developer", "audio dev", "solo dev", or any
+software-engineering label. OSD is the first piece of software he has ever
+shipped. The framing is **spatial media expertise + Spatial Media Lab co-founder**,
+not "indie developer".
+
+**Identity:**
+- Long form (formal/credibility surfaces — KVR news, AES email, blog, Patreon, website bio): "Berlin-based spatial media expert and co-founder of Spatial Media Lab"
+- Short form (DMs, peer contexts): "co-founder of Spatial Media Lab"
+- Never name his employer (Andrew holds professional distance from the major audio company he works at)
+
+**Timo Bittner (SML co-founder) — when to name:**
+- Social broadcast (LinkedIn body, IG body, blog body, newsletter): **IN** — "with Timo Bittner" / "@TimoBittner" so he can be tagged
+- Direct emails (review pitches, KVR news, AES Germany): **OUT**
+- DM to peer Andrew knows personally (e.g. Hainbach is borderline — he knows Hainbach but not well so includes Timo; Peter Kirn + Eric Horstmann are real peers so no Timo): **OUT** if he genuinely knows them; **IN** if relationship is thin or unknown
+- DM to person Andrew doesn't know personally (most YouTube/podcast contacts in 05-06/05-08): **IN**
+
+**"First piece of software I've ever shipped" framing:**
+- Optional B-side mention OK on personal-story surfaces (blog, LinkedIn, Patreon)
+- Do not lead with it on credibility surfaces (KVR, AES, review pitches)
+
+**AI tooling reference:**
+- May reference generically ("AI agentic workflows", "AI tools as a pairing partner") on personal-story surfaces
+- Do **NOT** name Claude Code specifically in launch copy
+
+**Andrew's actual platform availability** (constrains DM channel choice):
+- LinkedIn ✓
+- Email ✓
+- Instagram ✓
+- Bluesky ✗
+- Mastodon ✗
+
+When the planner specifies a channel Andrew doesn't have, downgrade per: Bluesky → IG (if contact has IG) → email.
+
 ## Plans this file locks
 
-- 05-03 LinkedIn launch post (not yet drafted) — must honor Rules 1–8.
-- 05-04 Instagram (not yet drafted) — must honor Rules 1–8 **plus** exercise Rule 6 (zodiac carousel).
-- 05-05 KVR listing (not yet drafted) — must honor Rules 1–8. KVR audience is ~80% stereo-music producers — stereo framing is MOST important here.
-- 05-06 review-pitch outreach (not yet drafted) — must honor Rules 1–8. Individual personalisations may reference reviewer's existing stereo-tool reviews (e.g. Valhalla, Soundtoys, FabFilter) to anchor OSD as "stereo-native plus more."
-- 05-07 Berlin DMs (not yet drafted) — must honor Rules 1–8. Local-relationship tone; lead with the hook most relevant to each recipient's body of work.
-- 05-08 guest-pitch drafts (not yet drafted) — must honor Rules 1–8.
+- 05-03 LinkedIn launch post (not yet drafted) — must honor Rules 1–8 + 8a.
+- 05-04 Instagram (not yet drafted) — must honor Rules 1–8 + 8a **plus** exercise Rule 6 (zodiac carousel).
+- 05-05 KVR listing (not yet drafted) — must honor Rules 1–8 + 8a. KVR audience is ~80% stereo-music producers — stereo framing is MOST important here.
+- 05-06 review-pitch outreach (not yet drafted) — must honor Rules 1–8 + 8a. Individual personalisations may reference reviewer's existing stereo-tool reviews (e.g. Valhalla, Soundtoys, FabFilter) to anchor OSD as "stereo-native plus more." Default Timo IN for unknown contacts; flag known contacts for Timo OUT.
+- 05-07 Berlin DMs (not yet drafted) — must honor Rules 1–8 + 8a. Local-relationship tone; lead with the hook most relevant to each recipient's body of work.
+- 05-08 guest-pitch drafts (not yet drafted) — must honor Rules 1–8 + 8a. Default Timo IN for podcast/conference contacts.
