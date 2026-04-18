@@ -21,7 +21,7 @@ round 3. User iterates per-item; this table tracks state.
 | # | File | Status | Round-3 notes |
 |---|------|--------|---------------|
 | 2 | `screenshot_annotated.png` | ✅ Done (`063c9f6`) | see "Item 2 — Annotated screenshot" below |
-| 6 | `screenshot_elevation_map.png` | ⏳ Awaiting review | — |
+| 6 | `screenshot_elevation_map.png` | ✅ Done (no change) | Round-3 review: accepted as-is |
 | 7 | `screenshot.png` | ⏳ Awaiting review | — |
 | 10 | `screenshot_output_menu.png` | ⏳ Awaiting review | — |
 | 11 | `screenshot_preset_menu.png` | ⏳ Awaiting review | — |
