@@ -20,7 +20,7 @@ round 3. User iterates per-item; this table tracks state.
 
 | # | File | Status | Round-3 notes |
 |---|------|--------|---------------|
-| 2 | `screenshot_annotated.png` | ✅ Done | see "Item 2 — Annotated screenshot" below |
+| 2 | `screenshot_annotated.png` | ✅ Done (`063c9f6`) | see "Item 2 — Annotated screenshot" below |
 | 6 | `screenshot_elevation_map.png` | ⏳ Awaiting review | — |
 | 7 | `screenshot.png` | ⏳ Awaiting review | — |
 | 10 | `screenshot_output_menu.png` | ⏳ Awaiting review | — |
