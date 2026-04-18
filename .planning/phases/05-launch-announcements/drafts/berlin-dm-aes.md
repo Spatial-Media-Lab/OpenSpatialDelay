@@ -24,21 +24,23 @@ Subject: Free GPL spatial delay plugin — AES Germany demo interest?
 
 > Hello Ulli,
 >
-> I'm Andrew Rahman, a Berlin-based audio software developer. I'm releasing OpenSpatialDelay v1.0.0 — a free, GPL-3.0 spatial delay plugin (VST3 + AU, macOS + Windows) — on Tuesday Apr 28, just before Superbooth.
+> I'm Andrew Rahman, a Berlin-based spatial media expert and co-founder of Spatial Media Lab. We're releasing OpenSpatialDelay v1.0.0 on Tuesday Apr 28 — a free, GPL-3.0 spatial delay plugin (VST3 + AU, macOS + Windows), just before Superbooth.
 >
 > I'll be at the Messe during Superbooth and would be glad to give a brief demo if any AES Germany members are interested — either informally at the Messe or, down the road, as a short presentation at a future AES Germany meetup.
 >
-> No pressure at all — if the timing isn't right, this is also just a heads-up that an open-source Berlin spatial-audio tool is out.
+> No pressure — if the timing isn't right, this is also just a heads-up that an open-source Berlin spatial-audio tool is out.
 >
 > Demo + download (live Apr 28): https://andrewrahman.com/get-osd
 > Source: https://github.com/Spatial-Media-Lab/OpenSpatialDelay
 >
 > Thanks for your time,
 > — Andrew
-> Spatial Media Lab • Berlin
+> Spatial Media Lab · Berlin
 > https://spatialmedialab.org
 
-Character count (primary email body, excluding subject line): 752
+Character count (primary email body, excluding subject line): ~810
+
+**Identity framing per Rule 8a:** "Berlin-based spatial media expert and co-founder of Spatial Media Lab" (long form, formal credibility surface). Timo OUT (direct email rule).
 
 ## Fallback — AES Germany gateway email
 

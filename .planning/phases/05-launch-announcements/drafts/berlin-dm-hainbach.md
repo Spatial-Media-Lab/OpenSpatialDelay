@@ -1,35 +1,30 @@
 # Berlin DM — Hainbach (Stefan Paul Goetsch)
 
-- Contact: primary Bluesky @hainbach.bsky.social; fallback Instagram @hainbach101
+- **Primary contact: Instagram DM @hainbach101** (Andrew has IG; not Bluesky)
 - Send window: 2026-04-21 through 2026-04-25 (per D-07b / RESEARCH Pitfall 6)
 - Tone: relationship-first, "see you at Superbooth" — NOT review pitch
-- Length: primary ≤ 400 chars (Bluesky / IG DM favour short)
+- Length: ≤ 400 chars (IG DM favours short)
 - Hook: Hainbach's ambient / experimental texture work — OSD's spatial dimension is relevant without any spatial jargon needed
+- **Timo Bittner: IN** (Andrew knows Hainbach but not well; doesn't know if Hainbach knows Timo)
 
-## Primary — Bluesky DM
+## Plan deviation note
 
-Platform: @hainbach.bsky.social
+Plan template specified Bluesky @hainbach.bsky.social as primary, IG as fallback. Andrew has no Bluesky account → IG primary. Documented per Rule 8a platform-availability rule.
 
-> Hi Hainbach — I'm a fellow Berlin-based audio dev. I'm launching a free GPL-3.0 spatial delay plugin (VST3 + AU, Apr 28) right before Superbooth. Not a review ask — just a Berlin-local heads-up. If you'll be around the Messe, I'd love to grab a coffee and show you the plugin in person. No rush either way.
+## Primary — Instagram DM
+
+Platform: Instagram @hainbach101
+
+> Hi Hainbach — fellow Berliner here, co-founder of Spatial Media Lab (with Timo Bittner). We're launching a free GPL-3.0 spatial delay plugin (VST3+AU) on Apr 28, right before Superbooth. Not a pitch — just a Berlin-local "see you at the Messe" heads-up. Coffee + quick demo if you have a window?
 >
 > — Andrew
 
-Character count (primary): 313
-
-## Fallback — Instagram DM (@hainbach101)
-
-Platform: Instagram @hainbach101 (use only if Bluesky DM goes unread 5 days after send)
-
-> Hi Hainbach — Berlin solo dev here, launching a free spatial delay plugin just before Superbooth. Not a pitch — just a "see you at the Messe" heads-up. Coffee + quick demo if you have a window?
->
-> — Andrew
-
-Character count (fallback): 208
+Character count (primary): 340
 
 ## Post-send
 
-- Log send in berlin-dm-log.md (row 1 — set status=sent, fill Timestamp)
-- If no reply within 5 days: one gentle nudge on the alternate platform (IG if Bluesky was primary)
+- Log send in berlin-dm-log.md (row 1 — set status=sent, fill Timestamp, channel=IG)
+- If no reply within 5 days: no fallback (Bluesky requires account Andrew doesn't have); leave open
 - If meeting confirmed: note date + time in log Meeting-confirmed column
 
 ## What NOT to say
