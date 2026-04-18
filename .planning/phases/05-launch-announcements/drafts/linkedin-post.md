@@ -21,7 +21,7 @@ OpenSpatialDelay v1.0.0 is live. It's a VST3/AU delay where each echo has a 3D p
 
 Load it on a bus in Logic or Ableton and you get five classic stereo modes (Equal Power, Stereo VBAP, XY Pair, MS Encode, Blumlein), twelve independently-positioned taps, and the full preset bank — "Stereo Ping-Pong" and "Wide Stereo" are in there alongside cinematic whooshes, ambient beds, and rhythmic counter-lines. The day you take on a headphone piece, a 5.1 room, a dome, a 7.1.4 Atmos session — flip one dropdown and the same patches come with you.
 
-Under the hood there are three algorithm families — five stereo modes, six binaural modes (five measured HRTF datasets plus a CPU-lite fallback), seven surround/immersive algorithms covering Quad through 7.1.4 Atmos and Ambisonics up to sixth order. ADM-OSC in and out so it talks to Spat Revolution, Panoramix, Iannix, TouchDesigner. 70 factory presets. No trial timer. No licence server. GPL-3.0.
+Under the hood there are three algorithm families — five stereo modes, six binaural modes (five measured HRTF datasets plus a Simple mode for basic binaural without HRTF coloration), seven surround/immersive algorithms covering Quad through 7.1.4 Atmos and Ambisonics up to sixth order. ADM-OSC in and out so it talks to Spat Revolution, Panoramix, Iannix, TouchDesigner. 70 factory presets. No trial timer. No licence server. GPL-3.0.
 
 I kept the whole pipeline open because it's genuinely useful that way — for students learning Ambisonics, for composers scoring their first VR piece, for mixers in Berlin and everywhere else who want to experiment with immersive without signing up for another subscription, and for stereo producers who want a delay that grows with their mix as they grow with it.
 
