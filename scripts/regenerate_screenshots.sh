@@ -42,11 +42,14 @@ SHIMMER_PRESET="Shimmer"              # shimmer preset for feature screenshot
 echo ""
 echo "=== Regenerating screenshots ==="
 
-# --- Full editor screenshot: "features-on" showcase state (issue #168 r2) ---
-# The --showcase flag overrides preset state with 9.1.6 + VBAP, MOD/FLT/AIR on,
-# Sync+Triplet, OSC Send on, 9 taps with an Orbit trajectory on Tap 1.
+# --- Full editor screenshot: hero state (issue #168 r3, item 7) -------------
+# Hero mode renders the "features-on" showcase state + Global Drawer open +
+# populated undo history + per-tap activity glow + custom preset label
+# ("Infinity Halo") + an Infinity trajectory drawn on the spatial map.
+# Tap 1 is L-only, +7 st pitch, 75% Doppler; taps 3/6/9 disabled, 10/11/12
+# enabled and redistributed. --showcase is implicit in this mode.
 # This image is the PIL-crop source for header / right-panel / bottom-panel.
-"$TOOL" "$OUT_DIR/screenshot.png"         "$SCALE" --preset "$MAIN_PRESET"      --mode full --showcase
+"$TOOL" "$OUT_DIR/screenshot.png"         "$SCALE" --preset "$MAIN_PRESET"      --mode hero
 cp "$OUT_DIR/screenshot.png" "$OUT_DIR/screenshot_full.png"
 
 # --- Direct-snapshot captures (no PIL crop required) -----------------------

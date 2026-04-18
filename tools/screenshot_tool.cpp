@@ -28,6 +28,9 @@
 //   undo-active       — Editor with populated undo history (undo active, redo inactive)
 //   annotated-source  — Showcase state + Global Drawer open + undo history populated.
 //                       Source image for the annotated callout overlay (issue #168 r3).
+//   hero              — Hero screenshot for docs/README: showcase + drawer open +
+//                       undo populated + per-tap activity glow + custom preset name
+//                       (issue #168 r3). --showcase is implicit.
 //   spatial-map       — Just the SpatialMap component (no drawer, no bottom panel)
 //   elevation-map     — SpatialMap with all 12 taps in a −90°→+90° spiral, labelled
 //
@@ -446,19 +449,47 @@ static void applyShowcaseState (OpenSpatialDelayProcessor& processor,
     processor.setOscSendEnabled    (true);
 
     // --- Taps: 9 enabled, varied az / el / dist ------------------------------
-    // Tap 1 carries an Orbit trajectory so the spatial map shows a visible
-    // trail. Other taps stay static but varied so the scene looks busy.
-    struct TapDef { float az, el, dist; int trajShape; float trajSpeed; };
-    const TapDef defs[9] = {
-        {   15.0f,  20.0f, 0.35f, 9, 0.40f },  // Tap 1: Orbit trajectory
-        {  -60.0f,   0.0f, 0.55f, 0, 0.0f  },
-        {  120.0f,  35.0f, 0.75f, 0, 0.0f  },
-        { -120.0f, -15.0f, 0.70f, 0, 0.0f  },
-        {   70.0f,  55.0f, 0.45f, 0, 0.0f  },
-        {  175.0f, -30.0f, 0.60f, 0, 0.0f  },
-        {  -30.0f,  45.0f, 0.50f, 0, 0.0f  },
-        {   45.0f, -40.0f, 0.85f, 0, 0.0f  },
-        { -150.0f,  10.0f, 0.65f, 0, 0.0f  },
+    // Round-3 update (issue #168): Tap 1 now carries an Infinity trajectory
+    // (figure-∞) so the spatial map shows a figure-8 trail. Tap 1 also
+    // splits out to R-only input with +7 st pitch shift and 75% Doppler —
+    // a soloable "lead" tap. Taps 3, 6 and 9 are disabled; taps 10, 11 and
+    // 12 take their place so the scene still carries 9 active echoes.
+    //
+    // trajectoryShape index 7 = "Infinity" (alphabetical list in
+    // PluginProcessor.cpp: None=0, Bounce=1, Circle=2, Cross=3, Figure-8=4,
+    // Heart=5, Helix=6, Infinity=7, ...).
+    // inputChannel index 1 = "L" (choices: L+R=0, L=1, R=2).
+    //
+    // Round-3 update 2: the Infinity lemniscate centred on Tap 1
+    // (az=15°, el=20°, dist=0.35) extends roughly ±0.65 in map-space on
+    // each side, which would collide with the inner taps from the first
+    // revision. Non-Tap-1 positions have been pushed toward the edges of
+    // the map so the full figure-∞ reads clean, and Tap 1 is now routed
+    // from the L channel rather than R.
+    struct TapDef { bool enabled; float az, el, dist; int trajShape;
+                    float trajSpeed; int inputCh; float dopplerAmt;
+                    float pitchSt; };
+    // Tap 1 is the Infinity-trajectory lead (az=0°, el=+20°, dist=0.25), so
+    // the lemniscate spans mapX ∈ [-0.75, 0.75] and mapY ∈ [-0.015, 0.515]
+    // in (sin(az)·dist, cos(az)·dist) space. The remaining 8 enabled taps
+    // are hand-placed outside that bounding region — a pseudo-random but
+    // deliberately non-uniform distribution: varied azimuths covering
+    // front-high, sides, rear-low and behind; distances span 0.42–0.95 so
+    // they don't form a ring; elevations span −55° to +72° so the scene
+    // reads as a real 3D spread rather than a flat plane.
+    const TapDef defs[12] = {
+        { true,     0.0f,  20.0f, 0.25f, 7, 0.40f, 1, 0.75f, 7.0f },  // Tap 1: Infinity, L, +7st, 75% Doppler
+        { true,   -65.0f, -25.0f, 0.92f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 2:  past left lobe, low
+        { false,   0.0f,   0.0f, 0.50f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 3 DISABLED
+        { true,  -155.0f,  -5.0f, 0.58f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 4:  rear-left mid
+        { true,   115.0f,  45.0f, 0.42f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 5:  side-right upper
+        { false,   0.0f,   0.0f, 0.50f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 6 DISABLED
+        { true,  -110.0f,  28.0f, 0.75f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 7:  rear-left upper
+        { true,   148.0f, -38.0f, 0.55f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 8:  rear-right low
+        { false,   0.0f,   0.0f, 0.50f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 9 DISABLED
+        { true,     0.0f,  72.0f, 0.88f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 10: directly front, very high + far
+        { true,    85.0f, -55.0f, 0.95f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 11: past right lobe, very low
+        { true,   175.0f,  15.0f, 0.50f, 0, 0.0f,  0, 0.0f,  0.0f },  // Tap 12: directly behind mid
     };
     for (int i = 0; i < 12; ++i)
     {
@@ -480,19 +511,18 @@ static void applyShowcaseState (OpenSpatialDelayProcessor& processor,
                 p->setValueNotifyingHost (v ? 1.0f : 0.0f);
         };
 
-        if (i < 9)
+        const auto& d = defs[i];
+        setObjBool ("enabled", d.enabled);
+        if (d.enabled)
         {
-            const auto& d = defs[i];
-            setObjBool   ("enabled",             true);
             setObjFloat  ("azimuth",             d.az);
             setObjFloat  ("elevation",           d.el);
             setObjFloat  ("distance",            d.dist);
             setObjChoice ("trajectoryShape",     d.trajShape);
             setObjFloat  ("trajectorySpeed",     d.trajSpeed);
-        }
-        else
-        {
-            setObjBool ("enabled", false);
+            setObjChoice ("inputChannel",        d.inputCh);
+            setObjFloat  ("dopplerAmount",       d.dopplerAmt);
+            setObjFloat  ("pitchShift",          d.pitchSt);
         }
     }
 
@@ -797,6 +827,60 @@ int main (int argc, char* argv[])
         auto& map = osd->getSpatialMapForScreenshot();
         result = snapshotComponent (map, scaleFactor);
     }
+    else if (mode == "hero")
+    {
+        // Issue #168 round 3: hero screenshot for docs/README. Combines the
+        // showcase state (features-on demo) with the Global Drawer open, a
+        // populated undo history (undo arrow lit), per-tap activity glow on
+        // a subset of non-Tap-1 taps, and a custom preset-name label that
+        // better matches the Round-3 Tap-1 characterisation. --showcase is
+        // implicit so the script doesn't need both flags.
+        if (! showcase)
+            applyShowcaseState (processor, *osd);
+        const float demoKnobs[6] = { 0.0f, 0.0f, 0.15f, -0.1f, 0.0f, 0.0f };
+        osd->configureGlobalDrawer (true, demoKnobs, 6);
+        populateUndoHistory (processor);
+        osd->resized();
+        osd->syncForScreenshot();
+
+        // Post-sync overrides — syncForScreenshot calls timerCallback which
+        // (a) resets presetNameButton text from getCurrentPresetIndex(), and
+        // (b) zeroes spatialMap activity to getTapActivityRMS() (== 0 in the
+        // offline tool). Any manual overrides must therefore run AFTER that
+        // sync, right before the snapshot.
+        osd->setPresetNameForScreenshot ("Infinity Halo");
+        auto& map = osd->getSpatialMapForScreenshot();
+        // Light up a handful of non-Tap-1 echoes so the hero image reads as
+        // a plugin in motion. Indices are 0-based: 1 = Tap 2, 4 = Tap 5,
+        // 7 = Tap 8, 10 = Tap 11.
+        map.setObjectActivityLevel (1,  0.75f);
+        map.setObjectActivityLevel (4,  0.65f);
+        map.setObjectActivityLevel (7,  0.85f);
+        map.setObjectActivityLevel (10, 0.70f);
+
+        // The trajectory trail (PluginEditor.cpp ~L1087) only draws when
+        // the selected object's TrajectoryState has shape != 0. That state
+        // is normally set from trajectory.tick() inside processBlock, which
+        // never runs in the offline tool — so we seed it manually here.
+        // Tap 1 (index 0) is the default selected object.
+        TrajectoryState infinityState;
+        infinityState.originAzDeg = 0.0f;
+        infinityState.originElDeg = 20.0f;
+        infinityState.originDist  = 0.25f;
+        infinityState.shape       = 7;       // Infinity (Lemniscate)
+        infinityState.phase       = 0.25f;   // mid-loop — animated dot sits ~¼ along the path
+        infinityState.reverse     = false;
+        infinityState.randomTime  = 0.0f;
+        map.setTrajectoryState (0, infinityState);
+
+        // Round-3 update 2: draw the entire sampled path at peak brightness
+        // so the figure-∞ reads as a complete shape (the live view's
+        // proximity-based glow would render most of the curve near-invisible
+        // at 0.05 alpha in a still frame).
+        map.setDrawFullTrajectoryForScreenshot (true);
+
+        result = snapshotComponent (*osd, scaleFactor);
+    }
     else if (mode == "elevation-map")
     {
         // Configure all 12 taps as a spiral: azimuths evenly spread around the
@@ -839,8 +923,8 @@ int main (int argc, char* argv[])
         std::cerr << "Error: unknown --mode: " << mode.toStdString() << "\n";
         std::cerr << "Valid modes: full, drawer-open, tone-section, osc-section,\n"
                      "             save-overlay, preset-menu, output-dropdown,\n"
-                     "             undo-active, annotated-source, spatial-map,\n"
-                     "             elevation-map\n";
+                     "             undo-active, annotated-source, hero,\n"
+                     "             spatial-map, elevation-map\n";
         return 1;
     }
 
