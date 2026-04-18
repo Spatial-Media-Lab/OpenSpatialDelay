@@ -26,6 +26,8 @@
 //   preset-menu       — Editor with nested preset menu (folders + expanded submenu)
 //   output-dropdown   — Editor with the Output Format dropdown (flat list)
 //   undo-active       — Editor with populated undo history (undo active, redo inactive)
+//   annotated-source  — Showcase state + Global Drawer open + undo history populated.
+//                       Source image for the annotated callout overlay (issue #168 r3).
 //   spatial-map       — Just the SpatialMap component (no drawer, no bottom panel)
 //   elevation-map     — SpatialMap with all 12 taps in a −90°→+90° spiral, labelled
 //
@@ -771,6 +773,22 @@ int main (int argc, char* argv[])
         osd->syncForScreenshot();  // triggers timerCallback → updateUndoButtons
         result = snapshotComponent (*osd, scaleFactor);
     }
+    else if (mode == "annotated-source")
+    {
+        // Source image for the callout overlay (issue #168 r3). Combines the
+        // showcase state (features-on demo) with the Global Drawer open and a
+        // populated undo history so the annotated overlay can point to every
+        // major UI region — including the drawer tab and the highlighted undo
+        // arrow. Always applies showcase, so --showcase is implicit here.
+        if (! showcase)
+            applyShowcaseState (processor, *osd);
+        const float demoKnobs[6] = { 0.0f, 0.0f, 0.15f, -0.1f, 0.0f, 0.0f };
+        osd->configureGlobalDrawer (true, demoKnobs, 6);
+        populateUndoHistory (processor);
+        osd->resized();
+        osd->syncForScreenshot();
+        result = snapshotComponent (*osd, scaleFactor);
+    }
     else if (mode == "spatial-map")
     {
         // Snapshot the SpatialMap component directly — this excludes the
@@ -821,7 +839,8 @@ int main (int argc, char* argv[])
         std::cerr << "Error: unknown --mode: " << mode.toStdString() << "\n";
         std::cerr << "Valid modes: full, drawer-open, tone-section, osc-section,\n"
                      "             save-overlay, preset-menu, output-dropdown,\n"
-                     "             undo-active, spatial-map, elevation-map\n";
+                     "             undo-active, annotated-source, spatial-map,\n"
+                     "             elevation-map\n";
         return 1;
     }
 
