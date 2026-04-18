@@ -61,6 +61,9 @@ cp "$OUT_DIR/screenshot.png" "$OUT_DIR/screenshot_full.png"
 "$TOOL" "$OUT_DIR/screenshot_preset_menu.png"   "$SCALE" --preset "$PRESET_MENU_PRESET" --mode preset-menu
 "$TOOL" "$OUT_DIR/screenshot_output_menu.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode output-dropdown
 "$TOOL" "$OUT_DIR/screenshot_undo_active.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode undo-active
+# Annotated source (issue #168 r3): showcase state + Global Drawer open + undo
+# history populated. annotate_screenshot.py reads this as its SRC.
+"$TOOL" "$OUT_DIR/screenshot_annotated_source.png" "$SCALE" --preset "$MAIN_PRESET"    --mode annotated-source
 
 # --- Per-preset feature captures (full editor, different preset each) -------
 "$TOOL" "$OUT_DIR/screenshot_elevation.png"     "$SCALE" --preset "$ELEVATION_PRESET" --mode full
