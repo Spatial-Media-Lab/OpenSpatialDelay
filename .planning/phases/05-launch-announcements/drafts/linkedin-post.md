@@ -6,6 +6,7 @@
 - [ ] Confirm bio/headline text mentions "Berlin" somewhere so the "Link in bio" CTA pays off visually when a reader taps through.
 - [ ] Decide: Format A (text-only) OR Format B (document carousel). Research says B gets ~3× engagement; A is zero-friction if a Figma/Canva PDF isn't ready. Honest recommendation: ship A if the PDF isn't already designed by T-2 evening — B is better only when the design is good.
 - [ ] Post at 2026-04-28 10:20 CET per launch-day-runbook step 5.
+- [ ] At composer time: @-mention Timo Bittner in the body where his name appears (LinkedIn UI auto-suggests as you type "@Timo").
 - [ ] DO NOT paste any URL into the first-comment slot. DO NOT add any link in the post body. (2026 LinkedIn algorithm penalises both — see `05-RESEARCH.md` Anti-Patterns + Pitfall 2. The bio-link is the compliant CTA path.)
 
 ---
@@ -25,13 +26,13 @@ Under the hood there are three algorithm families — five stereo modes, six bin
 
 I kept the whole pipeline open because it's genuinely useful that way — for students learning Ambisonics, for composers scoring their first VR piece, for mixers in Berlin and everywhere else who want to experiment with immersive without signing up for another subscription, and for stereo producers who want a delay that grows with their mix as they grow with it.
 
-OSD is the first tool in the Spatial Media Library — a small family of spatial-audio plugins sharing one framework underneath. Panners, choruses, reverbs, synthesizers. Build the engine once, ship several tools on top of it. Solo dev, Berlin, open source — that's the whole shop.
+OSD is the first tool in the Spatial Media Library — a small family of spatial-audio plugins sharing one framework underneath. Panners, choruses, reverbs, synthesizers. Build the engine once, ship several tools on top of it. Co-founded with Timo Bittner. Berlin, open source, two people building tools we wished existed.
 
 If you're curious what a free, open-source spatial delay sounds like — Link in bio.
 
 (Berlin folks: I'll be at Superbooth Messe May 7–10. If you want to see it running in person, find me.)
 
-#SpatialAudio #DolbyAtmos #AudioPlugin #IndieDev #OpenSource
+#SpatialAudio #DolbyAtmos #AudioPlugin #SpatialMediaLab #OpenSource
 ```
 
 ---
@@ -86,7 +87,7 @@ Swipe through the doc for the capability tour. Link in bio when you're ready to 
 
 (Berlin folks at Superbooth May 7–10 — find me and I'll show you in person.)
 
-#SpatialAudio #DolbyAtmos #AudioPlugin #IndieDev #OpenSource
+#SpatialAudio #DolbyAtmos #AudioPlugin #SpatialMediaLab #OpenSource
 ```
 
 ---
