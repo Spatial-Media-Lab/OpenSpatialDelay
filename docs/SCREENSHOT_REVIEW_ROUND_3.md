@@ -77,12 +77,19 @@ supersampled drawing).
   rendered on top. Ensures the 15/16 diagonals remain visible if they
   cross any legend geometry.
 
+## Item 6 — Elevation map
+
+Reviewed in this session against the current PNG at
+`docs/assets/screenshot_elevation_map.png`. Accepted as-is — no changes
+required. The round-2 spiral flip and plugin-native label change are
+considered final for round 3. Item 6 is closed and needs no further
+work.
+
 ## Next session / next item
 
-The next item to review is **#6 — `screenshot_elevation_map.png`**.
-Round 2 accepted it after the spiral flip and plugin-native label change;
-any round-3 revision will come from direct user feedback on the current
-PNG at `docs/assets/screenshot_elevation_map.png`.
+The next item to review is **#7 — `screenshot.png`** (the main plugin
+screenshot / hero image). Any round-3 revision will come from direct
+user feedback on the current PNG at `docs/assets/screenshot.png`.
 
 ## Files the next session needs
 
