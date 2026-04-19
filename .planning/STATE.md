@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: paused
-stopped_at: Wave 1 complete (05-04 IG, 05-05 KVR, 05-07 Berlin DMs all drafted + approved). Rule 8a identity framing locked. Paused before Wave 2 (05-06 review pitches) for HITL — see PAUSE-T-10-v3.md.
-last_updated: "2026-04-18T22:00:00.000Z"
-last_activity: 2026-04-18
+stopped_at: "Phase 02 Plan 05 (Sender.net) blocked on sending-domain decision — see .planning/phases/02-email-capture-funding-infrastructure/02-05-SENDING-DOMAIN-RESEARCH.md. Phase 05 Wave 2 also paused for HITL — see .planning/phases/05-launch-announcements/PAUSE-T-10-v3.md."
+last_updated: "2026-04-19T16:30:00.000Z"
+last_activity: 2026-04-19
 progress:
   total_phases: 5
   completed_phases: 1
@@ -25,12 +25,18 @@ See: .planning/PROJECT.md (updated 2026-04-14)
 
 ## Current Position
 
-Phase: 05 (launch-announcements) — PAUSED
+**Active blocker — Phase 02 Plan 05 (Sender.net email-capture)**
+Status: PAUSED pending sending-domain decision.
+Root cause: Sender.net gates double opt-in behind account verification; verification requires SPF/DKIM/DMARC on the sending domain. DNS for `spatialmedialab.org` is hosted at InterNetX AutoDNS (not jackhost) and is not directly accessible to Andrew — AutoDNS credentials presumed held by Timo Bittner.
+Resume file: `.planning/phases/02-email-capture-funding-infrastructure/02-05-SENDING-DOMAIN-RESEARCH.md`
+Research complete 2026-04-19 — user researching options before committing to recommended pivot (Option A: send from `andrew@andrewrahman.com` via ImprovMX forwarder).
+
+**Secondary — Phase 05 (launch-announcements)**
 Plan: 8 of 9 (Wave 1 complete; Wave 2 + 3 pending)
-Status: Paused — see PAUSE-T-10-v3.md for resume
+Status: Paused — see `.planning/phases/05-launch-announcements/PAUSE-T-10-v3.md` for resume
 Last activity: 2026-04-18
 
-Progress: [████████░░] 78% (7/9 plans complete)
+Progress: [████████░░] 80% (24/30 plans complete)
 
 ## Performance Metrics
 
@@ -94,6 +100,7 @@ Recent decisions affecting current work:
 - [Phase 03]: Plan 03-08: WEB-02 flipped to Complete via external-site Playwright guard on spatialmedialab.org/about. sml-about.spec.ts (4 tests, @external, retries: 2) lives in andrewrahman-com repo; REQUIREMENTS.md checkbox + traceability row flipped in openspatialdelay repo. WEB-01/WEB-03 untouched. CONTEXT.md D-02 scope-strike now reflected in requirements tracker.
 - [Phase 05]: Plan 05-00: T-11 precheck walk — Mailchimp owner=Andrew (resolved), SPF verified (v=spf1 a include:spf.jackhost.net -all), DKIM+DMARC pending HITL at jackhost.net target T-3, KVR Developer Account=no-account (dual path: apply + contactus@kvraudio.com fallback), Phase 4 plan 04-00 committed by 2026-04-20 (not descoped)
 - [Phase 05]: Plan 05-01: SML blog post approved after 18 voice red-lines. Primary download path = andrewrahman.com/get-osd (email-wall); GitHub positioned as source-only. Release-tag deep-link URL (/releases/tag/v1.0.0) deliberately absent from final draft — intentional deviation from planner grep.
+- [Phase 02] (2026-04-19): Plan 02-05 blocked on sending-domain decision. Findings: (1) Sender.net requires double opt-in behind account verification, which requires SPF/DKIM/DMARC on the sending domain; (2) `spatialmedialab.org` DNS is hosted at InterNetX AutoDNS (nameservers `a-d.ns14.net`) NOT at jackhost.net — the jackhost Plesk panel has no DNS editor because DNS was never delegated to jackhost; (3) AutoDNS credentials presumed held by Timo Bittner (Plesk `Systembenutzer = timobittner.de`). Research doc `.planning/phases/02-email-capture-funding-infrastructure/02-05-SENDING-DOMAIN-RESEARCH.md` enumerates three options: A) pivot sending domain to `andrewrahman.com` via ImprovMX forwarder (recommended — aligns with D-16 Data-Controller=Andrew natural-person framing), B) ask Timo to add the three DNS records on `spatialmedialab.org` one-time, C) use Sender shared domain (rejected — poor deliverability under Gmail/Yahoo 2024 sender rules). User researching before committing.
 
 ### Pending Todos
 
@@ -105,9 +112,12 @@ None yet.
 - Patreon must have 2+ posts before any public link appears in announcements or website (Phase 2 gate before Phase 5).
 - **[03-07 CHECKPOINT-PAUSED]** Task 2 is a `checkpoint:human-verify` gate on opengraph.xyz + metatags.io social-preview rendering. Needs a deploy URL (Netlify push of `andrewrahman-com` main — currently 24 commits ahead of origin, or `netlify deploy --build` for draft). Cannot fabricate verdict — axe/Playwright cannot scrape live social platforms. Blocks 03-07 close + 03-08 start.
 - **[02-06 CLOSED 2026-04-17]** Patreon LAUNCHED and live at `https://patreon.com/AndrewRahman` (HTTP/2 301 → www.patreon.com/AndrewRahman). 4-screenshot evidence requirement waived by user override (non-load-bearing ceremony for solo-creator context — see 02-06-SUMMARY.md Decisions §A). DIST-03 complete. Creator-verified 7 incognito checks at launch time + self-verified reader test.
+- **[02-05 BLOCKED 2026-04-19]** Sender.net DOI gated behind account verification → sending-domain authentication required → no direct DNS access to `spatialmedialab.org` (DNS at InterNetX AutoDNS under Timo's account). Research doc produced with three options and ordered resumption checklist. DIST-01 remains in-progress. Primary decision input needed: pivot to `andrewrahman.com` + ImprovMX forwarder, or wait on Timo, or run both in parallel.
 
 ## Session Continuity
 
-Last session: 2026-04-18T22:00:00.000Z
-Stopped at: Wave 1 complete (05-04 IG, 05-05 KVR, 05-07 Berlin DMs all drafted + approved). Rule 8a identity framing locked. Paused before Wave 2 (05-06 review pitches) for HITL.
-Resume file: .planning/phases/05-launch-announcements/PAUSE-T-10-v3.md
+Last session: 2026-04-19T16:30:00.000Z
+Stopped at: Phase 02 Plan 05 blocked on sending-domain decision after discovering jackhost-Plesk has no DNS editor for spatialmedialab.org (DNS actually hosted at InterNetX AutoDNS). Research doc complete; Andrew researching before deciding on Option A (pivot to andrewrahman.com + ImprovMX forwarder) vs Option B (ask Timo to add records).
+Resume files:
+  - PRIMARY: .planning/phases/02-email-capture-funding-infrastructure/02-05-SENDING-DOMAIN-RESEARCH.md (active blocker)
+  - Phase 05 pause (secondary, unchanged): .planning/phases/05-launch-announcements/PAUSE-T-10-v3.md

@@ -4,6 +4,12 @@
 
 **Source of truth:** 02-05-PLAN.md `<task status="complete">` block — this doc is the distilled in-browser checklist. If the plan and this doc disagree, the plan wins.
 
+> ⚠️ **BLOCKED 2026-04-19 — read `02-05-SENDING-DOMAIN-RESEARCH.md` before proceeding.**
+>
+> Sender.net gates double opt-in behind account verification, which requires a verified sending domain with working SPF/DKIM/DMARC. Research found that DNS for `spatialmedialab.org` is hosted at InterNetX AutoDNS (not jackhost), and the AutoDNS credentials are not accessible to Andrew. The research doc enumerates three options (pivot sending domain to `andrewrahman.com` + forwarder · ask Timo Bittner to add DNS records · use Sender shared domain), picks a recommended path, and provides the ordered resumption checklist. **Do not execute any step below until the sending-domain decision is made per that doc.**
+
+**Plan status (2026-04-19):** Paused pending sending-domain decision. Sender account exists (user-created earlier). Groups/form/automation not yet built because DOI is locked behind verification. The 2026-04-17 note below ("Task 1 was erroneously marked complete") remains accurate for historical context.
+
 **Plan status (2026-04-17):** Sender account exists (user-created earlier). Nothing else has been done. Task 1 was erroneously marked complete in a prior session — we're now doing the actual dashboard work.
 
 ---
