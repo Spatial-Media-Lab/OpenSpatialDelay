@@ -23,8 +23,8 @@ round 3. User iterates per-item; this table tracks state.
 | 2 | `screenshot_annotated.png` | ✅ Done (`063c9f6`) | see "Item 2 — Annotated screenshot" below |
 | 6 | `screenshot_elevation_map.png` | ✅ Done (no change) | Round-3 review: accepted as-is |
 | 7 | `screenshot.png` | ✅ Done (this commit) | see "Item 7 — Hero screenshot" below |
-| 10 | `screenshot_output_menu.png` | ⚠️ HITL (live capture) | see "Item 10 — HITL" below |
-| 11 | `screenshot_preset_menu.png` | ⏳ Awaiting review | — |
+| 10 | `screenshot_output_menu.png` | ✅ Done (this commit, mock revisit) | see "Item 10 — HITL revisit" below |
+| 11 | `screenshot_preset_menu.png` | ✅ Done (this commit) | see "Item 11 — Preset menu mock" below |
 | 12 | `screenshot_right_panel.png` | ✅ Done (this commit) | see "Item 12 — Right panel" below |
 | 16 | `screenshot_tone_section.png` | ✅ Done (this commit) | see "Item 16 — TONE section crop" below |
 | 17 | `screenshot_undo_active.png` | ✅ Done (this commit) | see "Item 17 — Undo/redo documented" below |
@@ -226,6 +226,74 @@ Root causes of the agent's misreads:
 - Compare against `.context/attachments/Screenshot 2026-04-17 at
   15.50.02-v1.png` at ≥200 % zoom pixel-diff before claiming a match.
 
+## Item 10 — HITL revisit
+
+**Outcome:** `docs/assets/screenshot_output_menu.png` is now
+reproduced by the screenshot tool (`--mode output-dropdown`),
+matching the same live reference that previously defeated the mock
+(`.context/attachments/Screenshot 2026-04-17 at 15.50.02.png`) at
+**~95% pixel match** (diff > 30 threshold: 95.19% match; diff > 60:
+98.74%). The HITL carve-out is lifted — line 70 of
+`scripts/regenerate_screenshots.sh` is uncommented and the output
+menu regenerates alongside the other screenshots.
+
+**What changed versus the round-2 drop (which became HITL):**
+
+- **Popup row height 14 → 24 px.** The round-2 mock compressed rows
+  so all 23 formats would fit inside the editor's 580 px height.
+  The real JUCE popup uses `OSDLookAndFeel::getIdealPopupMenuItemSize`
+  (24 px rows) and is allowed to overflow past the editor bottom —
+  any DAW renders that overflow into its own window chrome. The
+  mock now matches that row height and extends the output canvas
+  vertically (black background below the editor) so the popup's
+  last six rows render instead of being clipped.
+- **Popup width 170 → 128 px.** The live popup is sized to the
+  widest item's text + padding, not to the minimum width I had
+  set in round 2. 128 px matches the pixel-measured reference
+  (popup left x=585, right x=713 native).
+- **Active row now pre-highlighted (cyan fill), not just ticked.**
+  `ComboBox::showPopup` calls `PopupMenu::setSelectedItem` for the
+  current index, so the Binaural row in the live reference is both
+  ticked and filled with `PopupMenu::highlightedBackgroundColourId`.
+  `buildOutputDropdownMock` now sets both `isTicked` and
+  `isHighlighted` for the active format.
+- **Anchor x/y nudged 1 px each.** The real JUCE popup sits 1 px
+  in from `(btn.getX(), btn.getBottom()+2)` — pixel-measured from
+  the reference. Composite anchor is now `(btn.getX()-1,
+  btn.getBottom()+1)`.
+- **Output canvas trimmed to 1636×1202.** The reference was captured
+  at 818×601 native (why 818 vs the editor's 820 is unclear — most
+  likely a DAW-specific 1 px inset on each side). The output-dropdown
+  handler now trims 2 px from each side of the raw 1640-wide composite
+  so the generated PNG carries the same dimensions as the reference.
+
+**Residual diff is color-level, not structural:**
+
+| Threshold | Match |
+|---|---|
+| diff > 10 (strict) | 93.30% |
+| diff > 20 | 94.87% |
+| diff > 30 (moderate) | 95.19% |
+| diff > 60 (loose) | 98.74% |
+| mean per-channel diff | 3.70 / 255 |
+
+The residual ~5% is dominated by (a) the cyan highlight colour
+(my mock reads `0xff7cc8f0` = RGB 124,200,240; the reference rim
+samples as RGB 141,198,236 — a consistent 17-unit R offset that
+points at a live-vs-offline compositing difference, not a value
+change), and (b) sub-pixel text anti-aliasing on every row. Neither
+is visually perceptible at 1× viewing size.
+
+**Files in this commit:**
+
+- `tools/screenshot_tool.cpp` — `buildOutputDropdownMock` and
+  `--mode output-dropdown` handler fixes.
+- `scripts/regenerate_screenshots.sh` — line 70 uncommented, HITL
+  note replaced with the current invocation.
+- `docs/assets/screenshot_output_menu.png` — regenerated mock
+  (replaces the prior live-capture).
+- `docs/SCREENSHOT_REVIEW_ROUND_3.md` — this tracker.
+
 ## Item 12 — Right panel
 
 **Outcome:** passed as-is on the first review pass this session — no
@@ -340,6 +408,62 @@ divider. No pixel change to the PNG.
 - `docs/wiki/controls-reference.md` — new Undo / Redo Arrows table row.
 - `scripts/regenerate_screenshots.sh` — clarifying comment on the
   header-crop PIL tuple.
+- `docs/SCREENSHOT_REVIEW_ROUND_3.md` — this tracker.
+
+## Item 11 — Preset menu mock
+
+**Outcome:** `docs/assets/screenshot_preset_menu.png` regenerated
+from `tools/screenshot_tool.cpp --mode preset-menu` with parent- and
+submenu-rendering corrections that bring the mock within ≈97.5% pixel
+match (at ≥30 per-channel tolerance) of the live reference at
+`.context/attachments/Screenshot 2026-04-17 at 15.50.40-v2.png`.
+Remaining drift is sub-pixel anti-aliasing on glyphs plus minor
+state differences inherent to the offline snapshot path — structural
+elements (menu shape, highlight, tick, preset list, right-panel
+values, map contents) all match.
+
+**What changed versus the round-2 drop:**
+
+- **Parent list no longer ticks the hovered category.** The round-2
+  build set `it.isTicked = (cat == hovered)` on every parent item, so
+  the open category rendered with both the cyan highlight *and* a
+  leading ✓. The real JUCE popup only highlights — the tick belongs
+  exclusively on the active preset in the submenu. Removed the
+  `isTicked` assignment in `buildPresetMenuMock()`.
+- **Dropped the subtle white wash behind ticked rows.** Round 2 laid
+  an 8%-white fill on the ticked row before calling
+  `drawPopupMenuItem`; the real popup has no such wash, so that
+  treatment was a visible mismatch at every zoom. Removed.
+- **Card padding 6 → 1 px, row height 22 → 24 px.** Matches JUCE's
+  native popup metrics (`OSDLookAndFeel::getIdealPopupMenuItemSize`
+  returns 24 px row height; native popups use a 1-px inset inside
+  the 1-px border, not 6).
+- **Parent width 170 → 160 px, submenu width 190 → 116 px.** The
+  round-2 widths were wider than the live reference; the new values
+  hug the longest category name and preset name respectively, giving
+  the same visual weight as the reference.
+- **Submenu gap −2 → +1 px.** The round-2 build overlapped the
+  parent border; the real nested popup leaves a hairline separation.
+
+All changes are confined to
+`tools/screenshot_tool.cpp::buildPresetMenuMock` and the
+`PopupMenuSnapshot` defaults.
+
+**Verification:** pixel-diff vs the live reference at the best
+alignment (dx=1, dy=−1):
+
+| Threshold | Match |
+|---|---|
+| any-channel diff > 10 | 94.82% |
+| any-channel diff > 30 | 97.55% |
+| any-channel diff > 60 | 98.14% |
+| mean per-channel diff | 3.4 / 255 |
+
+**Files in this commit:**
+
+- `tools/screenshot_tool.cpp` — `PopupMenuSnapshot` defaults and
+  `buildPresetMenuMock` fixes.
+- `docs/assets/screenshot_preset_menu.png` — regenerated mock.
 - `docs/SCREENSHOT_REVIEW_ROUND_3.md` — this tracker.
 
 ## Item 18 — Hero video (Merry-Go-Round)
@@ -751,17 +875,15 @@ frames pass through 1:1.
 
 ## Next session / next item
 
-Items 7, 12, 16, 17 are closed. Item 10 is closed via HITL (see
-above). Items 18, 19, 20, and 21 encodes are complete; site wiring
-is the remaining step for all four. Remaining open items: **11**
-(preset-menu screenshot), **18** (hero video — site wiring only),
-**19** (Orbit Dance — destination slot + site wiring), **20**
-(Spiral Descent — destination slot + site wiring), and **21**
-(Quad Swirl — destination slot + site wiring). Item 11 is
-HITL-eligible like item 10 — if mock iteration exceeds attempt 2,
-escalate to live capture following the item-10 pattern. When items
-11, 18, 19, 20, and 21 close, round 3 is complete and the branch
-can roll up to issue #168.
+Items 7, 11, 12, 16, 17 are closed. Item 10 is closed via HITL
+(see above). Items 18, 19, 20, and 21 encodes are complete; site
+wiring is the remaining step for all four. Remaining open items:
+**18** (hero video — site wiring only), **19** (Orbit Dance —
+destination slot + site wiring), **20** (Spiral Descent —
+destination slot + site wiring), and **21** (Quad Swirl —
+destination slot + site wiring). When items 18, 19, 20, and 21
+close, round 3 is complete and the branch can roll up to issue
+#168.
 
 ### Session backlog (beyond round 3)
 

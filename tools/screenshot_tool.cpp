@@ -165,7 +165,7 @@ public:
     };
 
     PopupMenuSnapshot (OSDLookAndFeel& lnf, std::vector<Item> items_, int fixedWidth,
-                       int rowHeight = 22)
+                       int rowHeight = 24)
         : look (lnf), items (std::move (items_)), itemHeight (rowHeight)
     {
         setLookAndFeel (&look);
@@ -198,16 +198,9 @@ public:
             }
             else
             {
-                // Subtle "currently-selected" wash behind the ticked row — matches
-                // the real JUCE popup's pre-selected-item treatment without using
-                // the full cyan highlightedBackgroundColourId (too aggressive for
-                // a static screenshot).
-                if (it.isTicked && ! it.isHighlighted && ! it.isSeparator)
-                {
-                    g.setColour (juce::Colour::fromFloatRGBA (1.0f, 1.0f, 1.0f, 0.08f));
-                    g.fillRect (area);
-                }
-
+                // Note (r3 item 11): the real JUCE popup does NOT wash the
+                // ticked row — it only draws the ✓ glyph. Any extra background
+                // treatment shows up as a visible mismatch vs the live capture.
                 look.drawPopupMenuItem (g, area,
                                         it.isSeparator,
                                         /*isActive*/ true,
@@ -233,7 +226,7 @@ private:
     OSDLookAndFeel& look;
     std::vector<Item> items;
     int itemHeight = 22;
-    static constexpr int kCardPadding = 6;
+    static constexpr int kCardPadding = 1;  // match JUCE's native popup: just 1px inside the 1px border
 };
 
 //==============================================================================
@@ -307,10 +300,10 @@ buildPresetMenuMock (OSDLookAndFeel& lnf,
     }
 
     // Build the parent (category folders) menu.
-    // Issue #168 round 2: tick the category that contains the currently-active
-    // preset, so the parent list mirrors JUCE's real popup (which ticks the
-    // category of the active preset *and* highlights the row where the submenu
-    // is open).
+    // Issue #168 round 3: the real JUCE popup does NOT tick the hovered/open
+    // category — it only highlights the row (cyan fill) to indicate the
+    // submenu is currently open on it. The tick belongs on the active preset
+    // in the submenu, not on its parent category.
     std::vector<PopupMenuSnapshot::Item> parentItems;
     for (const auto& cat : categories)
     {
@@ -318,7 +311,6 @@ buildPresetMenuMock (OSDLookAndFeel& lnf,
         it.text          = cat;
         it.hasSubMenu    = true;
         it.isHighlighted = (cat == hovered);
-        it.isTicked      = (cat == hovered);
         parentItems.push_back (it);
     }
 
@@ -370,15 +362,21 @@ buildOutputDropdownMock (OSDLookAndFeel& lnf,
     {
         const auto& info = OpenSpatialDelayProcessor::outputFormatRegistry[(size_t) i];
         PopupMenuSnapshot::Item it;
-        it.text     = info.name;
-        it.isTicked = (i == currentFmt);
+        it.text          = info.name;
+        it.isTicked      = (i == currentFmt);
+        // Round 3 item-10-revisit: the live popup highlights the currently-
+        // selected item on open (JUCE's ComboBox::showPopup calls
+        // setRootItemSelected for the active index), so the Binaural row in
+        // the reference is both ticked AND cyan-filled.
+        it.isHighlighted = (i == currentFmt);
         items.push_back (it);
     }
 
-    // Row height 14 so all 23 formats fit within the editor height without
-    // clipping. The OSDLookAndFeel popup font is DM Sans Regular 13pt — a
-    // 14px row gives 1px vertical padding above/below.
-    return std::make_unique<PopupMenuSnapshot> (lnf, std::move (items), minWidth, /*row h*/ 14);
+    // 24 px row height matches OSDLookAndFeel::getIdealPopupMenuItemSize and
+    // the live JUCE popup. The full 23-row popup overflows the editor's 580 px
+    // height; the --mode output-dropdown handler below extends the canvas
+    // vertically so the overflow renders instead of being clipped.
+    return std::make_unique<PopupMenuSnapshot> (lnf, std::move (items), minWidth, /*row h*/ 24);
 }
 
 //==============================================================================
@@ -890,8 +888,8 @@ int main (int argc, char* argv[])
     {
         auto base = snapshotComponent (*osd, scaleFactor);
         auto pair = buildPresetMenuMock (osd->getOSDLookAndFeel(), processor,
-                                         /*parentWidth*/ 170,
-                                         /*submenuWidth*/ 190);
+                                         /*parentWidth*/ 160,
+                                         /*submenuWidth*/ 116);
         auto parentImg  = snapshotComponent (*pair.parent, scaleFactor);
         auto submenuImg = snapshotComponent (*pair.submenu, scaleFactor);
 
@@ -901,9 +899,10 @@ int main (int argc, char* argv[])
         int parentY = btn.getBottom() + 2;
 
         // Submenu anchored to the right of the parent at the hovered row.
-        // Each category row in the parent uses the default 22px row height,
-        // plus the 6px card padding at the top.
-        int rowH  = 22;
+        // Each category row in the parent uses the default 24px row height
+        // (matches OSDLookAndFeel::getIdealPopupMenuItemSize), plus the 6px
+        // card padding at the top.
+        int rowH  = 24;
         int pad   = 6;
         int hoverIdx = 0;
         auto presets = processor.getCategorizedPresets();
@@ -917,7 +916,10 @@ int main (int argc, char* argv[])
                 ++hoverIdx;
             }
         }
-        int submenuX = parentX + pair.parent->getWidth() - 2;
+        // Submenu sits just to the right of the parent with a 1px gap — the
+        // real JUCE nested popup leaves a hairline visual separation rather
+        // than overlapping the parent border.
+        int submenuX = parentX + pair.parent->getWidth() + 1;
         int submenuY = parentY + pad + hoverIdx * rowH - pad;
 
         // Clamp so both popups stay inside the editor.
@@ -934,22 +936,61 @@ int main (int argc, char* argv[])
     else if (mode == "output-dropdown")
     {
         auto base = snapshotComponent (*osd, scaleFactor);
-        auto mock = buildOutputDropdownMock (osd->getOSDLookAndFeel(), processor, 170);
+        // Popup width 128 px matches the live JUCE popup (sized to the widest
+        // item's text + 2×8 px padding), per the pixel-measured reference at
+        // .context/attachments/Screenshot 2026-04-17 at 15.50.02.png (popup
+        // native bounds: left x=585, right x=713, 24 px rows × 23 items).
+        auto mock = buildOutputDropdownMock (osd->getOSDLookAndFeel(), processor, 128);
         auto mockImg = snapshotComponent (*mock, scaleFactor);
 
-        // Anchor horizontally near the Output Format button, but shift left so the
-        // popup stays inside the editor. Anchor vertically just below the button,
-        // then clamp so the bottom of the mock stays within the editor.
+        // Anchor the popup's LEFT edge at the Output Format button's left edge
+        // and its top just below the button. The real JUCE popup is floated as
+        // a borderless child window, so it can extend past the editor's bottom;
+        // the live reference shows the bottom six rows hanging below the
+        // editor. We mirror that by extending the output canvas vertically
+        // when the popup would otherwise be clipped.
         auto btn = osd->getOutputFormatBoxBounds();
         const int mockW = mock->getWidth();
         const int mockH = mock->getHeight();
-        int anchorX = btn.getRight() - mockW;
+        // Reference pixel-measurements put the popup 1 px left and 1 px up
+        // relative to the naive "btn.getX(), btn.getBottom()+2" anchor — the
+        // JUCE popup nudges itself in by 1 px to sit visually flush with the
+        // ComboBox border rather than butting directly against it.
+        int anchorX = btn.getX() - 1;
         if (anchorX < 4) anchorX = 4;
-        int anchorY = btn.getBottom() + 2;
-        if (anchorY + mockH > osd->getHeight() - 4)
-            anchorY = osd->getHeight() - 4 - mockH;
+        int anchorY = btn.getBottom() + 1;
         if (anchorY < 4) anchorY = 4;
-        result = compositeOverlay (base, mockImg, anchorX, anchorY, scaleFactor);
+
+        int neededHeight = juce::jmax (osd->getHeight(), anchorY + mockH + 2);
+        if (neededHeight > osd->getHeight())
+        {
+            int canvasH = juce::roundToInt (neededHeight * scaleFactor);
+            juce::Image canvas (juce::Image::ARGB, base.getWidth(), canvasH, true);
+            juce::Graphics gc (canvas);
+            gc.fillAll (juce::Colour (0xff000000));
+            gc.drawImageAt (base, 0, 0);
+            result = compositeOverlay (canvas, mockImg, anchorX, anchorY, scaleFactor);
+        }
+        else
+        {
+            result = compositeOverlay (base, mockImg, anchorX, anchorY, scaleFactor);
+        }
+
+        // Match the live reference's exact pixel dimensions (1636×1202 at 2×
+        // scale, i.e. 818×601 native). The editor renders at 820 native, so
+        // the raw composite is 1640 wide — we trim 2 px from each side to
+        // match the captured reference. Vertical extent already matches via
+        // the canvas-extension above.
+        const int targetW = juce::roundToInt (818.0f * scaleFactor);
+        if (result.getWidth() > targetW)
+        {
+            int extra = result.getWidth() - targetW;
+            int trimL = extra / 2;
+            juce::Image trimmed (result.getFormat(), targetW, result.getHeight(), true);
+            juce::Graphics gt (trimmed);
+            gt.drawImageAt (result, -trimL, 0);
+            result = trimmed;
+        }
     }
     else if (mode == "undo-active")
     {
