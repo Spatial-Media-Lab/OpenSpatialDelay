@@ -2,101 +2,105 @@
 
 **File**: `docs/assets/signal-flow.png`
 **Generator**: `docs/generate_signal_flow.py`
-**Canvas**: 2400×1400 (fixed)
+**Current canvas**: 2000×1180 (down from original 2400×1400)
 
-## Observed readability issues
+## Status
 
-1. **Overlapping block text in the Spatialization Engine panel.** `HRTF Convolution`
-   and `Simple Stereo` render on top of each other in the same cell, and the
-   `PartitionedConvolver + ITD / 6 HRTF profiles` sublabel reads as corrupted
-   text because of the collision. This is the worst single readability issue.
-2. **Very small body copy vs. canvas size.** The canvas is 2400×1400 but most
-   sublabels are 12–14 px (DM Sans Regular / JetBrains Mono 12–13). At the size
-   the PNG is actually displayed (github README, manual PDF), the sublabels
-   drop below the legibility threshold.
-3. **Low-contrast helper colours.** `DIM = (100, 105, 120)` is used for every
-   secondary label (sublabels, bottom footer, side notes). It is only ~2.3:1
-   against the `#0A0A14` background — below WCAG AA for normal text.
-4. **Long free-floating annotation lines.** The "back to delay input",
-   "mono sources", "Output: 1-49 channels | Stereo | Binaural | Ambisonics"
-   labels sit without a background panel behind them, so they overlap grid
-   lines and other arrow strokes.
-5. **Legend colour swatches too short.** The three legend strokes (main /
-   dry / feedback) are short line segments with no label weighting — easy to
-   miss as a legend at first glance.
-6. **Inconsistent typographic hierarchy in the Per-Tap / Spatialization /
-   Feedback Path section headers.** They use DM Sans Bold 22 but no visual
-   separator or rule underneath. The eye doesn't register them as section
-   titles vs. block titles.
-7. **Bottom info panels ("Phase Vocoder Details", "Tape Wobble Emulation")**
-   are four-line dense monospace blocks with no framing. They compete with the
-   diagram boxes for attention and make the bottom of the canvas feel busy.
+**In progress — not shipped as finished.** Enough rework has landed to
+close the worst structural/readability issues, but the diagram still has
+visible empty zones inside the canvas. Pick this up in the next session
+and keep tightening until it feels "done" end-to-end.
 
-## Proposed fix plan (not executed yet)
+## What has been done (see commit history on `AndrewRahman/issue-168-backlog`)
 
-Step-ordered so each step produces a visibly better diagram on its own:
+Structural fixes (11-item list from original review):
 
-### Step 1 — Fix the HRTF / Simple Stereo overlap
-Split the Spatialization Engine panel into a **2×4** grid (currently 2×3 with
-the fourth row shared). Layout becomes:
+1. ✅ HRTF Convolution / Simple Stereo overlap fixed — Spatialization Engine
+   is now a clean 2×4 grid, no floating annotations.
+2. ✅ "mono sources" label placed in a BG-filled pill so it punches
+   through panel borders.
+3. ✅ Orphan "Output: 1-49 channels | Stereo | Binaural | Ambisonics"
+   strip removed; format info absorbed into Spat panel subtitle.
+4. ✅ Per-Tap and Feedback intra-group arrows bumped to width=3.
+5. ✅ Dry path rerouted: short arrow from Stereo Input split into a
+   wide-flat Latency Compensation bar, then straight down the narrow
+   right-gutter into Crossfade from the right.
+6. ✅ Feedback return rerouted through the inter-panel corridor (between
+   Spat and Feedback panels) with a "back to delay input" pill above
+   Spat panel's top.
+7. ✅ Removed the misleading direct arrow `Dual Delay Lines →
+   Spatialization Engine` — spat is fed only via Per-Tap output.
+8. ✅ Orphan "Phase Vocoder Details" and "Tape Wobble Emulation"
+   callouts dropped.
+9. ✅ Legend gained a 4th entry explaining group-header colour semantics.
+10. ✅ "x12 taps per delay line" replaced with "12 taps × 2 delay lines
+    (L/R)".
+11. ✅ Legend relocated to bottom-left.
+
+Layout tightening (after user pushed back on initial canvas reduction):
+
+- Canvas 2400×1400 → 2000×1180 (~30% area reduction).
+- All x-coordinates shifted left by 80 (tap_panel_x=40, input_x=970,
+  spat_panel_x=800, fb_panel_x=1480, corridor_x=1460, lg_x=60).
+- Latency Compensation redesigned as a **wide horizontal bar**
+  (680×32 at x=1280–1960, y=split_y centred) rather than a 320×50
+  block floating in empty space. The dry-path horizontal gap is now
+  filled by the bar itself, and the bar's right edge meets the dry
+  descent lane directly (no +40 horizontal offset).
+
+## What still needs attention
+
+The user called the current state unfinished. Voids that remain:
+
+1. **Top-right zone below Latency Compensation bar, above Feedback
+   panel header** — roughly y=232–454, x=1180–1960 = ~820×220 empty
+   region. Candidates: move Legend up into this space, or shrink the
+   vertical chain and pull panels up.
+2. **Bottom-right zone below Feedback panel** — y=854–1180, x=1320–2000.
+   Feedback panel has ~112 px of internal bottom padding because it
+   only holds 3 blocks (Soft Clipper / HP-LP / Feedback Gain) while
+   Per-Tap has 5 and Spat has 8. Options:
+   - Let Feedback panel be shorter than Per-Tap/Spat (break equal-height
+     convention, honest visual weight).
+   - Drop panel height globally (h=400 → h=380 or lower) if Per-Tap
+     block height can tighten.
+3. **Left-of-chain zone** — y=130–430, x=40–870 (left of the vertical
+   Stereo Input → Input Gain → Dual Delay Lines chain, above Per-Tap
+   panel). Currently dead space above the Per-Tap panel and to the
+   left of the main chain.
+4. **Vertical chain gaps** — `split_y→ig_y = 55`, `ig_bottom→dd_y = 40`,
+   `dd_bottom→branch_y = 45`. Each could trim ~10–15 px.
+5. **Legend could be compacted** — currently 540×170. A
+   horizontal-row legend would be tighter.
+
+## Decision points for next session
+
+Before touching more code, the user should pick a direction:
+
+1. **Legend placement**: leave bottom-left (anchors the composition) or
+   move to top-right below LC bar (fills the biggest remaining void but
+   opens a bottom-left void)?
+2. **Panel height policy**: all-equal-h=400 (current) or
+   content-sized-per-panel (Feedback shorter)?
+3. **Aspect target**: is 2000×1180 (~17:10) acceptable, or aim for a
+   tighter 16:9 / 3:2 target?
+
+None of the remaining work is required for the diagram to be
+functionally correct. This is pure compositional tightening.
+
+## Files touched
+
+- `docs/generate_signal_flow.py` — full rewrite of layout routing and
+  Latency Comp representation.
+- `docs/assets/signal-flow.png` — regenerated.
+- `docs/OpenSpatialDelay_Manual_v1.0.docx` / `.pdf` — regenerated to
+  pick up the new diagram in Section 2 "Signal Flow".
+
+## Regenerate commands
 
 ```
-VBAP      DBAP
-VBIP      Ambisonics
-MDAP      HRTF Convolution
-KNN       Simple Stereo
+python3 docs/generate_signal_flow.py
+NODE_PATH=/opt/homebrew/lib/node_modules node docs/generate_manual.js
+soffice --headless --convert-to pdf docs/OpenSpatialDelay_Manual_v1.0.docx \
+  --outdir docs/
 ```
-
-Each block sized to a consistent height so no sublabel collides. The
-`PartitionedConvolver + ITD / 6 HRTF profiles` sublabel moves under
-`HRTF Convolution` only; `Simple Stereo` gets its own short sublabel
-(e.g. `pan law, no filtering`).
-
-### Step 2 — Typography scale bump (2×)
-Because this PNG is displayed at half canvas size in the manual and README:
-- Block titles: 22 → 28
-- Sublabels: 14 → 18
-- JetBrains Mono body: 12 → 14
-- Footer and free-floating labels: 13 → 16
-
-Canvas grows to 2800×1600 to keep whitespace proportional (or keep canvas and
-accept tighter margins — decision during execution).
-
-### Step 3 — Contrast bump on secondary text
-Replace `DIM = (100, 105, 120)` with `DIM = (140, 148, 164)` which is ~3.4:1
-against the background and clears WCAG AA for large text. Also bump
-sublabel colour from `DIM` to `WHITE @ 70% alpha` for block sublabels so they
-don't disappear on retina-scaled renders.
-
-### Step 4 — Panel annotations behind a thin rule
-Wrap "back to delay input", "mono sources", and "Output: 1-49 channels | …"
-in a 1-px stroked rounded rect filled with `BG` so they punch through grid
-lines. No colour change needed.
-
-### Step 5 — Legend visual weight
-Grow legend swatch length from ~40 px to 80 px, add a thin background panel
-behind the legend block, and bump labels to DM Sans Medium 18.
-
-### Step 6 — Section headers
-Add a 1-px `CYAN_DIM` horizontal rule 8 px below each of `Per-Tap Processing`,
-`Spatialization Engine`, `Feedback Path` titles. Same for `Phase Vocoder
-Details` and `Tape Wobble Emulation` bottom-left info panels (or give those
-panels a subtle border).
-
-### Step 7 — Bottom info panels framed
-Give `Phase Vocoder Details` and `Tape Wobble Emulation` proper rounded-rect
-frames so they read as reference callouts rather than loose body text.
-
-## Decision points before execution
-
-- **Canvas size**: keep at 2400×1400 and tighten margins, or grow to
-  2800×1600? Affects README display size. Recommend growing.
-- **Font bump**: straight 2× or a targeted bump of just the body copy?
-  Recommend targeted — block titles already work.
-- **Colour palette**: preserve the cyan / violet / amber mapping
-  (main / feedback / dry) or introduce a fourth hue for the submenu blocks?
-  Recommend preserve.
-
-None of Steps 1–7 should be started until the palette and canvas decisions are
-locked. Step 1 alone closes the worst reported issue; Steps 2–3 are the
-highest-value follow-ups.
