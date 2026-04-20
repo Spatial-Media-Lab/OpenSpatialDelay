@@ -199,8 +199,8 @@ public:
                                         it.isSeparator,
                                         /*isActive*/ true,
                                         it.isHighlighted,
-                                        it.hasSubMenu,
                                         it.isTicked,
+                                        it.hasSubMenu,
                                         it.text,
                                         /*shortcut*/ juce::String(),
                                         /*icon*/ nullptr,
@@ -339,9 +339,10 @@ buildPresetMenuMock (OSDLookAndFeel& lnf,
 
 //==============================================================================
 // Build an output-format dropdown mock that matches the real plugin's popup
-// (issue #168 round 2): juce::ComboBox duplicates the currently-selected item
-// at the top of the popup, followed by a separator, then the full flat list
-// below (with the current item ticked in both positions).
+// (issue #168 rounds 2 + 3): juce::ComboBox shows the currently-selected item
+// at the top of the popup (ticked), followed by a separator, followed by the
+// remaining items in their natural order. The selected item is NOT duplicated
+// in the list below — matching the reference attachment in round 3.
 //==============================================================================
 static std::unique_ptr<PopupMenuSnapshot>
 buildOutputDropdownMock (OSDLookAndFeel& lnf,
@@ -351,7 +352,7 @@ buildOutputDropdownMock (OSDLookAndFeel& lnf,
     std::vector<PopupMenuSnapshot::Item> items;
     int currentFmt = processor.configOutputFormat.load();
 
-    // 1. Current item repeated at the top of the popup (ticked).
+    // 1. Currently-selected item at the top, ticked.
     if (currentFmt >= 0 && currentFmt < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS)
     {
         const auto& cur = OpenSpatialDelayProcessor::outputFormatRegistry[(size_t) currentFmt];
@@ -365,19 +366,20 @@ buildOutputDropdownMock (OSDLookAndFeel& lnf,
         items.push_back (sep);
     }
 
-    // 2. Full flat list — current item ticked again so both occurrences match.
+    // 2. Remaining items — skip the selected one, no ticks on any of them.
     for (int i = 0; i < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS; ++i)
     {
+        if (i == currentFmt) continue;
         const auto& info = OpenSpatialDelayProcessor::outputFormatRegistry[(size_t) i];
         PopupMenuSnapshot::Item it;
-        it.text    = info.name;
-        it.isTicked = (i == currentFmt);
+        it.text = info.name;
         items.push_back (it);
     }
 
-    // Compact row height so the duplicated current item + separator + 23 formats
-    // still fit within the editor height.
-    return std::make_unique<PopupMenuSnapshot> (lnf, std::move (items), minWidth, /*row h*/ 18);
+    // Compact row height so the header + separator + 22 remaining formats
+    // still fit within the editor height — matches the real popup's visual
+    // density in the issue #168 round-3 reference.
+    return std::make_unique<PopupMenuSnapshot> (lnf, std::move (items), minWidth, /*row h*/ 14);
 }
 
 //==============================================================================
@@ -776,7 +778,7 @@ int main (int argc, char* argv[])
     else if (mode == "output-dropdown")
     {
         auto base = snapshotComponent (*osd, scaleFactor);
-        auto mock = buildOutputDropdownMock (osd->getOSDLookAndFeel(), processor, 200);
+        auto mock = buildOutputDropdownMock (osd->getOSDLookAndFeel(), processor, 170);
         auto mockImg = snapshotComponent (*mock, scaleFactor);
 
         // Anchor horizontally near the Output Format button, but shift left so the
