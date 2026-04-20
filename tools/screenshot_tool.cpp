@@ -165,7 +165,7 @@ public:
     };
 
     PopupMenuSnapshot (OSDLookAndFeel& lnf, std::vector<Item> items_, int fixedWidth,
-                       int rowHeight = 22)
+                       int rowHeight = 24)
         : look (lnf), items (std::move (items_)), itemHeight (rowHeight)
     {
         setLookAndFeel (&look);
@@ -198,16 +198,9 @@ public:
             }
             else
             {
-                // Subtle "currently-selected" wash behind the ticked row — matches
-                // the real JUCE popup's pre-selected-item treatment without using
-                // the full cyan highlightedBackgroundColourId (too aggressive for
-                // a static screenshot).
-                if (it.isTicked && ! it.isHighlighted && ! it.isSeparator)
-                {
-                    g.setColour (juce::Colour::fromFloatRGBA (1.0f, 1.0f, 1.0f, 0.08f));
-                    g.fillRect (area);
-                }
-
+                // Note (r3 item 11): the real JUCE popup does NOT wash the
+                // ticked row — it only draws the ✓ glyph. Any extra background
+                // treatment shows up as a visible mismatch vs the live capture.
                 look.drawPopupMenuItem (g, area,
                                         it.isSeparator,
                                         /*isActive*/ true,
@@ -233,7 +226,7 @@ private:
     OSDLookAndFeel& look;
     std::vector<Item> items;
     int itemHeight = 22;
-    static constexpr int kCardPadding = 6;
+    static constexpr int kCardPadding = 1;  // match JUCE's native popup: just 1px inside the 1px border
 };
 
 //==============================================================================
@@ -307,10 +300,10 @@ buildPresetMenuMock (OSDLookAndFeel& lnf,
     }
 
     // Build the parent (category folders) menu.
-    // Issue #168 round 2: tick the category that contains the currently-active
-    // preset, so the parent list mirrors JUCE's real popup (which ticks the
-    // category of the active preset *and* highlights the row where the submenu
-    // is open).
+    // Issue #168 round 3: the real JUCE popup does NOT tick the hovered/open
+    // category — it only highlights the row (cyan fill) to indicate the
+    // submenu is currently open on it. The tick belongs on the active preset
+    // in the submenu, not on its parent category.
     std::vector<PopupMenuSnapshot::Item> parentItems;
     for (const auto& cat : categories)
     {
@@ -318,7 +311,6 @@ buildPresetMenuMock (OSDLookAndFeel& lnf,
         it.text          = cat;
         it.hasSubMenu    = true;
         it.isHighlighted = (cat == hovered);
-        it.isTicked      = (cat == hovered);
         parentItems.push_back (it);
     }
 
@@ -890,8 +882,8 @@ int main (int argc, char* argv[])
     {
         auto base = snapshotComponent (*osd, scaleFactor);
         auto pair = buildPresetMenuMock (osd->getOSDLookAndFeel(), processor,
-                                         /*parentWidth*/ 170,
-                                         /*submenuWidth*/ 190);
+                                         /*parentWidth*/ 160,
+                                         /*submenuWidth*/ 116);
         auto parentImg  = snapshotComponent (*pair.parent, scaleFactor);
         auto submenuImg = snapshotComponent (*pair.submenu, scaleFactor);
 
@@ -901,9 +893,10 @@ int main (int argc, char* argv[])
         int parentY = btn.getBottom() + 2;
 
         // Submenu anchored to the right of the parent at the hovered row.
-        // Each category row in the parent uses the default 22px row height,
-        // plus the 6px card padding at the top.
-        int rowH  = 22;
+        // Each category row in the parent uses the default 24px row height
+        // (matches OSDLookAndFeel::getIdealPopupMenuItemSize), plus the 6px
+        // card padding at the top.
+        int rowH  = 24;
         int pad   = 6;
         int hoverIdx = 0;
         auto presets = processor.getCategorizedPresets();
@@ -917,7 +910,10 @@ int main (int argc, char* argv[])
                 ++hoverIdx;
             }
         }
-        int submenuX = parentX + pair.parent->getWidth() - 2;
+        // Submenu sits just to the right of the parent with a 1px gap — the
+        // real JUCE nested popup leaves a hairline visual separation rather
+        // than overlapping the parent border.
+        int submenuX = parentX + pair.parent->getWidth() + 1;
         int submenuY = parentY + pad + hoverIdx * rowH - pad;
 
         // Clamp so both popups stay inside the editor.

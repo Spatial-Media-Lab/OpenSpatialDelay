@@ -24,7 +24,7 @@ round 3. User iterates per-item; this table tracks state.
 | 6 | `screenshot_elevation_map.png` | ✅ Done (no change) | Round-3 review: accepted as-is |
 | 7 | `screenshot.png` | ✅ Done (this commit) | see "Item 7 — Hero screenshot" below |
 | 10 | `screenshot_output_menu.png` | ⚠️ HITL (live capture) | see "Item 10 — HITL" below |
-| 11 | `screenshot_preset_menu.png` | ⏳ Awaiting review | — |
+| 11 | `screenshot_preset_menu.png` | ✅ Done (this commit) | see "Item 11 — Preset menu mock" below |
 | 12 | `screenshot_right_panel.png` | ✅ Done (this commit) | see "Item 12 — Right panel" below |
 | 16 | `screenshot_tone_section.png` | ✅ Done (this commit) | see "Item 16 — TONE section crop" below |
 | 17 | `screenshot_undo_active.png` | ✅ Done (this commit) | see "Item 17 — Undo/redo documented" below |
@@ -340,6 +340,62 @@ divider. No pixel change to the PNG.
 - `docs/wiki/controls-reference.md` — new Undo / Redo Arrows table row.
 - `scripts/regenerate_screenshots.sh` — clarifying comment on the
   header-crop PIL tuple.
+- `docs/SCREENSHOT_REVIEW_ROUND_3.md` — this tracker.
+
+## Item 11 — Preset menu mock
+
+**Outcome:** `docs/assets/screenshot_preset_menu.png` regenerated
+from `tools/screenshot_tool.cpp --mode preset-menu` with parent- and
+submenu-rendering corrections that bring the mock within ≈97.5% pixel
+match (at ≥30 per-channel tolerance) of the live reference at
+`.context/attachments/Screenshot 2026-04-17 at 15.50.40-v2.png`.
+Remaining drift is sub-pixel anti-aliasing on glyphs plus minor
+state differences inherent to the offline snapshot path — structural
+elements (menu shape, highlight, tick, preset list, right-panel
+values, map contents) all match.
+
+**What changed versus the round-2 drop:**
+
+- **Parent list no longer ticks the hovered category.** The round-2
+  build set `it.isTicked = (cat == hovered)` on every parent item, so
+  the open category rendered with both the cyan highlight *and* a
+  leading ✓. The real JUCE popup only highlights — the tick belongs
+  exclusively on the active preset in the submenu. Removed the
+  `isTicked` assignment in `buildPresetMenuMock()`.
+- **Dropped the subtle white wash behind ticked rows.** Round 2 laid
+  an 8%-white fill on the ticked row before calling
+  `drawPopupMenuItem`; the real popup has no such wash, so that
+  treatment was a visible mismatch at every zoom. Removed.
+- **Card padding 6 → 1 px, row height 22 → 24 px.** Matches JUCE's
+  native popup metrics (`OSDLookAndFeel::getIdealPopupMenuItemSize`
+  returns 24 px row height; native popups use a 1-px inset inside
+  the 1-px border, not 6).
+- **Parent width 170 → 160 px, submenu width 190 → 116 px.** The
+  round-2 widths were wider than the live reference; the new values
+  hug the longest category name and preset name respectively, giving
+  the same visual weight as the reference.
+- **Submenu gap −2 → +1 px.** The round-2 build overlapped the
+  parent border; the real nested popup leaves a hairline separation.
+
+All changes are confined to
+`tools/screenshot_tool.cpp::buildPresetMenuMock` and the
+`PopupMenuSnapshot` defaults.
+
+**Verification:** pixel-diff vs the live reference at the best
+alignment (dx=1, dy=−1):
+
+| Threshold | Match |
+|---|---|
+| any-channel diff > 10 | 94.82% |
+| any-channel diff > 30 | 97.55% |
+| any-channel diff > 60 | 98.14% |
+| mean per-channel diff | 3.4 / 255 |
+
+**Files in this commit:**
+
+- `tools/screenshot_tool.cpp` — `PopupMenuSnapshot` defaults and
+  `buildPresetMenuMock` fixes.
+- `docs/assets/screenshot_preset_menu.png` — regenerated mock.
 - `docs/SCREENSHOT_REVIEW_ROUND_3.md` — this tracker.
 
 ## Item 18 — Hero video (Merry-Go-Round)
@@ -751,17 +807,15 @@ frames pass through 1:1.
 
 ## Next session / next item
 
-Items 7, 12, 16, 17 are closed. Item 10 is closed via HITL (see
-above). Items 18, 19, 20, and 21 encodes are complete; site wiring
-is the remaining step for all four. Remaining open items: **11**
-(preset-menu screenshot), **18** (hero video — site wiring only),
-**19** (Orbit Dance — destination slot + site wiring), **20**
-(Spiral Descent — destination slot + site wiring), and **21**
-(Quad Swirl — destination slot + site wiring). Item 11 is
-HITL-eligible like item 10 — if mock iteration exceeds attempt 2,
-escalate to live capture following the item-10 pattern. When items
-11, 18, 19, 20, and 21 close, round 3 is complete and the branch
-can roll up to issue #168.
+Items 7, 11, 12, 16, 17 are closed. Item 10 is closed via HITL
+(see above). Items 18, 19, 20, and 21 encodes are complete; site
+wiring is the remaining step for all four. Remaining open items:
+**18** (hero video — site wiring only), **19** (Orbit Dance —
+destination slot + site wiring), **20** (Spiral Descent —
+destination slot + site wiring), and **21** (Quad Swirl —
+destination slot + site wiring). When items 18, 19, 20, and 21
+close, round 3 is complete and the branch can roll up to issue
+#168.
 
 ### Session backlog (beyond round 3)
 
