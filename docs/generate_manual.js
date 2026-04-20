@@ -90,6 +90,27 @@ const screenshotSpatialImg = loadImage("screenshot_spatial_map.png");
 const screenshotElevationImg = loadImage("screenshot_elevation_map.png");
 const screenshotBottomImg = loadImage("screenshot_bottom_panel.png");
 
+// Trajectory reference renders (13 shapes, map-only captures at 1112x816)
+const TRAJECTORY_SHAPES = [
+  { key: "bounce",   label: "Bounce" },
+  { key: "circle",   label: "Circle" },
+  { key: "cross",    label: "Cross" },
+  { key: "figure8",  label: "Figure-8" },
+  { key: "heart",    label: "Heart" },
+  { key: "helix",    label: "Helix" },
+  { key: "infinity", label: "Infinity" },
+  { key: "line",     label: "Line" },
+  { key: "orbit",    label: "Orbit" },
+  { key: "random",   label: "Random" },
+  { key: "spiral",   label: "Spiral" },
+  { key: "square",   label: "Square" },
+  { key: "triangle", label: "Triangle" },
+];
+const trajectoryImgs = TRAJECTORY_SHAPES.map(s => ({
+  ...s,
+  img: loadImage(path.join("trajectories", `traj_${s.key}.png`)),
+}));
+
 // ============================================================================
 // SECTION NUMBERING
 // ============================================================================
@@ -1169,7 +1190,91 @@ function buildTrajectories() {
     "Try setting 4 taps on Orbit at different speeds (0.5\u00d7, 1.0\u00d7, 1.5\u00d7, 2.0\u00d7) for a mesmerizing rotating delay pattern. With feedback above 50%, the trails create evolving spatial textures.",
   ], C.amber));
 
+  // Trajectory shape gallery — 3-col × 5-row grid of map-only reference renders
+  items.push(spacer(10));
+  items.push(heading2("Trajectory Shape Reference", "trajectory-shapes"));
+  items.push(bodyPara("Each reference shows one tap at origin (az=0\u00b0, el=0\u00b0, distance=0.5) running the named shape. The glow trail is drawn at full brightness to show the full path."));
+  items.push(spacer(6));
+  items.push(trajectoryGalleryTable(trajectoryImgs));
+
   return items;
+}
+
+// ============================================================================
+// HELPER: TRAJECTORY GALLERY TABLE (3-col grid with caption cells)
+// ============================================================================
+
+function trajectoryGalleryTable(shapes) {
+  const NUM_COLS = 3;
+  const COL_W = Math.floor(CONTENT_W / NUM_COLS);
+  const colWidths = new Array(NUM_COLS).fill(COL_W);
+  colWidths[NUM_COLS - 1] += CONTENT_W - colWidths.reduce((a, b) => a + b, 0);
+
+  // Image sizing: cell is ~3008 DXA (≈ 200pts). Use 150x110pts per image, aspect 1.363.
+  const IMG_W = 150;
+  const IMG_H = 110;
+
+  function imageCell(shape) {
+    const children = [];
+    if (shape.img) {
+      children.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 40 },
+        children: [new ImageRun({
+          type: "png",
+          data: shape.img,
+          transformation: { width: IMG_W, height: IMG_H },
+          altText: {
+            title: `${shape.label} trajectory`,
+            description: `Spatial map showing the ${shape.label} trajectory path`,
+            name: `traj-${shape.key}`,
+          },
+        })],
+      }));
+    } else {
+      children.push(new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 40 },
+        children: [dimText(`[ ${shape.label} ]`)],
+      }));
+    }
+    children.push(new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 0, after: 60 },
+      children: [new TextRun({ text: shape.label, font: FONT_BODY, size: 18, color: C.subheading, bold: true })],
+    }));
+    return children;
+  }
+
+  function emptyCell() {
+    return [new Paragraph({ children: [] })];
+  }
+
+  const rows = [];
+  for (let r = 0; r < Math.ceil(shapes.length / NUM_COLS); r++) {
+    const cells = [];
+    for (let c = 0; c < NUM_COLS; c++) {
+      const idx = r * NUM_COLS + c;
+      const children = idx < shapes.length ? imageCell(shapes[idx]) : emptyCell();
+      cells.push(new TableCell({
+        borders: noBorders,
+        margins: { top: 100, bottom: 100, left: 80, right: 80 },
+        width: { size: colWidths[c], type: WidthType.DXA },
+        children,
+      }));
+    }
+    rows.push(new TableRow({ children: cells }));
+  }
+
+  return new Table({
+    width: { size: CONTENT_W, type: WidthType.DXA },
+    columnWidths: colWidths,
+    borders: {
+      top: noBorder, bottom: noBorder, left: noBorder, right: noBorder,
+      insideHorizontal: noBorder, insideVertical: noBorder,
+    },
+    rows,
+  });
 }
 
 // ============================================================================
