@@ -27,7 +27,7 @@ round 3. User iterates per-item; this table tracks state.
 | 11 | `screenshot_preset_menu.png` | ⏳ Awaiting review | — |
 | 12 | `screenshot_right_panel.png` | ✅ Done (this commit) | see "Item 12 — Right panel" below |
 | 16 | `screenshot_tone_section.png` | ✅ Done (this commit) | see "Item 16 — TONE section crop" below |
-| 17 | `screenshot_undo_active.png` | ⏳ Awaiting review | — |
+| 17 | `screenshot_undo_active.png` | ✅ Done (this commit) | see "Item 17 — Undo/redo documented" below |
 
 Investigation-only: `screenshot_shimmer.png` (14) — confirmed still in use
 on the personal site; no change required.
@@ -276,13 +276,75 @@ purely a crop-bounds tighten.
   `./build/screenshot_tool docs/assets/screenshot_tone_section.png 2.0
   --preset "Quad Ping-Pong" --mode tone-section --showcase`.
 
+## Item 17 — Undo/redo documented
+
+**Outcome:** the round-2 code fix (remove the trailing
+`performInternalUndo()` call from `populateUndoHistory()` so only the
+undo arrow is active) already landed in commit `904fa8a` — the
+`screenshot_undo_active.png` asset was correct on disk for this
+round. The round-3 work that closes the item is therefore *not*
+another edit to the capture tool; it is documentation + a crop
+refinement to the asset that the user-facing docs actually consume.
+
+**Orphan-asset note:** `screenshot_undo_active.png` itself is
+produced by `scripts/regenerate_screenshots.sh:72` but is not
+currently embedded by any user-facing file — not
+`docs/generate_manual.js`, not `docs/wiki/`, not the README, not the
+andrewrahman.com site. It was added in round 1 as part of a batch of
+"tool-capability" capture modes. Kept in place (still produced by the
+regen script) so a future manual-update pass can claim it; no
+deletion in this commit.
+
+**What user-facing docs got instead:**
+
+`docs/generate_manual.js` already embeds `screenshot_header.png` in
+the "Controls Reference → Header Bar" section of the .docx manual.
+That image carries the hero state (undo arrow active, redo arrow
+dim), so it already *visually* documents the undo / redo pair — but
+the narrative and the caption skipped them entirely. Fixed in this
+commit:
+
+- **Caption** (`generate_manual.js` line ~968) — extended to mention
+  "undo / redo arrows" alongside title, preset navigation, OSC toggle,
+  Output Format, and Algorithm/HRTF.
+- **Narrative** (`generate_manual.js` lines ~970–982) — bolded
+  "undo / redo arrows" inserted between preset navigation and the OSC
+  toggle (matching physical header order), with a one-line gloss:
+  *step backwards or forwards through recent parameter changes —
+  dimmed when the corresponding history is empty*.
+
+`docs/wiki/controls-reference.md` had a parallel gap — the Header Bar
+table enumerates every other control (Preset Name, Prev/Next Arrows,
+Save, OSC RECV, Output Format, Algorithm / HRTF Profile, SML Badge)
+but not the undo/redo pair. Fixed by adding an **Undo / Redo Arrows**
+row between Save and OSC RECV, noting that each arrow is dimmed when
+its history is empty (undo activates after the first parameter
+change, redo activates only after an undo).
+
+**Asset refinement:** `screenshot_header.png` is produced as a PIL
+crop of `screenshot.png` at `(0, 0, 1640, 104)` — that bound was
+already correct, but the comment in
+`scripts/regenerate_screenshots.sh` did not say so, making the
+relationship to the header/map divider (drawn at scaled y=103,
+native y=52 via `kHeaderHeight`) unclear for future editors. Added a
+one-line note to the crop tuple explaining that the bound ends at the
+divider. No pixel change to the PNG.
+
+**Files in this commit:**
+
+- `docs/generate_manual.js` — caption + narrative additions.
+- `docs/wiki/controls-reference.md` — new Undo / Redo Arrows table row.
+- `scripts/regenerate_screenshots.sh` — clarifying comment on the
+  header-crop PIL tuple.
+- `docs/SCREENSHOT_REVIEW_ROUND_3.md` — this tracker.
+
 ## Next session / next item
 
-Items 7, 12, 16 are closed. Item 10 is closed via HITL (see above).
-Remaining open items: **11, 17**. Item 11 is HITL-eligible like item
-10 — if mock iteration exceeds attempt 2, escalate to live capture
-following the item-10 pattern. Item 17 is an independent
-`populateUndoHistory()` change; no cascade dependencies.
+Items 7, 12, 16, 17 are closed. Item 10 is closed via HITL (see
+above). Remaining open item: **11**. Item 11 is HITL-eligible like
+item 10 — if mock iteration exceeds attempt 2, escalate to live
+capture following the item-10 pattern. When item 11 closes, round 3
+is complete and the branch can roll up to issue #168.
 
 ## Files the next session needs
 
