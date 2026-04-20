@@ -26,7 +26,7 @@ round 3. User iterates per-item; this table tracks state.
 | 10 | `screenshot_output_menu.png` | ⚠️ HITL (live capture) | see "Item 10 — HITL" below |
 | 11 | `screenshot_preset_menu.png` | ⏳ Awaiting review | — |
 | 12 | `screenshot_right_panel.png` | ✅ Done (this commit) | see "Item 12 — Right panel" below |
-| 16 | `screenshot_tone_section.png` | ⏳ Awaiting review | — |
+| 16 | `screenshot_tone_section.png` | ✅ Done (this commit) | see "Item 16 — TONE section crop" below |
 | 17 | `screenshot_undo_active.png` | ⏳ Awaiting review | — |
 
 Investigation-only: `screenshot_shimmer.png` (14) — confirmed still in use
@@ -253,13 +253,36 @@ cascade), and `screenshot_annotated_source.png` +
 annotated overlay and its PIL output — re-emitted from the same regen
 run so they agree with the current code).
 
+## Item 16 — TONE section crop
+
+**Outcome:** `getToneSectionBoundsForScreenshot()` in
+`Source/PluginEditor.cpp` had `padBottom` reduced from 6 to 0. At 6 px
+the top edge of the MIX / AIR pill below TONE was bleeding into the
+bottom-right of the crop; 0 px makes the bottom cut flush at the
+readout line ("HP 120  Res 0.10   LP 4.0k  Res 8.00"). No other layout
+constants changed — the top padding, horizontal padding, and header /
+graph / readout heights all keep the round-2 values.
+
+The round-2 content requirements (FLT **on**, min-Q one side / max-Q
+the other) were already satisfied via the hero cascade — this item is
+purely a crop-bounds tighten.
+
+**Files in this commit:**
+
+- `Source/PluginEditor.cpp` — `padBottom = 0` + comment annotation
+  explaining the round-3 reason.
+- `docs/assets/screenshot_tone_section.png` — regenerated from the
+  rebuilt `screenshot_tool` via
+  `./build/screenshot_tool docs/assets/screenshot_tone_section.png 2.0
+  --preset "Quad Ping-Pong" --mode tone-section --showcase`.
+
 ## Next session / next item
 
-Items 7 and 12 are closed. Item 10 is closed via HITL (see above).
-Remaining open items: **11, 16, 17**. Item 11 is HITL-eligible like
-item 10 — if mock iteration exceeds attempt 2, escalate to live
-capture following the item-10 pattern. Items 16 and 17 are independent
-of the hero cascade.
+Items 7, 12, 16 are closed. Item 10 is closed via HITL (see above).
+Remaining open items: **11, 17**. Item 11 is HITL-eligible like item
+10 — if mock iteration exceeds attempt 2, escalate to live capture
+following the item-10 pattern. Item 17 is an independent
+`populateUndoHistory()` change; no cascade dependencies.
 
 ## Files the next session needs
 
