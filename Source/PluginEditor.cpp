@@ -3450,9 +3450,11 @@ juce::Rectangle<int> OpenSpatialDelayEditor::getToneSectionBoundsForScreenshot()
     // TONE section spans: header (14px) + 6px pad + filter graph (104px) + 22px readout
     // Round-2 review (#168): padding tightened to 6px top/bottom so the filter
     // graph fills the frame and doesn't look small inside a large crop.
+    // Round-3 review (#168 item 16): padBottom dropped to 0 to cut flush at
+    // the readout — at 6px the top corner of MIX/AIR was bleeding in.
     // Horizontal 10px padding retained for breathing room.
     const int padTop    = 6;
-    const int padBottom = 6;
+    const int padBottom = 0;
     const int padX      = 10;
     int top    = toneHeaderY - padTop;
     int height = padTop + 14 + 6 + 104 + 22 + padBottom;
