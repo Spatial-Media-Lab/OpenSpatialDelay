@@ -346,6 +346,25 @@ item 10 — if mock iteration exceeds attempt 2, escalate to live
 capture following the item-10 pattern. When item 11 closes, round 3
 is complete and the branch can roll up to issue #168.
 
+### Session backlog (beyond round 3)
+
+Captured during round-3 work, not tied to any specific issue #168 item:
+
+- **Signal-flow diagram rework.** `.context/attachments/signal-flow.png`
+  has "several issues" (per user) that need heavy revision. Not started;
+  issue list not yet captured — the user will describe when we return.
+- **Trajectory screenshots.** Prior attempt lives in
+  `docs/assets/trajectories/` (14 files: `traj_bounce.png`, `traj_circle.png`,
+  `traj_cross.png`, `traj_figure8.png`, `traj_heart.png`, `traj_helix.png`,
+  `traj_infinity.png`, `traj_line.png`, `traj_none.png`, `traj_orbit.png`,
+  `traj_random.png`, `traj_spiral.png`, `traj_square.png`,
+  `traj_triangle.png`). Per user those are incorrect and the set needs
+  to be regenerated. The new `preset-showcase` machinery
+  (`tools/screenshot_tool.cpp` `pumpTrajectories()` +
+  `setDrawFullTrajectoryForScreenshot`) is the right starting point —
+  each trajectory shape needs its own capture with the shape enabled,
+  the tap selected, and the trail rendered.
+
 ## Files the next session needs
 
 - Branch `AndrewRahman/screenshots-r2` (checked out in the `tallinn`

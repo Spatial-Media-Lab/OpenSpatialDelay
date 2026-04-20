@@ -26,6 +26,9 @@
 //   preset-menu       — Editor with nested preset menu (folders + expanded submenu)
 //   output-dropdown   — Editor with the Output Format dropdown (flat list)
 //   undo-active       — Editor with populated undo history (undo active, redo inactive)
+//   preset-showcase   — Full editor for a loaded preset with trajectory trails
+//                       rendered (--output-format / --surround-algo / --stereo-mode
+//                       / --hrtf-profile select the header state)
 //   annotated-source  — Showcase state + Global Drawer open + undo history populated.
 //                       Source image for the annotated callout overlay (issue #168 r3).
 //   hero              — Hero screenshot for docs/README: showcase + drawer open +
@@ -562,6 +565,70 @@ static void populateUndoHistory (OpenSpatialDelayProcessor& processor)
 }
 
 //==============================================================================
+// Preset-showcase helpers (round-3 item 18+): resolve user-facing output /
+// algorithm / HRTF / stereo-mode names to their integer indices, and pump the
+// processor so trajectory.tick() advances each object's TrajectoryState. Used
+// by the --mode preset-showcase capture path.
+//==============================================================================
+static int resolveOutputFormatIndex (const juce::String& name)
+{
+    for (int i = 0; i < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS; ++i)
+    {
+        const auto& info = OpenSpatialDelayProcessor::outputFormatRegistry[(size_t) i];
+        if (juce::String (info.name).equalsIgnoreCase (name)) return i;
+    }
+    return -1;
+}
+
+// Surround algorithm names in the order stored in OpenSpatialDelayProcessor::algorithms[0..6].
+static const char* const kSurroundAlgoNames[] = {
+    "Ambisonics", "Constant Power", "DBAP", "KNN", "MDAP", "VBAP", "VBIP"
+};
+
+static int resolveSurroundAlgoIndex (const juce::String& name)
+{
+    for (int i = 0; i < 7; ++i)
+        if (name.equalsIgnoreCase (kSurroundAlgoNames[i])) return i;
+    return -1;
+}
+
+// Stereo modes (configAlgorithm = 7 + stereoMode). Stored in the switch at
+// PluginProcessor.cpp ~L5102: 0=Equal Power, 1=VBAP, 2=XY, 3=MS, 4=Blumlein.
+static const char* const kStereoModeNames[] = {
+    "Equal Power", "VBAP", "XY Pair", "MS Encode", "Blumlein"
+};
+
+static int resolveStereoModeIndex (const juce::String& name)
+{
+    for (int i = 0; i < 5; ++i)
+        if (name.equalsIgnoreCase (kStereoModeNames[i])) return i;
+    return -1;
+}
+
+static int resolveHrtfProfileIndex (const juce::String& name)
+{
+    for (int i = 0; i < OpenSpatialDelayProcessor::NUM_HRTF_PROFILES; ++i)
+        if (name.equalsIgnoreCase (OpenSpatialDelayProcessor::hrtfProfileNames[i])) return i;
+    return -1;
+}
+
+// Run the processor for N blocks of silent audio so trajectory.tick() advances.
+// Required because getTrajectoryState() reports all zeros in a freshly-loaded
+// processor — the map's trail renders nothing until the engine has ticked.
+// Block count translates to simulated time: N blocks × 512 samples / 48 kHz.
+static void pumpTrajectories (OpenSpatialDelayProcessor& processor, int numBlocks)
+{
+    const int blockSize = 512;
+    juce::AudioBuffer<float> buffer (16, blockSize);  // plugin may route up to 16 out channels
+    juce::MidiBuffer midi;
+    for (int n = 0; n < numBlocks; ++n)
+    {
+        buffer.clear();
+        processor.processBlock (buffer, midi);
+    }
+}
+
+//==============================================================================
 // Simple, clean PNG writer.
 //==============================================================================
 static bool savePng (const juce::Image& image, const juce::File& out, float scale)
@@ -605,6 +672,10 @@ int main (int argc, char* argv[])
     juce::String presetArg;
     juce::String mode = "full";
     bool showcase = false;
+    juce::String outputFormatArg;   // --output-format "9.1.6 Atmos"
+    juce::String surroundAlgoArg;   // --surround-algo "VBAP"
+    juce::String stereoModeArg;     // --stereo-mode "XY Pair"
+    juce::String hrtfProfileArg;    // --hrtf-profile "Studio Reference"
 
     std::vector<juce::String> positional;
     for (int i = 1; i < argc; ++i)
@@ -619,10 +690,14 @@ int main (int argc, char* argv[])
                           << factoryPresets[j].name.toStdString() << "\n";
             return 0;
         }
-        else if (a == "--preset"   && i + 1 < argc) { presetArg = juce::String (argv[++i]); }
-        else if (a == "--mode"     && i + 1 < argc) { mode      = juce::String (argv[++i]); }
-        else if (a == "--showcase")                 { showcase  = true; }
-        else if (! a.startsWith ("--"))             { positional.push_back (a); }
+        else if (a == "--preset"        && i + 1 < argc) { presetArg       = juce::String (argv[++i]); }
+        else if (a == "--mode"          && i + 1 < argc) { mode            = juce::String (argv[++i]); }
+        else if (a == "--showcase")                      { showcase        = true; }
+        else if (a == "--output-format" && i + 1 < argc) { outputFormatArg = juce::String (argv[++i]); }
+        else if (a == "--surround-algo" && i + 1 < argc) { surroundAlgoArg = juce::String (argv[++i]); }
+        else if (a == "--stereo-mode"   && i + 1 < argc) { stereoModeArg   = juce::String (argv[++i]); }
+        else if (a == "--hrtf-profile"  && i + 1 < argc) { hrtfProfileArg  = juce::String (argv[++i]); }
+        else if (! a.startsWith ("--"))                  { positional.push_back (a); }
     }
 
     if (positional.size() > 0) outputPath = positional[0];
@@ -667,6 +742,91 @@ int main (int argc, char* argv[])
             processor.loadPreset (runtimeIdx);
             std::cout << "Loaded preset: " << names[runtimeIdx].toStdString() << "\n";
         }
+    }
+
+    // ── Output format / algorithm / HRTF overrides ────────────────────────
+    // Applied AFTER preset load so CLI flags win over the preset's stored
+    // values (presets do not touch configOutputFormat or configAlgorithm).
+    int selectedOutputIdx = -1;
+    if (outputFormatArg.isNotEmpty())
+    {
+        selectedOutputIdx = resolveOutputFormatIndex (outputFormatArg);
+        if (selectedOutputIdx < 0)
+        {
+            std::cerr << "Error: unknown --output-format: "
+                      << outputFormatArg.toStdString() << "\n";
+            return 1;
+        }
+        processor.configOutputFormat.store (selectedOutputIdx, std::memory_order_relaxed);
+        processor.markConfigStateDirty();
+        processor.requestOutputFormatChange (selectedOutputIdx);
+    }
+    else
+    {
+        selectedOutputIdx = processor.configOutputFormat.load (std::memory_order_relaxed);
+    }
+
+    // configAlgorithm is multiplexed by output format:
+    //   - Surround: 0..6 (Ambisonics, Constant Power, DBAP, KNN, MDAP, VBAP, VBIP)
+    //   - Stereo:   7..11 (Equal Power, VBAP, XY Pair, MS Encode, Blumlein)
+    //   - Binaural: configHrtfProfile is a separate field
+    const auto& selectedInfo
+        = OpenSpatialDelayProcessor::outputFormatRegistry[(size_t) juce::jlimit (
+            0, OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS - 1, selectedOutputIdx)];
+    const bool isStereo   = selectedInfo.isStereoVariant;
+    const bool isBinaural = (selectedInfo.format == OpenSpatialDelayProcessor::OutputFormat::Binaural);
+
+    if (stereoModeArg.isNotEmpty())
+    {
+        if (! isStereo)
+        {
+            std::cerr << "Error: --stereo-mode only applies when --output-format is Stereo.\n";
+            return 1;
+        }
+        int m = resolveStereoModeIndex (stereoModeArg);
+        if (m < 0)
+        {
+            std::cerr << "Error: unknown --stereo-mode: "
+                      << stereoModeArg.toStdString() << "\n";
+            return 1;
+        }
+        processor.configAlgorithm.store (7 + m, std::memory_order_relaxed);
+        processor.markConfigStateDirty();
+    }
+    else if (surroundAlgoArg.isNotEmpty())
+    {
+        if (isStereo || isBinaural)
+        {
+            std::cerr << "Error: --surround-algo does not apply when --output-format is Stereo or Binaural.\n";
+            return 1;
+        }
+        int a = resolveSurroundAlgoIndex (surroundAlgoArg);
+        if (a < 0)
+        {
+            std::cerr << "Error: unknown --surround-algo: "
+                      << surroundAlgoArg.toStdString() << "\n";
+            return 1;
+        }
+        processor.configAlgorithm.store (a, std::memory_order_relaxed);
+        processor.markConfigStateDirty();
+    }
+
+    if (hrtfProfileArg.isNotEmpty())
+    {
+        if (! isBinaural)
+        {
+            std::cerr << "Error: --hrtf-profile only applies when --output-format is Binaural.\n";
+            return 1;
+        }
+        int h = resolveHrtfProfileIndex (hrtfProfileArg);
+        if (h < 0)
+        {
+            std::cerr << "Error: unknown --hrtf-profile: "
+                      << hrtfProfileArg.toStdString() << "\n";
+            return 1;
+        }
+        processor.configHrtfProfile.store (h, std::memory_order_relaxed);
+        processor.markConfigStateDirty();
     }
 
     // OSC Receive: leave enabled for visual completeness (--showcase overrides
@@ -801,6 +961,21 @@ int main (int argc, char* argv[])
         osd->syncForScreenshot();  // triggers timerCallback → updateUndoButtons
         result = snapshotComponent (*osd, scaleFactor);
     }
+    else if (mode == "preset-showcase")
+    {
+        // Per-preset showcase: render the plugin as configured by the loaded
+        // preset, advance trajectories so any animated shape has a visible
+        // trail, and draw the full path at peak brightness for a still frame.
+        // Output format / algorithm / stereo-mode / HRTF come from CLI flags
+        // applied above — no synthetic state, no drawer, no showcase glow.
+        // 60 blocks @ 512 samples / 48 kHz ≈ 0.64 s of ticking, which puts
+        // trajectories comfortably past their origin so their shape is legible.
+        pumpTrajectories (processor, 60);
+        osd->syncForScreenshot();
+        auto& map = osd->getSpatialMapForScreenshot();
+        map.setDrawFullTrajectoryForScreenshot (true);
+        result = snapshotComponent (*osd, scaleFactor);
+    }
     else if (mode == "annotated-source")
     {
         // Source image for the callout overlay (issue #168 r3). Combines the
@@ -922,7 +1097,7 @@ int main (int argc, char* argv[])
         std::cerr << "Valid modes: full, drawer-open, tone-section, osc-section,\n"
                      "             save-overlay, preset-menu, output-dropdown,\n"
                      "             undo-active, annotated-source, hero,\n"
-                     "             spatial-map, elevation-map\n";
+                     "             preset-showcase, spatial-map, elevation-map\n";
         return 1;
     }
 
