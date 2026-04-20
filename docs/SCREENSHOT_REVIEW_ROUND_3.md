@@ -25,7 +25,7 @@ round 3. User iterates per-item; this table tracks state.
 | 7 | `screenshot.png` | ✅ Done (this commit) | see "Item 7 — Hero screenshot" below |
 | 10 | `screenshot_output_menu.png` | ⚠️ HITL (live capture) | see "Item 10 — HITL" below |
 | 11 | `screenshot_preset_menu.png` | ⏳ Awaiting review | — |
-| 12 | `screenshot_right_panel.png` | ⏳ Awaiting review | — |
+| 12 | `screenshot_right_panel.png` | ✅ Done (this commit) | see "Item 12 — Right panel" below |
 | 16 | `screenshot_tone_section.png` | ⏳ Awaiting review | — |
 | 17 | `screenshot_undo_active.png` | ⏳ Awaiting review | — |
 
@@ -222,13 +222,44 @@ Root causes of the agent's misreads:
 - Compare against `.context/attachments/Screenshot 2026-04-17 at
   15.50.02-v1.png` at ≥200 % zoom pixel-diff before claiming a match.
 
+## Item 12 — Right panel
+
+**Outcome:** passed as-is on the first review pass this session — no
+code changes required. The item-7 hero state already carries every
+toggle the round-2 spec demanded; the round-3 session simply re-ran
+`scripts/regenerate_screenshots.sh` so the PIL cascade picked up the
+new `screenshot.png` and produced a current `screenshot_right_panel.png`.
+
+**What the crop shows (round-2 spec lines 159–173):**
+
+- DELAY — Sync **on** (yellow), Triplet **on** (lit 3-notes toggle);
+  TIME 1/4, FEEDBACK 55%.
+- MOD — toggle **on**; Amount 55%, Morph 40% (both non-zero).
+- TONE / FLT — toggle **on**; filter graph shows a clear asymmetric
+  Q curve: HP Res 0.10 (flat slope) paired with LP Res 8.00 (sharp
+  resonant peak around 4 kHz).
+- MIX / AIR — toggle **on**; DRY/WET 65%, OUTPUT 0.0 dB.
+
+Crop bounds from the Python block in `regenerate_screenshots.sh`
+(x 1112–1640, y 104–1018) were already correct from round 2; no
+change to the crop maths.
+
+**Ancillary files synced in this commit (regen-only, no semantic
+change):** `screenshot_full.png` (copy of `screenshot.png`, was out
+of sync after item 7), `screenshot_header.png` and
+`screenshot_bottom_panel.png` (sibling PIL crops from the same
+cascade), and `screenshot_annotated_source.png` +
+`screenshot_annotated.png` (the hero-state-plus-drawer source for the
+annotated overlay and its PIL output — re-emitted from the same regen
+run so they agree with the current code).
+
 ## Next session / next item
 
-Item 7 is closed. Item 10 is closed via HITL (see above). Remaining
-open items: **11, 12, 16, 17**. User has been choosing the next item
-to review, so the next session should prompt with the outstanding list
-and wait for the pick. Note the downstream cascade above before
-touching item 12.
+Items 7 and 12 are closed. Item 10 is closed via HITL (see above).
+Remaining open items: **11, 16, 17**. Item 11 is HITL-eligible like
+item 10 — if mock iteration exceeds attempt 2, escalate to live
+capture following the item-10 pattern. Items 16 and 17 are independent
+of the hero cascade.
 
 ## Files the next session needs
 
