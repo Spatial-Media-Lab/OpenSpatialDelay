@@ -32,12 +32,11 @@ if [ ! -x "$TOOL" ]; then
     cmake --build build --target screenshot_tool -j"$(sysctl -n hw.ncpu)"
 fi
 
+mkdir -p "$OUT_DIR/presets"
+
 # Presets chosen per screenshot for visual clarity:
 MAIN_PRESET="Quad Ping-Pong"          # 4 taps at cardinal positions — baseline preset
 PRESET_MENU_PRESET="Merry-Go-Round"   # nested submenu demo — Spatial Movement category (issue #168 r2)
-ELEVATION_PRESET="Hemisphere Spread"  # varied elevations — feature showcase
-WOBBLE_PRESET="Tape Wow"              # wobble section engaged
-SHIMMER_PRESET="Shimmer"              # shimmer preset for feature screenshot
 
 echo ""
 echo "=== Regenerating screenshots ==="
@@ -74,10 +73,28 @@ cp "$OUT_DIR/screenshot.png" "$OUT_DIR/screenshot_full.png"
 # history populated. annotate_screenshot.py reads this as its SRC.
 "$TOOL" "$OUT_DIR/screenshot_annotated_source.png" "$SCALE" --preset "$MAIN_PRESET"    --mode annotated-source
 
-# --- Per-preset feature captures (full editor, different preset each) -------
-"$TOOL" "$OUT_DIR/screenshot_elevation.png"     "$SCALE" --preset "$ELEVATION_PRESET" --mode full
-"$TOOL" "$OUT_DIR/screenshot_wobble.png"        "$SCALE" --preset "$WOBBLE_PRESET"    --mode full
-"$TOOL" "$OUT_DIR/screenshot_shimmer.png"       "$SCALE" --preset "$SHIMMER_PRESET"   --mode full
+# --- Per-preset showcase captures (preset-showcase mode) --------------------
+# One screenshot per preset, each with a distinct output-format / algorithm
+# (or stereo-mode / HRTF-profile) combination so the full set reads as a
+# slideshow of what the plugin can do. preset-showcase mode pumps the
+# processor so trajectory.tick() advances — any animated shape's trail is
+# visible in the still frame via setDrawFullTrajectoryForScreenshot.
+"$TOOL" "$OUT_DIR/presets/merry-go-round.png"    "$SCALE" --preset "Merry-Go-Round"    --mode preset-showcase --output-format "9.1.4 Atmos"    --surround-algo "VBAP"
+"$TOOL" "$OUT_DIR/presets/multi-tap-cascade.png" "$SCALE" --preset "Multi-Tap Cascade" --mode preset-showcase --output-format "7.1 Surround"   --surround-algo "Constant Power"
+"$TOOL" "$OUT_DIR/presets/spiral-descent.png"    "$SCALE" --preset "Spiral Descent"    --mode preset-showcase --output-format "7.1.4 Atmos"    --surround-algo "MDAP"
+"$TOOL" "$OUT_DIR/presets/random-walk.png"       "$SCALE" --preset "Random Walk"       --mode preset-showcase --output-format "5.1.2 Atmos"    --surround-algo "KNN"
+"$TOOL" "$OUT_DIR/presets/kaleidoscope.png"      "$SCALE" --preset "Kaleidoscope"      --mode preset-showcase --output-format "Octaphonic"     --surround-algo "VBIP"
+"$TOOL" "$OUT_DIR/presets/frozen-cascade.png"    "$SCALE" --preset "Frozen Cascade"    --mode preset-showcase --output-format "9.1.6 Atmos"    --surround-algo "DBAP"
+"$TOOL" "$OUT_DIR/presets/grain-cloud.png"       "$SCALE" --preset "Grain Cloud"       --mode preset-showcase --output-format "4th Order Ambi"
+"$TOOL" "$OUT_DIR/presets/dome-ring.png"         "$SCALE" --preset "Dome Ring"         --mode preset-showcase --output-format "SpatialMediaLab 13.1" --surround-algo "MDAP"
+"$TOOL" "$OUT_DIR/presets/atmos-7-1-4.png"       "$SCALE" --preset "Atmos 7.1.4"       --mode preset-showcase --output-format "7.1.4 Atmos"    --surround-algo "Constant Power"
+"$TOOL" "$OUT_DIR/presets/micro-delay.png"       "$SCALE" --preset "Micro Delay"       --mode preset-showcase --output-format "Binaural"       --hrtf-profile "Studio Reference"
+"$TOOL" "$OUT_DIR/presets/offbeat-pong.png"      "$SCALE" --preset "Offbeat Pong"      --mode preset-showcase --output-format "Stereo"         --stereo-mode "XY Pair"
+"$TOOL" "$OUT_DIR/presets/west-african-bell.png" "$SCALE" --preset "West African Bell" --mode preset-showcase --output-format "Quadraphonic"   --surround-algo "VBAP"
+"$TOOL" "$OUT_DIR/presets/cinquillo.png"         "$SCALE" --preset "Cinquillo"         --mode preset-showcase --output-format "5.0 Surround"   --surround-algo "KNN"
+"$TOOL" "$OUT_DIR/presets/shimmer.png"           "$SCALE" --preset "Shimmer"           --mode preset-showcase --output-format "2nd Order Ambi"
+"$TOOL" "$OUT_DIR/presets/hemisphere-spread.png" "$SCALE" --preset "Hemisphere Spread" --mode preset-showcase --output-format "7.1.2 Atmos"    --surround-algo "VBIP"
+"$TOOL" "$OUT_DIR/presets/tape-wow.png"          "$SCALE" --preset "Tape Wow"          --mode preset-showcase --output-format "Binaural"       --hrtf-profile "Immersive"
 
 # --- PIL crops derived from the full editor screenshot ----------------------
 # Native plugin dimensions: 820 x 580. At scale=2, image is 1640 x 1160.
