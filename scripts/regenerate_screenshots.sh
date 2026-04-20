@@ -99,7 +99,7 @@ cp "$OUT_DIR/screenshot.png" "$OUT_DIR/screenshot_full.png"
 # --- Per-trajectory reference captures (issue #168 follow-up) ---------------
 # SpatialMap only, one tap enabled at (az=0, el=0, dist=0.5), trajectory
 # drawn at full brightness. Each shape uses a different tap (so colour
-# varies); Triangle wraps back to Tap 4 since there are 13 shapes and 12 taps.
+# varies); Triangle wraps back to Tap 3 since there are 13 shapes and 12 taps.
 mkdir -p "$OUT_DIR/trajectories"
 "$TOOL" "$OUT_DIR/trajectories/traj_bounce.png"   "$SCALE" --mode trajectory --trajectory Bounce   --tap 1
 "$TOOL" "$OUT_DIR/trajectories/traj_circle.png"   "$SCALE" --mode trajectory --trajectory Circle   --tap 2
@@ -113,7 +113,7 @@ mkdir -p "$OUT_DIR/trajectories"
 "$TOOL" "$OUT_DIR/trajectories/traj_random.png"   "$SCALE" --mode trajectory --trajectory Random   --tap 10
 "$TOOL" "$OUT_DIR/trajectories/traj_spiral.png"   "$SCALE" --mode trajectory --trajectory Spiral   --tap 11
 "$TOOL" "$OUT_DIR/trajectories/traj_square.png"   "$SCALE" --mode trajectory --trajectory Square   --tap 12
-"$TOOL" "$OUT_DIR/trajectories/traj_triangle.png" "$SCALE" --mode trajectory --trajectory Triangle --tap 4
+"$TOOL" "$OUT_DIR/trajectories/traj_triangle.png" "$SCALE" --mode trajectory --trajectory Triangle --tap 3
 
 # --- PIL crops derived from the full editor screenshot ----------------------
 # Native plugin dimensions: 820 x 580. At scale=2, image is 1640 x 1160.

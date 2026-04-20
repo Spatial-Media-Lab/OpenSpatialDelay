@@ -1161,9 +1161,14 @@ void SpatialMapComponent::paint (juce::Graphics& g)
             // Symmetric time-windowed trail: look-back + look-ahead centered on randomTime
             // Unlike deterministic shapes (which outline a compact closed loop at 0.05 base alpha),
             // Random's sprawling path needs zero base alpha — only the proximity glow near the dot.
-            constexpr int kRandomSamples = 120;
-            constexpr float kHalfWindow = 1.0f;     // ±1s from current time (2s total)
-            constexpr float kDecayRate = 3.0f;       // glow visible within ~±0.33s of dot
+            // In screenshot mode (drawFullTrajectoryForScreenshot), widen the
+            // window and flatten the decay so the still frame matches the
+            // visual weight of the deterministic shapes.
+            constexpr int kRandomSamples = 240;
+            const float kHalfWindow = drawFullTrajectoryForScreenshot ? 4.0f : 1.0f;
+            const float kDecayRate  = drawFullTrajectoryForScreenshot ? 0.0f : 3.0f;
+            const float kBaseAlpha  = drawFullTrajectoryForScreenshot ? 0.25f : 0.0f;
+            const float kPeakAlpha  = drawFullTrajectoryForScreenshot ? 0.35f : 0.60f;
 
             struct RndPathPoint { juce::Point<float> px; float elDeg; float timeOffset; };
             RndPathPoint rndPath[kRandomSamples];
@@ -1196,7 +1201,7 @@ void SpatialMapComponent::paint (juce::Graphics& g)
                 // Brightness: proximity to current time (timeOffset == 0)
                 float proximity = 1.0f - std::abs (p0.timeOffset) * kDecayRate;
                 proximity = juce::jlimit (0.0f, 1.0f, proximity);
-                float glowAlpha = proximity * 0.60f;
+                float glowAlpha = kBaseAlpha + proximity * kPeakAlpha;
 
                 // Elevation encoding: opacity + thickness (same as other shapes)
                 float avgEl = (p0.elDeg + p1.elDeg) * 0.5f;
