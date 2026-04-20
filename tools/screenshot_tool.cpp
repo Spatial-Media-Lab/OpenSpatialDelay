@@ -1132,6 +1132,17 @@ int main (int argc, char* argv[])
         }
         const int tapZero = juce::jlimit (1, 12, tapArg) - 1;  // 0-indexed
 
+        // Per-shape origin overrides. Default is (az=0, el=0, dist=0.5) so
+        // every shape is centred at the top of the map. Cross's on-map
+        // projection happens to match Bounce (its elevation arms are invisible
+        // in the 2D top-down view), so its tap is placed at the bottom of the
+        // map (az=180) to visually differentiate the two.
+        float originAz   = 0.0f;
+        float originEl   = 0.0f;
+        float originDist = 0.5f;
+        if (shapeIdx == 3)  // Cross
+            originAz = 180.0f;
+
         auto& apvts = processor.apvts;
         for (int i = 0; i < 12; ++i)
         {
@@ -1156,9 +1167,9 @@ int main (int argc, char* argv[])
             if (i == tapZero)
             {
                 setBool   ("enabled",            true);
-                setFloat  ("azimuth",            0.0f);
-                setFloat  ("elevation",          0.0f);
-                setFloat  ("distance",           0.5f);
+                setFloat  ("azimuth",            originAz);
+                setFloat  ("elevation",          originEl);
+                setFloat  ("distance",           originDist);
                 setChoice ("trajectoryShape",    shapeIdx);
                 setFloat  ("trajectorySpeed",    0.3f);
             }
@@ -1192,9 +1203,9 @@ int main (int argc, char* argv[])
         map.setSelectedObject (tapZero);
 
         TrajectoryState ts;
-        ts.originAzDeg = 0.0f;
-        ts.originElDeg = 0.0f;
-        ts.originDist  = 0.5f;
+        ts.originAzDeg = originAz;
+        ts.originElDeg = originEl;
+        ts.originDist  = originDist;
         ts.shape       = shapeIdx;
         ts.phase       = 0.25f;
         ts.reverse     = false;
@@ -1205,7 +1216,7 @@ int main (int argc, char* argv[])
         // true and therefore getObjectState() returns the live animated
         // position — so the dot drifts off the origin. Force the map to
         // show the tap at the configured base position regardless.
-        map.setObjectState (tapZero, 0.0f, 0.0f, 0.5f, true);
+        map.setObjectState (tapZero, originAz, originEl, originDist, true);
 
         map.setDrawFullTrajectoryForScreenshot (true);
         result = snapshotComponent (map, scaleFactor);
