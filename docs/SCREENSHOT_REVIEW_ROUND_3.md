@@ -23,7 +23,7 @@ round 3. User iterates per-item; this table tracks state.
 | 2 | `screenshot_annotated.png` | ✅ Done (`063c9f6`) | see "Item 2 — Annotated screenshot" below |
 | 6 | `screenshot_elevation_map.png` | ✅ Done (no change) | Round-3 review: accepted as-is |
 | 7 | `screenshot.png` | ✅ Done (this commit) | see "Item 7 — Hero screenshot" below |
-| 10 | `screenshot_output_menu.png` | ⏳ Awaiting review | — |
+| 10 | `screenshot_output_menu.png` | ⚠️ HITL (live capture) | see "Item 10 — HITL" below |
 | 11 | `screenshot_preset_menu.png` | ⏳ Awaiting review | — |
 | 12 | `screenshot_right_panel.png` | ⏳ Awaiting review | — |
 | 16 | `screenshot_tone_section.png` | ⏳ Awaiting review | — |
@@ -154,12 +154,81 @@ before reviewing the remaining round-3 items — in particular
 **#12 `screenshot_right_panel.png`** depends on this source and
 cannot be reviewed against the old round-2 crop.
 
+## Item 10 — HITL (agent failure, live capture used instead)
+
+**Outcome:** `docs/assets/screenshot_output_menu.png` is a **live
+capture from the running plugin**, not a generated mock. The agent
+could not produce a mock that matched the real JUCE ComboBox popup
+within an acceptable iteration budget, so the user provided the
+real screenshot (`.context/attachments/Screenshot 2026-04-17 at
+15.50.02-v1.png`) and it was copied in verbatim.
+
+**Why the agent failed:**
+
+Three successive mock iterations could not match the user's reference:
+
+1. **Iteration 1** (`8503747`): carried the round-2 spec forward —
+   current item duplicated at top + separator + full list. Matched the
+   round-2 written spec but not the real popup. Also had an
+   argument-order bug (`isTicked` / `hasSubMenu` swapped in the call
+   to `OSDLookAndFeel::drawPopupMenuItem`) so the tick glyph never
+   rendered.
+2. **Iteration 2** (`840db71`): fixed the swap, dropped the duplicate
+   and separator, added a subtle 8%-white wash behind the ticked row.
+   Structure was closer to the reference but the user confirmed the
+   font rendering and selected-row treatment were still visibly off.
+3. **Iteration 3 (abandoned):** no further changes landed — the user
+   declared the mock-based approach a failure and requested HITL.
+
+Root causes of the agent's misreads:
+
+- Misinterpreted the highlighted top row in the reference as a
+  "duplicate + separator" shape (carry-over from the round-2 written
+  spec). The real popup is just the natural flat list; the item at
+  position 1 happens to be Binaural because it is index 0 in
+  `outputFormatRegistry` and is currently selected for the Quad
+  Ping-Pong preset.
+- Could not reproduce the real popup's font metrics and highlight
+  fidelity through `PopupMenuSnapshot` + `OSDLookAndFeel::
+  drawPopupMenuItem` without pumping a full message loop through
+  JUCE's real `ComboBox::showPopup()` / `PopupMenu::showMenuAsync()`
+  path — which the screenshot tool is not structured to do.
+
+**HITL process for this screenshot going forward:**
+
+1. The generated file is **not** produced by `regenerate_screenshots.sh`.
+   Line 71 of that script is commented out with a pointer to this
+   section; the `--mode output-dropdown` capture mode in
+   `tools/screenshot_tool.cpp` and `buildOutputDropdownMock` are
+   retained for possible future reference but are unused by the docs
+   pipeline.
+2. If the plugin's output-format list, layout, or LookAndFeel changes
+   such that `docs/assets/screenshot_output_menu.png` goes stale, a
+   human must re-capture it from the live plugin:
+   - Open the plugin in a DAW at the native 820×580 editor size
+     (2× for the retina capture — final PNG should be 1640×1160).
+   - Click the OUTPUT Format combo box to open the popup.
+   - Capture the editor window (screenshot or `screencapture -iw`).
+   - Save to `docs/assets/screenshot_output_menu.png`.
+3. Commit the new PNG directly. No code change required.
+
+**Retry criteria (if an agent attempts the mock again):**
+
+- Drive the real `ComboBox::showPopup()` from the tool (requires a
+  headless message pump pumped for ~3 frames so JUCE can size and
+  paint the popup).
+- Snapshot the popup component *in-place* rather than rebuilding it
+  from the `PopupMenu::Item` API.
+- Compare against `.context/attachments/Screenshot 2026-04-17 at
+  15.50.02-v1.png` at ≥200 % zoom pixel-diff before claiming a match.
+
 ## Next session / next item
 
-Item 7 is closed. Remaining open items: **10, 11, 12, 16, 17**. User
-has been choosing the next item to review, so the next session should
-prompt with the outstanding list and wait for the pick. Note the
-downstream cascade above before touching item 12.
+Item 7 is closed. Item 10 is closed via HITL (see above). Remaining
+open items: **11, 12, 16, 17**. User has been choosing the next item
+to review, so the next session should prompt with the outstanding list
+and wait for the pick. Note the downstream cascade above before
+touching item 12.
 
 ## Files the next session needs
 
