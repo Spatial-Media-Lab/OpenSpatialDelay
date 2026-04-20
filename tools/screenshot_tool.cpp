@@ -1135,13 +1135,15 @@ int main (int argc, char* argv[])
         // Per-shape origin overrides. Default is (az=0, el=0, dist=0.5) so
         // every shape is centred at the top of the map. Cross's on-map
         // projection happens to match Bounce (its elevation arms are invisible
-        // in the 2D top-down view), so its tap is placed at the bottom of the
-        // map (az=180) to visually differentiate the two.
+        // in the 2D top-down view), so its tap is dropped to the lowest point
+        // of its elevation sweep (baseEl=-60). The tap sits at the same map
+        // location as the others, but its lower elevation dims/thins the
+        // rendered trail — visibly distinct from Bounce's mid-elevation arc.
         float originAz   = 0.0f;
         float originEl   = 0.0f;
         float originDist = 0.5f;
         if (shapeIdx == 3)  // Cross
-            originAz = 180.0f;
+            originEl = -60.0f;
 
         auto& apvts = processor.apvts;
         for (int i = 0; i < 12; ++i)
