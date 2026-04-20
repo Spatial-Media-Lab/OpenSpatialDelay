@@ -30,6 +30,7 @@ round 3. User iterates per-item; this table tracks state.
 | 17 | `screenshot_undo_active.png` | ✅ Done (this commit) | see "Item 17 — Undo/redo documented" below |
 | 18 | `hero-plugin.{webm,mp4}` (new) | ✅ Encoded, site wiring pending | see "Item 18 — Hero video (Merry-Go-Round)" below |
 | 19 | `orbit-dance.{webm,mp4}` (new) | ✅ Encoded, destination slot TBD | see "Item 19 — Orbit Dance video" below |
+| 20 | `spiral-descent.{webm,mp4}` (new) | ✅ Encoded, destination slot TBD | see "Item 20 — Spiral Descent video" below |
 
 Investigation-only: `screenshot_shimmer.png` (14) — confirmed still in use
 on the personal site; no change required.
@@ -646,17 +647,72 @@ rate conversion.
       `<video autoplay muted loop playsInline poster>` pattern as
       the hero video, plus `prefers-reduced-motion` fallback.
 
+## Item 20 — Spiral Descent video
+
+Third plugin-in-action video, same pipeline as items 18 and 19,
+different preset. Source delivered as
+`.context/attachments/Spiral Descent.mov` — 1640×1160 (already at
+target resolution, no scale needed), VFR avg 34.33 fps, 14.26 s,
+489 decodable frames, H.264, 7.47 MB.
+
+Destination slot on `andrewrahman-com` is **TBD** — likely candidate
+alongside Orbit Dance in a preset showcase / scroll demo section.
+Decide on placement and layout before wiring in.
+
+### Pipeline (identical to item 19)
+
+No-scale variant — source already at target resolution. Both target
+encodes run directly from the source file with VFR preserved via
+`-fps_mode passthrough`.
+
+```bash
+# Primary — WebM / AV1
+ffmpeg -y -i ".context/attachments/Spiral Descent.mov" \
+  -c:v libsvtav1 -preset 6 -crf 32 \
+  -pix_fmt yuv420p -an -fps_mode passthrough \
+  -movflags +faststart \
+  docs/assets/spiral-descent.webm
+
+# Fallback — MP4 / H.264 (auto-level 5.1 per items 18/19)
+ffmpeg -y -i ".context/attachments/Spiral Descent.mov" \
+  -c:v libx264 -preset slow -crf 23 -profile:v high \
+  -pix_fmt yuv420p -an -fps_mode passthrough \
+  -movflags +faststart \
+  docs/assets/spiral-descent.mp4
+```
+
+### As-built artefacts (in `docs/assets/`)
+
+| File | Codec | Size | Budget | Headroom | Frames |
+|------|-------|------|--------|----------|--------|
+| `spiral-descent.webm` | AV1 (libsvtav1, CRF 32) | **297 KB** | ≤2 MB | 85% | 489 |
+| `spiral-descent.mp4` | H.264 High @ L5.1 (CRF 23) | **474 KB** | ≤4 MB | 88% | 489 |
+
+Both: 1640×1160, VFR avg 34.33 fps (source preserved), yuv420p, no
+audio, `+faststart`, ~14.25 s duration. All 489 decodable source
+frames pass through 1:1.
+
+### Still to do
+
+- [ ] Decide destination slot on `andrewrahman-com`.
+- [ ] Copy `spiral-descent.webm` + `.mp4` into
+      `andrewrahman-com/public/assets/` once slot is chosen.
+- [ ] Wire into chosen component with same
+      `<video autoplay muted loop playsInline poster>` pattern as
+      the hero video, plus `prefers-reduced-motion` fallback.
+
 ## Next session / next item
 
 Items 7, 12, 16, 17 are closed. Item 10 is closed via HITL (see
-above). Items 18 and 19 encodes are complete; site wiring is the
-remaining step for both. Remaining open items: **11** (preset-menu
-screenshot), **18** (hero video — site wiring only), and **19**
-(Orbit Dance — destination slot + site wiring). Item 11 is
+above). Items 18, 19, and 20 encodes are complete; site wiring is
+the remaining step for all three. Remaining open items: **11**
+(preset-menu screenshot), **18** (hero video — site wiring only),
+**19** (Orbit Dance — destination slot + site wiring), and **20**
+(Spiral Descent — destination slot + site wiring). Item 11 is
 HITL-eligible like item 10 — if mock iteration exceeds attempt 2,
 escalate to live capture following the item-10 pattern. When items
-11, 18, and 19 close, round 3 is complete and the branch can roll
-up to issue #168.
+11, 18, 19, and 20 close, round 3 is complete and the branch can
+roll up to issue #168.
 
 ### Session backlog (beyond round 3)
 
