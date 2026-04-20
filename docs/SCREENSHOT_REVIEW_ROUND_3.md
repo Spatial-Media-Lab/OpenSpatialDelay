@@ -29,6 +29,7 @@ round 3. User iterates per-item; this table tracks state.
 | 16 | `screenshot_tone_section.png` | ✅ Done (this commit) | see "Item 16 — TONE section crop" below |
 | 17 | `screenshot_undo_active.png` | ✅ Done (this commit) | see "Item 17 — Undo/redo documented" below |
 | 18 | `hero-plugin.{webm,mp4}` (new) | ✅ Encoded, site wiring pending | see "Item 18 — Hero video (Merry-Go-Round)" below |
+| 19 | `orbit-dance.{webm,mp4}` (new) | ✅ Encoded, destination slot TBD | see "Item 19 — Orbit Dance video" below |
 
 Investigation-only: `screenshot_shimmer.png` (14) — confirmed still in use
 on the personal site; no change required.
@@ -584,17 +585,78 @@ re-encoding. Recommend adding `docs/assets/hero-video-build/` to
       playing the video for users who've opted out).
 - [ ] Run site Playwright hero tests; update any
       `<Image>`-specific assertions to the new element.
-- [ ] Add `docs/assets/hero-video-build/` to `.gitignore`.
+- [x] Add `docs/assets/hero-video-build/` to `.gitignore`. *(done in
+      item-18 commit)*
+
+## Item 19 — Orbit Dance video
+
+Second plugin-in-action video, same pipeline as item 18, different
+preset. Source delivered as
+`.context/attachments/Orbit Dance.mov` — 1640×1160 (already at
+target resolution, no scale needed), VFR avg 33.85 fps, 12.85 s,
+435 decodable frames, H.264, 6.96 MB.
+
+Destination slot on `andrewrahman-com` is **TBD** — not the
+homepage hero (that's item 18's Merry-Go-Round). Likely candidates:
+features section, "Hear it in 3D" scroll-triggered demo, or a
+future dedicated preset showcase page. Decide on placement before
+wiring into the site.
+
+### Pipeline (identical to item 18, minus the scale step)
+
+Source was already 1640×1160, so the scale filter was dropped and
+both target encodes run directly from the source file. VFR timing
+preserved throughout via `-fps_mode passthrough`.
+
+```bash
+# Primary — WebM / AV1
+ffmpeg -y -i ".context/attachments/Orbit Dance.mov" \
+  -c:v libsvtav1 -preset 6 -crf 32 \
+  -pix_fmt yuv420p -an -fps_mode passthrough \
+  -movflags +faststart \
+  docs/assets/orbit-dance.webm
+
+# Fallback — MP4 / H.264 (no explicit -level; auto-selects 5.1 for
+# the same r_frame_rate=120 reason as item 18)
+ffmpeg -y -i ".context/attachments/Orbit Dance.mov" \
+  -c:v libx264 -preset slow -crf 23 -profile:v high \
+  -pix_fmt yuv420p -an -fps_mode passthrough \
+  -movflags +faststart \
+  docs/assets/orbit-dance.mp4
+```
+
+### As-built artefacts (in `docs/assets/`)
+
+| File | Codec | Size | Budget | Headroom | Frames |
+|------|-------|------|--------|----------|--------|
+| `orbit-dance.webm` | AV1 (libsvtav1, CRF 32) | **307 KB** | ≤2 MB | 85% | 435 |
+| `orbit-dance.mp4` | H.264 High @ L5.1 (CRF 23) | **441 KB** | ≤4 MB | 89% | 435 |
+
+Both: 1640×1160, VFR avg 33.85 fps (source preserved), yuv420p, no
+audio, `+faststart`, 12.85 s duration. Every one of the source's
+435 decodable frames passes through 1:1 — no scale, no trim, no
+rate conversion.
+
+### Still to do
+
+- [ ] Decide destination slot on `andrewrahman-com`.
+- [ ] Copy `orbit-dance.webm` + `.mp4` into
+      `andrewrahman-com/public/assets/` once slot is chosen.
+- [ ] Wire into chosen component with same
+      `<video autoplay muted loop playsInline poster>` pattern as
+      the hero video, plus `prefers-reduced-motion` fallback.
 
 ## Next session / next item
 
 Items 7, 12, 16, 17 are closed. Item 10 is closed via HITL (see
-above). Item 18 encodes are complete; site wiring is the remaining
-step. Remaining open items: **11** (preset-menu screenshot) and
-**18** (hero video — site wiring only). Item 11 is HITL-eligible
-like item 10 — if mock iteration exceeds attempt 2, escalate to live
-capture following the item-10 pattern. When items 11 and 18 close,
-round 3 is complete and the branch can roll up to issue #168.
+above). Items 18 and 19 encodes are complete; site wiring is the
+remaining step for both. Remaining open items: **11** (preset-menu
+screenshot), **18** (hero video — site wiring only), and **19**
+(Orbit Dance — destination slot + site wiring). Item 11 is
+HITL-eligible like item 10 — if mock iteration exceeds attempt 2,
+escalate to live capture following the item-10 pattern. When items
+11, 18, and 19 close, round 3 is complete and the branch can roll
+up to issue #168.
 
 ### Session backlog (beyond round 3)
 
