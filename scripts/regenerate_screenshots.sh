@@ -96,6 +96,25 @@ cp "$OUT_DIR/screenshot.png" "$OUT_DIR/screenshot_full.png"
 "$TOOL" "$OUT_DIR/presets/hemisphere-spread.png" "$SCALE" --preset "Hemisphere Spread" --mode preset-showcase --output-format "7.1.2 Atmos"    --surround-algo "VBIP"
 "$TOOL" "$OUT_DIR/presets/tape-wow.png"          "$SCALE" --preset "Tape Wow"          --mode preset-showcase --output-format "Binaural"       --hrtf-profile "Immersive"
 
+# --- Per-trajectory reference captures (issue #168 follow-up) ---------------
+# SpatialMap only, one tap enabled at (az=0, el=0, dist=0.5), trajectory
+# drawn at full brightness. Each shape uses a different tap (so colour
+# varies); Triangle wraps back to Tap 3 since there are 13 shapes and 12 taps.
+mkdir -p "$OUT_DIR/trajectories"
+"$TOOL" "$OUT_DIR/trajectories/traj_bounce.png"   "$SCALE" --mode trajectory --trajectory Bounce   --tap 1
+"$TOOL" "$OUT_DIR/trajectories/traj_circle.png"   "$SCALE" --mode trajectory --trajectory Circle   --tap 2
+"$TOOL" "$OUT_DIR/trajectories/traj_cross.png"    "$SCALE" --mode trajectory --trajectory Cross    --tap 3
+"$TOOL" "$OUT_DIR/trajectories/traj_figure8.png"  "$SCALE" --mode trajectory --trajectory Figure-8 --tap 4
+"$TOOL" "$OUT_DIR/trajectories/traj_heart.png"    "$SCALE" --mode trajectory --trajectory Heart    --tap 5
+"$TOOL" "$OUT_DIR/trajectories/traj_helix.png"    "$SCALE" --mode trajectory --trajectory Helix    --tap 6
+"$TOOL" "$OUT_DIR/trajectories/traj_infinity.png" "$SCALE" --mode trajectory --trajectory Infinity --tap 7
+"$TOOL" "$OUT_DIR/trajectories/traj_line.png"     "$SCALE" --mode trajectory --trajectory Line     --tap 8
+"$TOOL" "$OUT_DIR/trajectories/traj_orbit.png"    "$SCALE" --mode trajectory --trajectory Orbit    --tap 9
+"$TOOL" "$OUT_DIR/trajectories/traj_random.png"   "$SCALE" --mode trajectory --trajectory Random   --tap 10
+"$TOOL" "$OUT_DIR/trajectories/traj_spiral.png"   "$SCALE" --mode trajectory --trajectory Spiral   --tap 11
+"$TOOL" "$OUT_DIR/trajectories/traj_square.png"   "$SCALE" --mode trajectory --trajectory Square   --tap 12
+"$TOOL" "$OUT_DIR/trajectories/traj_triangle.png" "$SCALE" --mode trajectory --trajectory Triangle --tap 3
+
 # --- PIL crops derived from the full editor screenshot ----------------------
 # Native plugin dimensions: 820 x 580. At scale=2, image is 1640 x 1160.
 # Layout constants (scaled):
