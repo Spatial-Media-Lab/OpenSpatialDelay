@@ -36,6 +36,9 @@
 //                       (issue #168 r3). --showcase is implicit.
 //   spatial-map       — Just the SpatialMap component (no drawer, no bottom panel)
 //   elevation-map     — SpatialMap with all 12 taps in a −90°→+90° spiral, labelled
+//   trajectory        — SpatialMap only, one tap (--tap N, default 1) at
+//                       (az=0, el=0, dist=0.5) with --trajectory <name> drawn
+//                       at full brightness. Every other tap disabled.
 //
 // Examples:
 //   screenshot_tool ui.png 2.0
@@ -610,6 +613,22 @@ static int resolveHrtfProfileIndex (const juce::String& name)
     return -1;
 }
 
+// Trajectory shape names, in the order declared in PluginProcessor.cpp
+// (trajectoryShape parameter). Index 0 = None; 1..13 = drawn shapes.
+static const char* const kTrajectoryNames[] = {
+    "None", "Bounce", "Circle", "Cross", "Figure-8", "Heart", "Helix",
+    "Infinity", "Line", "Orbit", "Random", "Spiral", "Square", "Triangle"
+};
+
+static int resolveTrajectoryIndex (const juce::String& name)
+{
+    for (int i = 0; i < 14; ++i)
+        if (name.equalsIgnoreCase (kTrajectoryNames[i])) return i;
+    // Accept "Figure8" as an alias for "Figure-8".
+    if (name.equalsIgnoreCase ("Figure8")) return 4;
+    return -1;
+}
+
 // Run the processor for N blocks of silent audio so trajectory.tick() advances.
 // Required because getTrajectoryState() reports all zeros in a freshly-loaded
 // processor — the map's trail renders nothing until the engine has ticked.
@@ -674,6 +693,8 @@ int main (int argc, char* argv[])
     juce::String surroundAlgoArg;   // --surround-algo "VBAP"
     juce::String stereoModeArg;     // --stereo-mode "XY Pair"
     juce::String hrtfProfileArg;    // --hrtf-profile "Studio Reference"
+    juce::String trajectoryArg;     // --trajectory "Bounce"
+    int          tapArg = 1;        // --tap 1..12 (1-indexed)
 
     std::vector<juce::String> positional;
     for (int i = 1; i < argc; ++i)
@@ -695,6 +716,8 @@ int main (int argc, char* argv[])
         else if (a == "--surround-algo" && i + 1 < argc) { surroundAlgoArg = juce::String (argv[++i]); }
         else if (a == "--stereo-mode"   && i + 1 < argc) { stereoModeArg   = juce::String (argv[++i]); }
         else if (a == "--hrtf-profile"  && i + 1 < argc) { hrtfProfileArg  = juce::String (argv[++i]); }
+        else if (a == "--trajectory"    && i + 1 < argc) { trajectoryArg   = juce::String (argv[++i]); }
+        else if (a == "--tap"           && i + 1 < argc) { tapArg          = juce::String (argv[++i]).getIntValue(); }
         else if (! a.startsWith ("--"))                  { positional.push_back (a); }
     }
 
@@ -1132,13 +1155,123 @@ int main (int argc, char* argv[])
         osd->syncForScreenshot();
         result = snapshotComponent (map, scaleFactor);
     }
+    else if (mode == "trajectory")
+    {
+        // Reference capture for one trajectory shape applied to one tap.
+        // Output is just the SpatialMap (no chrome). Every tap except the
+        // chosen one is disabled; the chosen tap sits at (az=0, el=0, dist=0.5)
+        // so every shape is centred and fully visible on the map. The trail
+        // is drawn at peak brightness via setDrawFullTrajectoryForScreenshot.
+        int shapeIdx = resolveTrajectoryIndex (trajectoryArg);
+        if (shapeIdx < 0)
+        {
+            std::cerr << "Error: --mode trajectory requires --trajectory <name>.\n"
+                         "Valid names: None, Bounce, Circle, Cross, Figure-8, Heart,\n"
+                         "             Helix, Infinity, Line, Orbit, Random, Spiral,\n"
+                         "             Square, Triangle\n";
+            return 1;
+        }
+        const int tapZero = juce::jlimit (1, 12, tapArg) - 1;  // 0-indexed
+
+        // Per-shape origin overrides. Default is (az=0, el=0, dist=0.5) so
+        // every shape is centred at the top of the map. Cross's on-map
+        // projection happens to match Bounce (its elevation arms are invisible
+        // in the 2D top-down view), so its tap is dropped to the lowest point
+        // of its elevation sweep (baseEl=-60). The tap sits at the same map
+        // location as the others, but its lower elevation dims/thins the
+        // rendered trail — visibly distinct from Bounce's mid-elevation arc.
+        float originAz   = 0.0f;
+        float originEl   = 0.0f;
+        float originDist = 0.5f;
+        if (shapeIdx == 3)  // Cross
+            originEl = -60.0f;
+
+        auto& apvts = processor.apvts;
+        for (int i = 0; i < 12; ++i)
+        {
+            auto pre = "object" + juce::String (i + 1) + "_";
+            auto setFloat = [&] (const juce::String& id, float v) {
+                if (auto* p = apvts.getParameter (pre + id))
+                    p->setValueNotifyingHost (p->convertTo0to1 (v));
+            };
+            auto setChoice = [&] (const juce::String& id, int idx) {
+                if (auto* p = dynamic_cast<juce::AudioParameterChoice*> (apvts.getParameter (pre + id)))
+                {
+                    int n = p->choices.size();
+                    if (n > 1)
+                        p->setValueNotifyingHost ((float) idx / (float) (n - 1));
+                }
+            };
+            auto setBool = [&] (const juce::String& id, bool v) {
+                if (auto* p = apvts.getParameter (pre + id))
+                    p->setValueNotifyingHost (v ? 1.0f : 0.0f);
+            };
+
+            if (i == tapZero)
+            {
+                setBool   ("enabled",            true);
+                setFloat  ("azimuth",            originAz);
+                setFloat  ("elevation",          originEl);
+                setFloat  ("distance",           originDist);
+                setChoice ("trajectoryShape",    shapeIdx);
+                setFloat  ("trajectorySpeed",    0.3f);
+            }
+            else
+            {
+                setBool   ("enabled",            false);
+                setChoice ("trajectoryShape",    0);
+            }
+        }
+
+        // Pump the processor ONLY for Random (shape 10). Its trail sampling
+        // reads live noise state from the engine, so it needs a populated
+        // randomTime. For every other shape, pumping advances trajectory.tick()
+        // which flips trajectory.isActive(t) to true — and that makes
+        // processor.getObjectState() return the animated position instead of
+        // the APVTS origin, so the tap dot drifts off (az=0, el=0, dist=0.5).
+        // Skipping the pump keeps the dot pinned to the origin while
+        // setDrawFullTrajectoryForScreenshot still samples the entire path
+        // directly from the seeded TrajectoryState below.
+        if (shapeIdx == 10)
+            pumpTrajectories (processor, 60);
+        osd->syncForScreenshot();
+
+        auto& map = osd->getSpatialMapForScreenshot();
+
+        // syncForScreenshot() writes the map's selectedObject from the
+        // editor's currentObjectIndex (== 0 by default) and overwrites
+        // trajectoryStates from processor.getTrajectoryState(). We must
+        // therefore (a) redirect the map's selection to the active tap,
+        // and (b) re-seed its TrajectoryState explicitly, after sync.
+        map.setSelectedObject (tapZero);
+
+        TrajectoryState ts;
+        ts.originAzDeg = originAz;
+        ts.originElDeg = originEl;
+        ts.originDist  = originDist;
+        ts.shape       = shapeIdx;
+        ts.phase       = 0.25f;
+        ts.reverse     = false;
+        ts.randomTime  = 0.0f;
+        map.setTrajectoryState (tapZero, ts);
+
+        // Random pumped the processor, which makes trajectory.isActive(t)
+        // true and therefore getObjectState() returns the live animated
+        // position — so the dot drifts off the origin. Force the map to
+        // show the tap at the configured base position regardless.
+        map.setObjectState (tapZero, originAz, originEl, originDist, true);
+
+        map.setDrawFullTrajectoryForScreenshot (true);
+        result = snapshotComponent (map, scaleFactor);
+    }
     else
     {
         std::cerr << "Error: unknown --mode: " << mode.toStdString() << "\n";
         std::cerr << "Valid modes: full, drawer-open, tone-section, osc-section,\n"
                      "             save-overlay, preset-menu, output-dropdown,\n"
                      "             undo-active, annotated-source, hero,\n"
-                     "             preset-showcase, spatial-map, elevation-map\n";
+                     "             preset-showcase, spatial-map, elevation-map,\n"
+                     "             trajectory\n";
         return 1;
     }
 
