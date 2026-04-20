@@ -195,6 +195,16 @@ public:
             }
             else
             {
+                // Subtle "currently-selected" wash behind the ticked row — matches
+                // the real JUCE popup's pre-selected-item treatment without using
+                // the full cyan highlightedBackgroundColourId (too aggressive for
+                // a static screenshot).
+                if (it.isTicked && ! it.isHighlighted && ! it.isSeparator)
+                {
+                    g.setColour (juce::Colour::fromFloatRGBA (1.0f, 1.0f, 1.0f, 0.08f));
+                    g.fillRect (area);
+                }
+
                 look.drawPopupMenuItem (g, area,
                                         it.isSeparator,
                                         /*isActive*/ true,
@@ -338,11 +348,12 @@ buildPresetMenuMock (OSDLookAndFeel& lnf,
 }
 
 //==============================================================================
-// Build an output-format dropdown mock that matches the real plugin's popup
-// (issue #168 rounds 2 + 3): juce::ComboBox shows the currently-selected item
-// at the top of the popup (ticked), followed by a separator, followed by the
-// remaining items in their natural order. The selected item is NOT duplicated
-// in the list below — matching the reference attachment in round 3.
+// Build an output-format dropdown mock that matches the real JUCE ComboBox
+// popup (issue #168 round 3 reference
+// .context/attachments/Screenshot 2026-04-17 at 15.50.02-v1.png):
+//   flat list of all output formats in natural order, no separator, no
+//   duplicate-at-top, no highlight background. The currently-selected
+//   item is marked only by the tick glyph at its left.
 //==============================================================================
 static std::unique_ptr<PopupMenuSnapshot>
 buildOutputDropdownMock (OSDLookAndFeel& lnf,
@@ -352,33 +363,18 @@ buildOutputDropdownMock (OSDLookAndFeel& lnf,
     std::vector<PopupMenuSnapshot::Item> items;
     int currentFmt = processor.configOutputFormat.load();
 
-    // 1. Currently-selected item at the top, ticked.
-    if (currentFmt >= 0 && currentFmt < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS)
-    {
-        const auto& cur = OpenSpatialDelayProcessor::outputFormatRegistry[(size_t) currentFmt];
-        PopupMenuSnapshot::Item head;
-        head.text     = cur.name;
-        head.isTicked = true;
-        items.push_back (head);
-
-        PopupMenuSnapshot::Item sep;
-        sep.isSeparator = true;
-        items.push_back (sep);
-    }
-
-    // 2. Remaining items — skip the selected one, no ticks on any of them.
     for (int i = 0; i < OpenSpatialDelayProcessor::NUM_OUTPUT_FORMATS; ++i)
     {
-        if (i == currentFmt) continue;
         const auto& info = OpenSpatialDelayProcessor::outputFormatRegistry[(size_t) i];
         PopupMenuSnapshot::Item it;
-        it.text = info.name;
+        it.text     = info.name;
+        it.isTicked = (i == currentFmt);
         items.push_back (it);
     }
 
-    // Compact row height so the header + separator + 22 remaining formats
-    // still fit within the editor height — matches the real popup's visual
-    // density in the issue #168 round-3 reference.
+    // Row height 14 so all 23 formats fit within the editor height without
+    // clipping. The OSDLookAndFeel popup font is DM Sans Regular 13pt — a
+    // 14px row gives 1px vertical padding above/below.
     return std::make_unique<PopupMenuSnapshot> (lnf, std::move (items), minWidth, /*row h*/ 14);
 }
 
