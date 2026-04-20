@@ -96,7 +96,8 @@ OUT_DIR = Path("docs/assets")
 full = Image.open(OUT_DIR / "screenshot.png")
 
 crops = {
-    # Top header strip — full width, SML + preset row + format dropdowns
+    # Top header strip — full width, SML + preset row + format dropdowns.
+    # Crop ends at the header/map divider (issue #168 round 3, item 17).
     "screenshot_header.png":       (full, (0,    0,   1640, 104 )),
     # Right panel — DELAY + MOD + TONE + MIX (stops 10px above OSC section header)
     "screenshot_right_panel.png":  (full, (1112, 104, 1640, 1018)),

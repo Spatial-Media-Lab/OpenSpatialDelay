@@ -15,6 +15,7 @@ The header bar spans the top of the plugin and contains navigation, routing, and
 | Preset Name | Dropdown | Click to open the preset browser. Shows current preset name. |
 | Prev/Next Arrows | Buttons | Step through presets sequentially. |
 | Save | Button | Opens the preset save overlay to save the current settings. |
+| Undo / Redo Arrows | Buttons | Step backwards or forwards through recent parameter changes. Each arrow is dimmed when its history is empty — undo becomes active after the first parameter change, redo becomes active only after an undo. |
 | OSC RECV | Toggle | Enables ADM-OSC receive. See [ADM-OSC Integration](adm-osc.md). |
 | Output Format | Dropdown | Selects one of 23 output formats. See [Output Formats](output-formats.md). |
 | Algorithm / HRTF Profile | Dropdown | Context-dependent: shows spatialization algorithm for surround formats (Constant Power, Ambisonics, DBAP, KNN, MDAP, VBAP, VBIP — defaults to Constant Power), HRTF profile for Binaural, stereo mode for Stereo. Hidden when not applicable. See [Output Formats](output-formats.md) for algorithm details. |

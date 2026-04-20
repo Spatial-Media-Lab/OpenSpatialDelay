@@ -965,12 +965,14 @@ function buildControlsReference() {
   items.push(heading2("Header Bar", "header-bar"));
   items.push(screenshotImage(screenshotHeaderImg, 480, 30,
     "Header Bar",
-    "Header Bar \u2014 showing title, preset navigation, OSC toggle, Output Format, Algorithm/HRTF dropdown"));
+    "Header Bar \u2014 showing title, preset navigation, undo / redo arrows, OSC toggle, Output Format, Algorithm/HRTF dropdown"));
   items.push(spacer(4));
   items.push(bodyPara([
     bodyText("The header bar contains: plugin title and version (left), "),
     boldText("preset navigation "),
     bodyText("(dropdown, prev/next arrows, save button), "),
+    boldText("undo / redo arrows "),
+    bodyText("(step backwards or forwards through recent parameter changes \u2014 dimmed when the corresponding history is empty), "),
     boldText("OSC toggle "),
     bodyText("(ADM-OSC receive on/off), "),
     boldText("Output Format "),
