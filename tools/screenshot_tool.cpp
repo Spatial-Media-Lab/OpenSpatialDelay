@@ -1169,11 +1169,17 @@ int main (int argc, char* argv[])
             }
         }
 
-        // Pump the processor so the engine's TrajectoryState for the active
-        // tap is populated (origin + phase) from the real trajectory.tick().
-        // Without this the seeded state below is the only source, but pumping
-        // also keeps Random (shape 10) — which samples live noise — viable.
-        pumpTrajectories (processor, 60);
+        // Pump the processor ONLY for Random (shape 10). Its trail sampling
+        // reads live noise state from the engine, so it needs a populated
+        // randomTime. For every other shape, pumping advances trajectory.tick()
+        // which flips trajectory.isActive(t) to true — and that makes
+        // processor.getObjectState() return the animated position instead of
+        // the APVTS origin, so the tap dot drifts off (az=0, el=0, dist=0.5).
+        // Skipping the pump keeps the dot pinned to the origin while
+        // setDrawFullTrajectoryForScreenshot still samples the entire path
+        // directly from the seeded TrajectoryState below.
+        if (shapeIdx == 10)
+            pumpTrajectories (processor, 60);
         osd->syncForScreenshot();
 
         auto& map = osd->getSpatialMapForScreenshot();
@@ -1194,6 +1200,12 @@ int main (int argc, char* argv[])
         ts.reverse     = false;
         ts.randomTime  = 0.0f;
         map.setTrajectoryState (tapZero, ts);
+
+        // Random pumped the processor, which makes trajectory.isActive(t)
+        // true and therefore getObjectState() returns the live animated
+        // position — so the dot drifts off the origin. Force the map to
+        // show the tap at the configured base position regardless.
+        map.setObjectState (tapZero, 0.0f, 0.0f, 0.5f, true);
 
         map.setDrawFullTrajectoryForScreenshot (true);
         result = snapshotComponent (map, scaleFactor);
