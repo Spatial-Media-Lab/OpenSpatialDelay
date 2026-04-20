@@ -1165,7 +1165,7 @@ void SpatialMapComponent::paint (juce::Graphics& g)
             // window and flatten the decay so the still frame matches the
             // visual weight of the deterministic shapes.
             constexpr int kRandomSamples = 240;
-            const float kHalfWindow = drawFullTrajectoryForScreenshot ? 2.0f : 1.0f;
+            const float kHalfWindow = drawFullTrajectoryForScreenshot ? 1.0f : 1.0f;
             const float kDecayRate  = drawFullTrajectoryForScreenshot ? 0.0f : 3.0f;
             const float kBaseAlpha  = drawFullTrajectoryForScreenshot ? 0.25f : 0.0f;
             const float kPeakAlpha  = drawFullTrajectoryForScreenshot ? 0.35f : 0.60f;
