@@ -61,13 +61,13 @@ cp "$OUT_DIR/screenshot.png" "$OUT_DIR/screenshot_full.png"
 "$TOOL" "$OUT_DIR/screenshot_save_preset.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode save-overlay
 # Preset menu: Merry-Go-Round lives in "Spatial Movement" — the submenu ticks it.
 "$TOOL" "$OUT_DIR/screenshot_preset_menu.png"   "$SCALE" --preset "$PRESET_MENU_PRESET" --mode preset-menu
-# NOTE (issue #168 round 3, item 10): screenshot_output_menu.png is HITL —
-# the generated mock failed to match the real JUCE ComboBox popup after
-# multiple iterations. The file is now a live-plugin capture committed
-# directly. Do NOT regenerate it from --mode output-dropdown; the mock is
-# retained in the tool for future reference only. See
-# docs/SCREENSHOT_REVIEW_ROUND_3.md § "Item 10 — HITL" for details.
-# "$TOOL" "$OUT_DIR/screenshot_output_menu.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode output-dropdown
+# Output dropdown: reference-matched mock (see docs/SCREENSHOT_REVIEW_ROUND_3.md
+# § "Item 10 — HITL revisit"). Previously HITL; now reproduces the live
+# reference at .context/attachments/Screenshot 2026-04-17 at 15.50.02.png at
+# ~95% pixel match via width/anchor/height-and-trim fixes in the --mode
+# output-dropdown handler. The Binaural row is pre-highlighted because JUCE's
+# real popup highlights the active item on open.
+"$TOOL" "$OUT_DIR/screenshot_output_menu.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode output-dropdown
 "$TOOL" "$OUT_DIR/screenshot_undo_active.png"   "$SCALE" --preset "$MAIN_PRESET"      --mode undo-active
 # Annotated source (issue #168 r3): showcase state + Global Drawer open + undo
 # history populated. annotate_screenshot.py reads this as its SRC.

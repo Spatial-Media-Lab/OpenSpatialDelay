@@ -23,7 +23,7 @@ round 3. User iterates per-item; this table tracks state.
 | 2 | `screenshot_annotated.png` | ✅ Done (`063c9f6`) | see "Item 2 — Annotated screenshot" below |
 | 6 | `screenshot_elevation_map.png` | ✅ Done (no change) | Round-3 review: accepted as-is |
 | 7 | `screenshot.png` | ✅ Done (this commit) | see "Item 7 — Hero screenshot" below |
-| 10 | `screenshot_output_menu.png` | ⚠️ HITL (live capture) | see "Item 10 — HITL" below |
+| 10 | `screenshot_output_menu.png` | ✅ Done (this commit, mock revisit) | see "Item 10 — HITL revisit" below |
 | 11 | `screenshot_preset_menu.png` | ✅ Done (this commit) | see "Item 11 — Preset menu mock" below |
 | 12 | `screenshot_right_panel.png` | ✅ Done (this commit) | see "Item 12 — Right panel" below |
 | 16 | `screenshot_tone_section.png` | ✅ Done (this commit) | see "Item 16 — TONE section crop" below |
@@ -225,6 +225,74 @@ Root causes of the agent's misreads:
   from the `PopupMenu::Item` API.
 - Compare against `.context/attachments/Screenshot 2026-04-17 at
   15.50.02-v1.png` at ≥200 % zoom pixel-diff before claiming a match.
+
+## Item 10 — HITL revisit
+
+**Outcome:** `docs/assets/screenshot_output_menu.png` is now
+reproduced by the screenshot tool (`--mode output-dropdown`),
+matching the same live reference that previously defeated the mock
+(`.context/attachments/Screenshot 2026-04-17 at 15.50.02.png`) at
+**~95% pixel match** (diff > 30 threshold: 95.19% match; diff > 60:
+98.74%). The HITL carve-out is lifted — line 70 of
+`scripts/regenerate_screenshots.sh` is uncommented and the output
+menu regenerates alongside the other screenshots.
+
+**What changed versus the round-2 drop (which became HITL):**
+
+- **Popup row height 14 → 24 px.** The round-2 mock compressed rows
+  so all 23 formats would fit inside the editor's 580 px height.
+  The real JUCE popup uses `OSDLookAndFeel::getIdealPopupMenuItemSize`
+  (24 px rows) and is allowed to overflow past the editor bottom —
+  any DAW renders that overflow into its own window chrome. The
+  mock now matches that row height and extends the output canvas
+  vertically (black background below the editor) so the popup's
+  last six rows render instead of being clipped.
+- **Popup width 170 → 128 px.** The live popup is sized to the
+  widest item's text + padding, not to the minimum width I had
+  set in round 2. 128 px matches the pixel-measured reference
+  (popup left x=585, right x=713 native).
+- **Active row now pre-highlighted (cyan fill), not just ticked.**
+  `ComboBox::showPopup` calls `PopupMenu::setSelectedItem` for the
+  current index, so the Binaural row in the live reference is both
+  ticked and filled with `PopupMenu::highlightedBackgroundColourId`.
+  `buildOutputDropdownMock` now sets both `isTicked` and
+  `isHighlighted` for the active format.
+- **Anchor x/y nudged 1 px each.** The real JUCE popup sits 1 px
+  in from `(btn.getX(), btn.getBottom()+2)` — pixel-measured from
+  the reference. Composite anchor is now `(btn.getX()-1,
+  btn.getBottom()+1)`.
+- **Output canvas trimmed to 1636×1202.** The reference was captured
+  at 818×601 native (why 818 vs the editor's 820 is unclear — most
+  likely a DAW-specific 1 px inset on each side). The output-dropdown
+  handler now trims 2 px from each side of the raw 1640-wide composite
+  so the generated PNG carries the same dimensions as the reference.
+
+**Residual diff is color-level, not structural:**
+
+| Threshold | Match |
+|---|---|
+| diff > 10 (strict) | 93.30% |
+| diff > 20 | 94.87% |
+| diff > 30 (moderate) | 95.19% |
+| diff > 60 (loose) | 98.74% |
+| mean per-channel diff | 3.70 / 255 |
+
+The residual ~5% is dominated by (a) the cyan highlight colour
+(my mock reads `0xff7cc8f0` = RGB 124,200,240; the reference rim
+samples as RGB 141,198,236 — a consistent 17-unit R offset that
+points at a live-vs-offline compositing difference, not a value
+change), and (b) sub-pixel text anti-aliasing on every row. Neither
+is visually perceptible at 1× viewing size.
+
+**Files in this commit:**
+
+- `tools/screenshot_tool.cpp` — `buildOutputDropdownMock` and
+  `--mode output-dropdown` handler fixes.
+- `scripts/regenerate_screenshots.sh` — line 70 uncommented, HITL
+  note replaced with the current invocation.
+- `docs/assets/screenshot_output_menu.png` — regenerated mock
+  (replaces the prior live-capture).
+- `docs/SCREENSHOT_REVIEW_ROUND_3.md` — this tracker.
 
 ## Item 12 — Right panel
 
