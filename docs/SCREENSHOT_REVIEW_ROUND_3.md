@@ -615,6 +615,19 @@ Captured during round-3 work, not tied to any specific issue #168 item:
   each trajectory shape needs its own capture with the shape enabled,
   the tap selected, and the trail rendered.
 
+  **UPDATE 2026-04-20 — closed** on branch
+  `AndrewRahman/trajectory-renders`. New `--mode trajectory
+  --trajectory <name> --tap <N>` captures the SpatialMap alone with one
+  tap enabled and a full-brightness trail. All 13 shapes regenerated
+  (Bounce…Square map to Taps 1–12 in order; Triangle wraps to Tap 3).
+  Per-shape origin overrides are in place for Cross (`baseEl=-60`, so
+  the trail differentiates visually from Bounce via dimming + the
+  plugin's native elevation label). Random's trail samples a ±1s
+  window at flat decay in screenshot mode (gated by
+  `drawFullTrajectoryForScreenshot`) so it reads as a continuous
+  sprawl rather than a tiny live-view wisp. `traj_none.png` is left
+  untouched (not in the user's shape-by-shape list).
+
 ## Files the next session needs
 
 - Branch `AndrewRahman/screenshots-r2` (checked out in the `tallinn`
