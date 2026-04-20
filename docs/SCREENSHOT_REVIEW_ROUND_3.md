@@ -31,6 +31,7 @@ round 3. User iterates per-item; this table tracks state.
 | 18 | `hero-plugin.{webm,mp4}` (new) | ✅ Encoded, site wiring pending | see "Item 18 — Hero video (Merry-Go-Round)" below |
 | 19 | `orbit-dance.{webm,mp4}` (new) | ✅ Encoded, destination slot TBD | see "Item 19 — Orbit Dance video" below |
 | 20 | `spiral-descent.{webm,mp4}` (new) | ✅ Encoded, destination slot TBD | see "Item 20 — Spiral Descent video" below |
+| 21 | `quad-swirl.{webm,mp4}` (new) | ✅ Encoded, destination slot TBD | see "Item 21 — Quad Swirl video" below |
 
 Investigation-only: `screenshot_shimmer.png` (14) — confirmed still in use
 on the personal site; no change required.
@@ -701,18 +702,66 @@ frames pass through 1:1.
       `<video autoplay muted loop playsInline poster>` pattern as
       the hero video, plus `prefers-reduced-motion` fallback.
 
+## Item 21 — Quad Swirl video
+
+Fourth plugin-in-action video, same pipeline as items 19 and 20.
+Source delivered as `.context/attachments/Quad Swirl.mov` —
+1640×1160 (already at target resolution, no scale needed), VFR avg
+34.46 fps, 12.53 s, 432 decodable frames, H.264, 6.47 MB.
+
+Destination slot on `andrewrahman-com` is **TBD** — likely candidate
+alongside Orbit Dance and Spiral Descent in a preset showcase / scroll
+demo section.
+
+### Pipeline (identical to items 19/20)
+
+```bash
+ffmpeg -y -i ".context/attachments/Quad Swirl.mov" \
+  -c:v libsvtav1 -preset 6 -crf 32 \
+  -pix_fmt yuv420p -an -fps_mode passthrough \
+  -movflags +faststart \
+  docs/assets/quad-swirl.webm
+
+ffmpeg -y -i ".context/attachments/Quad Swirl.mov" \
+  -c:v libx264 -preset slow -crf 23 -profile:v high \
+  -pix_fmt yuv420p -an -fps_mode passthrough \
+  -movflags +faststart \
+  docs/assets/quad-swirl.mp4
+```
+
+### As-built artefacts (in `docs/assets/`)
+
+| File | Codec | Size | Budget | Headroom | Frames |
+|------|-------|------|--------|----------|--------|
+| `quad-swirl.webm` | AV1 (libsvtav1, CRF 32) | **270 KB** | ≤2 MB | 87% | 432 |
+| `quad-swirl.mp4` | H.264 High @ L5.1 (CRF 23) | **370 KB** | ≤4 MB | 91% | 432 |
+
+Both: 1640×1160, VFR avg 34.46 fps (source preserved), yuv420p, no
+audio, `+faststart`, ~12.52 s duration. All 432 decodable source
+frames pass through 1:1.
+
+### Still to do
+
+- [ ] Decide destination slot on `andrewrahman-com`.
+- [ ] Copy `quad-swirl.webm` + `.mp4` into
+      `andrewrahman-com/public/assets/` once slot is chosen.
+- [ ] Wire into chosen component with same
+      `<video autoplay muted loop playsInline poster>` pattern as
+      the hero video, plus `prefers-reduced-motion` fallback.
+
 ## Next session / next item
 
 Items 7, 12, 16, 17 are closed. Item 10 is closed via HITL (see
-above). Items 18, 19, and 20 encodes are complete; site wiring is
-the remaining step for all three. Remaining open items: **11**
+above). Items 18, 19, 20, and 21 encodes are complete; site wiring
+is the remaining step for all four. Remaining open items: **11**
 (preset-menu screenshot), **18** (hero video — site wiring only),
-**19** (Orbit Dance — destination slot + site wiring), and **20**
-(Spiral Descent — destination slot + site wiring). Item 11 is
+**19** (Orbit Dance — destination slot + site wiring), **20**
+(Spiral Descent — destination slot + site wiring), and **21**
+(Quad Swirl — destination slot + site wiring). Item 11 is
 HITL-eligible like item 10 — if mock iteration exceeds attempt 2,
 escalate to live capture following the item-10 pattern. When items
-11, 18, 19, and 20 close, round 3 is complete and the branch can
-roll up to issue #168.
+11, 18, 19, 20, and 21 close, round 3 is complete and the branch
+can roll up to issue #168.
 
 ### Session backlog (beyond round 3)
 
