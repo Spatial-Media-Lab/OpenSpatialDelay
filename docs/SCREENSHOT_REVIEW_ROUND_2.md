@@ -247,8 +247,8 @@ screenshot until the user decides.
 - Don't touch the 9 accepted screenshots unless a capture-mode change
   incidentally re-runs them (that's fine — their content will be
   identical to `f41a8d9`).
-- Don't try to fix `signal-flow.png` — that's a future project (see
-  `docs/SIGNAL_FLOW_READABILITY_PLAN.md`).
+- Don't try to fix `signal-flow.png` — that's a separate track
+  (resolved in pass 4, merged via PR #211 / PR #213).
 - Don't delete `screenshot_shimmer.png` or any other file without the
   user's explicit go-ahead (item 14 is investigation-only).
 - Don't run `killall AudioComponentRegistrar` or `sudo` anything —
