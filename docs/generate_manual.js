@@ -1210,9 +1210,11 @@ function trajectoryGalleryTable(shapes) {
   const colWidths = new Array(NUM_COLS).fill(COL_W);
   colWidths[NUM_COLS - 1] += CONTENT_W - colWidths.reduce((a, b) => a + b, 0);
 
-  // Image sizing: cell is ~3008 DXA (≈ 200pts). Use 150x110pts per image, aspect 1.363.
-  const IMG_W = 150;
-  const IMG_H = 110;
+  // Image sizing: cell is ~3008 DXA (≈ 200pts). 110x80pt per image, aspect 1.375.
+  // Sized so all 5 rows of the 3×5 grid (14 shapes) fit on one A4 page instead
+  // of orphaning the 14th shape (Triangle) on a new page.
+  const IMG_W = 110;
+  const IMG_H = 80;
 
   function imageCell(shape) {
     const children = [];
