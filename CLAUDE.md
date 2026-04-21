@@ -6,7 +6,7 @@ Spatial delay plugin — each echo lives in 3D space. VST3 + AU, macOS + Windows
 ## What
 - `Source/` — plugin processor, editor, DSP (PluginProcessor.cpp is ~175KB)
 - `Tests/` — Catch2 test suite (162+ tests)
-- `HRTF/` — SOFA files for binaural rendering (6 profiles)
+- `HRTF/` — 5 SOFA files for binaural rendering (the plugin exposes 6 binauralization options: these 5 profiles + a CPU-lite Woodworth ITD/ILD fallback that uses no SOFA file)
 - `scripts/` — build_version.sh, install helpers
 - `docs/` — user manual, legal notices, assets
 - `fonts/` — DM Sans, JetBrains Mono, Roboto (SIL OFL / Apache 2.0)

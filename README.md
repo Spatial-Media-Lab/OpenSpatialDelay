@@ -38,8 +38,8 @@ OpenSpatialDelay is the first plugin in the **Spatial Media Library** — an ope
 - 23 output formats — Binaural, Stereo (5 mic simulation modes), 15 Surround (Quad through 9.1.6 Atmos + SpatialMediaLab 13.1), 6 Ambisonics (1st through 6th order)
 
 **Delay & Modulation**
-- Tempo-synced or free-running delay with cumulative pitch shifting across taps
-- Per-tap pitch shift that preserves timing, layered on top of global pitch
+- Tempo-synced or free-running delay with per-tap pitch shift, layered on top of a global tap-pitch offset
+- Per-tap pitch shift (±12 semitones) that preserves timing via phase-vocoder STFT
 - Wobble modulation — delay-time LFO with morphable waveform (sine → square)
 - Stereo input routing with per-tap L/R channel selection
 - Feedback filters (low-pass + high-pass with resonance), soft clipper, output limiter
