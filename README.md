@@ -38,21 +38,21 @@ OpenSpatialDelay is the first plugin in the **Spatial Media Library** — an ope
 - 23 output formats — Binaural, Stereo (5 mic simulation modes), 15 Surround (Quad through 9.1.6 Atmos + SpatialMediaLab 13.1), 6 Ambisonics (1st through 6th order)
 
 **Delay & Modulation**
-- Tempo-synced or free-running delay with cumulative pitch shifting across taps
-- Per-tap pitch shift that preserves timing, layered on top of global pitch
+- Tempo-synced or free-running delay with per-tap pitch shift, layered on top of a global tap-pitch offset
+- Per-tap pitch shift (±12 semitones) that preserves timing via phase-vocoder STFT
 - Wobble modulation — delay-time LFO with morphable waveform (sine → square)
 - Stereo input routing with per-tap L/R channel selection
 - Feedback filters (low-pass + high-pass with resonance), soft clipper, output limiter
 
 **Animation & Control**
-- 14 trajectory shapes per tap — Orbit, Figure-8, Spiral, Heart, Helix, Bounce, and more
+- 13 trajectory shapes per tap — Orbit, Figure-8, Spiral, Heart, Helix, Bounce, and more (plus "None" to keep a tap static)
 - Forward/reverse trajectory direction
 - [ADM-OSC](https://adm-osc.music.columbia.edu/) receive and send for external position control, plus full OSC control of all parameters via custom `/osd/` namespace
 - Doppler effect with distance-based air absorption
 
 **Workflow**
-- 70 factory presets across 9 categories
-- User preset save/load with custom categories
+- 70 factory presets across 8 curated categories, plus a User category for your own saves
+- Save / load your own presets, including custom categories, from the plugin header
 - Spatial map with real-time trajectory visualization
 - Global tap controls — 6 offset knobs that adjust all enabled taps simultaneously, preserving spatial arrangements
 
