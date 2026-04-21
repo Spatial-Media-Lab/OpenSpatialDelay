@@ -34,7 +34,8 @@
 - User-selectable spatialization algorithm — 7 options (Ambisonics, ConstantPower, DBAP, KNN, MDAP, VBAP, VBIP)
 - 6 binauralization options: 5 curated HRTF profiles from academically validated, freely licensed databases + 1 CPU-lite option (Woodworth ITD+ILD approximation, not an HRTF)
 - Up to 12 manually placeable delay taps, each with its own pitch shift, Doppler, and animated trajectory
-- 14 trajectory shapes for per-tap animation (Orbit, Figure-8, Spiral, Helix, Heart, Bounce, etc.)
+- 13 trajectory shapes for per-tap animation (Orbit, Figure-8, Spiral, Helix, Heart, Bounce, etc.), plus "None" for taps that stay fixed
+- 23 output formats (2 stereo, 15 surround, 6 Ambisonics orders)
 - ADM-OSC receive + send for interoperability with spatial audio renderers, plus an `/osd/` namespace for full parameter control
 - Stereo input with per-tap L / R / L+R channel selection
 - Open-source, licensed under GPL-3.0
@@ -94,7 +95,7 @@ OpenSpatialDelay/
 |   |                                  # delay taps, feedback, OSC, preset state
 |   |-- PluginEditor.h / .cpp          # UI, Colours_OSD palette, spatial map, controls
 |   |-- PhaseVocoderPitchShifter.h     # STFT pitch shifter (2048 FFT, 4x overlap, ±12 st)
-|   |-- TrajectoryEngine.h / .cpp      # 14 trajectory shapes for animated taps
+|   |-- TrajectoryEngine.h / .cpp      # 13 trajectory shapes for animated taps (+ "None" disabled state)
 |   |-- FilterBank.h / .cpp            # Feedback-path LP + HP biquads with resonance
 |   |-- DopplerVelocity.h / .cpp       # Per-tap Doppler pitch from position velocity
 |   |-- PresetData.h / .cpp            # 70 factory presets (C++ static structs)
@@ -143,17 +144,45 @@ OpenSpatialDelay/
 
 #### 3.4.2 Output Format
 
-The plugin auto-detects the output format from the host's track channel count. All speaker positions follow ITU-R BS.775 (ear-level) and BS.2051 (height) standards. Convention: 0° = front, positive azimuth = left.
+The plugin ships **23 output formats** (`NUM_OUTPUT_FORMATS` in `Source/PluginProcessor.h`). It auto-detects the active format from the host's track channel count and selects the matching entry from the `outputFormatRegistry`. All speaker positions follow ITU-R BS.775 (ear-level) and BS.2051 (height) standards. Convention: 0° = front, positive azimuth = left.
 
-| Output Format | Channels | Speaker Layout | LFE |
-|---------------|----------|----------------|-----|
-| Stereo (Binaural or encoded) | 2 | Binaural HRTF renderer (default), or one of: Equal Power, Stereo VBAP, XY, MS, Blumlein (selectable when bus is stereo) | No |
-| Quadraphonic | 4 | L(30°), R(-30°), Ls(110°), Rs(-110°) | No |
-| 5.1 Surround | 6 | L, R, C, Ls, Rs + LFE (ch3) | Yes |
-| 7.1 Surround | 8 | L, R, C, Lss(90°), Rss(-90°), Lsr(135°), Rsr(-135°) + LFE | Yes |
-| 7.1.4 (Atmos bed) | 12 | 7.1 ear-level + Tfl, Tfr, Trl, Trr at 45° elevation + LFE | Yes |
-| 9.1.6 (Atmos full) | 16 | 9.1 ear-level + Tfl, Tfr, Tsl, Tsr, Trl, Trr at 45° elevation + LFE | Yes |
-| Ambisonics (HOA) | 4 / 9 / 16 / 25 / 36 / 49 | 1st through 6th order spherical harmonic channels | No |
+**Stereo (2 formats)**
+
+| Output Format | Channels | Render Path |
+|---|---|---|
+| Binaural | 2 | HRTF convolution for each tap |
+| Stereo (encoded) | 2 | One of 5 mic-simulation modes (Equal Power, Stereo VBAP, XY, MS, Blumlein) selected via the algorithm parameter |
+
+**Surround (15 formats)**
+
+| Output Format | Channels | LFE | Height |
+|---|---|---|---|
+| Quadraphonic | 4 | No | No |
+| 5.0 Surround | 5 | No | No |
+| 5.1 Surround | 6 | Yes | No |
+| 7.0 Surround | 7 | No | No |
+| 7.1 Surround | 8 | Yes | No |
+| 9.1 Surround (ITU-R BS.2051 System H — ear-level) | 10 | Yes | No |
+| Octaphonic | 8 | No | No |
+| 5.1.2 | 8 | Yes | 2 |
+| 5.1.4 | 10 | Yes | 4 |
+| 7.1.2 | 10 | Yes | 2 |
+| 7.1.4 (Atmos bed) | 12 | Yes | 4 |
+| 7.1.6 | 14 | Yes | 6 |
+| 9.1.4 | 14 | Yes | 4 |
+| 9.1.6 (Atmos full) | 16 | Yes | 6 |
+| SML 13.1 (Spatial Media Lab Multi-Use Room) | 14 | Yes | 4 |
+
+**Ambisonics (6 formats, AmbiX ACN/SN3D)**
+
+| Output Format | Channels | Order |
+|---|---|---|
+| Ambisonics FOA | 4 | 1st |
+| Ambisonics SOA | 9 | 2nd |
+| Ambisonics HOA | 16 | 3rd |
+| Ambisonics 4OA | 25 | 4th |
+| Ambisonics 5OA | 36 | 5th |
+| Ambisonics 6OA | 49 | 6th |
 
 **Algorithm × Output Format compatibility:**
 
@@ -253,7 +282,7 @@ The plugin has 12 delay taps. Each tap has 10 APVTS parameters:
 | Distance | 0.0 – 1.0 | Normalized; drives distance attenuation + air absorption. |
 | Doppler Amount | 0.0 – 1.0 | Per-tap Doppler pitch from position velocity. |
 | Pitch Shift | −12 st – +12 st | Per-tap phase-vocoder pitch shift, additive with Global Tap Pitch. |
-| Trajectory Shape | 14 options: None, Orbit, Circle, Line, Bounce, Cross, Figure-8, Heart, Helix, Infinity, Random, Spiral, Square, Triangle | Animated trajectory. |
+| Trajectory Shape | None (disabled) + 13 shapes: Bounce, Circle, Cross, Figure-8, Heart, Helix, Infinity, Line, Orbit, Random, Spiral, Square, Triangle | "None" is the off state; selecting it disables trajectory animation for the tap. |
 | Trajectory Speed | 0.0 – 1.0 | Rate (multiplied by Global Tap Speed). |
 | Trajectory Direction | Forward / Reverse | Trajectory animation direction. |
 | Input Channel | L+R / L / R | Which input channel feeds this tap's delay line. |
@@ -262,7 +291,7 @@ The plugin has 12 delay taps. Each tap has 10 APVTS parameters:
 
 | Feature | Specification |
 |---|---|
-| Output formats | Stereo (binaural + 5 encoded stereo modes), Quad, 5.1, 7.1, 7.1.4, 9.1.6, plus 1st–6th order Ambisonics. See §3.4.2. |
+| Output formats | 23 total: 2 stereo (Binaural + encoded), 15 surround (Quad through 9.1.6 Atmos including the SML 13.1 layout), 6 Ambisonics (1st through 6th order). See §3.4.2. |
 | Spatialization algorithm | User-selectable: Ambisonics, ConstantPower, DBAP, KNN, MDAP, VBAP, VBIP (7 options). |
 | Binauralization options | 6 total — 5 HRTF profiles (Immersive, Natural, Precise, Spatial, Studio Reference) plus 1 CPU-lite "Simple (Low CPU)" Woodworth ITD+ILD option (not an HRTF). |
 | HRTF convolution | Partitioned FFT convolution with spectral-envelope EMA smoothing (magnitude + phase per bin) to prevent phase-misalignment comb filtering. |
@@ -592,7 +621,7 @@ Preset JSON carries the full APVTS state (23 globals + 10 × 12 per-tap params) 
 
 ### 9.2 Factory Presets
 
-v1.0.0 ships **70 factory presets** across **9 categories**:
+v1.0.0 ships **70 factory presets** across **8 curated categories**, plus a **User** category for user-created presets (empty at ship):
 
 | Category | Focus |
 |---|---|
@@ -604,7 +633,13 @@ v1.0.0 ships **70 factory presets** across **9 categories**:
 | Wobble + Modulated | Tape-style and LFO-driven wobble presets |
 | Creative + Experimental | Non-standard designs (gated, chaotic, glitch) |
 | Rhythmic | Tempo-synced grooves and polymetric patterns |
-| User | Empty at ship; fills with user-saved presets |
+| **User** (ships empty) | Users can save new presets from the plugin header preset menu at any time. User presets are saved as JSON under `~/Library/Audio/Presets/OpenSpatialDelay/User/` on macOS and are indistinguishable from factory presets to the loader. Users can also create their own custom categories. |
+
+### 9.3 User Preset Authoring
+
+- Save: header menu → **Save As** → name + category (pick an existing category or type a new one).
+- Delete / rename: edit the JSON file on disk, or use the header menu entries.
+- Share: user preset JSON files are plain text and portable between OSD installs.
 
 ---
 
