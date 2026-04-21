@@ -210,3 +210,108 @@ Things worth confirming before committing to Option A:
 - `02-05-SENDER-SETUP.md` — dashboard walkthrough (steps 1–5 for Sender UI)
 - `.planning/STATE.md` — Phase 02 decisions list (update once sending domain is finalized)
 - `site/app/privacy/page.tsx` — privacy policy contact line (may need update if pivoting)
+
+---
+
+## 12 — Session log 2026-04-21 (Option A execution)
+
+**Decision:** Option A chosen — pivot sender domain to `andrewrahman.com` using ImprovMX forwarder.
+
+**Alias refinement:** sender identity is `hey@andrewrahman.com` (not `andrew@andrewrahman.com` as originally drafted in §8). Forwards to `andrewjrahman@gmail.com` via ImprovMX.
+
+**DNS-host discovery (contradicts §8 prerequisite assumption):** `andrewrahman.com` nameservers are `ns1.netfirms.com` / `ns2.netfirms.com` — DNS lives at **Netfirms, not Netlify**. Plan 02-04's DNS cutover to Netlify (Tasks 2/3/4) was never executed; the andrewrahman.com apex still resolves to `66.96.149.1` (Netfirms/HostGator parking page, last-modified 2023-09-27). Option A therefore proceeds with DNS records added at Netfirms, not Netlify. Plan 02-04 completion + Netlify apex migration is deferred to a later session — it does not block Sender.net sender-identity setup.
+
+**Actions completed this session:**
+
+1. ImprovMX account created; `andrewrahman.com` added; alias `hey@andrewrahman.com → andrewjrahman@gmail.com` configured.
+2. Netfirms DNS — deleted stale `MX @ mx.andrewrahman.com` (priority 30) and stale `TXT @ v=spf1 ip4:66.96.128.0/18 include:websitewelcome.com ?all`. Deleted wildcard `MX * mx.andrewrahman.com` as cleanup. Added ImprovMX records:
+   - `MX @ mx1.improvmx.com` priority 10
+   - `MX @ mx2.improvmx.com` priority 20
+   - `TXT @ v=spf1 include:spf.improvmx.com ~all`
+3. Sender.net — domain `andrewrahman.com` added; DNS panel generated per-account values.
+4. Netfirms DNS — merged Sender SPF into ImprovMX SPF, added Sender DKIM + DMARC:
+   - **Edit** `TXT @` → `v=spf1 include:spf.improvmx.com include:sendersrv.com ~all`
+   - **Add** `CNAME sender._domainkey → dkim.sendersrv.com`
+   - **Add** `TXT _dmarc → v=DMARC1; p=none;`
+5. Tested forwarder end-to-end: external email sent to `hey@andrewrahman.com` arrived in Gmail via ImprovMX. Forwarding is live.
+
+**Current state at session pause:**
+
+- **ns2.netfirms.com** — all new records serving correctly (SPF, DKIM, DMARC, MX verified via `dig @ns2.netfirms.com`)
+- **ns1.netfirms.com** — still serving stale zone (old SPF, old MX, missing DMARC); DKIM CNAME present. Netfirms' internal sync between NS1 and NS2 is the bottleneck; panel warns "changes may take 4–8 hours".
+- **Sender.net verification** — DKIM has hit green (queries that landed on ns2); SPF and DMARC still flip red/green depending on which NS Sender's check queries. Expected to stabilise all-green once ns1 catches up.
+- **ImprovMX internal DNS check** — still red for MX records (checker queries public resolvers with cached old values); real mail flow works regardless.
+
+**Existing unrelated Netfirms records preserved:**
+
+- `CNAME dkim._domainkey → cur.dkim.veigmail.net` (old Netfirms email DKIM, different selector `dkim` vs our `sender`, no conflict)
+- `A` records for site + legacy subdomains (`ftp`, `popmail`, `pop`, `imap`, `smtp`, `mail`, `webmail`, `email`, etc.) — orphaned from old Netfirms email setup; harmless
+- `CNAME _acme-challenge → andrewrahman.com.letsencry...` — Let's Encrypt validation, leave alone
+
+**Deviation from §8 order of operations:**
+
+- §8 step 1 (Netlify migration complete) skipped — andrewrahman.com DNS stayed at Netfirms; records added there directly. When Netlify migration does happen in a later session, the mail-related DNS records (MX ×2, SPF TXT, DKIM CNAME, DMARC TXT) will need to be re-created at Netlify's DNS UI before nameservers flip. Track as a prerequisite for the Netlify cutover.
+
+**Resume checklist (next session):**
+
+1. Run `dig @ns1.netfirms.com TXT andrewrahman.com +short` — expect merged SPF. If still stale, wait.
+2. Back in Sender.net Domains screen → click "Check SPF, DKIM and DMARC records" — expect all-green.
+3. Continue with SENDER-SETUP.md steps 2–5 (form, DOI automation, data-region, self-test) using from-address `hey@andrewrahman.com` in the DOI automation.
+4. Email `support@sender.net` requesting account verification (required to unlock double opt-in) — template in §8 step 7.
+5. Capture FORM_ID; set aside for Plan 02-05 Task 2 (code changes, deferred until Netlify deploy of andrewrahman-com site).
+
+**Dependency reminder:** Plan 02-05 Tasks 2–4 (site code + env var + E2E UAT) still depend on Plan 02-04 Tasks 2–4 (Netlify deploy + custom-domain attach + DNS cutover) being executed. Sender-side setup can complete fully before that happens; the FORM_ID sits in Sender waiting for the site to go live.
+
+---
+
+## 13 — Session continuation 2026-04-22 (ns1 synced + design correction)
+
+**ns1 sync completion:** Netfirms ns1 caught up ~30 minutes after records were added (much faster than the 4–8h warning). Verified via `dig @ns1.netfirms.com`:
+- SPF: `v=spf1 include:spf.improvmx.com include:sendersrv.com ~all` ✅
+- MX: `10 mx1.improvmx.com`, `20 mx2.improvmx.com` ✅
+- DKIM: `dkim.sendersrv.com` ✅
+- DMARC still lagging on ns1 per direct query but Sender's panel shows all-green (cached verified state from earlier ns2 hits). Functionally complete.
+
+**Sender.net — domain auth status:** ALL GREEN (SPF + DKIM + DMARC).
+
+**Sender.net — progress this session:**
+1. Groups created: `osd-unconfirmed`, `osd-confirmed` ✅
+2. Embedded signup form published. FORM_ID captured (pending paste into this log).
+3. DOI automation — NOT YET BUILT (next step).
+
+**Critical design correction — `/get-osd/` is NOT the form page.** Fresh read of `andrewrahman-com` origin/main (local clone was 93 commits behind):
+- **Homepage (`/`)** is the email-capture surface — `DownloadForm` component embeds the Sender form (`app/page.tsx` line ~992). `NEXT_PUBLIC_SENDER_FORM_ID` drives it.
+- **`/get-osd/`** is the POST-DOI-CONFIRM landing page: heading "Confirmed · you're in" + `DownloadButtons` (OS-detected macOS + Windows .zip) + Patreon CTA.
+- **Downloads are self-hosted** at `https://andrewrahman.com/assets/OpenSpatialDelay-v1.0.0-macOS-arm64.zip` and `…-Windows-x64.zip`. NOT GitHub releases. `lib/release.ts` is the single source of truth for filenames + paths.
+- **Windows build IS live** (`WIN_ZIP_AVAILABLE = true` in `lib/release.ts`). Earlier concern about missing Windows build was based on stale GitHub-releases data; irrelevant under the self-hosted-assets design.
+
+**Consequence — DOI email simplifies drastically:**
+- **No download buttons in the email.** The email is pure confirm-action.
+- **Post-confirm redirect URL** = `https://andrewrahman.com/get-osd/`. Configured in Sender's DOI/form settings.
+- Patreon CTA already lives on `/get-osd/` — can optionally drop from email (or keep as soft duplicate).
+
+**Revised DOI email body (replaces Plan 02-05 Task 1 Step C.14 spec):**
+- Subject: `Confirm your subscription to OpenSpatialDelay`
+- Preheader: `One click to confirm and grab your installer.`
+- From name: `Andrew Rahman`
+- From email: `hey@andrewrahman.com`
+- Body blocks (in order):
+  1. Heading: `You're one click away from OpenSpatialDelay.`
+  2. Paragraph: `Click below to confirm your subscription. We'll take you straight to the download.`
+  3. Button: `Confirm my subscription` → URL `{$double-optin-link}` (primary/brand)
+  - (Optional) Paragraph: soft Patreon line — may be dropped since `/get-osd/` already carries a Patreon CTA.
+
+**Dependency correction:** Plan 02-05 Task 2 site-code work is largely already done on `andrewrahman-com` origin/main. `DownloadForm` component, `DownloadButtons` component, `/get-osd/` post-confirm page, `lib/release.ts` constants, `/assets/` zip hosting — all present. Remaining code work scopes down to:
+- Confirm `_headers` CSP covers `cdn.sender.net` + Sender runtime domains (probably already done)
+- Confirm `app/privacy/page.tsx` names Sender.net as processor (probably already done per commit `986a898 chore(03-05): migrate .env.example env var TALLY_FORM_ID -> SENDER_FORM_ID`)
+- Sender-embed Playwright spec (`tests/sender-embed.spec.ts`) may or may not exist — verify
+
+**Local clone hygiene:** `andrewrahman-com` local at this workstation is 93 commits behind origin + 2 ahead (local Plan 02-05 work that never got pushed because the push was superseded by origin's redesign). Rebase/reset recommended before further code work — separate task, not blocking Sender setup.
+
+**Resume checklist for next step (Step 3 in Sender):**
+1. Build DOI automation per revised body above.
+2. Set post-confirm redirect URL = `https://andrewrahman.com/get-osd/` (exact setting location: Sender's automation success-redirect OR the form's post-confirm URL — locate in-UI during build).
+3. Toggle automation to ACTIVE.
+4. Data region check (Step 4 in SENDER-SETUP).
+5. Email `support@sender.net` requesting account verification to unlock double opt-in.
+6. Paste FORM_ID into this log + STATE.md so downstream code work can wire it when the site deploys.

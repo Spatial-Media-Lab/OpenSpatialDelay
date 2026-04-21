@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: paused
-stopped_at: "Phase 02 Plan 05 (Sender.net) blocked on sending-domain decision — see .planning/phases/02-email-capture-funding-infrastructure/02-05-SENDING-DOMAIN-RESEARCH.md. Phase 05 Wave 2 also paused for HITL — see .planning/phases/05-launch-announcements/PAUSE-T-10-v3.md."
-last_updated: "2026-04-19T16:30:00.000Z"
-last_activity: 2026-04-19
+stopped_at: "Phase 02 Plan 05 (Sender.net) — domain auth complete 2026-04-22 (ns1 synced; SPF+DKIM+DMARC all green on Sender); groups osd-unconfirmed/osd-confirmed created; embedded form published (FORM_ID pending capture). Design pivot 2026-04-22: DOI email is confirm-button-only; downloads live on /get-osd/ post-confirm page; Sender post-confirm redirect URL = https://andrewrahman.com/get-osd/. Remaining: build DOI automation per revised body, data-region check, email support@sender.net for account verification. Site code already on andrewrahman-com origin/main (DownloadForm, DownloadButtons, /get-osd/, lib/release.ts, /assets/zips). Production flip gated on Plan 02-04 Netlify deploy. See .planning/phases/02-email-capture-funding-infrastructure/02-05-SENDING-DOMAIN-RESEARCH.md §12–§13. Phase 05 Wave 2 also paused for HITL — see .planning/phases/05-launch-announcements/PAUSE-T-10-v3.md."
+last_updated: "2026-04-22T00:15:00.000Z"
+last_activity: 2026-04-22
 progress:
   total_phases: 5
   completed_phases: 1
@@ -26,10 +26,16 @@ See: .planning/PROJECT.md (updated 2026-04-14)
 ## Current Position
 
 **Active blocker — Phase 02 Plan 05 (Sender.net email-capture)**
-Status: PAUSED pending sending-domain decision.
-Root cause: Sender.net gates double opt-in behind account verification; verification requires SPF/DKIM/DMARC on the sending domain. DNS for `spatialmedialab.org` is hosted at InterNetX AutoDNS (not jackhost) and is not directly accessible to Andrew — AutoDNS credentials presumed held by Timo Bittner.
-Resume file: `.planning/phases/02-email-capture-funding-infrastructure/02-05-SENDING-DOMAIN-RESEARCH.md`
-Research complete 2026-04-19 — user researching options before committing to recommended pivot (Option A: send from `andrew@andrewrahman.com` via ImprovMX forwarder).
+Status: DOI automation build pending (no longer DNS-blocked).
+Decision (2026-04-21): Option A — sender domain = `andrewrahman.com`, sender identity = `hey@andrewrahman.com`, forwarder = ImprovMX → Gmail. DNS host = Netfirms (Plan 02-04 Netlify cutover deferred).
+Progress 2026-04-21 → 2026-04-22:
+  - ImprovMX configured; Netfirms DNS records added + stale records removed; mail forwarding verified end-to-end.
+  - Netfirms ns1 sync completed ~30 min after record addition (much faster than Netfirms' 4–8h warning).
+  - Sender.net: SPF + DKIM + DMARC all green; groups `osd-unconfirmed` + `osd-confirmed` created; embedded signup form published (FORM_ID pending capture).
+**Design pivot 2026-04-22** — after reading `andrewrahman-com` origin/main fresh (local clone was 93 commits behind): the DOI email is confirm-button-only (no download buttons); downloads live on `/get-osd/` (post-DOI landing page with `DownloadButtons` component); Sender's post-confirm redirect URL = `https://andrewrahman.com/get-osd/`. Site code (DownloadForm, DownloadButtons, /get-osd/, lib/release.ts, self-hosted /assets/*.zip) already on origin/main — remaining code work scopes to CSP/privacy-page/test-spec spot-checks, not a rewrite.
+Resume file: `.planning/phases/02-email-capture-funding-infrastructure/02-05-SENDING-DOMAIN-RESEARCH.md §12–§13` (session logs + resume checklist).
+Next session: (1) build DOI automation in Sender per revised body in SENDER-SETUP.md Step 3; (2) set post-confirm redirect URL to /get-osd/; (3) data-region check; (4) email `support@sender.net` requesting account verification.
+Downstream dep: production flip (Netlify env var + live E2E UAT) waits on Plan 02-04 Netlify deploy/cutover. Local clone of `andrewrahman-com` is 93 behind + 2 ahead of origin/main — needs git rebase/reset before further code work; not blocking Sender setup.
 
 **Secondary — Phase 05 (launch-announcements)**
 Plan: 8 of 9 (Wave 1 complete; Wave 2 + 3 pending)

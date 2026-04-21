@@ -1,14 +1,22 @@
 # Sender.net Setup Walkthrough (Plan 02-05 Task 1)
 
-**Goal:** Stand up the Sender.net form, groups, and DOI automation that Plan 02-05 depends on. The site-side code is already done (commits `fce5663` + `a4ef090` in `andrewrahman-com` repo). You provide the FORM_ID + asset URLs, I record them here, and the actual production flip happens in Phase-3 tail plan **03-09** (Netlify env var + clear-cache deploy + live E2E UAT) once the Phase-3 website is ready and DNS flips to Netlify.
+**Goal:** Stand up the Sender.net form, groups, and DOI automation that Plan 02-05 depends on. Site-side code already exists on `andrewrahman-com` origin/main (`DownloadForm` on homepage, `DownloadButtons` + `/get-osd/` post-confirm page, `lib/release.ts` asset constants, `/assets/*.zip` hosting). You provide the FORM_ID, I record it here, and the production flip happens when Plan 02-04 completes (Netlify deploy of andrewrahman-com + env var `NEXT_PUBLIC_SENDER_FORM_ID` + live E2E UAT).
 
-**Source of truth:** 02-05-PLAN.md `<task status="complete">` block — this doc is the distilled in-browser checklist. If the plan and this doc disagree, the plan wins.
+**Source of truth:** 02-05-PLAN.md `<task>` block as amended by the 2026-04-22 design pivot (see `<objective>` block and `02-05-SENDING-DOMAIN-RESEARCH.md §13`). This doc is the distilled in-browser checklist. If plan and doc disagree, the plan wins.
 
-> ⚠️ **BLOCKED 2026-04-19 — read `02-05-SENDING-DOMAIN-RESEARCH.md` before proceeding.**
+> ✅ **DOMAIN AUTH COMPLETE 2026-04-22** — Option A resolved, ns1 synced, all three Sender checks green. See `02-05-SENDING-DOMAIN-RESEARCH.md §13` for continuation session log.
 >
-> Sender.net gates double opt-in behind account verification, which requires a verified sending domain with working SPF/DKIM/DMARC. Research found that DNS for `spatialmedialab.org` is hosted at InterNetX AutoDNS (not jackhost), and the AutoDNS credentials are not accessible to Andrew. The research doc enumerates three options (pivot sending domain to `andrewrahman.com` + forwarder · ask Timo Bittner to add DNS records · use Sender shared domain), picks a recommended path, and provides the ordered resumption checklist. **Do not execute any step below until the sending-domain decision is made per that doc.**
+> **Decision (2026-04-21):** Option A chosen — sender domain = `andrewrahman.com`, sender identity = `hey@andrewrahman.com` (forwarded to Gmail via ImprovMX). DNS host = Netfirms (Plan 02-04 Netlify cutover deferred).
+>
+> **State (2026-04-22):** ImprovMX + Sender DNS records live at Netfirms; both `ns1` and `ns2` serving new zone. Mail forwarding verified end-to-end. Sender.net: SPF + DKIM + DMARC all green; groups `osd-unconfirmed` + `osd-confirmed` created; embedded form published; FORM_ID pending capture.
+>
+> **Design pivot (2026-04-22):** The DOI email no longer contains download buttons. Downloads live on `andrewrahman.com/get-osd/` (post-confirm landing page with `DownloadButtons` component). Sender's post-confirm redirect URL = `https://andrewrahman.com/get-osd/`. Rationale + full revised spec in research doc §13.
+>
+> **Remaining work on Sender side:** Step 3 (DOI automation — revised body below), Step 4 (data region), Step 5 (self-test, optional), then email `support@sender.net` requesting account verification to unlock double opt-in.
+>
+> **Sender terminology correction:** Sender.net has no standalone "Add sender" screen. The from-address is configured inside each campaign/automation's Details step, not globally.
 
-**Plan status (2026-04-19):** Paused pending sending-domain decision. Sender account exists (user-created earlier). Groups/form/automation not yet built because DOI is locked behind verification. The 2026-04-17 note below ("Task 1 was erroneously marked complete") remains accurate for historical context.
+**Plan status (2026-04-22):** Domain verified. Groups + form built. DOI automation pending. Site-side code already live on `andrewrahman-com` origin/main; remaining code work = spot-check `_headers` CSP + `app/privacy/page.tsx` processor prose + Playwright spec. Production flip gated on Plan 02-04 Netlify deploy.
 
 **Plan status (2026-04-17):** Sender account exists (user-created earlier). Nothing else has been done. Task 1 was erroneously marked complete in a prior session — we're now doing the actual dashboard work.
 
@@ -68,11 +76,13 @@ By subscribing, you agree to receive occasional updates about OpenSpatialDelay a
 
 ---
 
-## Step 3 — DOI automation (the core of Option A)
+## Step 3 — DOI automation (revised 2026-04-22)
+
+**Design note:** The DOI email is confirm-button-only. Downloads live on `andrewrahman.com/get-osd/`, not in the email. Sender's post-confirm redirect takes the subscriber there. The old version of this Step — with macOS + Windows buttons in the email body — is obsolete; see `02-05-SENDING-DOMAIN-RESEARCH.md §13` for the pivot rationale.
 
 Left sidebar → **Automation** → **New workflow**.
 
-**Workflow name:** `OSD DOI — confirm + deliver download`
+**Workflow name:** `OSD DOI — confirm subscription`
 
 **Trigger:**
 - Event: `Subscriber added to group`
@@ -82,33 +92,32 @@ Left sidebar → **Automation** → **New workflow**.
 
 | Field | Value |
 |-------|-------|
-| Subject | `Confirm your subscription and download OpenSpatialDelay` |
+| Subject | `Confirm your subscription to OpenSpatialDelay` |
 | Preheader | `One click to confirm and grab your installer.` |
 | From name | `Andrew Rahman` |
-| From address | your controller email (Step 0) |
+| From address | `hey@andrewrahman.com` (Option A sender identity; forwarded to Gmail via ImprovMX) |
+| Reply-to | `hey@andrewrahman.com` (optional; keeps replies flowing through the forwarder) |
 
 **Body** — use Sender's block editor, paste each block verbatim:
 
 1. **Heading block:** `You're one click away from OpenSpatialDelay.`
-2. **Paragraph block:** `Thanks for signing up. Click below to confirm your subscription, then grab your download for macOS or Windows.`
-3. **Button block #1 (confirm):**
+2. **Paragraph block:** `Click below to confirm your subscription. We'll take you straight to the download.`
+3. **Button block (confirm):**
    - Label: `Confirm my subscription`
    - URL: `{$double-optin-link}` ← **paste the literal mergetag including braces and dollar sign**; Sender resolves per-subscriber
    - Style: **primary** / brand colour
-4. **Paragraph block:** `Your downloads:`
-5. **Button block #2 (macOS):**
-   - Label: `Download for macOS`
-   - URL: `https://github.com/Spatial-Media-Lab/OpenSpatialDelay/releases/download/v1.0.0/<exact-macOS-filename>`
-   - Style: secondary
-6. **Button block #3 (Windows):**
-   - Label: `Download for Windows`
-   - URL: `https://github.com/Spatial-Media-Lab/OpenSpatialDelay/releases/download/v1.0.0/<exact-Windows-filename>`
-   - Style: secondary
-7. **Paragraph block (Patreon CTA):** `If you find OpenSpatialDelay useful, you can support the Spatial Media Library pipeline on [Patreon](https://patreon.com/AndrewRahman). Every tier helps keep these tools free and open-source.`
+4. *(Optional)* **Paragraph block (Patreon CTA):** `If you find OpenSpatialDelay useful, you can support the Spatial Media Library pipeline on [Patreon](https://patreon.com/AndrewRahman). Every tier helps keep these tools free and open-source.`
+   — OK to drop entirely since `/get-osd/` already carries a Patreon CTA below the downloads. Keeping it in the email is a soft duplicate; dropping it makes the email tighter.
 
-**Exact asset filenames:** open https://github.com/Spatial-Media-Lab/OpenSpatialDelay/releases/tag/v1.0.0 in a new tab, copy the precise filenames from the Assets list. Do not guess. Plan expects `.pkg` for macOS and `.exe` for Windows but the real release may use `.dmg` or `.msi`.
+**No download buttons in this email.** If Sender's template pre-fills any extra blocks, delete them.
 
-**Save to reply** ▸ **B. macOS URL** and ▸ **C. Windows URL**.
+**Post-confirm redirect URL:** locate the setting in Sender's form builder (Form settings → "After confirmation redirect URL" or similar) OR in the DOI automation's confirm-action step — wherever Sender exposes it. Set it to:
+
+```
+https://andrewrahman.com/get-osd/
+```
+
+This is what ties "click confirm" to "see downloads". If you can't find this setting during the build, flag it and we'll dig into Sender's UI together.
 
 **Step B: Wait** → `1 minute` (gives subscriber time to click before condition fires)
 
@@ -135,38 +144,39 @@ Account settings (top-right avatar → Settings or Profile) → look for **"Data
 
 ---
 
-## Step 5 — Self-test (optional now; can defer to Phase-3 tail UAT)
+## Step 5 — Self-test (revised 2026-04-22)
 
-You can skip this during Phase 2 close-out and do it as part of Plan 03-09 once the production site is live. But if you want to confirm the automation works before the site exists:
+You can skip this during Phase 2 close-out and do it as part of the live UAT once the site is deployed. But if you want to confirm the automation works before the site exists:
 
 1. Grab the form's **share URL** from Sender (Forms → your form → Share / Public link) OR paste the embed snippet into a local `test.html` file and open it in a browser.
 2. Submit your real email.
 3. Confirm in the Sender dashboard: subscriber appears in `osd-unconfirmed`.
-4. Wait ≤60s. DOI email arrives.
-5. Open email. Verify four elements present in order: confirm button, macOS button, Windows button, Patreon CTA.
-6. Click confirm. Subscriber moves to `osd-confirmed` in dashboard.
-7. Click each download button. Correct installer downloads.
+4. Wait ≤60s. DOI email arrives at `andrewjrahman@gmail.com` via ImprovMX (`hey@andrewrahman.com` forwarder).
+5. Open email. Verify it contains a single primary button labelled `Confirm my subscription`. No download buttons in the email body. (Optional: soft Patreon CTA paragraph, if kept.)
+6. Click confirm. Two things must happen:
+   - Subscriber moves to `osd-confirmed` in Sender dashboard.
+   - Browser lands on `https://andrewrahman.com/get-osd/` (once that URL is live) OR Sender's generic "subscribed" page if the post-confirm redirect isn't configured yet. Until the site is live on Netlify, you'll hit the Netfirms placeholder at `andrewrahman.com/get-osd/` (a 404 / Netfirms parking page) — that's expected and not a bug.
+7. (Deferred to live UAT) On `/get-osd/`, both macOS and Windows `Download for ...` buttons render; clicking them downloads `OpenSpatialDelay-v1.0.0-{macOS-arm64|Windows-x64}.zip` from `/assets/`.
 
-If any step fails, fix in Sender UI before replying.
+If any step 1–6 fails before the site goes live, fix in Sender UI before replying.
 
 ---
 
 ## What to reply with
 
-Paste these four values in one message:
+Paste these two values in one message:
 
 ```
 A. FORM_ID = <value from data-sender-form-id>
-B. macOS URL = https://github.com/Spatial-Media-Lab/OpenSpatialDelay/releases/download/v1.0.0/<filename>
-C. Windows URL = https://github.com/Spatial-Media-Lab/OpenSpatialDelay/releases/download/v1.0.0/<filename>
-D. Data region = <value or "awaiting support">
+B. Data region = <value or "awaiting support">
 ```
 
+(macOS + Windows URLs from the old checklist are no longer needed — downloads are served from `/assets/` on the site, wired up via `lib/release.ts`. No per-email URL capture required.)
+
 Then I'll:
-1. Write `02-05-SUMMARY.md` with `plan_status: code-complete-UAT-deferred` and embed A–D
-2. Create the Phase-3 tail plan `03-09-PLAN.md` that will, when the site is ready, set the Netlify env var + clear-cache deploy + live E2E UAT + flip DIST-01 to complete
-3. Update STATE/ROADMAP to reflect 02-05 as substantially complete
-4. Leave DIST-01 in-progress (not complete) until 03-09 runs
+1. Write `02-05-SUMMARY.md` with `plan_status: sender-setup-complete` and embed A + B
+2. Update STATE/ROADMAP to reflect 02-05 as substantially complete (Sender side); flag the remaining code/deploy work (Netlify env var + Netlify deploy of andrewrahman-com + live E2E UAT) as dependent on Plan 02-04 completion
+3. Leave DIST-01 in-progress (not complete) until the live E2E UAT runs against the deployed site
 
 ## Evidence screenshots
 
