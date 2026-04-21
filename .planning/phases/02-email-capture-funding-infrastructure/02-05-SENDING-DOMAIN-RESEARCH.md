@@ -276,7 +276,7 @@ Things worth confirming before committing to Option A:
 
 **Sender.net — progress this session:**
 1. Groups created: `osd-unconfirmed`, `osd-confirmed` ✅
-2. Embedded signup form published. FORM_ID captured (pending paste into this log).
+2. Embedded signup form published. **FORM_ID = `bkRxov`** (captured 2026-04-22). Wire into `NEXT_PUBLIC_SENDER_FORM_ID` in `andrewrahman-com` Netlify env during Plan 02-04 cutover.
 3. DOI automation — NOT YET BUILT (next step).
 
 **Critical design correction — `/get-osd/` is NOT the form page.** Fresh read of `andrewrahman-com` origin/main (local clone was 93 commits behind):
@@ -315,3 +315,53 @@ Things worth confirming before committing to Option A:
 4. Data region check (Step 4 in SENDER-SETUP).
 5. Email `support@sender.net` requesting account verification to unlock double opt-in.
 6. Paste FORM_ID into this log + STATE.md so downstream code work can wire it when the site deploys.
+
+---
+
+## 14 — Session continuation 2026-04-22 (DOI workflow built, account under review)
+
+**Session window:** 2026-04-22 00:15 → 01:15 GMT+2 (~1 hour).
+
+**FORM_ID:** `bkRxov` (captured from the form's Publishing Settings page). Form URL: `https://stats.sender.net/forms/bkRxov/view`.
+
+**DOI automation built:** `OSD DOI — confirm subscription`. Structure:
+1. **Trigger:** `Subscriber joins a group` → group `osd-unconfirmed`.
+2. **Email step:** `Send an email` — From `Andrew Rahman <hey@andrewrahman.com>`, subject `Confirm your subscription to OpenSpatialDelay`, preheader `One click to confirm and grab your installer.`, blank-template body = Heading (`You're one click away from OpenSpatialDelay.`) + Paragraph (`Click below to confirm your subscription. We'll take you straight to the download.`) + Button (`Confirm my subscription`, URL `{$double-optin-link}`). Using Sender's free-tier default styling for now (orange button, auto-injected `Delivered using Sender` footer + unsubscribe line). Brand polish deferred — see STATE.md "Pending Todos" for brand-settings pass.
+3. **Delay step:** `1 minute`. Required by Sender's documented DOI pattern — gives click event time to register before the condition evaluates. Invisible to end-user (their redirect fires instantly on button click).
+4. **Condition step:** `Workflow email activity` → "Clicked a link" → email = this workflow's email step, link = `{$double-optin-link}`, window = 1 minute.
+5. **Yes branch → Action:** `Move subscriber to group` → `osd-confirmed`.
+6. **No branch:** empty (unconfirmed subscribers persist; manual prune later if needed).
+
+**Form settings touched:** *Publishing > Redirect after submit* → **unchecked**. Rationale: `/get-osd/` is the POST-confirm landing page ("Confirmed · you're in" + DownloadButtons); redirecting there right after form submit would bypass the DOI gate. Sender's default inline success message ("Thanks! Check your email to confirm") is correct UX — user knows to check email, doesn't leave the site.
+
+**Blockers discovered:**
+- **Account verification** — clicking Activate on the workflow surfaced: *"You will be able to activate workflows as soon as your account is reviewed by our team. Usually this happens within 1 hour."* Sender auto-flagged the account for review the moment Activate was clicked — no proactive support ticket needed. Publishing-settings panel confirms: *"Account is under review... you'll receive an update within 1 hour."*
+- **DOI toggle greyed out** on form's Publishing Settings → Double opt-in section — locked with warning *"Double opt-in is only available on verified accounts"*. Expected; unlocks with account verification.
+- **Post-DOI redirect URL field** — NOT FOUND tonight. Almost certainly lives inside the DOI settings panel (currently locked). Assumption: once DOI toggle unlocks, the `/get-osd/` redirect field becomes visible. Next session will verify.
+
+**Decisions & corrections this session:**
+- **Trigger label:** Sender's actual UI label is `Subscriber joins a group`, not `Subscriber added to group` as written in earlier planning docs. Harmless naming drift.
+- **Builder flow:** Sender splits email metadata (subject/sender/preview) from body content. "Create email content" button opens a separate drag-and-drop builder. Template picker lands on "Blank template" tile — chosen to avoid pre-designed marketing templates that would add hero images/logos we don't want.
+- **Palette correction:** Session uncovered that `--accent-regal` lavender (Phase 03-03 D-12 "Patreon CTA only" token) is **abandoned** — Session 3 swapped Patreon CTA to `--accent-green` (`#3BCE6C`), Session 7 extended the through-line to §5 Pipeline. Globals.css:28 still carries a stale `/* Patreon CTA only */` comment. Memory entry `project_andrewrahman_site_cta_palette.md` written + indexed to prevent regression. Current CTA hierarchy: primary cyan `#80d8ff` / secondary green `#3BCE6C` / tertiary dim.
+- **DOI email button styling:** Kept Sender's free-tier orange default for now. Recommended future swap = cyan `#80d8ff` (matches Download OSD primary CTA semantic). Deferred to brand-settings pass (STATE.md todo).
+
+**Evidence artefacts (screenshots captured by Andrew during build):**
+- `~/Desktop/Screenshot 2026-04-22 at 00.25.42.png` — Automations landing (pre-"Create from scratch")
+- `~/Desktop/Screenshot 2026-04-22 at 00.28.30.png` — Trigger picker showing 9 options
+- `~/Desktop/Screenshot 2026-04-22 at 00.38.45.png` — Email Setup panel with sender + subject filled
+- `~/Desktop/Screenshot 2026-04-22 at 00.45.08.png` — Template picker with Blank template tile
+- `~/Desktop/Screenshot 2026-04-22 at 00.50.19.png` — Built DOI email body
+- `~/Desktop/Screenshot 2026-04-22 at 00.55.09.png` — Brand settings page (todo reference)
+- `~/Desktop/Screenshot 2026-04-22 at 01.02.29.png` — Condition Setup with "Workflow email activity" option
+- `~/Desktop/Screenshot 2026-04-22 at 01.06.56.png` — "Account under review" error on Activate click
+- `~/Desktop/Screenshot 2026-04-22 at 01.10.22.png` — Form Settings showing "Redirect after submit"
+- `~/Desktop/Screenshot 2026-04-22 at 01.13.10.png` — Form Publishing Settings with DOI locked + review banner
+
+**Resume checklist for NEXT session:**
+1. **First check:** has Sender's account review completed? Indicators = DOI toggle on form's Publishing Settings is no longer greyed out, AND the "Account is under review" banner is gone. If not, wait or email `support@sender.net` with context.
+2. Enable **Double opt-in toggle** on the form's Publishing Settings (top-right corner of that panel).
+3. Locate + set the **post-DOI redirect URL** → `https://andrewrahman.com/get-osd/`. Should surface inside the now-unlocked DOI settings panel OR in a new field that appears when DOI is toggled on.
+4. Return to the automation (`Automations → OSD DOI — confirm subscription`) and toggle it to **ACTIVE**.
+5. **Data region check** — account Settings/Profile → look for "Data region" / "Data processing region". If visible and = EU, log it. If not visible, ask Sender support.
+6. **Optional self-test** — submit an email via Sender's hosted form URL (`https://stats.sender.net/forms/bkRxov/view`), verify DOI email arrives, click confirm, verify redirect lands on `/get-osd/` (will hit the OLD Netfirms placeholder until Plan 02-04 Netlify cutover — expected). Confirm subscriber moved from `osd-unconfirmed` → `osd-confirmed` in Sender.
+7. **STILL DEFERRED (Plan 02-04):** Netlify deploy of `andrewrahman-com` + apex DNS cutover. Without this, the post-confirm redirect lands on the old Netfirms parking page. Production flip of Plan 02-05 depends on this.

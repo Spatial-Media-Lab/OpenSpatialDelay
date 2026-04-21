@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: paused
-stopped_at: "Phase 02 Plan 05 (Sender.net) — domain auth complete 2026-04-22 (ns1 synced; SPF+DKIM+DMARC all green on Sender); groups osd-unconfirmed/osd-confirmed created; embedded form published (FORM_ID pending capture). Design pivot 2026-04-22: DOI email is confirm-button-only; downloads live on /get-osd/ post-confirm page; Sender post-confirm redirect URL = https://andrewrahman.com/get-osd/. Remaining: build DOI automation per revised body, data-region check, email support@sender.net for account verification. Site code already on andrewrahman-com origin/main (DownloadForm, DownloadButtons, /get-osd/, lib/release.ts, /assets/zips). Production flip gated on Plan 02-04 Netlify deploy. See .planning/phases/02-email-capture-funding-infrastructure/02-05-SENDING-DOMAIN-RESEARCH.md §12–§13. Phase 05 Wave 2 also paused for HITL — see .planning/phases/05-launch-announcements/PAUSE-T-10-v3.md."
-last_updated: "2026-04-22T00:15:00.000Z"
+stopped_at: "Phase 02 Plan 05 (Sender.net) — DOI workflow BUILT 2026-04-22 01:15 (trigger on osd-unconfirmed → email with {$double-optin-link} button → 1min delay → Workflow email activity condition → Move to osd-confirmed on Yes). Workflow saved in Paused state. Account auto-flagged for review when Activate was clicked; Sender says ≤1h — DOI toggle on form is greyed out until review completes. Form's 'Redirect after submit' unchecked (inline success — correct; /get-osd/ is POST-confirm landing so can't redirect there from form submit). Post-DOI redirect URL field not yet found — likely unlocks with DOI toggle. FORM_ID = bkRxov. Next session: (1) verify account review cleared; (2) toggle form DOI on; (3) set post-DOI redirect to https://andrewrahman.com/get-osd/; (4) activate workflow; (5) data-region check; (6) optional self-test. Full session log + screenshot refs + resume checklist in .planning/phases/02-email-capture-funding-infrastructure/02-05-SENDING-DOMAIN-RESEARCH.md §14. Phase 05 Wave 2 also paused for HITL — see .planning/phases/05-launch-announcements/PAUSE-T-10-v3.md."
+last_updated: "2026-04-22T01:15:00.000Z"
 last_activity: 2026-04-22
 progress:
   total_phases: 5
@@ -26,15 +26,17 @@ See: .planning/PROJECT.md (updated 2026-04-14)
 ## Current Position
 
 **Active blocker — Phase 02 Plan 05 (Sender.net email-capture)**
-Status: DOI automation build pending (no longer DNS-blocked).
+Status: DOI workflow BUILT, **account under Sender review (≤1h auto-approval per banner)** — next session should verify review cleared before proceeding.
 Decision (2026-04-21): Option A — sender domain = `andrewrahman.com`, sender identity = `hey@andrewrahman.com`, forwarder = ImprovMX → Gmail. DNS host = Netfirms (Plan 02-04 Netlify cutover deferred).
 Progress 2026-04-21 → 2026-04-22:
   - ImprovMX configured; Netfirms DNS records added + stale records removed; mail forwarding verified end-to-end.
   - Netfirms ns1 sync completed ~30 min after record addition (much faster than Netfirms' 4–8h warning).
-  - Sender.net: SPF + DKIM + DMARC all green; groups `osd-unconfirmed` + `osd-confirmed` created; embedded signup form published (FORM_ID pending capture).
+  - Sender.net: SPF + DKIM + DMARC all green; groups `osd-unconfirmed` + `osd-confirmed` created; embedded signup form published (FORM_ID = `bkRxov`, captured 2026-04-22).
+  - **2026-04-22 session (00:15 → 01:15):** DOI workflow `OSD DOI — confirm subscription` built end-to-end. Trigger → Email step (with `{$double-optin-link}` confirm button, Sender free-tier default styling) → 1min Delay → Condition (Workflow email activity: clicked link) → Yes branch: Move to `osd-confirmed`; No branch empty. Workflow saved in Paused state. Account auto-flagged for review when Activate was clicked (Sender banner: ≤1h auto-approval). Form's "Redirect after submit" unchecked — correct UX (inline success; `/get-osd/` is post-confirm only). Post-DOI redirect URL field not yet located — almost certainly unlocks with the DOI toggle (currently greyed out on form's Publishing Settings with "only available on verified accounts" warning).
 **Design pivot 2026-04-22** — after reading `andrewrahman-com` origin/main fresh (local clone was 93 commits behind): the DOI email is confirm-button-only (no download buttons); downloads live on `/get-osd/` (post-DOI landing page with `DownloadButtons` component); Sender's post-confirm redirect URL = `https://andrewrahman.com/get-osd/`. Site code (DownloadForm, DownloadButtons, /get-osd/, lib/release.ts, self-hosted /assets/*.zip) already on origin/main — remaining code work scopes to CSP/privacy-page/test-spec spot-checks, not a rewrite.
-Resume file: `.planning/phases/02-email-capture-funding-infrastructure/02-05-SENDING-DOMAIN-RESEARCH.md §12–§13` (session logs + resume checklist).
-Next session: (1) build DOI automation in Sender per revised body in SENDER-SETUP.md Step 3; (2) set post-confirm redirect URL to /get-osd/; (3) data-region check; (4) email `support@sender.net` requesting account verification.
+**Palette correction (2026-04-22):** Phase 03-03 D-12 `--accent-regal` lavender "Patreon CTA only" token is ABANDONED — Session 3 swapped Patreon CTA to `--accent-green` (`#3BCE6C`), Session 7 extended the through-line to §5 Pipeline. Current CTA hierarchy: primary cyan `#80d8ff` / secondary green `#3BCE6C` / tertiary dim. See `~/.claude/projects/.../memory/project_andrewrahman_site_cta_palette.md`. `globals.css:28` stale `/* Patreon CTA only */` comment earmarked for cleanup during local-clone rebase.
+Resume file: `.planning/phases/02-email-capture-funding-infrastructure/02-05-SENDING-DOMAIN-RESEARCH.md §14` (full session log + 7-step resume checklist).
+Next session: (1) verify Sender account review cleared (DOI toggle no longer greyed out); (2) enable DOI toggle on form's Publishing Settings; (3) set post-DOI redirect → `https://andrewrahman.com/get-osd/`; (4) activate workflow; (5) data-region check; (6) optional self-test via hosted form URL.
 Downstream dep: production flip (Netlify env var + live E2E UAT) waits on Plan 02-04 Netlify deploy/cutover. Local clone of `andrewrahman-com` is 93 behind + 2 ahead of origin/main — needs git rebase/reset before further code work; not blocking Sender setup.
 
 **Secondary — Phase 05 (launch-announcements)**
@@ -110,7 +112,7 @@ Recent decisions affecting current work:
 
 ### Pending Todos
 
-None yet.
+- **[02-05 BRAND-SETTINGS]** Go through Sender.net account-level **Brand settings** page (logo upload, colour theme, fonts) before next marketing email goes out. Captured 2026-04-22 during DOI build — skipped to keep momentum on the DOI automation itself. Notes from screenshot: accent colour already near-cyan (close to `#80d8ff`), headline font = Fira Sans, paragraph font = DM Sans (DM Sans matches OSD spec ✅). Targets: upload OSD wordmark/logo PNG, pick a preset or tune `--accent-stellar` / `--bg-void` / DM Sans across headline + paragraph, save. Applies globally to all future Sender emails — better than per-email styling.
 
 ### Blockers/Concerns
 
@@ -118,12 +120,12 @@ None yet.
 - Patreon must have 2+ posts before any public link appears in announcements or website (Phase 2 gate before Phase 5).
 - **[03-07 CHECKPOINT-PAUSED]** Task 2 is a `checkpoint:human-verify` gate on opengraph.xyz + metatags.io social-preview rendering. Needs a deploy URL (Netlify push of `andrewrahman-com` main — currently 24 commits ahead of origin, or `netlify deploy --build` for draft). Cannot fabricate verdict — axe/Playwright cannot scrape live social platforms. Blocks 03-07 close + 03-08 start.
 - **[02-06 CLOSED 2026-04-17]** Patreon LAUNCHED and live at `https://patreon.com/AndrewRahman` (HTTP/2 301 → www.patreon.com/AndrewRahman). 4-screenshot evidence requirement waived by user override (non-load-bearing ceremony for solo-creator context — see 02-06-SUMMARY.md Decisions §A). DIST-03 complete. Creator-verified 7 incognito checks at launch time + self-verified reader test.
-- **[02-05 BLOCKED 2026-04-19]** Sender.net DOI gated behind account verification → sending-domain authentication required → no direct DNS access to `spatialmedialab.org` (DNS at InterNetX AutoDNS under Timo's account). Research doc produced with three options and ordered resumption checklist. DIST-01 remains in-progress. Primary decision input needed: pivot to `andrewrahman.com` + ImprovMX forwarder, or wait on Timo, or run both in parallel.
+- **[02-05 PROGRESS 2026-04-22 01:15]** Sender.net DOI workflow BUILT end-to-end (trigger + email + delay + condition + yes-branch action); saved in Paused state. Account auto-flagged for Sender review when Activate was clicked (≤1h auto-approval per banner). Form's DOI toggle currently greyed out ("only available on verified accounts") — unlocks with review. Post-DOI redirect URL field not yet found — likely appears in the now-locked DOI settings panel. Resume steps in SENDING-DOMAIN-RESEARCH.md §14. DIST-01 remains in-progress pending activation + E2E UAT.
 
 ## Session Continuity
 
-Last session: 2026-04-19T16:30:00.000Z
-Stopped at: Phase 02 Plan 05 blocked on sending-domain decision after discovering jackhost-Plesk has no DNS editor for spatialmedialab.org (DNS actually hosted at InterNetX AutoDNS). Research doc complete; Andrew researching before deciding on Option A (pivot to andrewrahman.com + ImprovMX forwarder) vs Option B (ask Timo to add records).
+Last session: 2026-04-22T01:15:00.000Z
+Stopped at: Phase 02 Plan 05 — DOI automation built in Sender, account under review (≤1h auto-approval window). Documented tonight's work + committed + pushed. Resume tomorrow by verifying review cleared, then activating + configuring post-DOI redirect.
 Resume files:
-  - PRIMARY: .planning/phases/02-email-capture-funding-infrastructure/02-05-SENDING-DOMAIN-RESEARCH.md (active blocker)
+  - PRIMARY: .planning/phases/02-email-capture-funding-infrastructure/02-05-SENDING-DOMAIN-RESEARCH.md §14 (latest session log + 7-step resume checklist)
   - Phase 05 pause (secondary, unchanged): .planning/phases/05-launch-announcements/PAUSE-T-10-v3.md
