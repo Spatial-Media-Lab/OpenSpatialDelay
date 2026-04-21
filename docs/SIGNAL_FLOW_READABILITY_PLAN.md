@@ -2,99 +2,132 @@
 
 **File**: `docs/assets/signal-flow.png`
 **Generator**: `docs/generate_signal_flow.py`
-**Current canvas**: 2000×1180 (down from original 2400×1400)
+**Current output**: 4800 × 1800 (logical 2400 × 900 × SCALE=2)
+**Aspect**: 8:3, locked to the DOCX manual render box
+**Status**: **Pass 4 signed off by user** — ready for manual regen.
 
 ## Status
 
-**In progress — not shipped as finished.** Enough rework has landed to
-close the worst structural/readability issues, but the diagram still has
-visible empty zones inside the canvas. Pick this up in the next session
-and keep tightening until it feels "done" end-to-end.
+Pass 4 ("Orbital Horizon") was signed off by the user. The diagram
+was redrawn from scratch on branch `AndrewRahman/flow-diagram-v4`
+after passes 1-3 were judged "not greatly improved." The rewrite
+fixes a latent aspect-ratio bug and re-stages the composition around
+the brand's stated design philosophy. A follow-up commit doubled the
+render DPI without changing geometry.
 
-## What has been done (see commit history on `AndrewRahman/issue-168-backlog`)
+The DOCX and PDF still need to be regenerated to pick up the new
+PNG — see "Next session" at the bottom.
 
-Structural fixes (11-item list from original review):
+## Root cause found during pass-4 research
 
-1. ✅ HRTF Convolution / Simple Stereo overlap fixed — Spatialization Engine
-   is now a clean 2×4 grid, no floating annotations.
-2. ✅ "mono sources" label placed in a BG-filled pill so it punches
-   through panel borders.
-3. ✅ Orphan "Output: 1-49 channels | Stereo | Binaural | Ambisonics"
-   strip removed; format info absorbed into Spat panel subtitle.
-4. ✅ Per-Tap and Feedback intra-group arrows bumped to width=3.
-5. ✅ Dry path rerouted: short arrow from Stereo Input split into a
-   wide-flat Latency Compensation bar, then straight down the narrow
-   right-gutter into Crossfade from the right.
-6. ✅ Feedback return rerouted through the inter-panel corridor (between
-   Spat and Feedback panels) with a "back to delay input" pill above
-   Spat panel's top.
-7. ✅ Removed the misleading direct arrow `Dual Delay Lines →
-   Spatialization Engine` — spat is fed only via Per-Tap output.
-8. ✅ Orphan "Phase Vocoder Details" and "Tape Wobble Emulation"
-   callouts dropped.
-9. ✅ Legend gained a 4th entry explaining group-header colour semantics.
-10. ✅ "x12 taps per delay line" replaced with "12 taps × 2 delay lines
-    (L/R)".
-11. ✅ Legend relocated to bottom-left.
+Two research agents produced structured reports. The critical
+discovery was in the rendered manual itself:
 
-Layout tightening (after user pushed back on initial canvas reduction):
+`docs/generate_manual.js` transforms the image to
+`{ width: 480, height: 180 }` when embedding it in the DOCX. That's
+an 8:3 (≈ 2.67:1) aspect ratio. Every previous pass drew the PNG
+at ~16:9 (2000 × 1180, 1920 × 1080, 2400 × 1400), so the diagram was
+being **horizontally compressed** by roughly 50 % inside the A4
+manual at every rendering. This explains the persistent sense that
+the layouts never quite "worked" — the geometry the user saw in the
+PDF was not the geometry the generator produced.
 
-- Canvas 2400×1400 → 2000×1180 (~30% area reduction).
-- All x-coordinates shifted left by 80 (tap_panel_x=40, input_x=970,
-  spat_panel_x=800, fb_panel_x=1480, corridor_x=1460, lg_x=60).
-- Latency Compensation redesigned as a **wide horizontal bar**
-  (680×32 at x=1280–1960, y=split_y centred) rather than a 320×50
-  block floating in empty space. The dry-path horizontal gap is now
-  filled by the bar itself, and the bar's right edge meets the dry
-  descent lane directly (no +40 horizontal offset).
+Independent of the aspect bug, the "three panels side-by-side"
+paradigm was never reconsidered across passes 1-3 even though the
+Orbital Cartography design philosophy calls for **radial / orbital**
+composition, not static panels.
 
-## What still needs attention
+## What pass 4 did
 
-The user called the current state unfinished. Voids that remain:
+**Geometry:**
+- Canvas 2400 × 900 (exactly 8:3) — matches the manual's DOCX
+  transformation, eliminating the horizontal compression.
+- Horizontal left-to-right signal flow. This is the first pass to
+  try the horizontal-entry-chain paradigm flagged as untried in the
+  previous plan.
+- The 12-tap fan radiates from the DELAY BUFFER output as the
+  compositional centre — honours "every layout radiates from a
+  centre" in the philosophy doc.
 
-1. **Top-right zone below Latency Compensation bar, above Feedback
-   panel header** — roughly y=232–454, x=1180–1960 = ~820×220 empty
-   region. Candidates: move Legend up into this space, or shrink the
-   vertical chain and pull panels up.
-2. **Bottom-right zone below Feedback panel** — y=854–1180, x=1320–2000.
-   Feedback panel has ~112 px of internal bottom padding because it
-   only holds 3 blocks (Soft Clipper / HP-LP / Feedback Gain) while
-   Per-Tap has 5 and Spat has 8. Options:
-   - Let Feedback panel be shorter than Per-Tap/Spat (break equal-height
-     convention, honest visual weight).
-   - Drop panel height globally (h=400 → h=380 or lower) if Per-Tap
-     block height can tighten.
-3. **Left-of-chain zone** — y=130–430, x=40–870 (left of the vertical
-   Stereo Input → Input Gain → Dual Delay Lines chain, above Per-Tap
-   panel). Currently dead space above the Per-Tap panel and to the
-   left of the main chain.
-4. **Vertical chain gaps** — `split_y→ig_y = 55`, `ig_bottom→dd_y = 40`,
-   `dd_bottom→branch_y = 45`. Each could trim ~10–15 px.
-5. **Legend could be compacted** — currently 540×170. A
-   horizontal-row legend would be tighter.
+**Path routing:**
+- Dry path is a single cubic Bezier arc sweeping above the main row
+  (AMBER) — a "computed trajectory", not a right-angle route.
+- Feedback is a cubic Bezier arc sweeping below the main row
+  (VIOLET), tapping from the DELAY BUFFER bottom and re-entering the
+  summer ⊕ from below. Matches the code truth: feedback is mono,
+  pre-DSP, pre-spatialisation.
+- Main signal path is short straight cyan arrows between blocks
+  with a feedback summer ⊕ glyph where feedback rejoins.
 
-## Decision points for next session
+**Orbital detailing:**
+- Concentric rings at the fan origin (110, 200, 260, 320, 380, 440,
+  500 px radii) form the "astronomical chart" field.
+- Radial tick marks at ±30° on the outermost ring, with clinical
+  mono angle labels (-30°, +30°).
+- Corner registration crosshairs — chart-style alignment markers.
 
-Before touching more code, the user should pick a direction:
+**Labels:**
+- Capability-level only. "Pitch Shift" not "Phase Vocoder";
+  "Woodworth" with the UI sublabel "simple (low CPU)" instead of
+  the dataset name; no FFT size, no STFT, no Laroche-Dolson. Matches
+  the marketing-copy-depth rule.
+- Dry path pill annotates "2048-sample latency compensation"
+  (user-visible fact).
+- Feedback arc pill annotates "filter · saturate · gain".
+- "limiter · wet path only" pill below MIX — honest about the
+  dry-bypasses-limiter rule.
 
-1. **Legend placement**: leave bottom-left (anchors the composition) or
-   move to top-right below LC bar (fills the biggest remaining void but
-   opens a bottom-left void)?
-2. **Panel height policy**: all-equal-h=400 (current) or
-   content-sized-per-panel (Feedback shorter)?
-3. **Aspect target**: is 2000×1180 (~17:10) acceptable, or aim for a
-   tighter 16:9 / 3:2 target?
+**Typography:**
+- DM Sans (bold, semibold, medium, regular) for structural / block
+  labels — the "generous scale" tier of the dual-extreme rule.
+- JetBrains Mono for annotations, coordinate labels, tap indices —
+  the "clinical small" tier.
+- INPUT and OUTPUT at 30 pt (logical); panel titles at 26 pt. Chosen
+  so the hierarchy survives the 5:1 scale-down to the manual's
+  480 × 180 pt render.
 
-None of the remaining work is required for the diagram to be
-functionally correct. This is pure compositional tightening.
+**Resolution:**
+- `SCALE` constant at the top of the generator multiplies every
+  pixel-based value (canvas, geometry, fonts, line widths, paddings,
+  radii). Text is re-rasterised at the scaled font size, so it stays
+  crisp at any SCALE.
+- Shipped at `SCALE = 2` → 4800 × 1800 PNG (~262 KB). Drop to
+  `SCALE = 1` for the 2400 × 900 baseline or bump to `SCALE = 3` for
+  7200 × 2700 without touching any other constant.
 
-## Files touched
+## Structural truths preserved
 
-- `docs/generate_signal_flow.py` — full rewrite of layout routing and
-  Latency Comp representation.
-- `docs/assets/signal-flow.png` — regenerated.
-- `docs/OpenSpatialDelay_Manual_v1.0.docx` / `.pdf` — regenerated to
-  pick up the new diagram in Section 2 "Signal Flow".
+The diagram is verified against the actual DSP chain in
+`Source/PluginProcessor.cpp`:
+
+- Dry compensation is unconditional (2048 samples, pre-input-selector).
+- Feedback is mono, reads from the delay buffer itself, rejoins
+  before the buffer write.
+- 12 taps read from one shared delay buffer at offsets
+  `(N + 1) × baseDelay` — shown as the radial fan.
+- Each tap goes through its own PV pitch shift → Doppler → air
+  absorption → HP/LP filter, then to spatial render.
+- Spatial render has 5 mutually-exclusive output paths. All six
+  HRTF profiles (including Woodworth as Simple / Low CPU) are
+  visible.
+- Limiter is wet-only. Dry bypasses it.
+- MIX is equal-power crossfade.
+
+No DSP truth has been elided or misrepresented.
+
+## Files touched in pass 4
+
+- `docs/generate_signal_flow.py` — complete rewrite plus a SCALE
+  multiplier pass. New geometry budget, cubic-Bezier path helpers,
+  orbital-ring / angle-tick drawing, capability-level label
+  rewording, 8:3 canvas constants, single-knob DPI.
+- `docs/assets/signal-flow.png` — regenerated at 4800 × 1800.
+- `docs/SIGNAL_FLOW_READABILITY_PLAN.md` — this document.
+
+**NOT yet regenerated** (needs one final session):
+
+- `docs/OpenSpatialDelay_Manual_v1.0.docx`
+- `docs/OpenSpatialDelay_Manual_v1.0.pdf`
 
 ## Regenerate commands
 
@@ -104,3 +137,21 @@ NODE_PATH=/opt/homebrew/lib/node_modules node docs/generate_manual.js
 soffice --headless --convert-to pdf docs/OpenSpatialDelay_Manual_v1.0.docx \
   --outdir docs/
 ```
+
+## Commit trail
+
+Pass 4 work on `AndrewRahman/flow-diagram-v4`:
+
+- `5efdb53` — pass 4 complete redraw at 8:3.
+- `e84f486` — render at 2× DPI (4800 × 1800).
+
+The branch was rebased from `AndrewRahman/signal-flow-polish`
+(which was 5 commits ahead of main when pass 4 began).
+
+## Next session
+
+The PNG is final. The one remaining task is to regenerate the DOCX
+and PDF to pick up the new diagram and verify it reads cleanly
+inside the A4 page at the 480 × 180 pt render size. See the prompt
+stub in `.planning/NEXT_SESSION.md` (if present) or the session-end
+summary.
