@@ -2,17 +2,21 @@
 
 **File**: `docs/assets/signal-flow.png`
 **Generator**: `docs/generate_signal_flow.py`
-**Current canvas**: 2400 × 900 (8:3 aspect) — pass 4 "Orbital Horizon"
+**Current output**: 4800 × 1800 (logical 2400 × 900 × SCALE=2)
+**Aspect**: 8:3, locked to the DOCX manual render box
+**Status**: **Pass 4 signed off by user** — ready for manual regen.
 
 ## Status
 
-**Pass 4 shipped — awaiting user sign-off.** The diagram was redrawn
-from scratch on branch `AndrewRahman/flow-diagram-v4` after passes 1-3
-were judged "not greatly improved." The rewrite fixes a latent bug and
-re-stages the composition around the brand's stated design philosophy.
+Pass 4 ("Orbital Horizon") was signed off by the user. The diagram
+was redrawn from scratch on branch `AndrewRahman/flow-diagram-v4`
+after passes 1-3 were judged "not greatly improved." The rewrite
+fixes a latent aspect-ratio bug and re-stages the composition around
+the brand's stated design philosophy. A follow-up commit doubled the
+render DPI without changing geometry.
 
-The DOCX and PDF have **not** been regenerated — per the "no manual
-regen until images final" rule, the new PNG must be reviewed first.
+The DOCX and PDF still need to be regenerated to pick up the new
+PNG — see "Next session" at the bottom.
 
 ## Root cause found during pass-4 research
 
@@ -78,9 +82,18 @@ composition, not static panels.
   labels — the "generous scale" tier of the dual-extreme rule.
 - JetBrains Mono for annotations, coordinate labels, tap indices —
   the "clinical small" tier.
-- INPUT and OUTPUT at 30 pt; panel titles at 26 pt. Chosen so the
-  hierarchy survives the 5:1 scale-down to the manual's 480 × 180 pt
-  render.
+- INPUT and OUTPUT at 30 pt (logical); panel titles at 26 pt. Chosen
+  so the hierarchy survives the 5:1 scale-down to the manual's
+  480 × 180 pt render.
+
+**Resolution:**
+- `SCALE` constant at the top of the generator multiplies every
+  pixel-based value (canvas, geometry, fonts, line widths, paddings,
+  radii). Text is re-rasterised at the scaled font size, so it stays
+  crisp at any SCALE.
+- Shipped at `SCALE = 2` → 4800 × 1800 PNG (~262 KB). Drop to
+  `SCALE = 1` for the 2400 × 900 baseline or bump to `SCALE = 3` for
+  7200 × 2700 without touching any other constant.
 
 ## Structural truths preserved
 
@@ -104,18 +117,19 @@ No DSP truth has been elided or misrepresented.
 
 ## Files touched in pass 4
 
-- `docs/generate_signal_flow.py` — complete rewrite. New geometry
-  budget, cubic-Bezier path helpers, orbital-ring / angle-tick
-  drawing, capability-level label rewording, 8:3 canvas constants.
-- `docs/assets/signal-flow.png` — regenerated.
+- `docs/generate_signal_flow.py` — complete rewrite plus a SCALE
+  multiplier pass. New geometry budget, cubic-Bezier path helpers,
+  orbital-ring / angle-tick drawing, capability-level label
+  rewording, 8:3 canvas constants, single-knob DPI.
+- `docs/assets/signal-flow.png` — regenerated at 4800 × 1800.
 - `docs/SIGNAL_FLOW_READABILITY_PLAN.md` — this document.
 
-**NOT regenerated** (awaiting user sign-off on the PNG):
+**NOT yet regenerated** (needs one final session):
 
 - `docs/OpenSpatialDelay_Manual_v1.0.docx`
 - `docs/OpenSpatialDelay_Manual_v1.0.pdf`
 
-## Regenerate commands (after PNG is signed off)
+## Regenerate commands
 
 ```
 python3 docs/generate_signal_flow.py
@@ -126,6 +140,18 @@ soffice --headless --convert-to pdf docs/OpenSpatialDelay_Manual_v1.0.docx \
 
 ## Commit trail
 
-Pass 4 work lives on `AndrewRahman/flow-diagram-v4`, rebased from
-`AndrewRahman/signal-flow-polish` (which was 5 commits ahead of main
-when pass 4 began).
+Pass 4 work on `AndrewRahman/flow-diagram-v4`:
+
+- `5efdb53` — pass 4 complete redraw at 8:3.
+- `e84f486` — render at 2× DPI (4800 × 1800).
+
+The branch was rebased from `AndrewRahman/signal-flow-polish`
+(which was 5 commits ahead of main when pass 4 began).
+
+## Next session
+
+The PNG is final. The one remaining task is to regenerate the DOCX
+and PDF to pick up the new diagram and verify it reads cleanly
+inside the A4 page at the 480 × 180 pt render size. See the prompt
+stub in `.planning/NEXT_SESSION.md` (if present) or the session-end
+summary.
