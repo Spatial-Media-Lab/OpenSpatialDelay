@@ -365,3 +365,71 @@ Things worth confirming before committing to Option A:
 5. **Data region check** — account Settings/Profile → look for "Data region" / "Data processing region". If visible and = EU, log it. If not visible, ask Sender support.
 6. **Optional self-test** — submit an email via Sender's hosted form URL (`https://stats.sender.net/forms/bkRxov/view`), verify DOI email arrives, click confirm, verify redirect lands on `/get-osd/` (will hit the OLD Netfirms placeholder until Plan 02-04 Netlify cutover — expected). Confirm subscriber moved from `osd-unconfirmed` → `osd-confirmed` in Sender.
 7. **STILL DEFERRED (Plan 02-04):** Netlify deploy of `andrewrahman-com` + apex DNS cutover. Without this, the post-confirm redirect lands on the old Netfirms parking page. Production flip of Plan 02-05 depends on this.
+
+## 15 — Session continuation 2026-04-22 (account verified; DOI redirect feature DOES NOT EXIST in Sender; Path A chosen)
+
+**Session window:** 2026-04-22 08:20 → 09:00 GMT+2 (~40 min). Computer reboot pause.
+
+**Sender account review completed** — DOI toggle on form `bkRxov` Publishing Settings is unlocked; "Account is under review" banner gone.
+
+**DOI toggle flipped ON** on form `bkRxov` → Publishing Settings → "Double opt-in settings" panel. Panel contains only: DOI toggle, confirmation email subject (`Confirm your subscription`), sender name (`Andrew`), sender email (`hey@andrewrahman.com`), plus a preview card. Blue helper text reads: *"Automations will be triggered once subscribers confirm their email address."* **No post-DOI redirect URL field exists in this panel or anywhere else on the form.** Resume-checklist Step 2 done; Step 3 **cannot be completed as written — it was based on an invalid assumption.**
+
+### Empirical test resolving H1 vs H2 (redirect timing)
+
+Question: when DOI is enabled, does the form's "Redirect after submit" (Form editor → Settings tab → Options → Redirect after submit + "Redirect to" URL field) fire at step 1 (immediately on form submit, pre-DOI) or at step 3 (after clicking Confirm in DOI email)?
+
+Test: set "Redirect after submit" → `https://andrewrahman.com/?sender-test=1`, submitted hosted form (`https://stats.sender.net/forms/bkRxov/view`) in incognito.
+
+Result: **H1 confirmed.** Submit → brief flash of Sender's default "Oh thank you! / We are glad to have you on board" Success view → immediate redirect to `/?sender-test=1`. No DOI email click required to trigger redirect. **"Redirect after submit" fires at step 1, pre-DOI. Using this field for `/get-osd/` would gate-bypass the DOI.** Setting was reverted; field will remain unchecked going forward.
+
+### Sender's architectural reality (confirmed from docs + test)
+
+- Sender's Success view is a single hosted page per form. Per docs, the confirm button in the DOI email also lands on "success view page" — docs use the same term for both moments. Cannot use the Success view to host a download link, because step-1 users (not yet confirmed) see the same view and would click straight through, defeating DOI.
+- **Sender has no native post-DOI-confirm redirect URL anywhere in its UI.** Form-level, DOI-panel, automation-action, account-settings — none of them expose a "where should the user land after confirming?" field.
+- Four Sender help docs explicitly route this question to `support@sender.net`, and the implicit answer across all four is: *"no such setting, use automations."*
+- Sender's own mental model is clear in the DOI panel's blue helper: **post-confirmation behaviour is delivered via automations, not redirects.**
+
+### Path A chosen (recommended): follow-up automation email on Yes branch
+
+Current automation structure:
+`Trigger: added to osd-unconfirmed → Email (Confirm button) → Delay 1min → Condition: clicked {$double-optin-link} → Yes: Move to osd-confirmed / No: (empty)`
+
+**New Yes branch:**
+`Yes: Move to osd-confirmed → Send email (subject "Your OpenSpatialDelay download", body: single primary button "Get OpenSpatialDelay" → https://andrewrahman.com/get-osd/)`
+
+User journey:
+1. Submit form → Sender Success view ("Oh thank you!" — will be rewritten to set expectations)
+2. Email #1 (DOI) arrives → click Confirm → same Sender Success view
+3. Email #2 (download) arrives seconds later → click button → `/get-osd/`
+
+Preserves DOI gate absolutely (only osd-confirmed subscribers get email #2). Zero custom infra. Matches Sender's native model.
+
+### Decisions deferred to next session
+
+- **Success view copy rewrite.** Default "Oh thank you! / We are glad to have you on board" doesn't tell the user to expect email #2. Rewrite to something like *"Almost there — check your email to confirm, and we'll send your download link right after."* (Same view is used at both step 1 and step 3; copy must work for both moments. After step 3 the user just read email #2 instructions, so it's only mildly redundant.)
+- **Patreon soft-CTA placement.** Original plan had DOI email carry optional soft Patreon CTA. With downloads moving to email #2, open question: Patreon CTA in email #1 (DOI), email #2 (download), `/get-osd/` page, or all three? Recommend email #2 + `/get-osd/` (both are post-confirm, aligned with "thanks for subscribing" moment).
+- **Email #2 button styling.** Defer to brand-settings pass (already on STATE.md todo).
+
+### Evidence artefacts (screenshots captured by Andrew this session)
+
+- `~/Desktop/Screenshot 2026-04-22 at 08.44.24.png` — DOI panel fully unlocked; toggle ON; only email-metadata fields present, no redirect field.
+- `~/Desktop/Screenshot 2026-04-22 at 08.54.23.png` — Form editor Settings tab showing "Redirect after submit" checkbox + "Redirect to" URL field (used for H1 test).
+- `~/Desktop/Screenshot 2026-04-22 at 08.56.14.png` — Sender's default "Oh thank you! We are glad to have you on board" Success view (shown briefly at step 1 before redirect fired).
+
+### Revised resume checklist for NEXT session (supersedes §14 checklist steps 3 + 6)
+
+**State at pause:** DOI toggle ON, confirmation email metadata saved, "Redirect after submit" UNCHECKED (reverted from test). Automation still in Paused state. Downloads still on `/get-osd/` only. No production (Netlify) flip yet.
+
+1. Confirm automation is still in Paused state (`Automations → OSD DOI — confirm subscription`). If it somehow auto-activated, pause it before editing.
+2. **Add Yes-branch email step to the automation:** click Yes branch under Condition → after "Move to osd-confirmed", add `Send an email`. Subject: `Your OpenSpatialDelay download`. Sender: `Andrew Rahman <hey@andrewrahman.com>`. Body (Blank template): short heading, 1-line paragraph, single primary button `Get OpenSpatialDelay` → `https://andrewrahman.com/get-osd/`. Optional soft Patreon paragraph below button (aligns with post-confirm "thanks" moment).
+3. **Rewrite the form's Success view** (Form editor → Design tab → click "Success view" above the form preview). Replace `Oh thank you! / We are glad to have you on board` with something like `Almost there — check your email to confirm, and we'll send your download link right after.` Save.
+4. **Activate the DOI automation workflow.**
+5. **Data region check** (Settings/Profile → "Data region" / "Data processing region"). Log EU or email support if not visible.
+6. **End-to-end self-test** in incognito: submit hosted form → receive DOI email → click Confirm → verify Sender Success view + receive email #2 within seconds → click "Get OpenSpatialDelay" → lands on `/get-osd/` (will still hit old Netfirms parking page until Plan 02-04 Netlify cutover — this is a known expected failure; verify instead that email #2 *arrived* and the button URL points at `andrewrahman.com/get-osd/`). Confirm subscriber moved osd-unconfirmed → osd-confirmed.
+7. Commit this research doc update + update STATE.md's `stopped_at`, `Current Position`, and Pending Todos.
+8. Plan 02-05 production flip still blocked on Plan 02-04 Netlify deploy/cutover (unchanged from §14).
+
+### Why Path B and Path C were rejected
+
+- **Path B (revert 2026-04-22 pivot: put download buttons back in DOI email):** rejected for design continuity with the pivot — downloads on `/get-osd/` is the locked design, email #1 stays confirm-button-only. (Weakens DOI gate marginally — user could click download before confirming — but downloads are free public GPL zips so the gate is soft either way. Kept Path B as a documented fallback if Path A friction proves unacceptable.)
+- **Path C (put download button on Sender Success view):** rejected because the Success view is shown at BOTH step 1 and step 3 — a step-1 user would click the download button without confirming, totally defeating the DOI. Unrecoverable unless Sender distinguishes the two views (no doc evidence it does).
