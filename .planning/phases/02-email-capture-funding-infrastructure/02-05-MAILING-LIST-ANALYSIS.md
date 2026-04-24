@@ -21,19 +21,21 @@ The two Sender DOI mechanisms operate independently:
 
 All failed attempts mixed these two systems. The documented automation-based DOI pattern was never tried.
 
-## Untried Solution (Sender's documented pattern)
+## Sender's Documented Automation-Based DOI Pattern
 
 Source: [Enable double opt-in | Sender Automation](https://www.sender.net/help/automation/double-opt-in/)
 
 1. Form DOI toggle = **OFF**
 2. Form → subscriber added to `osd-unconfirmed`
 3. Automation trigger: "Subscriber added to a group"
-4. Send email with button → `https://andrewrahman.com/get-osd/` (plain URL)
-5. Delay 1 hour
+4. Send email with button → plain URL
+5. Delay (hours)
 6. Condition: "Link is clicked" on the plain URL
 7. Yes: Move to `osd-confirmed`
 
-Confirm button URL IS the download page — one click confirms AND delivers.
+**CRITICAL FLAW (identified 2026-04-24):** This pattern does NOT gate the download behind DOI confirmation. The "Link is clicked" condition is passive tracking, not access control. Any user who knows the download URL can access it without confirming. Clicking a download link is NOT formal DOI consent under German law — the confirmation and download delivery must be logically separate actions. This pattern fails requirements R6 and R7 (see 02-05-RESEARCH-PLAN.md).
+
+**Status:** Further research needed — see 02-05-RESEARCH-PLAN.md for structured investigation.
 
 ## Sunk Cost Inventory (favors staying with Sender)
 
@@ -64,4 +66,4 @@ No mailing list providers have known MCP servers. All require UI for automation 
 
 ## Decision
 
-Try untried Sender automation-based DOI pattern first (~45 min). Clear go/no-go gate after E2E test. Switch to MailerLite only if Sender fails.
+**SUPERSEDED** — The automation-based DOI pattern does not meet requirements R6/R7 (download gated behind confirmed DOI). Structured research required before any further implementation. See `02-05-RESEARCH-PLAN.md` for the full research plan covering Sender.net viability and alternative providers.
