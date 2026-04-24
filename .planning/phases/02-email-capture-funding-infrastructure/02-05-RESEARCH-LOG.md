@@ -13,7 +13,12 @@ Purpose: Prevent re-researching the same topics. Every entry is evidence-grounde
 3. Subscriber group changes to `osd-confirmed` + download email sent automatically
 4. User clicks link in download email → lands on `andrewrahman.com/get-osd/`
 
-**Next step:** Integrate the Sender form embed onto the local andrewrahman-com site. Validate it works correctly and matches the site's design language. Once the site is live on Netlify, come back to simplify the workflow (change confirm button URL to `/get-osd/` so the user lands directly on the download page on confirm click, eliminating the need for the second download email).
+**Form embed: WORKING.** Integrated onto local andrewrahman-com site (localhost:3000) on 2026-04-24:
+- Fixed `DownloadForm.tsx` to use Sender's official IIFE bootstrap pattern (account ID `9b01e3bbeb8393` + `sender()` initialization) instead of just loading `universal.js` directly. Without the bootstrap, `universal.js` crashes with `Cannot read properties of undefined (reading 'q')`.
+- Added `NEXT_PUBLIC_SENDER_ACCOUNT_ID` env var (alongside existing `NEXT_PUBLIC_SENDER_FORM_ID`).
+- Form renders correctly: heading "Get OpenSpatialDelay", email + name fields, "Get the download" button, privacy consent text, Sender branding footer.
+
+**Next step:** Style the Sender form in the dashboard Design tab to match the site's dark theme (dark background, light text, branded button color). Then complete Task 2 of Plan 02-05 (tests, privacy page verification). Once Plan 02-04 Netlify cutover happens, proceed to Task 3 (env vars) and Task 4 (production UAT). Future simplification: change confirm button URL to `/get-osd/` to eliminate the second download email.
 
 ---
 
@@ -86,6 +91,12 @@ Email sent to support@sender.net asking to confirm EU data processing. No UI fie
 
 ### X6. Single-automation DOI with short delay + condition
 **Why it's risky:** condition evaluates once after delay (F7). Short delay (1–5 min) misses slow clickers. Long delay (24–48h) delays download delivery unacceptably.
+
+### F11. Sender embed requires IIFE bootstrap with account ID — not just universal.js
+Loading `https://cdn.sender.net/accounts_resources/universal.js` directly (without the IIFE that sets up `window.Sender` + calls `sender('ACCOUNT_ID')`) crashes with `TypeError: Cannot read properties of undefined (reading 'q')`. The official embed snippet from Sender's Publishing Settings has two parts: (1) an IIFE that initializes the `Sender` global with a `.q` queue, `.l` timestamp, and `.on` listener method, then calls `sender('9b01e3bbeb8393')`, (2) the HTML div `<div class="sender-form-field" data-sender-form-id="bkRxov">`.
+- Source: Sender Publishing Settings page for form `bkRxov`, confirmed by browser console error on localhost:3000 2026-04-24
+- Account ID: `9b01e3bbeb8393`
+- Form ID: `bkRxov`
 
 ---
 
