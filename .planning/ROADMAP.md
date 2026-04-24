@@ -68,6 +68,16 @@ Plans:
 - [ ] 03-09-PLAN.md — Cross-phase Sender.net production flip + DIST-01 UAT (queued 2026-04-17; depends on site launch + Sender dashboard completion)
 **UI hint**: yes
 
+### Phase 03.1: Release Readiness (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 3
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 03.1 to break down)
+
 ### Phase 4: Demo Content
 **Goal**: A 30-second binaural audio clip, a video reel, and high-res screenshots exist as finished assets ready to embed in the website and attach to every announcement
 **Depends on**: Phase 1

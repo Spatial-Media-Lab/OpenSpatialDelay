@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: ready_to_plan
+status: executing
 stopped_at: "Phase 02 Plan 05 — Sender design pass mid-pivot. Site-side A2 CSS injection implemented (+184 lines in andrewrahman-com/components/DownloadForm.tsx, dirty working tree) but scope exceeds ideal. User direction (final this session): move bulk of styling to Sender account-level Brand Settings (applies to ALL forms + emails, minimises site coupling to Sender class names). Chrome confirmed open+logged-in at https://app.sender.net/forms/builder/bkRxov. Chrome drive helpers pre-written + verified at /tmp/osdchrome/{run.sh, click.sh, js.js}. Sender ToS fetched — zero free-tier branding clauses. `next dev` may still be running on :3000."
-last_updated: "2026-04-24T16:27:27.612Z"
+last_updated: "2026-04-24T16:53:55.766Z"
 last_activity: 2026-04-24 -- Phase --phase execution started
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 31
-  completed_plans: 27
-  percent: 40
+  completed_plans: 28
+  percent: 90
 ---
 
 # Project State
@@ -21,13 +21,13 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-14)
 
 **Core value:** Each delay echo occupies a distinct spatial position, creating immersive 3D soundscapes that move through space around the listener.
-**Current focus:** Phase --phase — 02
+**Current focus:** Phase --phase — 03
 
 ## Current Position
 
-Phase: 03
+Phase: --phase (03) — EXECUTING
 **Active task — Phase 02 Plan 05 (Sender.net email-capture)** — `02-05-SUMMARY.md` written 2026-04-24 (status: partial).
-Status: Ready to plan
+Status: Executing Phase --phase
 Active task (paused end-of-session 2026-04-24 late-afternoon): **Sender form design pass — pivoted A2 → A1.** A2 (iframe CSS injection) implemented +184 lines in andrewrahman-com components/DownloadForm.tsx, but scope exceeds ideal — user direction: move bulk of styling to Sender account-level Brand Settings (applies to ALL forms + emails, zero site coupling to Sender class names), then strip the site-side A2 code back to minimal. A1 starting point: Chrome open + logged in at https://app.sender.net/forms/builder/bkRxov; Chrome drive helpers verified working at /tmp/osdchrome/{run.sh,click.sh,js.js}. Sender ToS fetched → zero free-tier branding clauses → attribution-hide via site-side color-match trick is ToS-safe. **Resume file: `02-05-SENDER-DESIGN-HANDOFF.md`** (paste-ready design tokens + Brand Settings walkthrough + Form Design walkthrough + Email templates spot-check + post-dashboard site cleanup plan).
 UX wart accepted, deferred post-launch: 2-emails/2-clicks. Reduction-to-1-link path (point Email #1 confirm URL at `/get-osd/`) documented in `02-05-RESEARCH-LOG.md`; not implemented now.
 User decision 2026-04-24: ship full andrewrahman-com site with finalised styling BEFORE Plan 02-04 Netlify account migration + andrewrahman.com DNS cutover. Minimises change-surface during the deploy step.
@@ -49,9 +49,9 @@ Next session: (1) reload localhost:3000 + Playwright re-screenshot the embedded 
 Downstream dep: production flip (Netlify env var + live E2E UAT) waits on Plan 02-04 Netlify deploy/cutover.
 
 **Secondary — Phase 05 (launch-announcements)**
-Plan: Not started
+Plan: 1 of --name
 Status: Paused — see `.planning/phases/05-launch-announcements/PAUSE-T-10-v3.md` for resume
-Last activity: 2026-04-24
+Last activity: 2026-04-24 -- Phase --phase execution started
 
 Progress: [████████░░] 80% (24/30 plans complete)
 
@@ -119,6 +119,10 @@ Recent decisions affecting current work:
 - [Phase 05]: Plan 05-00: T-11 precheck walk — Mailchimp owner=Andrew (resolved), SPF verified (v=spf1 a include:spf.jackhost.net -all), DKIM+DMARC pending HITL at jackhost.net target T-3, KVR Developer Account=no-account (dual path: apply + contactus@kvraudio.com fallback), Phase 4 plan 04-00 committed by 2026-04-20 (not descoped)
 - [Phase 05]: Plan 05-01: SML blog post approved after 18 voice red-lines. Primary download path = andrewrahman.com/get-osd (email-wall); GitHub positioned as source-only. Release-tag deep-link URL (/releases/tag/v1.0.0) deliberately absent from final draft — intentional deviation from planner grep.
 - [Phase 02] (2026-04-19): Plan 02-05 blocked on sending-domain decision. Findings: (1) Sender.net requires double opt-in behind account verification, which requires SPF/DKIM/DMARC on the sending domain; (2) `spatialmedialab.org` DNS is hosted at InterNetX AutoDNS (nameservers `a-d.ns14.net`) NOT at jackhost.net — the jackhost Plesk panel has no DNS editor because DNS was never delegated to jackhost; (3) AutoDNS credentials presumed held by Timo Bittner (Plesk `Systembenutzer = timobittner.de`). Research doc `.planning/phases/02-email-capture-funding-infrastructure/02-05-SENDING-DOMAIN-RESEARCH.md` enumerates three options: A) pivot sending domain to `andrewrahman.com` via ImprovMX forwarder (recommended — aligns with D-16 Data-Controller=Andrew natural-person framing), B) ask Timo to add the three DNS records on `spatialmedialab.org` one-time, C) use Sender shared domain (rejected — poor deliverability under Gmail/Yahoo 2024 sender rules). User researching before committing.
+
+### Roadmap Evolution
+
+- Phase 03.1 inserted after Phase 03: Release Readiness (URGENT) — Clean up SML GitHub repo for public release, build binaries, CTA visual polish, planning state cleanup. Blocks Phase 5.
 
 ### Pending Todos
 
