@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: paused
-stopped_at: "Phase 02 Plan 05 (Sender.net) — COMPLETE 2026-04-24 evening-late. Design pass landed end-to-end: Sender dashboard Design tab (HITL user-driven) + site-side DownloadForm.tsx rewrite. First render was weak (title 18px, inputs 40px, DM Sans, right-side gap) — iterated to final state: title 36px/700 Inter (imported from Google Fonts since next/font can't reach iframe about:blank) with -0.025em tracking, inputs 56px with height:auto forced (Sender was pinning 40px) + #252930 borders, button gradient #9ce0ff→#80d8ff with cyan glow shadow + inner highlight + 63px tall, labels 14px/600, legal text 14px centered, card widened 460→540 max-w with p-6/sm:p-8 padding, Sender's #sender-form-content chain forced width:100% (was capped at 424 inside 474 iframe causing the right-side gap), attribution display:none (was color-hide; ghost row was inflating card height), iframe min-height removed so card hugs content. User sign-off ~18:20. Commits: andrewrahman-com 813c1a6, openspatialdelay (this commit). Both local only, NOT pushed. Sender account Brand Settings still only partial — Dark bg #0a0d12 saved, accent already #80d8ff; logo upload, 'from' identity, light-theme colours, social links all still pending (Plan 02-08 scope). Next work: EITHER (a) Plan 02-08 finalise Sender account Brand Settings, OR (b) Plan 02-04 Netlify account migration + andrewrahman.com DNS cutover. User decision 2026-04-24: ship full site styling BEFORE deploy migration to minimise change-surface."
-last_updated: "2026-04-24T18:25:00.000Z"
-last_activity: 2026-04-24
+status: ready_to_plan
+stopped_at: "Phase 02 Plan 05 — Sender design pass mid-pivot. Site-side A2 CSS injection implemented (+184 lines in andrewrahman-com/components/DownloadForm.tsx, dirty working tree) but scope exceeds ideal. User direction (final this session): move bulk of styling to Sender account-level Brand Settings (applies to ALL forms + emails, minimises site coupling to Sender class names). Chrome confirmed open+logged-in at https://app.sender.net/forms/builder/bkRxov. Chrome drive helpers pre-written + verified at /tmp/osdchrome/{run.sh, click.sh, js.js}. Sender ToS fetched — zero free-tier branding clauses. `next dev` may still be running on :3000."
+last_updated: "2026-04-24T16:27:27.612Z"
+last_activity: 2026-04-24 -- Phase --phase execution started
 progress:
   total_phases: 5
-  completed_phases: 1
-  total_plans: 30
-  completed_plans: 24
-  percent: 80
+  completed_phases: 2
+  total_plans: 31
+  completed_plans: 27
+  percent: 40
 ---
 
 # Project State
@@ -21,21 +21,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-14)
 
 **Core value:** Each delay echo occupies a distinct spatial position, creating immersive 3D soundscapes that move through space around the listener.
-**Current focus:** Phase 05 — launch-announcements
+**Current focus:** Phase --phase — 02
 
 ## Current Position
 
+Phase: 03
 **Active task — Phase 02 Plan 05 (Sender.net email-capture)** — `02-05-SUMMARY.md` written 2026-04-24 (status: partial).
-Status: **DOI flow validated working end-to-end on localhost:3000** (form `bkRxov` → `osd-unconfirmed` → confirm email → click → `osd-confirmed` + download email → `/get-osd/`). **Form embed working** on `andrewrahman-com` via Sender's required IIFE bootstrap (DownloadForm.tsx commit `e9c6b27`; account ID `9b01e3bbeb8393`). **Path A "broken" framing from 2026-04-23 was incorrect** — confirm-click in Email #1 is a legally valid DOI consent action under UWG §7 + DSGVO Art. 7; full rebuttal in `02-05-MAILING-LIST-ANALYSIS.md`.
+Status: Ready to plan
 Active task (paused end-of-session 2026-04-24 late-afternoon): **Sender form design pass — pivoted A2 → A1.** A2 (iframe CSS injection) implemented +184 lines in andrewrahman-com components/DownloadForm.tsx, but scope exceeds ideal — user direction: move bulk of styling to Sender account-level Brand Settings (applies to ALL forms + emails, zero site coupling to Sender class names), then strip the site-side A2 code back to minimal. A1 starting point: Chrome open + logged in at https://app.sender.net/forms/builder/bkRxov; Chrome drive helpers verified working at /tmp/osdchrome/{run.sh,click.sh,js.js}. Sender ToS fetched → zero free-tier branding clauses → attribution-hide via site-side color-match trick is ToS-safe. **Resume file: `02-05-SENDER-DESIGN-HANDOFF.md`** (paste-ready design tokens + Brand Settings walkthrough + Form Design walkthrough + Email templates spot-check + post-dashboard site cleanup plan).
 UX wart accepted, deferred post-launch: 2-emails/2-clicks. Reduction-to-1-link path (point Email #1 confirm URL at `/get-osd/`) documented in `02-05-RESEARCH-LOG.md`; not implemented now.
 User decision 2026-04-24: ship full andrewrahman-com site with finalised styling BEFORE Plan 02-04 Netlify account migration + andrewrahman.com DNS cutover. Minimises change-surface during the deploy step.
 Decision (2026-04-21): Option A — sender domain = `andrewrahman.com`, sender identity = `hey@andrewrahman.com`, forwarder = ImprovMX → Gmail. DNS host = Netfirms (Plan 02-04 Netlify cutover deferred).
 Progress 2026-04-21 → 2026-04-22:
+
   - ImprovMX configured; Netfirms DNS records added + stale records removed; mail forwarding verified end-to-end.
   - Netfirms ns1 sync completed ~30 min after record addition (much faster than Netfirms' 4–8h warning).
   - Sender.net: SPF + DKIM + DMARC all green; groups `osd-unconfirmed` + `osd-confirmed` created; embedded signup form published (FORM_ID = `bkRxov`, captured 2026-04-22).
   - **2026-04-22 session (00:15 → 01:15):** DOI workflow `OSD DOI — confirm subscription` built end-to-end. Trigger → Email step (with `{$double-optin-link}` confirm button, Sender free-tier default styling) → 1min Delay → Condition (Workflow email activity: clicked link) → Yes branch: Move to `osd-confirmed`; No branch empty. Workflow saved in Paused state. Account auto-flagged for review when Activate was clicked (Sender banner: ≤1h auto-approval). Form's "Redirect after submit" unchecked — correct UX (inline success; `/get-osd/` is post-confirm only). Post-DOI redirect URL field not yet located — almost certainly unlocks with the DOI toggle (currently greyed out on form's Publishing Settings with "only available on verified accounts" warning).
+
 **Design pivot 2026-04-22** — after reading `andrewrahman-com` origin/main fresh (local clone was 93 commits behind): the DOI email is confirm-button-only (no download buttons); downloads live on `/get-osd/` (post-DOI landing page with `DownloadButtons` component); Sender's post-confirm redirect URL = `https://andrewrahman.com/get-osd/`. Site code (DownloadForm, DownloadButtons, /get-osd/, lib/release.ts, self-hosted /assets/*.zip) already on origin/main — remaining code work scopes to CSP/privacy-page/test-spec spot-checks, not a rewrite.
 **Palette correction (2026-04-22):** Phase 03-03 D-12 `--accent-regal` lavender "Patreon CTA only" token is ABANDONED — Session 3 swapped Patreon CTA to `--accent-green` (`#3BCE6C`), Session 7 extended the through-line to §5 Pipeline. Current CTA hierarchy: primary cyan `#80d8ff` / secondary green `#3BCE6C` / tertiary dim. See `~/.claude/projects/.../memory/project_andrewrahman_site_cta_palette.md`. `globals.css:28` stale `/* Patreon CTA only */` comment earmarked for cleanup during local-clone rebase.
 **Session 2026-04-22 08:20 → 09:00 (~40min):** Sender account review cleared. Enabled DOI toggle on form `bkRxov`. Spent session investigating where the post-DOI redirect URL lives in Sender. **Finding: it doesn't exist.** Sender's DOI panel has only email-metadata fields; the form's "Redirect after submit" empirically fires at step 1 pre-DOI (tested with `/?sender-test=1` tracer URL — browser redirected immediately after form submit, before any confirmation email); and the confirm-button click always lands on Sender's fixed hosted Success view ("Oh thank you! / We are glad to have you on board"). Four Sender help docs implicitly confirm: post-confirm behaviour goes through automations, not redirects. Path A chosen (follow-up email on Yes branch). Test setting reverted — "Redirect after submit" back to unchecked.
@@ -46,9 +49,9 @@ Next session: (1) reload localhost:3000 + Playwright re-screenshot the embedded 
 Downstream dep: production flip (Netlify env var + live E2E UAT) waits on Plan 02-04 Netlify deploy/cutover.
 
 **Secondary — Phase 05 (launch-announcements)**
-Plan: 8 of 9 (Wave 1 complete; Wave 2 + 3 pending)
+Plan: Not started
 Status: Paused — see `.planning/phases/05-launch-announcements/PAUSE-T-10-v3.md` for resume
-Last activity: 2026-04-18
+Last activity: 2026-04-24
 
 Progress: [████████░░] 80% (24/30 plans complete)
 
@@ -56,7 +59,7 @@ Progress: [████████░░] 80% (24/30 plans complete)
 
 **Velocity:**
 
-- Total plans completed: 4
+- Total plans completed: 12
 - Average duration: --
 - Total execution time: 0 hours
 
@@ -65,6 +68,7 @@ Progress: [████████░░] 80% (24/30 plans complete)
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 01 | 4 | - | - |
+| 02 | 8 | - | - |
 
 **Recent Trend:**
 
@@ -135,13 +139,16 @@ Recent decisions affecting current work:
 Last session: 2026-04-24T16:45:00.000Z
 Stopped at: Phase 02 Plan 05 — Sender design pass mid-pivot. Site-side A2 CSS injection implemented (+184 lines in andrewrahman-com/components/DownloadForm.tsx, dirty working tree) but scope exceeds ideal. User direction (final this session): move bulk of styling to Sender account-level Brand Settings (applies to ALL forms + emails, minimises site coupling to Sender class names). Chrome confirmed open+logged-in at https://app.sender.net/forms/builder/bkRxov. Chrome drive helpers pre-written + verified at /tmp/osdchrome/{run.sh, click.sh, js.js}. Sender ToS fetched — zero free-tier branding clauses. `next dev` may still be running on :3000.
 Resume files:
+
   - PRIMARY: .planning/phases/02-email-capture-funding-infrastructure/02-05-SENDER-DESIGN-HANDOFF.md (paste-ready design tokens + full Chrome-drive walkthrough + post-dashboard cleanup plan)
   - SUPPORTING: 02-05-SUMMARY.md (current state of plan — status: partial)
   - SUPPORTING: 02-05-RESEARCH-LOG.md (F1–F11 facts, X1–X6 failed approaches)
   - SUPPORTING: 02-05-MAILING-LIST-ANALYSIS.md (provider matrix, decision rationale)
   - MEMORY: ~/.claude/projects/.../memory/reference_chrome_drive_mechanism.md (helper script source of truth)
   - Phase 05 pause (secondary, unchanged): .planning/phases/05-launch-announcements/PAUSE-T-10-v3.md
+
 Uncommitted working tree:
+
   - openspatialdelay: M STATE.md, ?? 02-05-SUMMARY.md, ?? 02-05-SENDER-DESIGN-HANDOFF.md (0 commits ahead of origin)
   - andrewrahman-com: M components/DownloadForm.tsx (0 commits ahead of origin)
   - User explicit: NO COMMITS this session — "form looks awful right now, you're definitely not done"
