@@ -143,27 +143,6 @@ target_link_libraries(OpenSpatialDelay
         juce::juce_recommended_warning_flags
 )
 
-# MSVC drops .obj files from a static library when no code references each
-# symbol explicitly. The HRTF data is iterated by symbol-pointer indirection,
-# so without /WHOLEARCHIVE the embedded SOFA bytes are stripped at link time
-# and 5 of 6 binaural profiles silently fall back to the no-data CPU-Lite
-# path. Apple's ld and ELF ld pull in data symbols permissively, so this only
-# affects MSVC.
-#
-# /WHOLEARCHIVE must be on the linker command that produces the final binary.
-# JUCE's juce_add_plugin emits one format-specific target per FORMATS entry
-# (e.g. OpenSpatialDelay_VST3) and those are the targets the linker runs on,
-# not the umbrella OpenSpatialDelay target (which is the SharedCode static
-# library — lib.exe ignores /WHOLEARCHIVE).
-if(MSVC)
-    foreach(_osd_format ${PLUGIN_FORMATS})
-        set(_osd_format_target "OpenSpatialDelay_${_osd_format}")
-        if(TARGET ${_osd_format_target})
-            target_link_options(${_osd_format_target} PRIVATE "/WHOLEARCHIVE:HRTFData")
-        endif()
-    endforeach()
-endif()
-
 # =============================================================================
 # v0.5: Fast-math and vectorization flags (safe — explicit NaN guards exist)
 # =============================================================================
