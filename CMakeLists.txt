@@ -143,6 +143,16 @@ target_link_libraries(OpenSpatialDelay
         juce::juce_recommended_warning_flags
 )
 
+# MSVC drops .obj files from a static library when no code references each
+# symbol explicitly. The HRTF data is iterated by symbol-pointer indirection,
+# so without /WHOLEARCHIVE the embedded SOFA bytes are stripped at link time
+# and 5 of 6 binaural profiles silently fall back to the no-data CPU-Lite
+# path. Apple's ld and ELF ld pull in data symbols permissively, so this only
+# affects MSVC.
+if(MSVC)
+    target_link_options(OpenSpatialDelay PRIVATE "/WHOLEARCHIVE:HRTFData")
+endif()
+
 # =============================================================================
 # v0.5: Fast-math and vectorization flags (safe — explicit NaN guards exist)
 # =============================================================================
