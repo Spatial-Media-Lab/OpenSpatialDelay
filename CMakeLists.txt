@@ -149,8 +149,19 @@ target_link_libraries(OpenSpatialDelay
 # and 5 of 6 binaural profiles silently fall back to the no-data CPU-Lite
 # path. Apple's ld and ELF ld pull in data symbols permissively, so this only
 # affects MSVC.
+#
+# /WHOLEARCHIVE must be on the linker command that produces the final binary.
+# JUCE's juce_add_plugin emits one format-specific target per FORMATS entry
+# (e.g. OpenSpatialDelay_VST3) and those are the targets the linker runs on,
+# not the umbrella OpenSpatialDelay target (which is the SharedCode static
+# library — lib.exe ignores /WHOLEARCHIVE).
 if(MSVC)
-    target_link_options(OpenSpatialDelay PRIVATE "/WHOLEARCHIVE:HRTFData")
+    foreach(_osd_format ${PLUGIN_FORMATS})
+        set(_osd_format_target "OpenSpatialDelay_${_osd_format}")
+        if(TARGET ${_osd_format_target})
+            target_link_options(${_osd_format_target} PRIVATE "/WHOLEARCHIVE:HRTFData")
+        endif()
+    endforeach()
 endif()
 
 # =============================================================================
