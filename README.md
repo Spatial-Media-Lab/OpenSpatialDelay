@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="https://github.com/Spatial-Media-Lab/OpenSpatialDelay/releases">Download</a> &middot;
+  <a href="https://github.com/Spatial-Media-Lab/OpenSpatialDelay/wiki">Wiki</a> &middot;
   <a href="https://spatialmedialab.org">Spatial Media Lab</a> &middot;
   <a href="docs/OpenSpatialDelay_Manual_v1.0.pdf">User Manual</a>
 </p>
@@ -115,8 +116,8 @@ See the [User Manual](docs/OpenSpatialDelay_Manual_v1.0.pdf) for the full guide.
 
 ## Documentation
 
+- [GitHub Wiki](https://github.com/Spatial-Media-Lab/OpenSpatialDelay/wiki) — complete reference: getting started, spatial map, all 23 output formats, controls reference, trajectories, presets, ADM-OSC, creative tips, troubleshooting, glossary
 - [Quick Start Guide (PDF)](docs/OpenSpatialDelay_Manual_v1.0.pdf) — install, load, and start using the plugin
-- [Full Documentation](https://wiki.spatialmedialab.org) — complete reference on the Spatial Media Lab wiki
 - [Version History](docs/VERSION_HISTORY.md) — changelog across all versions
 
 ## Contributing
