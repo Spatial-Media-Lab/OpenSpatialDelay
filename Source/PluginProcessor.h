@@ -950,10 +950,10 @@ public:
     // v1.0: Public test entry point — forwards to oscMessageReceived
     void testProcessOSCMessage (const juce::OSCMessage& msg) { oscMessageReceived (msg); }
 
-    // v1.0.3: Test accessor for active binaural renderer (diagnostic isolation)
+    // Test accessor for active binaural renderer (diagnostic isolation)
     BinauralRenderer& getActiveRenderer() { return binauralRenderers[activeRendererIndex.load (std::memory_order_acquire)]; }
 
-    // v1.0.3: Synchronous HRTF profile load for tests (timer thread doesn't fire in test harness)
+    // Synchronous HRTF profile load for tests (timer thread doesn't fire in test harness)
     void testLoadHRTFProfile (int profileIndex) { loadHRTFProfile (profileIndex); }
 #endif
 private:

@@ -371,7 +371,7 @@ static std::unique_ptr<Proc> createBinauralProcessor (int hrtfProfile = 1)
 
     proc->prepareToPlay (kSampleRate, kBlockSize);
 
-    // v1.0.3: Synchronously load HRTF profile — timer thread doesn't fire in test harness
+    // Synchronously load HRTF profile — timer thread doesn't fire in test harness
     if (hrtfProfile > 0)
         proc->testLoadHRTFProfile (hrtfProfile);
 
